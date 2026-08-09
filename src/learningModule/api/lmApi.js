@@ -208,6 +208,8 @@ const lmApi = {
     request(`/classes/${classId}/members/${membershipId}`, { method: 'DELETE' }),
   memberProgress: (classId, membershipId) =>
     request(`/classes/${classId}/members/${membershipId}/progress`),
+  emailMember: (classId, membershipId, { subject, body }) =>
+    request(`/classes/${classId}/members/${membershipId}/email`, { method: 'POST', body: { subject, body } }),
   transferOwnership: (classId, membershipId) =>
     request(`/classes/${classId}/members/${membershipId}/transfer-ownership`, { method: 'POST', body: {} }),
 

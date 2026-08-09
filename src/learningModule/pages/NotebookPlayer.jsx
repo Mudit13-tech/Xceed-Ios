@@ -339,12 +339,19 @@ export default function NotebookPlayer() {
 
   /* ──────────────────────────── editing cells ─────────────────────────── */
 
-  const addCell = (type) => {
-    // No `_id`: the server assigns one, and `key` is what this page tracks the
-    // cell by until it does.
-    setCells((current) => [...current, { key: clientKey(), type, source: '', outputs: [], runCount: 0 }]);
-    scheduleSave();
-  };
+  const addCell = (type, afterIndex = null) => {
+  setCells((current) => {
+    const next = [...current];
+    const cell = { key: clientKey(), type, source: '', outputs: [], runCount: 0 };
+    if (afterIndex === null) {
+      next.push(cell);
+    } else {
+      next.splice(afterIndex + 1, 0, cell);
+    }
+    return next;
+  });
+  scheduleSave();
+};
 
   const moveCell = (index, delta) => {
     setCells((current) => {
@@ -495,26 +502,37 @@ export default function NotebookPlayer() {
 
       <VStack align="stretch" spacing={3}>
         {cells.map((cell, index) => (
-          <NotebookCell
-            key={cell.key}
-            cell={cell}
-            index={index}
-            total={cells.length}
-            readOnly={submitted}
-            running={busyCellId === cell.key}
-            canRun={status === 'ready' && !busyCellId}
-            onChange={(patch) => {
-              patchCell(cell.key, patch);
-              scheduleSave();
-            }}
-            onRun={() => executeCell(cell)}
-            onStop={stopKernel}
-            onMove={(delta) => moveCell(index, delta)}
-            onDelete={() => {
-              setCells((current) => current.filter((entry) => entry.key !== cell.key));
-              scheduleSave();
-            }}
-          />
+          <Box key={cell.key}>
+            <NotebookCell
+              cell={cell}
+              index={index}
+              total={cells.length}
+              readOnly={submitted}
+              running={busyCellId === cell.key}
+              canRun={status === 'ready' && !busyCellId}
+              onChange={(patch) => {
+                patchCell(cell.key, patch);
+                scheduleSave();
+              }}
+              onRun={() => executeCell(cell)}
+              onStop={stopKernel}
+              onMove={(delta) => moveCell(index, delta)}
+              onDelete={() => {
+                setCells((current) => current.filter((entry) => entry.key !== cell.key));
+                scheduleSave();
+              }}
+            />
+            {!submitted && notebook.settings?.allowAddCells !== false && (
+              <HStack spacing={2} mt={1} px={1} opacity={0.4} _hover={{ opacity: 1 }} transition="opacity 0.15s">
+                <Button size="xs" variant="ghost" onClick={() => addCell('code', index)}>
+                  + Code
+                </Button>
+                <Button size="xs" variant="ghost" onClick={() => addCell('markdown', index)}>
+                  + Text
+                </Button>
+              </HStack>
+            )}
+          </Box>
         ))}
       </VStack>
 
