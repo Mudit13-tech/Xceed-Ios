@@ -286,7 +286,7 @@ export default function LearningLayout() {
   const studentOnly = isStudentOnly(me?.roles);
 
   return (
-    <Box className="lm-root" minH={studentOnly ? '100vh' : 'calc(100vh - 64px)'} bg="gray.50">
+    <Box minH={studentOnly ? '100vh' : 'calc(100vh - 64px)'} bg="gray.50">
       <Box bg="white" borderBottomWidth="1px" borderColor="gray.200" position="sticky" top={0} zIndex={20}>
         <Container maxW="1400px" py={3}>
           <Flex align="center" gap={3}>
@@ -336,7 +336,7 @@ export default function LearningLayout() {
               Join class
             </Button>
             {mayCreateClass && (
-              <Button size="sm" colorScheme="blue" onClick={() => navigate('/learning?create=1')}>
+              <Button size="sm" colorScheme="blue" onClick={() => navigate('/learning?create=1')} display={{ base: 'none', sm: 'inline-flex' }}>
                 Create
               </Button>
             )}
@@ -377,7 +377,7 @@ export default function LearningLayout() {
         </Container>
       </Box>
 
-      <Container maxW="1400px" py={6}>
+      <Container maxW="1400px" py={{ base: 3, md: 6 }} px={{ base: 3, md: 4 }} w="100%">
         <Flex gap={6} align="flex-start">
           <Box
             as="nav"
@@ -395,7 +395,7 @@ export default function LearningLayout() {
             />
           </Box>
 
-          <Box flex="1" minW={0}>
+          <Box flex="1" minW={0} w="100%">
             <Outlet context={{ me, overview, reloadOverview: load }} />
           </Box>
         </Flex>
@@ -403,24 +403,33 @@ export default function LearningLayout() {
 
       <Drawer isOpen={isOpen} placement="left" onClose={onClose}>
         <DrawerOverlay />
-        <DrawerContent
-          bg="white"
-          maxW="280px"
-          h='100vh' 
-          position="fixed"
-          left={0}
-          top={studentOnly ? 0 : '60px'}
-          bottom={0}
-          m={0}
-          borderRadius={0}
-          pt={6}
-        >
-          <DrawerCloseButton mt={6} />
-          <DrawerHeader pt={4} pb={2}>
-            <Icon as="span" mr={2}>🎓</Icon> XCEED Learning
+        <DrawerContent>
+          <DrawerCloseButton />
+          <DrawerHeader>
+            <Icon as="span">🎓</Icon> XCEED Learning
           </DrawerHeader>
           <DrawerBody>
-            <NavItems onNavigate={onClose} studentOnly={studentOnly} />
+            <Flex direction="column" gap={2} mb={4}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => { onClose(); navigate('/learning?join=1'); }}
+                width="100%"
+              >
+                Join class
+              </Button>
+              {mayCreateClass && (
+                <Button
+                  size="sm"
+                  colorScheme="blue"
+                  onClick={() => { onClose(); navigate('/learning?create=1'); }}
+                  width="100%"
+                >
+                  Create
+                </Button>
+              )}
+            </Flex>
+            <NavItems onNavigate={onClose} studentOnly={studentOnly} isAdmin={Boolean(me?.isAdmin)} />
             <ClassSwitcher
               classes={classes}
               activeClassId={activeClassId}

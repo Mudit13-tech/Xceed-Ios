@@ -391,7 +391,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
       wrap="wrap"
     >
       <Box flex="1" minW="220px">
-        <HStack wrap="wrap">
+        <HStack>
           <Heading size="sm">{quiz.title}</Heading>
           <Badge colorScheme={isExam ? 'red' : 'blue'}>{isExam ? '🎓 Exam' : '📝 Quiz'}</Badge>
           {quiz.source === 'ai' && <Badge colorScheme="purple">✨ AI</Badge>}
@@ -486,7 +486,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
         )}
       </Box>
 
-      <HStack wrap="wrap">
+      <HStack>
         {isTeacher ? (
           <>
             <Button as={RouterLink} to={`/learning/class/${classId}/quiz/${quiz._id}/edit`} size="sm" variant="outline">

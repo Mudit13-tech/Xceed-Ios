@@ -333,7 +333,7 @@ export default function Calendar() {
             everything on it.
           </Text>
         </Box>
-        <HStack wrap="wrap">
+        <HStack>
           <Button size="sm" variant="outline" onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))}>
             ←
           </Button>

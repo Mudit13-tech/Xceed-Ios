@@ -53,9 +53,10 @@ const KIND_STYLE = {
 
 const formatWhen = (value) => (value ? new Date(value).toLocaleString() : '');
 
-function ReportCard({ report, onDecide }) {
+function ReportCard({ report, onDecide, onSendNote }) {
   const [note, setNote] = useState(report.adminNote || '');
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
   const cardBg = useColorModeValue('white', 'gray.800');
   const border = useColorModeValue('gray.200', 'gray.700');
   const quoteBg = useColorModeValue('gray.50', 'gray.900');
@@ -69,6 +70,24 @@ function ReportCard({ report, onDecide }) {
       setBusy(false);
     }
   };
+
+  // A reply with no verdict attached — "what were you doing when it happened?"
+  // on a ticket that has to stay open until they answer. The four buttons below
+  // all decide the report, so without this there is no way to ask a question
+  // without also closing or approving it.
+  const sendNote = async () => {
+    if (!note.trim()) return;
+    setSending(true);
+    try {
+      await onSendNote(report, note.trim());
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // Re-sending text the reporter has already been shown notifies nobody: the
+  // server only raises a notification when the stored note actually changes.
+  const noteIsNew = note.trim() !== '' && note.trim() !== (report.adminNote || '').trim();
 
   const kind = KIND_STYLE[report.kind] || KIND_STYLE.bug;
   const status = STATUS_STYLE[report.status] || { colorScheme: 'gray', label: report.status };
@@ -125,13 +144,28 @@ function ReportCard({ report, onDecide }) {
         </Text>
       )}
 
-      <Input
-        size="sm"
-        mb={3}
-        placeholder="Note back to the reporter (optional)"
-        value={note}
-        onChange={(event) => setNote(event.target.value)}
-      />
+      <HStack spacing={2} mb={3} align="center">
+        <Input
+          size="sm"
+          placeholder="Note back to the reporter (optional)"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && noteIsNew) sendNote();
+          }}
+        />
+        <Button
+          size="sm"
+          colorScheme="purple"
+          variant="outline"
+          flexShrink={0}
+          isLoading={sending}
+          isDisabled={!noteIsNew}
+          onClick={sendNote}
+        >
+          Send note
+        </Button>
+      </HStack>
 
       <HStack spacing={2} wrap="wrap">
         {/* Only "Approve" pays, and only the first time: the server records the
@@ -197,6 +231,23 @@ const BugReportsAdmin = () => {
         title: nextStatus === 'acknowledged' ? 'Approved' : `Marked ${nextStatus}`,
         duration: 3000,
       });
+      await load();
+    } catch (err) {
+      toast({ status: 'error', title: err.message, duration: 6000 });
+    }
+  };
+
+  /**
+   * Sends the note on its own, deliberately without a `status`.
+   *
+   * The server reads an absent status as "leave it as it is", so a question on
+   * an open report keeps it open and in the queue rather than quietly filing it
+   * as reviewed.
+   */
+  const sendNote = async (report, adminNote) => {
+    try {
+      await lmApi.reviewBug(report._id, { adminNote });
+      toast({ status: 'success', title: 'Note sent to the reporter', duration: 3000 });
       await load();
     } catch (err) {
       toast({ status: 'error', title: err.message, duration: 6000 });
@@ -308,6 +359,7 @@ const BugReportsAdmin = () => {
                     key={`${report._id}-${report.reviewedAt || ''}`}
                     report={report}
                     onDecide={decide}
+                    onSendNote={sendNote}
                   />
                 ))}
               </VStack>

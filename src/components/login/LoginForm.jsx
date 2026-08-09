@@ -35,6 +35,8 @@ const LoginForm = () => {
   // them. A normal sign-in never sees this.
   const [captcha, setCaptcha] = useState(null)
   const [captchaAnswer, setCaptchaAnswer] = useState('')
+  const [emailCode, setEmailCode] = useState(false)
+  const [sendingCode, setSendingCode] = useState(false)
   const apiUrl = getEnvironment()
   const navigate = useNavigate();
   const location = useLocation();
@@ -64,6 +66,41 @@ const LoginForm = () => {
     navigate(`/forgot-password`);
   };
 
+  /**
+   * The alternative for anyone who cannot read the picture — a screen reader user,
+   * or somebody on a link that renders images badly. Stronger than the image, not
+   * weaker: answering it needs the mailbox, not better eyesight.
+   */
+  const requestEmailCode = async () => {
+    if (!email.trim()) {
+      setMessage('Enter your email address first, then ask for a code.')
+      return
+    }
+    setSendingCode(true)
+    try {
+      const response = await fetch(`${apiUrl}/auth/captcha/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+        credentials: 'include',
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setMessage(data.message || 'Could not send a code. Please try again.')
+        return
+      }
+      // No svg: the challenge is the code in their inbox.
+      setCaptcha({ token: data.token, svg: null })
+      setCaptchaAnswer('')
+      setEmailCode(true)
+      setMessage(data.message)
+    } catch {
+      setMessage('Could not send a code. Please try again.')
+    } finally {
+      setSendingCode(false)
+    }
+  }
+
   const loadCaptcha = async () => {
     try {
       const response = await fetch(`${apiUrl}/auth/captcha`, { credentials: 'include' })
@@ -71,6 +108,7 @@ const LoginForm = () => {
       const data = await response.json()
       setCaptcha({ token: data.token, svg: data.svg })
       setCaptchaAnswer('')
+      setEmailCode(false)
     } catch {
       // Leave whatever is on screen and say so rather than clearing the form:
       // a transient failure here must not look like the password was wrong.
@@ -183,34 +221,56 @@ const LoginForm = () => {
           </FormControl>
           {captcha && (
             <FormControl>
-              <FormLabel>Type the characters shown</FormLabel>
-              <HStack spacing={3} align="center" mb={2}>
-                {/* Rendered through an <img> data URI rather than injected into
-                    the DOM: an SVG placed inline can carry a <script>, while one
-                    loaded as an image cannot run anything. The server writes this
-                    markup, but the login page is not the place to rely on that. */}
-                <Image
-                  src={`data:image/svg+xml;utf8,${encodeURIComponent(captcha.svg)}`}
-                  alt="Characters to type"
-                  height="60px"
-                  borderWidth="1px"
-                  borderRadius="md"
-                />
-                <Button size="sm" variant="ghost" onClick={loadCaptcha}>
-                  New image
-                </Button>
-              </HStack>
+              <FormLabel>
+                {emailCode ? 'Enter the code we emailed you' : 'Type the characters shown'}
+              </FormLabel>
+              {!emailCode && (
+                <HStack spacing={3} align="center" mb={2}>
+                  {/* Rendered through an <img> data URI rather than injected into
+                      the DOM: an SVG placed inline can carry a <script>, while one
+                      loaded as an image cannot run anything. The server writes this
+                      markup, but the login page is not the place to rely on that. */}
+                  <Image
+                    src={`data:image/svg+xml;utf8,${encodeURIComponent(captcha.svg)}`}
+                    alt="Characters to type"
+                    height="60px"
+                    borderWidth="1px"
+                    borderRadius="md"
+                  />
+                  <Button size="sm" variant="ghost" onClick={loadCaptcha}>
+                    New image
+                  </Button>
+                </HStack>
+              )}
               <Input
-                placeholder='Characters from the image'
+                placeholder={emailCode ? 'Six-digit code from your email' : 'Characters from the image'}
                 value={captchaAnswer}
                 onChange={(e) => setCaptchaAnswer(e.target.value)}
                 autoComplete='off'
+                inputMode={emailCode ? 'numeric' : 'text'}
                 isRequired
               />
               <Box mt={1}>
                 <Text fontSize='xs' color='gray.600'>
-                  Asked for after several failed attempts. Not case sensitive.
+                  {emailCode
+                    ? 'The code expires in five minutes and works once.'
+                    : 'Asked for after several failed attempts. Not case sensitive.'}
                 </Text>
+                {/* The accessible route out. An image challenge has no answer for
+                    somebody who cannot see it, and this is the one page they
+                    cannot skip. */}
+                {!emailCode && (
+                  <Button
+                    variant='link'
+                    size='sm'
+                    colorScheme='blue'
+                    mt={1}
+                    isLoading={sendingCode}
+                    onClick={requestEmailCode}
+                  >
+                    Can&apos;t see the image? Email me a code instead
+                  </Button>
+                )}
               </Box>
             </FormControl>
           )}

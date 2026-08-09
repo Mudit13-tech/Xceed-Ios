@@ -231,7 +231,7 @@ function StudentPoints({ classId, student, onClose }) {
             <Loading label="Adding it up…" />
           ) : (
             <VStack align="stretch" spacing={5}>
-              <SimpleGrid columns={{ base: 1, sm: 3 }} spacing={3}>
+              <SimpleGrid columns={3} spacing={3}>
                 <Box>
                   <Text fontSize="2xl" fontWeight="700">
                     {data.points}
@@ -419,7 +419,7 @@ function TeacherView({ week, all, classId }) {
   return (
     <VStack align="stretch" spacing={4}>
       <SectionCard title="How the class is doing">
-        <SimpleGrid columns={{ base: 2, sm: 2, md: 4 }} minChildWidth="120px" spacing={4}>
+        <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4}>
           <Box>
             <Text fontSize="2xl" fontWeight="700">
               {summary.totalPoints}
@@ -599,7 +599,7 @@ export default function Leaderboard() {
   return (
     <VStack align="stretch" spacing={4}>
       <SectionCard title="Where you stand">
-        <SimpleGrid columns={{ base: 1, sm: 3 }} spacing={4}>
+        <SimpleGrid columns={{ base: 3, md: 3 }} spacing={4}>
           <Box>
             <Text fontSize="2xl" fontWeight="700">
               {me?.points ?? 0}

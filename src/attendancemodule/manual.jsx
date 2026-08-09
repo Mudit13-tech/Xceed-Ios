@@ -664,6 +664,9 @@ function TabEmbeddings() {
                 <ul style={{ margin: '8px 0 0 0', paddingLeft: 18, lineHeight: 1.9 }}>
                     <li><strong>Paste directly</strong> into the text box — one roll number per line, or comma/space-separated.</li>
                     <li><strong>Upload a file</strong> containing the roll number list.</li>
+                    <li><strong>Fetch from ERP</strong> — click <strong>Fetch from ERP</strong> and the system pulls
+                    the registered roll numbers for the selected subject straight from ERP and displays them
+                    in the list. No manual typing or file upload is needed.</li>
                 </ul>
                 This tells the system exactly which students to include in matching for this subject.
             </Step>
@@ -679,6 +682,36 @@ function TabEmbeddings() {
                 An <strong>Incomplete</strong> badge means some enrolled students have no ground truth
                 images yet — their roll assignment may not be complete.
             </Step>
+
+            <SectionTitle>ERP Embedding Generation (Bulk)</SectionTitle>
+
+            <Note type="info">
+                If all subject registrations are final in ERP, you can skip the per-subject roll number entry
+                entirely and use <strong>ERP Embedding Generation</strong> instead. The system fetches the
+                registration data for the department directly from ERP and prepares embeddings for every subject
+                in one pass.
+            </Note>
+
+            <Step n={1} title="Fetch Data from ERP">
+                Click <strong>ERP Embedding Generation</strong>. The system pulls the current subject-wise
+                registration data for the selected department and semester from ERP.
+            </Step>
+
+            <Step n={2} title="Review the Comparison">
+                The fetched data is compared against the roll numbers already stored in the existing embeddings,
+                and the differences are highlighted — students newly added in ERP, students removed, and subjects
+                with no change. Review this list carefully before proceeding.
+            </Step>
+
+            <Step n={3} title="Approve and Generate">
+                Once the changes look correct, approve them and click <strong>Generate</strong>. Embeddings are
+                rebuilt to match the approved ERP data. Nothing is regenerated until you approve.
+            </Step>
+
+            <Note type="key">
+                Use this option only when registrations are final in ERP. If registrations are still changing,
+                the generated embeddings will go stale and must be regenerated again.
+            </Note>
 
             <Note type="warning">
                 Subject embeddings must be set up for each subject before running attendance for that subject.

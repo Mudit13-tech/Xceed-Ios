@@ -142,7 +142,7 @@ export default function Tutorials() {
           <SectionCard key={tutorial._id} mb={3}>
             <Flex align="center" gap={4} wrap="wrap">
               <Box flex="1" minW="220px">
-                <HStack wrap="wrap">
+                <HStack>
                   <Heading size="sm">{tutorial.title}</Heading>
                   {isTeacher && (
                     <Badge colorScheme={tutorial.published ? 'green' : 'gray'}>
@@ -179,7 +179,7 @@ export default function Tutorials() {
                 )}
               </Box>
 
-              <HStack wrap="wrap">
+              <HStack>
                 {isTeacher ? (
                   <>
                     {!tutorial.published && (

@@ -6,6 +6,15 @@
  * by a bot account, which is what you want when a maintainer needs to ask them a
  * follow-up question.
  *
+ * ## Only from the admin queue
+ *
+ * Nothing on the report form links here, for anybody. A student files in the
+ * app — that is the route that reaches the queue and pays points — and an admin
+ * reading the queue decides what is worth raising on the tracker. Two reasons
+ * it is not offered more widely: the repository is private, so most people would
+ * land on a 404 that reads as the app being broken; and an unfiltered path from
+ * a course page to the issue tracker fills it with reports nobody has triaged.
+ *
  * ## Two ways the label gets applied, on purpose
  *
  * `labels=` in the URL is **ignored for anyone without triage permission** on

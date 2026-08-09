@@ -1,10 +1,17 @@
 /**
- * Where the "Raise on GitHub" link appears on the bug report page.
+ * Where the "Raise on GitHub" link appears on the bug report page — and, more
+ * importantly, where it does not.
  *
- * The important assertion is the negative one. The repository is **private**, so
- * a student who follows this link lands on a 404 that reads as the app being
- * broken — the link has to stay hidden from everyone who cannot reach the
- * tracker, and a regression there is invisible to anyone testing as an admin.
+ * It exists in exactly one place: on a report inside the admin queue. Nobody
+ * filing a report gets a route to the tracker, admin or not. Two reasons, and
+ * the tests below pin both: the repository is private, so most people following
+ * such a link would land on a 404 that reads as the app being broken; and an
+ * unfiltered path from a course page to the issue tracker fills it with reports
+ * nobody has triaged.
+ *
+ * The negative assertions are the ones that matter. A regression that puts the
+ * link back on the form is invisible to anyone testing as an admin, which is
+ * everyone who would think to check.
  */
 
 import React from 'react';
@@ -45,83 +52,126 @@ const renderPage = () =>
     </ChakraProvider>,
   );
 
+const githubLinks = () => screen.queryAllByRole('link', { name: /Raise on GitHub/ });
+
+/** Opens the queue tab, which is lazily rendered. */
+const openQueue = async () => {
+  (await screen.findByRole('tab', { name: /Queue/ })).click();
+  return screen.findByText(REPORT.title);
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   lmApi.myBugReports.mockResolvedValue({ reports: [], pointsPerReport: 5 });
   lmApi.listClasses.mockResolvedValue([]);
 });
 
-const linkNamed = () => screen.queryAllByRole('link', { name: /Raise on GitHub/ });
-
-describe('BugReports — the GitHub link', () => {
-  it('is hidden from someone who is not an admin', async () => {
-    // The repository is private; this link would 404 for them.
+describe('BugReports — students never reach GitHub', () => {
+  it('offers no GitHub link at all to a student', async () => {
+    // GET /bugs 403s for anyone who is not a platform admin, so the queue — and
+    // with it the only link — never renders.
     lmApi.allBugReports.mockRejectedValue(new Error('403'));
     renderPage();
 
     await screen.findByText('Bug / Suggestion');
-    expect(linkNamed()).toHaveLength(0);
+    expect(githubLinks()).toHaveLength(0);
   });
 
-  it('is offered to an admin', async () => {
+  it('offers no GitHub link on a student’s own submission history', async () => {
+    lmApi.allBugReports.mockRejectedValue(new Error('403'));
+    lmApi.myBugReports.mockResolvedValue({
+      reports: [{ ...REPORT, awarded: false }],
+      pointsPerReport: 5,
+    });
+    renderPage();
+
+    await screen.findByText(REPORT.title);
+    expect(githubLinks()).toHaveLength(0);
+  });
+});
+
+describe('BugReports — the report form is not a route to the tracker', () => {
+  it('offers no GitHub link beside Send, even for an admin', async () => {
+    // The form is the same component for everybody. Escalation is a triage
+    // decision and belongs in the queue, not next to the Send button.
     lmApi.allBugReports.mockResolvedValue({ reports: [], counts: {} });
     renderPage();
 
-    await waitFor(() => expect(linkNamed().length).toBeGreaterThan(0));
+    await screen.findByRole('button', { name: 'Send' });
+    expect(githubLinks()).toHaveLength(0);
+  });
+
+  it('offers no GitHub link when an admin’s queue is empty', async () => {
+    lmApi.allBugReports.mockResolvedValue({ reports: [], counts: {} });
+    renderPage();
+
+    (await screen.findByRole('tab', { name: /Queue/ })).click();
+    await screen.findByText('Nothing in the queue');
+    expect(githubLinks()).toHaveLength(0);
+  });
+});
+
+describe('BugReports — escalating from the admin queue', () => {
+  beforeEach(() => {
+    lmApi.allBugReports.mockResolvedValue({ reports: [REPORT], counts: { open: 1 } });
+  });
+
+  it('gives an admin a link on the report', async () => {
+    renderPage();
+    await openQueue();
+    expect(githubLinks()).toHaveLength(1);
   });
 
   it('carries the label and the template', async () => {
-    lmApi.allBugReports.mockResolvedValue({ reports: [], counts: {} });
     renderPage();
+    await openQueue();
 
-    await waitFor(() => expect(linkNamed().length).toBeGreaterThan(0));
-    const href = new URL(linkNamed()[0].getAttribute('href'));
+    const href = new URL(githubLinks()[0].getAttribute('href'));
     expect(href.pathname).toBe('/xceed-nitj/AMS-with-TimeTable/issues/new');
     expect(href.searchParams.get('labels')).toBe(LABEL);
     expect(href.searchParams.get('template')).toBe(TEMPLATE);
   });
 
-  it('opens in a new tab without handing the opener over', async () => {
-    lmApi.allBugReports.mockResolvedValue({ reports: [], counts: {} });
+  it('forwards the report without retyping it', async () => {
+    // The case this exists for: a student files in the app, an admin passes it
+    // on with everything the reporter already supplied.
     renderPage();
+    await openQueue();
 
-    await waitFor(() => expect(linkNamed().length).toBeGreaterThan(0));
-    expect(linkNamed()[0]).toHaveAttribute('target', '_blank');
-    expect(linkNamed()[0].getAttribute('rel')).toContain('noopener');
-  });
-
-  it('escalates a queued report with its own details', async () => {
-    // The case this is really for: a student files in the app and an admin
-    // forwards it to the tracker without retyping any of it.
-    lmApi.allBugReports.mockResolvedValue({ reports: [REPORT], counts: { open: 1 } });
-    renderPage();
-
-    // The queue lives behind its own tab, which is lazily rendered.
-    const queueTab = await screen.findByRole('tab', { name: /Queue/ });
-    queueTab.click();
-
-    await screen.findByText('Document count is wrong');
-    const escalate = screen.getAllByRole('link', { name: /Raise on GitHub/ })
-      .map((node) => new URL(node.getAttribute('href')))
-      .find((url) => url.searchParams.get('title') === 'Document count is wrong');
-
-    expect(escalate).toBeDefined();
-    expect(escalate.searchParams.get('labels')).toBe(LABEL);
-    const body = escalate.searchParams.get('body');
+    const href = new URL(githubLinks()[0].getAttribute('href'));
+    expect(href.searchParams.get('title')).toBe('Document count is wrong');
+    const body = href.searchParams.get('body');
     expect(body).toContain('Front page says 1, the class says 3.');
     expect(body).toContain('https://xceed.nitj.ac.in/learning/class/abc');
     expect(body).toContain('Soft Computing');
   });
 
-  it('does not put the reporter’s name in the escalated issue', async () => {
-    lmApi.allBugReports.mockResolvedValue({ reports: [REPORT], counts: { open: 1 } });
+  it('opens in a new tab without handing the opener over', async () => {
     renderPage();
+    await openQueue();
 
-    (await screen.findByRole('tab', { name: /Queue/ })).click();
-    await screen.findByText('Document count is wrong');
+    expect(githubLinks()[0]).toHaveAttribute('target', '_blank');
+    expect(githubLinks()[0].getAttribute('rel')).toContain('noopener');
+  });
 
-    const hrefs = screen.getAllByRole('link', { name: /Raise on GitHub/ })
-      .map((node) => node.getAttribute('href'));
-    hrefs.forEach((href) => expect(decodeURIComponent(href)).not.toContain('Asha Rao'));
+  it('does not put the reporter’s name in the issue', async () => {
+    // The GitHub account filing it is already on the issue; an institute
+    // identity in the tracker is a second copy of personal data for no benefit.
+    renderPage();
+    await openQueue();
+
+    githubLinks().forEach((node) =>
+      expect(decodeURIComponent(node.getAttribute('href'))).not.toContain('Asha Rao'),
+    );
+  });
+
+  it('escalates without deciding the report', async () => {
+    // Opening an issue must not mark it approved — that pays the reporter, and
+    // it stays a separate, deliberate click.
+    renderPage();
+    await openQueue();
+
+    githubLinks()[0].click();
+    await waitFor(() => expect(lmApi.reviewBug).not.toHaveBeenCalled());
   });
 });

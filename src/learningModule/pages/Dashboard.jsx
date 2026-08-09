@@ -549,7 +549,7 @@ export default function Dashboard() {
       </Flex>
 
       {overview && (
-        <Grid templateColumns="repeat(auto-fit, minmax(140px, 1fr))" gap={4} mb={6}>
+        <Grid templateColumns={{ base: '1fr 1fr', md: 'repeat(4, 1fr)' }} gap={4} mb={6}>
           <StatTile label="Classes" value={overview.classCount} hint={`${overview.teachingCount} teaching`} />
           <StatTile label="Pending work" value={overview.pendingWork} accent="orange.500" hint="Not turned in" />
           <StatTile label="To review" value={overview.awaitingReview} accent="purple.500" hint="Student submissions" />

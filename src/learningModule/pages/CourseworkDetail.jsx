@@ -112,7 +112,7 @@ function YourWork({ classId, coursework, submission, onChanged }) {
         </Box>
       )}
 
-      <HStack mt={5} spacing={2} wrap="wrap">
+      <HStack mt={5} spacing={2}>
         {!locked && (
           <>
             <Button

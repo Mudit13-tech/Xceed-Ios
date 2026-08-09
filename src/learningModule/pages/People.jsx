@@ -36,9 +36,15 @@ import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, buttonTextStyles } from '../components/common';
 import { formatDate, initials, relativeTime } from '../format';
 
-function InviteModal({ isOpen, onClose, classId, onDone }) {
+function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student', availableRoles = ['student', 'co-teacher'] }) {
   const [emails, setEmails] = useState('');
-  const [role, setRole] = useState('student');
+  const [role, setRole] = useState(defaultRole);
+
+  useEffect(() => {
+    if (isOpen) {
+      setRole(defaultRole);
+    }
+  }, [isOpen, defaultRole]);
   const [createAccounts, setCreateAccounts] = useState(true);
   const [grantRoleToExisting, setGrantRoleToExisting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -110,8 +116,8 @@ function InviteModal({ isOpen, onClose, classId, onDone }) {
           <FormControl mb={4}>
             <FormLabel fontSize="sm">Role</FormLabel>
             <Select value={role} onChange={(event) => setRole(event.target.value)}>
-              <option value="student">Student</option>
-              <option value="co-teacher">Co-teacher</option>
+              {availableRoles.includes('student') && <option value="student">Student</option>}
+              {availableRoles.includes('co-teacher') && <option value="co-teacher">Co-teacher</option>}
             </Select>
           </FormControl>
           <FormControl>
@@ -228,7 +234,7 @@ function ProgressModal({ isOpen, onClose, classId, membership }) {
             <Loading minH="160px" />
           ) : (
             <>
-              <HStack spacing={4} mb={4} wrap="wrap">
+              <HStack spacing={6} mb={4}>
                 <Box>
                   <Text fontSize="2xl" fontWeight="700">
                     {data.summary.turnedIn}
@@ -296,10 +302,10 @@ function PersonRow({ member, isTeacher, isOwner, classId, onChanged, onViewProgr
   };
 
   return (
-    <Flex align="center" gap={2} py={3} borderBottomWidth="1px" borderColor="gray.100" wrap="wrap">
+    <Flex align="center" gap={3} py={3} borderBottomWidth="1px" borderColor="gray.100">
       <Avatar size="sm" name={member.name || member.email} getInitials={() => initials(member.name || member.email)} />
       <Box flex="1" minW={0}>
-        <HStack spacing={2} wrap="wrap">
+        <HStack spacing={2}>
           <Text fontSize="sm" fontWeight="500" noOfLines={1}>
             {member.name || member.email || 'Pending user'}
           </Text>
@@ -316,7 +322,7 @@ function PersonRow({ member, isTeacher, isOwner, classId, onChanged, onViewProgr
       </Box>
 
       {member.status === 'pending' && isTeacher && (
-        <HStack wrap="wrap">
+        <HStack>
           <Button
             size="xs"
             colorScheme="green"
@@ -399,6 +405,8 @@ export default function People() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [progressFor, setProgressFor] = useState(null);
+  const [inviteRole, setInviteRole] = useState('student');
+  const [availableRoles, setAvailableRoles] = useState(['student', 'co-teacher']);
   const invite = useDisclosure();
   const progress = useDisclosure();
 
@@ -457,7 +465,7 @@ export default function People() {
         title={`Teachers (${members.teachers.length})`}
         action={
           isTeacher ? (
-            <Button size="sm" variant="outline" onClick={invite.onOpen}>
+            <Button size="sm" variant="outline" onClick={() => { setInviteRole('co-teacher'); setAvailableRoles(['co-teacher']); invite.onOpen(); }}>
               + Invite
             </Button>
           ) : null
@@ -477,7 +485,16 @@ export default function People() {
         ))}
       </SectionCard>
 
-      <SectionCard title={`Students (${members.students.filter((m) => m.status !== 'pending').length})`}>
+      <SectionCard
+        title={`Students (${members.students.filter((m) => m.status !== 'pending').length})`}
+        action={
+          isTeacher ? (
+            <Button size="sm" variant="outline" onClick={() => { setInviteRole('student'); setAvailableRoles(['student']); invite.onOpen(); }}>
+              + Invite
+            </Button>
+          ) : null
+        }
+      >
         {members.students.filter((m) => m.status !== 'pending').length === 0 ? (
           <EmptyState
             icon="👥"
@@ -489,7 +506,7 @@ export default function People() {
             }
             action={
               isTeacher ? (
-                <Button size="sm" colorScheme="blue" onClick={invite.onOpen}>
+                <Button size="sm" colorScheme="blue" onClick={() => { setInviteRole('student'); setAvailableRoles(['student']); invite.onOpen(); }}>
                   Invite students
                 </Button>
               ) : null
@@ -520,7 +537,14 @@ export default function People() {
         </Box>
       )}
 
-      <InviteModal isOpen={invite.isOpen} onClose={invite.onClose} classId={classId} onDone={afterChange} />
+      <InviteModal
+        isOpen={invite.isOpen}
+        onClose={invite.onClose}
+        classId={classId}
+        onDone={afterChange}
+        defaultRole={inviteRole}
+        availableRoles={availableRoles}
+      />
       <ProgressModal
         isOpen={progress.isOpen}
         onClose={progress.onClose}

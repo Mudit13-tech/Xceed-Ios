@@ -1,6 +1,6 @@
 import StarryBackgroundAnimation from "../components/home/StarryBackgroundAnimation"
 import Lottie from 'lottie-react'
-// import animation404 from '../../public/404.json'
+import animation404 from '../../public/404.json'
 import { useState, useEffect } from 'react'
 
 // HOW TO USE THIS COMPONENT ?
