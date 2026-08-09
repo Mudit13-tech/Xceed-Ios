@@ -13,6 +13,8 @@ import {
   FormLabel,
   HStack,
   Heading,
+  IconButton,
+  Input,
   Menu,
   MenuButton,
   MenuDivider,
@@ -33,6 +35,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
+import { FiMail } from 'react-icons/fi';
 import { EmptyState, ErrorState, Loading, SectionCard, buttonTextStyles } from '../components/common';
 import { formatDate, initials, relativeTime } from '../format';
 
@@ -373,7 +376,110 @@ function ProgressModal({ isOpen, onClose, classId, membership }) {
   );
 }
 
-function PersonRow({ member, isTeacher, isOwner, classId, onChanged, onViewProgress }) {
+function EmailModal({ isOpen, onClose, classId, membership, className }) {
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [sending, setSending] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    if (isOpen && membership) {
+      setSubject(`[${className || 'Class'}] Notice for ${membership.name || 'Student'}`);
+      setBody('');
+    }
+  }, [isOpen, membership, className]);
+
+  if (!membership) return null;
+
+  const handleSend = async () => {
+    if (!subject.trim() || !body.trim()) {
+      toast({ status: 'warning', title: 'Please enter a subject and message body.' });
+      return;
+    }
+
+    setSending(true);
+    try {
+      await lmApi.emailMember(classId, membership._id, { subject: subject.trim(), body: body.trim() });
+      toast({ status: 'success', title: 'Email sent to student.' });
+      onClose();
+    } catch (error) {
+      toast({ status: 'error', title: 'Could not send email', description: error.message });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const mailtoHref = membership.email
+    ? `mailto:${encodeURIComponent(membership.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    : '#';
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} size="lg">
+      <ModalOverlay />
+      <ModalContent>
+        <ModalHeader>Email {membership.name || 'Student'}</ModalHeader>
+        <ModalCloseButton />
+        <ModalBody>
+          <FormControl mb={4}>
+            <FormLabel fontSize="sm">To</FormLabel>
+            <Input value={membership.email || 'No email address registered'} isReadOnly bg="gray.50" fontSize="sm" />
+          </FormControl>
+          <FormControl mb={4} isRequired>
+            <FormLabel fontSize="sm">Subject</FormLabel>
+            <Input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Enter email subject"
+              fontSize="sm"
+            />
+          </FormControl>
+          <FormControl isRequired>
+            <FormLabel fontSize="sm">Message</FormLabel>
+            <Textarea
+              rows={6}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Write your message here..."
+              fontSize="sm"
+            />
+            <FormHelperText>
+              Sent directly to the student&apos;s email address and saved as an in-app notification.
+            </FormHelperText>
+          </FormControl>
+        </ModalBody>
+        <ModalFooter gap={2}>
+          {membership.email && (
+            <Button
+              as="a"
+              href={mailtoHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              variant="outline"
+              size="sm"
+              leftIcon={<FiMail />}
+            >
+              Open in Email App
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            colorScheme="blue"
+            size="sm"
+            onClick={handleSend}
+            isLoading={sending}
+            isDisabled={!subject.trim() || !body.trim()}
+          >
+            Send Email
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
+
+function PersonRow({ member, isTeacher, isOwner, classId, onChanged, onViewProgress, onEmailMember }) {
   const toast = useToast();
 
   const act = async (fn, successTitle) => {
@@ -426,59 +532,76 @@ function PersonRow({ member, isTeacher, isOwner, classId, onChanged, onViewProgr
       )}
 
       {isTeacher && member.status === 'active' && (
-        <Menu>
-          <MenuButton as={Button} size="xs" variant="ghost">
-            ⋮
-          </MenuButton>
-          <MenuList>
-            {member.role === 'student' && (
-              <MenuItem {...buttonTextStyles} onClick={() => onViewProgress(member)}>
-                View progress
-              </MenuItem>
-            )}
-            {member.role === 'student' && (
-              <MenuItem {...buttonTextStyles} onClick={() => act(() => lmApi.updateMember(classId, member._id, { role: 'co-teacher' }), 'Promoted to co-teacher')}>
-                Make co-teacher
-              </MenuItem>
-            )}
-            {member.role === 'co-teacher' && (
-              <MenuItem {...buttonTextStyles} onClick={() => act(() => lmApi.updateMember(classId, member._id, { role: 'student' }), 'Changed to student')}>
-                Make student
-              </MenuItem>
-            )}
-            <MenuItem {...buttonTextStyles} onClick={() => act(() => lmApi.updateMember(classId, member._id, { muted: !member.muted }), member.muted ? 'Unmuted' : 'Muted')}>
-              {member.muted ? 'Allow posting' : 'Mute (no posts or comments)'}
-            </MenuItem>
-            {isOwner && member.role !== 'teacher' && (
-              <>
-                <MenuDivider />
-                <MenuItem
-                  {...buttonTextStyles}
-                  onClick={() => {
-                    // eslint-disable-next-line no-alert
-                    if (window.confirm(`Transfer ownership of this class to ${member.name}?`)) {
-                      act(() => lmApi.transferOwnership(classId, member._id), 'Ownership transferred');
-                    }
-                  }}
-                >
-                  Transfer ownership
+        <HStack spacing={1}>
+          {member.role === 'student' && onEmailMember && (
+            <IconButton
+              size="xs"
+              variant="ghost"
+              icon={<FiMail />}
+              aria-label={`Email ${member.name || 'student'}`}
+              title="Email student"
+              onClick={() => onEmailMember(member)}
+            />
+          )}
+          <Menu>
+            <MenuButton as={Button} size="xs" variant="ghost">
+              ⋮
+            </MenuButton>
+            <MenuList>
+              {member.role === 'student' && (
+                <MenuItem {...buttonTextStyles} onClick={() => onViewProgress(member)}>
+                  View progress
                 </MenuItem>
-              </>
-            )}
-            <MenuDivider />
-            <MenuItem
-              color="red.600"
-              onClick={() => {
-                // eslint-disable-next-line no-alert
-                if (window.confirm(`Remove ${member.name || member.email} from the class?`)) {
-                  act(() => lmApi.removeMember(classId, member._id), 'Removed');
-                }
-              }}
-            >
-              Remove from class
-            </MenuItem>
-          </MenuList>
-        </Menu>
+              )}
+              {member.role === 'student' && onEmailMember && (
+                <MenuItem {...buttonTextStyles} icon={<FiMail />} onClick={() => onEmailMember(member)}>
+                  Email student
+                </MenuItem>
+              )}
+              {member.role === 'student' && (
+                <MenuItem {...buttonTextStyles} onClick={() => act(() => lmApi.updateMember(classId, member._id, { role: 'co-teacher' }), 'Promoted to co-teacher')}>
+                  Make co-teacher
+                </MenuItem>
+              )}
+              {member.role === 'co-teacher' && (
+                <MenuItem {...buttonTextStyles} onClick={() => act(() => lmApi.updateMember(classId, member._id, { role: 'student' }), 'Changed to student')}>
+                  Make student
+                </MenuItem>
+              )}
+              <MenuItem {...buttonTextStyles} onClick={() => act(() => lmApi.updateMember(classId, member._id, { muted: !member.muted }), member.muted ? 'Unmuted' : 'Muted')}>
+                {member.muted ? 'Allow posting' : 'Mute (no posts or comments)'}
+              </MenuItem>
+              {isOwner && member.role !== 'teacher' && (
+                <>
+                  <MenuDivider />
+                  <MenuItem
+                    {...buttonTextStyles}
+                    onClick={() => {
+                      // eslint-disable-next-line no-alert
+                      if (window.confirm(`Transfer ownership of this class to ${member.name}?`)) {
+                        act(() => lmApi.transferOwnership(classId, member._id), 'Ownership transferred');
+                      }
+                    }}
+                  >
+                    Transfer ownership
+                  </MenuItem>
+                </>
+              )}
+              <MenuDivider />
+              <MenuItem
+                color="red.600"
+                onClick={() => {
+                  // eslint-disable-next-line no-alert
+                  if (window.confirm(`Remove ${member.name || member.email} from the class?`)) {
+                    act(() => lmApi.removeMember(classId, member._id), 'Removed');
+                  }
+                }}
+              >
+                Remove from class
+              </MenuItem>
+            </MenuList>
+          </Menu>
+        </HStack>
       )}
     </Flex>
   );
@@ -490,10 +613,12 @@ export default function People() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [progressFor, setProgressFor] = useState(null);
+  const [emailFor, setEmailFor] = useState(null);
   const [inviteRole, setInviteRole] = useState('student');
   const [availableRoles, setAvailableRoles] = useState(['student', 'co-teacher']);
   const invite = useDisclosure();
   const progress = useDisclosure();
+  const emailModal = useDisclosure();
 
   const load = useCallback(async () => {
     setError(null);
@@ -520,6 +645,11 @@ export default function People() {
     progress.onOpen();
   };
 
+  const openEmail = (member) => {
+    setEmailFor(member);
+    emailModal.onOpen();
+  };
+
   if (loading) return <Loading label="Loading people…" />;
 
   const pending = members.students.filter((m) => m.status === 'pending');
@@ -540,6 +670,7 @@ export default function People() {
                 classId={classId}
                 onChanged={afterChange}
                 onViewProgress={openProgress}
+                onEmailMember={openEmail}
               />
             ))}
           </SectionCard>
@@ -566,6 +697,7 @@ export default function People() {
             classId={classId}
             onChanged={afterChange}
             onViewProgress={openProgress}
+            onEmailMember={openEmail}
           />
         ))}
       </SectionCard>
@@ -609,6 +741,7 @@ export default function People() {
                 classId={classId}
                 onChanged={afterChange}
                 onViewProgress={openProgress}
+                onEmailMember={openEmail}
               />
             ))
         )}
@@ -635,6 +768,13 @@ export default function People() {
         onClose={progress.onClose}
         classId={classId}
         membership={progressFor}
+      />
+      <EmailModal
+        isOpen={emailModal.isOpen}
+        onClose={emailModal.onClose}
+        classId={classId}
+        membership={emailFor}
+        className={klass?.name}
       />
     </Box>
   );

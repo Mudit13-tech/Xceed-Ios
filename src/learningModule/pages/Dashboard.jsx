@@ -519,6 +519,10 @@ export default function Dashboard() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    reloadOverview?.();
+  }, [reloadOverview]);
+
   const openClass = (klass) => navigate(`/learning/class/${klass._id}`);
 
   const afterChange = async () => {

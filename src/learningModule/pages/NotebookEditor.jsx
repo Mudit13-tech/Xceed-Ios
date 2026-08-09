@@ -138,6 +138,12 @@ export default function NotebookEditor() {
       [next[index], next[to]] = [next[to], next[index]];
       return next;
     });
+    const addCell = (index, type) =>
+  setCells((current) => {
+    const next = [...current];
+    next.splice(index + 1, 0, newCell(type));
+    return next;
+  });
 
   /**
    * Stop kills the worker, which takes the hidden setup and every variable with
@@ -549,6 +555,14 @@ export default function NotebookEditor() {
               onMove={(delta) => moveCell(index, delta)}
               onDelete={() => setCells((current) => current.filter((entry) => entry._id !== cell._id))}
             />
+            <HStack spacing={2} mt={1} px={1} opacity={0.4} _hover={{ opacity: 1 }} transition="opacity 0.15s">
+              <Button size="xs" variant="ghost" onClick={() => addCell(index, 'code')}>
+              + Code
+              </Button>
+              <Button size="xs" variant="ghost" onClick={() => addCell(index, 'markdown')}>
+              + Text
+              </Button>
+            </HStack>
           </Box>
         ))}
       </VStack>

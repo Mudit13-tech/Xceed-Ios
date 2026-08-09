@@ -177,7 +177,7 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
   return (
     <Modal isOpen={isOpen} onClose={close} size="lg">
       <ModalOverlay />
-      <ModalContent>
+      <ModalContent pt={4}>
         <ModalHeader>Create a quiz</ModalHeader>
         <ModalCloseButton />
         <ModalBody>
