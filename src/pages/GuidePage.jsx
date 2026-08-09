@@ -4,10 +4,13 @@ import getEnvironment from '../getenvironment';
 import { rolesOf } from '../learningModule/roles';
 
 /**
- * Who may see this page at all. It mirrors `checkRole(["iams-admin"])` on
- * `/api/v1/guide` — which also lets plain `admin` through — and exists only so
- * the UI can say "not authorised" instead of "failed to load". The server is
- * the authority; nothing here is a security boundary.
+ * Who may *edit* the page. Reading is open to everyone, including anonymous
+ * visitors — the server no longer gates GET.
+ *
+ * This mirrors `checkRole(["iams-admin"])` on PUT `/api/v1/guide` — which also
+ * lets plain `admin` through — and exists only so the toolbar is hidden from
+ * people who cannot use it. The server is the authority; nothing here is a
+ * security boundary.
  */
 const GUIDE_ADMIN_ROLES = ['admin', 'iams-admin'];
 const isGuideAdmin = (role) =>
@@ -127,7 +130,8 @@ export default function GuidePage() {
   const [editing, setEditing]         = useState(false);
   const [editContent, setEditContent] = useState('');
   const [isAdmin, setIsAdmin]         = useState(false);
-  const [denied, setDenied]           = useState(false);
+  const [hiddenTabs, setHiddenTabs]   = useState(0);
+  const [isAuthed, setIsAuthed]       = useState(false);
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
   const [saveError, setSaveError]     = useState('');
@@ -137,12 +141,14 @@ export default function GuidePage() {
   useEffect(() => {
     const init = async () => {
       const [guideRes, userRes] = await Promise.allSettled([
-        // The cookie has to go with this now — the guide is no longer readable
-        // without one.
+        // Readable by anyone, signed in or not. The cookie still goes with it
+        // so the request is identical for both cases.
         fetch(`${apiUrl}/api/v1/guide`, { credentials: 'include' }),
         fetch(`${apiUrl}/user/getuser/`, { credentials: 'include' }),
       ]);
 
+      // A failure here is the ordinary anonymous case, not an error: it just
+      // means no editor toolbar.
       if (userRes.status === 'fulfilled' && userRes.value.ok) {
         const details = await userRes.value.json();
         setIsAdmin(isGuideAdmin(details?.user?.role));
@@ -153,11 +159,10 @@ export default function GuidePage() {
         const sorted = [...data.tabs].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         setTabs(sorted);
         setUpdatedAt(data.updatedAt);
-      } else if (
-        guideRes.status === 'fulfilled'
-        && [401, 403].includes(guideRes.value.status)
-      ) {
-        setDenied(true);
+        // The server decides which tabs to send; this is only how many it held
+        // back, so the page can explain itself rather than look truncated.
+        setHiddenTabs(data.hiddenTabs ?? 0);
+        setIsAuthed(Boolean(data.isAuthenticated));
       } else {
         setFetchError('Failed to load documentation. Please refresh.');
       }
@@ -207,32 +212,6 @@ export default function GuidePage() {
           }} />
           <p style={{ color: '#7c3aed', fontWeight: 600 }}>Loading documentation…</p>
           <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-        </div>
-      </div>
-    );
-  }
-
-  /* ── refused by the API ── */
-  if (denied) {
-    return (
-      <div style={{
-        minHeight: '100vh', background: '#f8f7ff', display: 'flex',
-        alignItems: 'center', justifyContent: 'center', padding: 24,
-        fontFamily: "'Inter','Segoe UI',sans-serif",
-      }}>
-        <div style={{
-          maxWidth: 460, textAlign: 'center', background: '#fff',
-          border: '1px solid #ede9fe', borderRadius: 16,
-          padding: '40px 36px', boxShadow: '0 4px 32px rgba(124,58,237,.08)',
-        }}>
-          <h1 style={{ margin: '0 0 10px', fontSize: '1.3rem', fontWeight: 800, color: '#1e1b4b' }}>
-            Administrators only
-          </h1>
-          <p style={{ margin: 0, fontSize: 14, color: '#475569', lineHeight: 1.7 }}>
-            The developer documentation describes the server&apos;s internal
-            configuration and APIs, so it is restricted to administrator
-            accounts.
-          </p>
         </div>
       </div>
     );
@@ -346,6 +325,39 @@ export default function GuidePage() {
             marginBottom: 24, fontSize: 14,
           }}>
             {fetchError}
+          </div>
+        )}
+
+        {/* The server withheld some tabs. Two different situations behind the
+            same count, and they need different advice: a visitor who has not
+            signed in can fix it, a student cannot. */}
+        {hiddenTabs > 0 && !editing && (
+          <div style={{
+            background: '#f5f3ff', border: '1px solid #ddd6fe',
+            borderLeft: '4px solid #7c3aed',
+            borderRadius: 10, padding: '14px 18px',
+            marginBottom: 24, fontSize: 14, color: '#4c1d95', lineHeight: 1.7,
+          }}>
+            {isAuthed ? (
+              <>
+                <strong>
+                  {hiddenTabs} further {hiddenTabs === 1 ? 'section is' : 'sections are'} not
+                  available to your account.
+                </strong>{' '}
+                The rest of this documentation covers the internal APIs and is
+                open to staff accounts. Ask an administrator if you need it.
+              </>
+            ) : (
+              <>
+                <strong>
+                  {hiddenTabs} further {hiddenTabs === 1 ? 'section is' : 'sections are'} available
+                  after signing in.
+                </strong>{' '}
+                Setup instructions are public; the rest describes the internal
+                APIs.{' '}
+                <a href="/login" style={{ color: '#7c3aed', fontWeight: 700 }}>Sign in</a>
+              </>
+            )}
           </div>
         )}
 

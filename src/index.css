@@ -14,19 +14,8 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    
   }
-}
-
-/* ── Learning Module — prevent body-level horizontal scroll ──────────────────
-   The learning module uses Chakra UI fluid layouts; nothing inside it should
-   ever be wider than the viewport. This clip is scoped to .lm-root so it does
-   not affect the Grades table (overflowX="auto" inside a Box) or any other
-   part of the app that legitimately scrolls horizontally.
-   ─────────────────────────────────────────────────────────────────────────── */
-.lm-root {
-  overflow-x: hidden;
-  width: 100%;
-  max-width: 100vw;
 }
 
 

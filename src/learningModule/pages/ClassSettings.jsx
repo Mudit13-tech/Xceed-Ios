@@ -191,9 +191,9 @@ export default function ClassSettings() {
       <SectionCard title="Permissions & notifications" mb={4}>
         <FormControl mb={4} maxW="360px">
           <FormLabel fontSize="sm">Who can post and comment</FormLabel>
-          <Select value={settings.whoCanPost} onChange={(event) => setSetting('whoCanPost', event.target.value)}>
-            <option value="students_can_post">Students can post and comment</option>
+          <Select value={settings.whoCanPost || 'students_can_comment'} onChange={(event) => setSetting('whoCanPost', event.target.value)}>
             <option value="students_can_comment">Students can only comment</option>
+            <option value="students_can_post">Students can post and comment</option>
             <option value="teachers_only">Only teachers can post or comment</option>
           </Select>
         </FormControl>

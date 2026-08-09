@@ -104,17 +104,17 @@ export default function CommentThread({
 
       {visible.map((comment) => (
         <Flex key={comment._id} gap={3} mb={3} align="flex-start">
-          <Avatar size="xs" name={comment.authorName} />
+          <Avatar size="xs" name={comment.authorName} flexShrink={0} />
           <Box flex="1" minW={0}>
-            <HStack spacing={2} align="baseline">
-              <Text fontSize="sm" fontWeight="600" color="gray.800">
+            <HStack spacing={2} align="baseline" wrap="wrap">
+              <Text fontSize="sm" fontWeight="600" color="gray.800" noOfLines={1} maxW="100%" wordBreak="break-all">
                 {comment.authorName}
               </Text>
-              <Text fontSize="xs" color="gray.400">
+              <Text fontSize="xs" color="gray.400" flexShrink={0}>
                 {relativeTime(comment.created_at)}
               </Text>
             </HStack>
-            <Text fontSize="sm" color="gray.700" whiteSpace="pre-wrap">
+            <Text fontSize="sm" color="gray.700" whiteSpace="pre-wrap" wordBreak="break-word" overflowWrap="anywhere">
               {comment.text}
             </Text>
           </Box>
@@ -126,12 +126,13 @@ export default function CommentThread({
               aria-label="Delete comment"
               icon={<span>✕</span>}
               onClick={() => remove(comment._id)}
+              flexShrink={0}
             />
           )}
         </Flex>
       ))}
 
-      <Flex gap={2} align="flex-end" mt={2}>
+      <Flex gap={2} align="center" mt={2}>
         <Textarea
           size="sm"
           rows={1}
@@ -148,7 +149,7 @@ export default function CommentThread({
             }
           }}
         />
-        <Button size="sm" colorScheme="blue" onClick={submit} isLoading={posting} isDisabled={!text.trim()}>
+        <Button size="sm" colorScheme="blue" onClick={submit} isLoading={posting} isDisabled={!text.trim()} flexShrink={0}>
           Post
         </Button>
       </Flex>

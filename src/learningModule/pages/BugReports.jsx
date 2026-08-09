@@ -61,7 +61,7 @@ const KIND_COPY = {
   },
 };
 
-function ReportForm({ classes, pointsPerReport, onSent, canUseGithub }) {
+function ReportForm({ classes, pointsPerReport, onSent }) {
   const [kind, setKind] = useState('bug');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -128,27 +128,10 @@ function ReportForm({ classes, pointsPerReport, onSent, canUseGithub }) {
         <Button colorScheme="purple" onClick={submit} isLoading={saving} isDisabled={!title.trim()}>
           Send
         </Button>
-        {/* Only for people who can actually reach the tracker — the repository
-            is private, so a student following this link lands on a 404 that
-            reads as the app being broken. Sending here is the route for
-            everyone else, and it is the one that pays points. */}
-        {canUseGithub && (
-          <Button
-            as="a"
-            variant="outline"
-            href={githubIssueUrl({
-              kind,
-              title,
-              description,
-              pageUrl: window.location.href,
-              className: classes.find((klass) => klass._id === classId)?.name || '',
-            })}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Raise on GitHub ↗
-          </Button>
-        )}
+        {/* No route to GitHub from this form, for anybody. Filing here is the
+            only way in: it reaches the queue, it pays points, and an admin
+            decides what is worth raising on the tracker. Escalation lives in
+            the queue instead — see AdminQueue. */}
         <Text fontSize="xs" color="gray.500">
           {pointsPerReport} points once an administrator approves it — and a badge if it was in one
           of your classes.
@@ -354,15 +337,7 @@ export default function BugReports() {
       title="Bug / Suggestion"
       subtitle="Found something broken, or thought of something better? Tell us and we will look."
     >
-      <ReportForm
-        classes={classes}
-        pointsPerReport={mine.pointsPerReport}
-        onSent={load}
-        // The same signal the page already uses to decide whether to show the
-        // queue: a non-null admin payload means the API let this account read
-        // it, which is the closest thing here to "works on the repository".
-        canUseGithub={Boolean(queue)}
-      />
+      <ReportForm classes={classes} pointsPerReport={mine.pointsPerReport} onSent={load} />
     </SectionCard>
   );
 

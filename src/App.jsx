@@ -188,6 +188,7 @@ import ConfManual from './conferencemodule/ConfManual';
 import DeptAdminLayout from './deptadmin/DeptAdminLayout';
 import DeptDashboard from './deptadmin/DeptDashboard';
 import DeptReports from './deptadmin/DeptReports';
+import DeptBugReports from './deptadmin/DeptBugReports';
 import {
     DeptAssignRolls,
     DeptLiveRTSP,
@@ -546,6 +547,7 @@ function App() {
           <Route path="altering-class" element={<AlterClassPage />} />
           <Route path="stats/progress" element={<Navigate to="/dept-admin/dashboard" replace />} />
           <Route path="dept-reports-view" element={<DeptReports />} />
+          <Route path="bug-report" element={<DeptBugReports />} />
           <Route path="*" element={
             <div style={{ padding: 48, textAlign: 'center' }}>
               <h2 style={{ marginBottom: 12 }}>Access Restricted</h2>

@@ -78,8 +78,8 @@ function Composer({ classId, onPosted }) {
           color="gray.500"
           textAlign="left"
         >
-          <Avatar size="sm" />
-          <Text fontSize="sm">Announce something to your class…</Text>
+          <Avatar size="sm" flexShrink={0} />
+          <Text fontSize="sm" noOfLines={1} flex="1">Announce something to your class…</Text>
         </Flex>
       ) : (
         <Box>
@@ -91,35 +91,39 @@ function Composer({ classId, onPosted }) {
             />
           </Box>
           <AttachmentPicker attachments={attachments} onChange={setAttachments} disabled={posting} />
-          <Flex mt={4} gap={3} align="center" wrap="wrap">
-            <Checkbox size="sm" isChecked={pinned} onChange={(e) => setPinned(e.target.checked)}>
-              Pin to top
-            </Checkbox>
-            <HStack spacing={2}>
-              <Text fontSize="sm" color="gray.600">
-                Schedule
-              </Text>
-              <Input
+          <Flex mt={4} gap={3} align="center" justify="space-between" wrap="wrap" direction={{ base: 'column', sm: 'row' }}>
+            <Flex gap={3} align="center" wrap="wrap" w={{ base: '100%', sm: 'auto' }}>
+              <Checkbox size="sm" isChecked={pinned} onChange={(e) => setPinned(e.target.checked)}>
+                Pin to top
+              </Checkbox>
+              <HStack spacing={2} w={{ base: '100%', sm: 'auto' }}>
+                <Text fontSize="sm" color="gray.600" flexShrink={0}>
+                  Schedule
+                </Text>
+                <Input
+                  size="sm"
+                  type="datetime-local"
+                  value={scheduledFor}
+                  onChange={(event) => setScheduledFor(event.target.value)}
+                  w={{ base: '100%', sm: 'auto' }}
+                  maxW={{ base: '100%', sm: '220px' }}
+                />
+              </HStack>
+            </Flex>
+            <HStack spacing={2} ml={{ base: 0, sm: 'auto' }} w={{ base: '100%', sm: 'auto' }} justify="flex-end">
+              <Button size="sm" variant="ghost" onClick={reset}>
+                Cancel
+              </Button>
+              <Button
                 size="sm"
-                type="datetime-local"
-                value={scheduledFor}
-                onChange={(event) => setScheduledFor(event.target.value)}
-                maxW="220px"
-              />
+                colorScheme="blue"
+                onClick={submit}
+                isLoading={posting}
+                isDisabled={isRichTextEmpty(text) && !attachments.length}
+              >
+                {scheduledFor ? 'Schedule' : 'Post'}
+              </Button>
             </HStack>
-            <Box flex="1" />
-            <Button size="sm" variant="ghost" onClick={reset}>
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              colorScheme="blue"
-              onClick={submit}
-              isLoading={posting}
-              isDisabled={isRichTextEmpty(text) && !attachments.length}
-            >
-              {scheduledFor ? 'Schedule' : 'Post'}
-            </Button>
           </Flex>
         </Box>
       )}
@@ -184,23 +188,23 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
   const canManage = isTeacher || String(item.authorId) === String(me?.id);
 
   return (
-    <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={5} mb={4}>
+    <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={{ base: 3, sm: 5 }} mb={4} w="100%">
       <Flex gap={3} align="flex-start">
-        <Avatar size="sm" name={item.authorName} />
+        <Avatar size="sm" name={item.authorName} flexShrink={0} />
         <Box flex="1" minW={0}>
           <Flex align="center" gap={2} wrap="wrap">
-            <Text fontWeight="600" fontSize="sm">
+            <Text fontWeight="600" fontSize="sm" noOfLines={1} maxW="100%" wordBreak="break-all">
               {item.authorName}
             </Text>
-            <Text fontSize="xs" color="gray.500">
-              {relativeTime(item.publishedAt)}
-            </Text>
-            {item.pinned && <Badge colorScheme="yellow">📌 Pinned</Badge>}
-            {item.status === 'scheduled' && <Badge colorScheme="purple">Scheduled</Badge>}
-            {item.status === 'draft' && <Badge colorScheme="gray">Draft</Badge>}
-            {item.audience?.length > 0 && <Badge colorScheme="cyan">Targeted</Badge>}
+            {item.pinned && <Badge colorScheme="yellow" flexShrink={0}>📌 Pinned</Badge>}
+            {item.status === 'scheduled' && <Badge colorScheme="purple" flexShrink={0}>Scheduled</Badge>}
+            {item.status === 'draft' && <Badge colorScheme="gray" flexShrink={0}>Draft</Badge>}
+            {item.audience?.length > 0 && <Badge colorScheme="cyan" flexShrink={0}>Targeted</Badge>}
           </Flex>
-          <Box mt={2}>
+          <Text fontSize="xs" color="gray.500" mt={0.5}>
+            {relativeTime(item.publishedAt)}
+          </Text>
+          <Box mt={3} wordBreak="break-word" overflowWrap="anywhere">
             <RichText>{item.text}</RichText>
           </Box>
           <AttachmentList attachments={item.attachments} />
@@ -208,7 +212,7 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
 
         {canManage && (
           <Menu>
-            <MenuButton as={IconButton} size="sm" variant="ghost" icon={<span>⋮</span>} aria-label="Post actions" />
+            <MenuButton as={IconButton} size="sm" variant="ghost" icon={<span>⋮</span>} aria-label="Post actions" flexShrink={0} />
             <MenuList>
               {isTeacher && (
                 <MenuItem {...buttonTextStyles} onClick={togglePin}>
@@ -224,27 +228,28 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
       </Flex>
 
       <Divider my={3} />
-      <HStack spacing={3} wrap="wrap">
+      <Flex gap={2} wrap="wrap" align="center">
         <Button
           size="xs"
           variant={myReaction ? 'solid' : 'ghost'}
           colorScheme="blue"
           onClick={react}
           leftIcon={<span>👍</span>}
+          flexShrink={0}
         >
           {reactions.length || ''}
         </Button>
         {likedBy.length > 0 && (
           <Tooltip label={likedBy.join(', ')} placement="top" hasArrow>
-            <Text fontSize="xs" color="gray.500" cursor="default">
+            <Text fontSize="xs" color="gray.500" cursor="default" maxW={{ base: '100%', sm: '300px' }} noOfLines={1}>
               Liked by {likedBySummary(likedBy)}
             </Text>
           </Tooltip>
         )}
-        <Button size="xs" variant="ghost" onClick={() => setShowComments((v) => !v)}>
+        <Button size="xs" variant="ghost" onClick={() => setShowComments((v) => !v)} flexShrink={0}>
           💬 {commentCount} class {commentCount === 1 ? 'comment' : 'comments'}
         </Button>
-      </HStack>
+      </Flex>
 
       <Collapse in={showComments} animateOpacity>
         <Box mt={3}>
@@ -275,7 +280,7 @@ function CourseworkStreamCard({ item, classId }) {
       borderWidth="1px"
       borderColor="gray.200"
       borderRadius="lg"
-      p={5}
+      p={{ base: 3, sm: 5 }}
       mb={4}
       _hover={{ boxShadow: 'sm', borderColor: 'blue.300', textDecoration: 'none' }}
     >
@@ -299,18 +304,18 @@ function CourseworkStreamCard({ item, classId }) {
           <Heading size="sm" color="gray.800" noOfLines={1}>
             {item.title}
           </Heading>
-          <HStack spacing={3} mt={1} wrap="wrap">
-            <Text fontSize="xs" color="gray.400">
+          <Flex gap={2} mt={1.5} align="center" wrap="wrap">
+            <Text fontSize="xs" color="gray.400" flexShrink={0}>
               {relativeTime(item.publishedAt)}
             </Text>
             {item.workType !== 'material' && <DueBadge dueDate={item.dueDate} />}
             {item.mySubmission && <StateBadge state={item.mySubmission.state} late={item.mySubmission.late} />}
             {item.submissionStats && (
-              <Badge colorScheme="gray">
+              <Badge colorScheme="gray" flexShrink={0}>
                 {item.submissionStats.turnedIn}/{item.submissionStats.total} handed in
               </Badge>
             )}
-          </HStack>
+          </Flex>
         </Box>
       </Flex>
       {item.aiSourceSessionId && (
@@ -362,7 +367,7 @@ export default function Stream() {
   if (loading) return <Loading label="Loading the stream…" />;
 
   return (
-    <Flex gap={6} align="flex-start" direction={{ base: 'column', lg: 'row' }}>
+    <Flex gap={{ base: 4, lg: 6 }} align="flex-start" direction={{ base: 'column', lg: 'row' }} w="100%">
       <Box w={{ base: '100%', lg: '280px' }} flexShrink={0}>
         <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={4} mb={4}>
           <Heading size="xs" mb={3} color="gray.700">
@@ -392,7 +397,7 @@ export default function Stream() {
         )}
       </Box>
 
-      <Box flex="1" minW={0}>
+      <Box flex="1" minW={0} w="100%">
         <ErrorState error={error} onRetry={load} />
         {data?.canPost && <Composer classId={classId} onPosted={load} />}
 

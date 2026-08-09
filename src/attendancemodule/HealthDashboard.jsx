@@ -21,6 +21,7 @@ function StatusDot({ status, size = 7 }) {
   if (status === 'online')   color = T.emerald;
   if (status === 'offline')  color = T.red;
   if (status === 'checking') color = T.amber;
+  if (status === 'degraded') color = T.amber;
 
   return (
     <span style={{
@@ -32,7 +33,7 @@ function StatusDot({ status, size = 7 }) {
   );
 }
 
-function ServiceButton({ label, status, details, action }) {
+function ServiceButton({ label, status, details, action, dropWidth = 220 }) {
   const [open, setOpen] = useState(false);
   const [dropPos, setDropPos] = useState({ top: 0, right: 0 });
   const btnRef = useRef(null);
@@ -67,6 +68,7 @@ function ServiceButton({ label, status, details, action }) {
   if (status === 'online')          { statusColor = T.emerald; statusText = 'Online';        dimColor = T.emeraldDim; }
   else if (status === 'offline')    { statusColor = T.red;     statusText = 'Offline';       dimColor = T.redDim;     }
   else if (status === 'checking')   { statusColor = T.amber;   statusText = 'Checking…';    dimColor = T.amberDim;   }
+  else if (status === 'degraded')   { statusColor = T.amber;   statusText = 'Degraded';      dimColor = T.amberDim;   }
   else if (status === 'not_configured') { statusText = 'Not Configured'; }
 
   const validDetails = details.filter(Boolean);
@@ -101,7 +103,8 @@ function ServiceButton({ label, status, details, action }) {
             position: 'fixed',
             top: dropPos.top,
             right: dropPos.right,
-            width: 220,
+            width: dropWidth,
+            maxWidth: 'calc(100vw - 24px)',
             background: T.surface,
             border: `1px solid ${T.border}`,
             borderRadius: 10,
@@ -189,6 +192,39 @@ export default function HealthDashboard() {
     ? MODEL_LABELS.map(([key, label]) => `${mlModels[key] ? '●' : '○'} ${label}${mlModels[key] ? '' : ' — not loaded'}`)
     : [];
 
+  // ERP — the status comes from a real POST to the roster API the ERP
+  // Embedding Generation page fetches through, so the server can say WHY it is
+  // whatever it is ("Roster API answering", "Non-JSON response (HTTP 502)…").
+  // Prefer that sentence over anything invented here.
+  const erpHealth  = healthData?.services?.erp || null;
+  const erpDetail  = clientStatus !== 'online'
+    ? 'Backend unreachable'
+    : (erpHealth?.detail
+       || (svc.erp === 'not_configured' ? 'Not configured (ERP_PORTAL_KEY unset)' : '—'));
+
+  // Every ERP endpoint the app is wired to, listed on click: the roster API
+  // that decides this status, plus the two that cannot be probed (pushing
+  // attendance would write to the ERP; the override sync is a route the ERP
+  // calls us on). ○ means configured but unprobed, ✕ means not configured.
+  const erpApiRows = (clientStatus === 'online' ? (erpHealth?.apis || []) : []).map((api) => {
+    let mark = '✕';
+    if (api.configured) mark = api.probed ? (svc.erp === 'online' ? '●' : '◌') : '○';
+    return (
+      <div key={api.name}>
+        <div style={{ color: T.text, fontWeight: 600, fontFamily: T.fontBody, fontSize: 11 }}>
+          {mark} {api.name}
+          <span style={{ color: T.textMuted, fontWeight: 500 }}>
+            {' '}· {api.direction}{api.probed ? ' · probed' : ''}
+          </span>
+        </div>
+        <div style={{ wordBreak: 'break-all', marginTop: 2 }}>{api.method} {api.url}</div>
+        {api.note && (
+          <div style={{ marginTop: 2, fontFamily: T.fontBody, fontSize: 10 }}>{api.note}</div>
+        )}
+      </div>
+    );
+  });
+
   const formatUptime = (s) => {
     if (!s) return '0s';
     const d = Math.floor(s / (3600 * 24));
@@ -259,10 +295,13 @@ export default function HealthDashboard() {
       <ServiceButton
         label="ERP"
         status={svc.erp}
+        dropWidth={300}
         details={[
+          erpDetail,
           svc.erp === 'not_configured'
-            ? 'Not configured (ERP_PORTAL_KEY unset)'
+            ? null
             : `Latency: ${healthData?.services?.erp?.latency ? healthData.services.erp.latency + 'ms' : '—'}`,
+          ...erpApiRows,
         ]}
         action={{ label: 'Manage ERP Sync', onClick: () => navigate('/attendance/erp-sync') }}
       />

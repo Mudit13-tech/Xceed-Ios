@@ -131,16 +131,16 @@ purify.addHook('afterSanitizeAttributes', (node) => {
 });
 
 const PROSE_STYLES = {
-  p: { mb: 2, lineHeight: 1.7 },
+  p: { mb: 2, lineHeight: 1.7, wordBreak: 'break-word', overflowWrap: 'anywhere' },
   'p:last-child': { mb: 0 },
-  'ul, ol': { pl: 6, mb: 2 },
-  li: { mb: 1, lineHeight: 1.7 },
-  'h1, h2, h3, h4, h5, h6': { fontWeight: 700, mt: 3, mb: 1.5, lineHeight: 1.3 },
+  'ul, ol': { pl: 6, mb: 2, wordBreak: 'break-word' },
+  li: { mb: 1, lineHeight: 1.7, wordBreak: 'break-word' },
+  'h1, h2, h3, h4, h5, h6': { fontWeight: 700, mt: 3, mb: 1.5, lineHeight: 1.3, wordBreak: 'break-word' },
   h1: { fontSize: '1.4rem' },
   h2: { fontSize: '1.2rem' },
   h3: { fontSize: '1.05rem' },
   strong: { fontWeight: 700 },
-  a: { color: 'blue.600', textDecoration: 'underline' },
+  a: { color: 'blue.600', textDecoration: 'underline', wordBreak: 'break-all' },
   img: { maxWidth: '100%', height: 'auto', borderRadius: 'md', my: 2 },
   blockquote: {
     borderLeftWidth: '4px',
@@ -150,9 +150,10 @@ const PROSE_STYLES = {
     my: 2,
     color: 'gray.600',
     fontStyle: 'italic',
+    wordBreak: 'break-word',
   },
-  code: { bg: 'gray.100', px: 1, borderRadius: 'sm', fontSize: '0.875em', fontFamily: 'mono' },
-  pre: { bg: 'gray.900', color: 'gray.100', p: 3, borderRadius: 'md', overflowX: 'auto', my: 2 },
+  code: { bg: 'gray.100', px: 1, borderRadius: 'sm', fontSize: '0.875em', fontFamily: 'mono', wordBreak: 'break-word' },
+  pre: { bg: 'gray.900', color: 'gray.100', p: 3, borderRadius: 'md', overflowX: 'auto', my: 2, whiteSpace: 'pre-wrap', wordBreak: 'break-all' },
   'pre code': { bg: 'transparent', color: 'inherit', p: 0 },
   table: { width: '100%', my: 2, borderCollapse: 'collapse', display: 'block', overflowX: 'auto' },
   'th, td': { borderWidth: '1px', borderColor: 'gray.200', px: 2, py: 1, fontSize: 'sm' },
@@ -197,7 +198,7 @@ export default function RichText({ children, fallback = null, markdown = false, 
   }
 
   return (
-    <Text whiteSpace="pre-wrap" color="gray.700" fontSize="sm" {...rest}>
+    <Text whiteSpace="pre-wrap" wordBreak="break-word" overflowWrap="anywhere" color="gray.700" fontSize="sm" {...rest}>
       {source}
     </Text>
   );

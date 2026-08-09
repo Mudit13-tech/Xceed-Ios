@@ -21,6 +21,7 @@ const ALL_MENUS = [
     { id: 'alteringClasses',   menuKey: 'alteringClasses',   route: '/dept-admin/altering-class',       label: 'Altering Classes',                   color: '#d946ef' },
     { id: 'instituteIdentification', menuKey: 'instituteIdentification', route: '/attendance/institute-identification', label: 'Institute Identification', color: '#8b5cf6' },
     { id: 'erpOverrides',      menuKey: 'erpOverrides',      route: '/attendance/erp-overrides',        label: 'ERP Overrides',                      color: '#f59e0b' },
+    { id: 'bugReports',        menuKey: 'bugReports',        route: '/dept-admin/bug-report',           label: 'Raise a Bug / Suggestion',           color: '#ef4444' },
     { id: 'helpManual',        menuKey: 'helpManual',        route: '/ams-manual',                      label: 'Help & Manual',        newTab: true, color: '#64748b' },
 ];
 
