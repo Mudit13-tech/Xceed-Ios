@@ -309,7 +309,7 @@ function CreateClassModal({ isOpen, onClose, onCreated }) {
               >
                 {semesters.map((item) => (
                   <option key={item} value={item}>
-                    Semester {item}
+                    {item}
                   </option>
                 ))}
               </Select>
@@ -331,7 +331,7 @@ function CreateClassModal({ isOpen, onClose, onCreated }) {
             >
               {subjects.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {[item.subCode, item.name].filter(Boolean).join(' — ')}
+                  {[item.subCode, item.subName || item.name].filter(Boolean).join(' — ')}
                   {item.type ? ` (${item.type})` : ''}
                 </option>
               ))}
