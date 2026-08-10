@@ -170,10 +170,15 @@ function GateBar({ gates }) {
   );
 }
 
-function RunProgress({ completed, target }) {
+function RunProgress({ completed, target, configured }) {
   const pct = target > 0 ? Math.min(100, (completed / target) * 100) : 0;
   const isDone = completed >= target && target > 0;
   const color = isDone ? '#10b981' : '#6366f1';
+  // `target` is what the period can actually hold, which is the honest
+  // denominator; `configured` is what the setting asks for. When a period is
+  // too short to deliver the setting, say so here rather than showing a
+  // shrunken target with no explanation.
+  const shortfall = configured > 0 && target > 0 && configured > target;
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: theme.textMuted, marginBottom: 4 }}>
@@ -187,6 +192,12 @@ function RunProgress({ completed, target }) {
           animation: !isDone && completed > 0 ? 'lrBar 2s ease-in-out infinite' : 'none',
         }} />
       </div>
+      {shortfall && (
+        <div style={{ fontSize: 10, color: '#f59e0b', marginTop: 4 }}>
+          {configured} runs configured — only {target} fit in this period at the
+          current run duration
+        </div>
+      )}
     </div>
   );
 }
@@ -351,14 +362,14 @@ function RoomCard({ r, onClickReport, pastPeriod }) {
                   ? `Run in progress — ${r.runsCompleted} of ${r.targetRuns} check${r.targetRuns === 1 ? '' : 's'} saved`
                   : 'Run in progress — capturing the first check…'}
               </div>
-              <RunProgress completed={r.runsCompleted} target={r.targetRuns} />
+              <RunProgress completed={r.runsCompleted} target={r.targetRuns} configured={r.configuredRuns} />
             </div>
           ) : isPending ? (
             <div style={{ fontSize: 11, color: theme.textMuted, fontStyle: 'italic' }}>
               {noRun ? 'No attendance recorded for this period.' : 'Waiting for attendance run to start…'}
             </div>
           ) : (
-            <RunProgress completed={r.runsCompleted} target={r.targetRuns} />
+            <RunProgress completed={r.runsCompleted} target={r.targetRuns} configured={r.configuredRuns} />
           )}
 
           {/* Why it has or hasn't started — always available, expanded by

@@ -55,6 +55,35 @@ function StatBadge({ label, value, tone = 'default' }) {
     );
 }
 
+// "2026-08-10T09:15:47" → "09:15:47". The stamp is already local wall-clock
+// (written by the server that ran the check), so it must not go through Date —
+// that would re-interpret it in the browser's timezone.
+function clockOf(isoLocal) {
+    const m = /T(\d{2}:\d{2}:\d{2})/.exec(isoLocal || '');
+    return m ? m[1] : null;
+}
+
+// One period folder holds every check of that period, so "Cam 1, 15s" alone
+// doesn't identify a frame — which run it came from and when it was actually
+// taken are what make it evidence.
+function FrameStats({ frame }) {
+    const captured = clockOf(frame.capturedAt);
+    return (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {frame.runTime ? (
+                <StatBadge
+                    label={frame.checkIndex ? `Run ${frame.checkIndex}` : 'Run'}
+                    value={frame.runTime}
+                />
+            ) : null}
+            {captured ? <StatBadge label="At" value={captured} /> : null}
+            {frame.camera != null ? <StatBadge label="Cam" value={frame.camera} tone="success" /> : null}
+            {frame.elapsedSec != null ? <StatBadge label="Sec" value={frame.elapsedSec} tone="warning" /> : null}
+            {frame.facesCount != null ? <StatBadge label="Faces" value={frame.facesCount} tone="danger" /> : null}
+        </div>
+    );
+}
+
 function EmptyState({ title, subtitle }) {
     return (
         <div style={{
@@ -654,11 +683,7 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                             <div style={{ fontSize: 13, fontWeight: 700, color: theme.text, marginBottom: 8 }}>
                                                 {frame.filename}
                                             </div>
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                                {frame.camera != null ? <StatBadge label="Cam" value={frame.camera} tone="success" /> : null}
-                                                {frame.elapsedSec != null ? <StatBadge label="Sec" value={frame.elapsedSec} tone="warning" /> : null}
-                                                {frame.facesCount != null ? <StatBadge label="Faces" value={frame.facesCount} tone="danger" /> : null}
-                                            </div>
+                                            <FrameStats frame={frame} />
                                         </button>
                                     ))}
                                 </div>
@@ -722,11 +747,7 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                             <div style={{ fontSize: 13, fontWeight: 700, color: theme.text, marginBottom: 8 }}>
                                                 {frame.filename}
                                             </div>
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                                {frame.camera != null ? <StatBadge label="Cam" value={frame.camera} tone="success" /> : null}
-                                                {frame.elapsedSec != null ? <StatBadge label="Sec" value={frame.elapsedSec} tone="warning" /> : null}
-                                                {frame.facesCount != null ? <StatBadge label="Faces" value={frame.facesCount} tone="danger" /> : null}
-                                            </div>
+                                            <FrameStats frame={frame} />
                                             {Array.isArray(frame.rolls) && frame.rolls.length > 0 ? (
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
                                                     {frame.rolls.map((roll) => (
@@ -856,6 +877,25 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                         <StatBadge label="Subject" value={classInfo?.subject || '-'} tone="success" />
                                         <StatBadge label="Faculty" value={classInfo?.faculty || '-'} tone="warning" />
                                         <StatBadge label="Batch" value={classInfo?.batch || '-'} tone="danger" />
+                                    </div>
+
+                                    {/* Which run of this period the open frame
+                                        belongs to, and when it was captured —
+                                        the folder is shared by every run. */}
+                                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.62)', marginBottom: 12 }}>
+                                        Capture
+                                    </div>
+                                    <div style={{ display: 'grid', gap: 10 }}>
+                                        <StatBadge
+                                            label={modalFrame.checkIndex ? `Run ${modalFrame.checkIndex}` : 'Run'}
+                                            value={modalFrame.runTime || 'not recorded'}
+                                        />
+                                        <StatBadge
+                                            label="Captured"
+                                            value={(modalFrame.capturedAt || '').replace('T', ' ') || 'not recorded'}
+                                        />
+                                        <StatBadge label="Cam" value={modalFrame.camera ?? '-'} tone="success" />
+                                        <StatBadge label="Sec into run" value={modalFrame.elapsedSec ?? '-'} tone="warning" />
                                     </div>
 
                                     {downloadError && (

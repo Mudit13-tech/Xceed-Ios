@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Badge,
   Box,
@@ -75,24 +76,10 @@ function WorkRow({ entry, showStudent }) {
 }
 
 export default function Todo() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setData(await lmApi.todo());
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data, isLoading: loading, error, refetch: load } = useQuery({
+    queryKey: ['learning', 'todo'],
+    queryFn: () => lmApi.todo(),
+  });
 
   if (loading) return <Loading label="Gathering your work…" />;
   if (error) return <ErrorState error={error} onRetry={load} />;

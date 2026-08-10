@@ -209,6 +209,12 @@ export default function ERPSync({ fixedDepartment, embedded = false }) {
   }, []);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
+  // fixedDepartment can arrive after mount (the dept-admin outlet context
+  // resolves asynchronously), so the initial state alone is not enough.
+  useEffect(() => {
+    if (fixedDepartment) setDept(fixedDepartment);
+  }, [fixedDepartment]);
+
   // Dept → semester cascade (same endpoint the other pages use)
   useEffect(() => {
     if (!dept) { setAvailableSems([]); setSemester(''); return; }
@@ -511,6 +517,10 @@ export default function ERPSync({ fixedDepartment, embedded = false }) {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      // Kept outside the loop as well as in state: the roster cache below has
+      // to be corrected with this run's real result, and doneSummary is not
+      // readable here (it is this render's stale closure).
+      let doneEv = null;
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -530,6 +540,7 @@ export default function ERPSync({ fixedDepartment, embedded = false }) {
             } else if (ev.type === 'stage' || ev.type === 'warning') {
               setProgressRows((prev) => [...prev, { rollNo: '—', status: ev.type, note: ev.message }]);
             } else if (ev.type === 'done') {
+              doneEv = ev;
               setDoneSummary(ev);
             } else if (ev.type === 'error') {
               throw new Error(ev.message);
@@ -541,6 +552,31 @@ export default function ERPSync({ fixedDepartment, embedded = false }) {
         }
       }
       showToast(`${subject.subName || subject.subjectFullName}: embeddings generated`);
+
+      // The row's missing-ground-truth list must come from the run that just
+      // finished, not from the ERP fetch that preceded it.
+      //
+      // missedFor() prefers this session's cached fetch over the Subject
+      // record whenever that cache holds rolls, and the cache was written by
+      // Fetch — whose missedGroundTruth is a snapshot of which ground-truth
+      // FOLDERS existed at fetch time. Photos captured after that fetch (the
+      // usual reason someone regenerates) never reached the cache, so the row
+      // went on reporting students as missing while the generation beside it
+      // embedded every one of them. loadSubjects() below could not fix it: it
+      // refreshes the Subject record, which the cache outranks.
+      //
+      // The done event is the authoritative answer — it lists exactly the
+      // students this build could not embed, and it counts a student with a
+      // folder but no photos marked for embedding as missed, which a folder
+      // existence check cannot see.
+      if (doneEv) {
+        const key = rowKey(subject);
+        const missedNow = (doneEv.missedRollNos || []).map((m) => m.rollNo || m);
+        setRosters((prev) => (prev[key]
+          ? { ...prev, [key]: { ...prev[key], missedGroundTruth: missedNow } }
+          : prev));
+      }
+
       await loadSubjects();
       return true;
     } catch (err) {
@@ -649,15 +685,25 @@ export default function ERPSync({ fixedDepartment, embedded = false }) {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'flex-end' }}>
           <div style={{ minWidth: 220, flex: '2 1 220px' }}>
             <label style={styles.label}>Department</label>
-            <select
-              value={dept}
-              onChange={(e) => { setDept(e.target.value); setSubjects([]); setRosters({}); }}
-              style={styles.select}
-              disabled={deptLoading || !!fixedDepartment || busy}
-            >
-              <option value="">{deptLoading ? 'Loading...' : deptError ? 'Error' : 'Select...'}</option>
-              {departments.map((d) => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
-            </select>
+            {/* Dept admins get a static box, not a disabled <select>: their dept
+                string comes from the user record and need not appear verbatim
+                in the department list (spacing/underscore variants), in which
+                case a select would render blank. */}
+            {fixedDepartment ? (
+              <div style={{ ...styles.select, display: 'flex', alignItems: 'center', background: theme.surfaceAlt, color: theme.textMuted, cursor: 'not-allowed' }}>
+                {fixedDepartment.replace(/_/g, ' ')}
+              </div>
+            ) : (
+              <select
+                value={dept}
+                onChange={(e) => { setDept(e.target.value); setSubjects([]); setRosters({}); }}
+                style={styles.select}
+                disabled={deptLoading || busy}
+              >
+                <option value="">{deptLoading ? 'Loading...' : deptError ? 'Error' : 'Select...'}</option>
+                {departments.map((d) => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
+              </select>
+            )}
           </div>
           <div style={{ minWidth: 130, flex: '1 1 130px' }}>
             <label style={styles.label}>Semester</label>

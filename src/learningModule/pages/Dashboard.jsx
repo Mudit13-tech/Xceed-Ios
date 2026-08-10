@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   AlertIcon,
@@ -487,10 +488,6 @@ function JoinClassModal({ isOpen, onClose, onJoined }) {
 
 export default function Dashboard() {
   const { me, overview, reloadOverview } = useOutletContext() || {};
-  const [classes, setClasses] = useState([]);
-  const [archived, setArchived] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -501,23 +498,32 @@ export default function Dashboard() {
   const showJoin = searchParams.get('join') === '1';
   const closeModals = () => setSearchParams({}, { replace: true });
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [active, old] = await Promise.all([lmApi.listClasses(), lmApi.listClasses('archived')]);
-      setClasses(active);
-      setArchived(old);
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    data: classes = [],
+    isLoading: loadingClasses,
+    error: activeError,
+    refetch: refetchActive,
+  } = useQuery({
+    queryKey: ['learning', 'classes', 'active'],
+    queryFn: () => lmApi.listClasses(),
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const {
+    data: archived = [],
+    isLoading: loadingArchived,
+    error: archivedError,
+    refetch: refetchArchived,
+  } = useQuery({
+    queryKey: ['learning', 'classes', 'archived'],
+    queryFn: () => lmApi.listClasses('archived'),
+  });
+
+  const loading = loadingClasses || loadingArchived;
+  const error = activeError || archivedError;
+
+  const load = useCallback(async () => {
+    await Promise.all([refetchActive(), refetchArchived()]);
+  }, [refetchActive, refetchArchived]);
 
   useEffect(() => {
     reloadOverview?.();
@@ -549,6 +555,11 @@ export default function Dashboard() {
           <Button variant="outline" onClick={() => setSearchParams({ join: '1' })}>
             Join class
           </Button>
+          {mayCreateClass && (
+            <Button colorScheme="blue" onClick={() => setSearchParams({ create: '1' })}>
+              Create class
+            </Button>
+          )}
         </HStack>
       </Flex>
 

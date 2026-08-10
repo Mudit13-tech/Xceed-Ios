@@ -324,19 +324,7 @@ export default function LearningLayout() {
 
             <NotificationBell />
 
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => navigate('/learning?join=1')}
-              display={{ base: 'none', sm: 'inline-flex' }}
-            >
-              Join class
-            </Button>
-            {mayCreateClass && (
-              <Button size="sm" colorScheme="blue" onClick={() => navigate('/learning?create=1')} display={{ base: 'none', sm: 'inline-flex' }}>
-                Create
-              </Button>
-            )}
+
 
             {me && (
               <Menu placement="bottom-end">
@@ -406,26 +394,7 @@ export default function LearningLayout() {
             <Icon as="span">🎓</Icon> XCEED Learning
           </DrawerHeader>
           <DrawerBody>
-            <Flex direction="column" gap={2} mb={4}>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => { onClose(); navigate('/learning?join=1'); }}
-                width="100%"
-              >
-                Join class
-              </Button>
-              {mayCreateClass && (
-                <Button
-                  size="sm"
-                  colorScheme="blue"
-                  onClick={() => { onClose(); navigate('/learning?create=1'); }}
-                  width="100%"
-                >
-                  Create
-                </Button>
-              )}
-            </Flex>
+
             <NavItems onNavigate={onClose} studentOnly={studentOnly} isAdmin={Boolean(me?.isAdmin)} />
             <ClassSwitcher
               classes={classes}

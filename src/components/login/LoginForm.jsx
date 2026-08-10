@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useLocation, useNavigate } from "react-router-dom";
+import { useQueryClient } from '@tanstack/react-query';
 import FormHeader from './FormHeader'
 import getEnvironment from '../../getenvironment'
 import { redirectTargetFrom } from '../../authRedirect'
@@ -17,6 +18,7 @@ import {
 } from '@chakra-ui/react'
 
 const LoginForm = () => {
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
@@ -122,6 +124,9 @@ const LoginForm = () => {
       if (responseData.token) {
         localStorage.setItem('token', responseData.token)
       }
+
+      // Clear the cache to prevent stale 401 errors from instantly kicking the user back out
+      queryClient.clear();
 
       setMessage(responseData.message);
       // A full load rather than a client-side navigation: the platform navbar

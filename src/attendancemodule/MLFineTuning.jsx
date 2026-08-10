@@ -18,6 +18,21 @@ const MAX_K_CONFIG_API = `${apiUrl}/api/v1/ml/max-k-config`;
 const ADAFACE_CONFIG_API = `${apiUrl}/api/v1/ml/adaface-config`;
 const PIPELINE_CONFIG_API = `${apiUrl}/api/v1/ml/pipeline-config`;
 const DETECTOR_CONFIG_API = `${apiUrl}/api/v1/ml/detector-config`;
+const LIVE_CONFIG_API = `${apiUrl}/api/v1/ml/live-config`;
+
+// Live Attendance Detection — what the detector actually sees on an attendance
+// run. Separate from the GT Acquisition values of the same name on purpose.
+const LIVE_META = {
+    det_size: {
+        label: 'Detection grid size', unit: 'px',
+        hint: 'InsightFace input size for attendance runs. 640 resolves smaller faces than 320. Independent of GT Acquisition’s own grid size — an acquisition run no longer changes this.',
+    },
+    max_detect_height: {
+        label: 'Max detect height', unit: 'px',
+        hint: 'Frames taller than this are downscaled before detection; 0 detects at the camera’s native resolution. Lower = faster and less memory, but every pixel dropped here caps how small a face can be and still be found.',
+    },
+};
+const LIVE_DET_SIZE_OPTIONS = [320, 640];
 
 // Face Detector — detection-only swap; embedding side untouched
 const DETECTOR_MODELS = [
@@ -190,6 +205,10 @@ export default function MLFineTuning() {
     const [detectorLoading, setDetectorLoading] = useState(true);
     const [detectorSaving,  setDetectorSaving]  = useState(false);
 
+    const [liveConfig,  setLiveConfig]  = useState(null);
+    const [liveLoading, setLiveLoading] = useState(true);
+    const [liveSaving,  setLiveSaving]  = useState(false);
+
     const [restarting, setRestarting] = useState(false);
 
     const showToast = (msg, type = 'success') => {
@@ -222,7 +241,7 @@ export default function MLFineTuning() {
                     const hd = await h.json();
                     if (h.ok && hd.status === 'ok') {
                         showToast(`ML service is back online${hd.model_loaded ? ' (model loaded)' : ''}.`);
-                        loadConfig(); loadGtConfig(); loadFaissConfig(); loadMaxKConfig(); loadAdafaceConfig(); loadPipelineConfig(); loadDetectorConfig();
+                        loadConfig(); loadGtConfig(); loadFaissConfig(); loadMaxKConfig(); loadAdafaceConfig(); loadPipelineConfig(); loadDetectorConfig(); loadLiveConfig();
                         setRestarting(false);
                         return;
                     }
@@ -402,6 +421,42 @@ export default function MLFineTuning() {
             showToast(`Update failed: ${err.message}`, 'error');
         }
         setPipelineSaving(false);
+    };
+
+    const loadLiveConfig = useCallback(async () => {
+        setLiveLoading(true);
+        try {
+            const res = await fetch(LIVE_CONFIG_API);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            setLiveConfig(data);
+        } catch (err) {
+            showToast(`Failed to load live attendance config: ${err.message}`, 'error');
+        }
+        setLiveLoading(false);
+    }, []);
+
+    useEffect(() => { loadLiveConfig(); }, [loadLiveConfig]);
+
+    const updateLiveConfig = async (patch) => {
+        setLiveSaving(true);
+        const prev = liveConfig;
+        setLiveConfig({ ...liveConfig, ...patch });
+        try {
+            const res = await fetch(LIVE_CONFIG_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch),
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            setLiveConfig(data);
+            showToast('Live attendance detection updated — applies to the next run');
+        } catch (err) {
+            setLiveConfig(prev);
+            showToast(`Update failed: ${err.message}`, 'error');
+        }
+        setLiveSaving(false);
     };
 
     const loadDetectorConfig = useCallback(async () => {
@@ -744,6 +799,138 @@ export default function MLFineTuning() {
                                 </div>
                             );
                         })}
+
+                        {/* Detection debug crops — diagnostic, off by default */}
+                        <div style={{
+                            borderTop: `1px solid ${theme.border}`, paddingTop: 14, marginTop: 4,
+                        }}>
+                            <Toggle
+                                checked={!!detectorConfig.debug_crops}
+                                disabled={detectorSaving}
+                                onChange={(v) => updateDetectorConfig({ debug_crops: v })}
+                                label={detectorConfig.debug_crops
+                                    ? 'Detection debug crops ON'
+                                    : 'Detection debug crops off'}
+                            />
+                            <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 6, lineHeight: 1.5 }}>
+                                Saves every crop the detector produced during the next live attendance
+                                run into <code>ml-data/detection_debug/&lt;room_slot_date&gt;/</code> on this
+                                server, split into <strong>raw</strong> (before any filter),
+                                {' '}<strong>rejected</strong> (with the reason and the failing value in the
+                                filename) and <strong>accepted</strong>. This is how you tell a face the
+                                detector never saw from one a filter discarded. Limited to the first{' '}
+                                {detectorConfig.debug_crop_frames ?? 20} frames per run — turn it off once
+                                you have a sample.
+                            </div>
+                            {detectorConfig.debug_crops && (
+                                <div style={{
+                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    marginTop: 10, flexWrap: 'wrap',
+                                }}>
+                                    <label style={styles.label}>Frames to collect</label>
+                                    <input
+                                        type="number" min={1} max={200}
+                                        style={{ ...styles.input, maxWidth: 100 }}
+                                        value={detectorConfig.debug_crop_frames ?? 20}
+                                        disabled={detectorSaving}
+                                        onChange={(e) => setDetectorConfig({
+                                            ...detectorConfig,
+                                            debug_crop_frames: e.target.value,
+                                        })}
+                                        onBlur={(e) => {
+                                            const n = Number.parseInt(e.target.value, 10);
+                                            if (Number.isNaN(n) || n < 1 || n > 200) {
+                                                setDetectorConfig({ ...detectorConfig, debug_crop_frames: 20 });
+                                                return;
+                                            }
+                                            updateDetectorConfig({ debug_crop_frames: n });
+                                        }}
+                                    />
+                                    <span style={{ fontSize: 11, color: theme.textMuted }}>1–200</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* ── Live Attendance Detection input ────────────────────────── */}
+            <div style={{ ...styles.card, marginBottom: 20 }}>
+                <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: theme.text }}>Live Attendance Detection</div>
+                    <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
+                        What the detector actually sees on a live attendance run — both the batch
+                        run and live tracking. These are <strong>separate</strong> from the GT
+                        Acquisition values below: each pipeline asserts its own at run start, so an
+                        acquisition run can no longer leave attendance on a different setting.
+                        Applies to the next run — no restart needed.
+                    </div>
+                </div>
+
+                {liveLoading ? (
+                    <div style={{ fontSize: 13, color: theme.textMuted }}>Loading…</div>
+                ) : !liveConfig ? (
+                    <div style={{ fontSize: 13, color: theme.danger }}>Could not load live attendance config.</div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div>
+                            <label style={styles.label}>
+                                {LIVE_META.det_size.label} ({LIVE_META.det_size.unit})
+                            </label>
+                            <select
+                                style={{ ...styles.input, maxWidth: 160 }}
+                                value={liveConfig.det_size ?? 640}
+                                disabled={liveSaving}
+                                onChange={(e) => updateLiveConfig({ det_size: Number(e.target.value) })}
+                            >
+                                {LIVE_DET_SIZE_OPTIONS.map((v) => (
+                                    <option key={v} value={v}>{v}</option>
+                                ))}
+                            </select>
+                            <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4, lineHeight: 1.5 }}>
+                                {LIVE_META.det_size.hint}
+                                {liveConfig.current_det_size != null
+                                    && liveConfig.current_det_size !== liveConfig.det_size && (
+                                    <span style={{ color: theme.warning, fontWeight: 700 }}>
+                                        {' '}Model is loaded at {liveConfig.current_det_size} right now —
+                                        the next attendance run will reload it to {liveConfig.det_size}.
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style={styles.label}>
+                                {LIVE_META.max_detect_height.label} ({LIVE_META.max_detect_height.unit})
+                            </label>
+                            <input
+                                type="number" min={0} max={4320}
+                                style={{ ...styles.input, maxWidth: 160 }}
+                                value={liveConfig.max_detect_height ?? 1080}
+                                disabled={liveSaving}
+                                onChange={(e) => setLiveConfig({
+                                    ...liveConfig, max_detect_height: e.target.value,
+                                })}
+                                onBlur={(e) => {
+                                    const n = Number.parseInt(e.target.value, 10);
+                                    // Out of range or unparseable: resync from the service rather
+                                    // than guessing a value the admin didn't choose.
+                                    if (Number.isNaN(n) || (n !== 0 && (n < 360 || n > 4320))) {
+                                        showToast('Max detect height must be 0 or 360–4320', 'error');
+                                        loadLiveConfig();
+                                        return;
+                                    }
+                                    if (n !== liveConfig.max_detect_height) {
+                                        updateLiveConfig({ max_detect_height: n });
+                                    }
+                                }}
+                            />
+                            <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4, lineHeight: 1.5 }}>
+                                {LIVE_META.max_detect_height.hint} 0 or 360–4320. Raise it in steps
+                                (try 1440 before 0): detection holds one full-frame buffer per zoom
+                                pass, so memory per concurrent run grows with the frame area.
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>

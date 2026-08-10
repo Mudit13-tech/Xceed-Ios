@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Avatar,
   Badge,
@@ -179,25 +180,13 @@ const KIND_LABELS = {
  * and nobody opens all of them.
  */
 function StudentPoints({ classId, student, onClose }) {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
   const studentId = student?.studentId;
 
-  useEffect(() => {
-    if (!studentId) return undefined;
-    // Guards against a slow response for a row the reader has already moved
-    // on from landing in the panel for the next one.
-    let live = true;
-    setData(null);
-    setError(null);
-    lmApi
-      .studentPoints(classId, studentId)
-      .then((res) => live && setData(res))
-      .catch((err) => live && setError(err));
-    return () => {
-      live = false;
-    };
-  }, [classId, studentId]);
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['learning', 'studentPoints', classId, studentId],
+    queryFn: () => lmApi.studentPoints(classId, studentId),
+    enabled: !!studentId,
+  });
 
   const earned = new Set((data?.badges || []).map((badge) => badge.id));
   const unearned = (data?.catalogue || []).filter((badge) => !earned.has(badge.id));
@@ -228,7 +217,7 @@ function StudentPoints({ classId, student, onClose }) {
         <DrawerBody pb={8}>
           {error ? (
             <ErrorState error={error} />
-          ) : !data ? (
+          ) : isLoading || !data ? (
             <Loading label="Adding it up…" />
           ) : (
             <VStack align="stretch" spacing={5}>
@@ -562,31 +551,24 @@ function TeacherView({ week, all, classId }) {
 
 export default function Leaderboard() {
   const { classId } = useOutletContext();
-  const [week, setWeek] = useState(null);
-  const [all, setAll] = useState(null);
   const [opened, setOpened] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+
+  const { data: week, isLoading: loadingWeek, error: weekError, refetch: loadWeek } = useQuery({
+    queryKey: ['learning', 'leaderboard', classId, 'week'],
+    queryFn: () => lmApi.leaderboard(classId, 'week'),
+  });
+
+  const { data: all, isLoading: loadingAll, error: allError, refetch: loadAll } = useQuery({
+    queryKey: ['learning', 'leaderboard', classId, 'all'],
+    queryFn: () => lmApi.leaderboard(classId, 'all'),
+  });
+
+  const loading = loadingWeek || loadingAll;
+  const error = weekError || allError;
 
   const load = useCallback(async () => {
-    setError(null);
-    try {
-      const [weekly, overall] = await Promise.all([
-        lmApi.leaderboard(classId, 'week'),
-        lmApi.leaderboard(classId, 'all'),
-      ]);
-      setWeek(weekly);
-      setAll(overall);
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [classId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+    await Promise.all([loadWeek(), loadAll()]);
+  }, [loadWeek, loadAll]);
 
   if (loading) return <Loading label="Counting up…" />;
   if (error) return <ErrorState error={error} onRetry={load} />;
