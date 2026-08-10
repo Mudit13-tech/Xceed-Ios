@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import getEnvironment from '../getenvironment';
-import { theme, styles, cssReset, DEGREES, YEARS } from './config';
+import { theme, styles, cssReset, DEGREES, YEARS, API_BASE as GT_API_BASE } from './config';
 import { useDepartments } from './useDepartments';
 import PipelineStageNote from './PipelineStageNote';
+import { GTModal } from './rollassign';
 
 const apiUrl = getEnvironment();
 const API_BASE = `${apiUrl}/attendancemodule/unknown-faces`;
@@ -266,7 +267,15 @@ export default function UnknownFaces({ embedded = false, defaultDate = '', defau
 
                             <div style={{ display: 'flex', gap: 8, marginTop: 'auto', paddingTop: 12, borderTop: `1px solid ${theme.border}` }}>
                                 {c.status !== 'REVIEWED' && (
-                                    <button onClick={() => updateStatus(c.clusterPath, 'REVIEWED')} style={{ ...styles.btnPrimary, flex: 1, padding: '6px', fontSize: '11px' }}>Review</button>
+                                    <button 
+                                        onClick={() => {
+                                            updateStatus(c.clusterPath, 'REVIEWED');
+                                            setGalleryModal({ open: true, cluster: c });
+                                        }} 
+                                        style={{ ...styles.btnPrimary, flex: 1, padding: '6px', fontSize: '11px' }}
+                                    >
+                                        Review
+                                    </button>
                                 )}
                                 {c.status !== 'ARCHIVED' && (
                                     <button onClick={() => updateStatus(c.clusterPath, 'ARCHIVED')} style={{ ...styles.btnGhost, flex: 1, padding: '6px', fontSize: '11px' }}>Archive</button>
@@ -300,34 +309,60 @@ export default function UnknownFaces({ embedded = false, defaultDate = '', defau
             )}
 
             {galleryModal.open && galleryModal.cluster && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 999999, padding: 20 }}>
-                    <div style={{ position: 'absolute', top: 24, right: 24 }}>
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column', zIndex: 999999, padding: 20 }}>
+                    <div style={{ position: 'absolute', top: 24, right: 24, zIndex: 10 }}>
                         <button onClick={() => setGalleryModal({ open: false, cluster: null })} style={{ background: 'rgba(239, 68, 68, 0.9)', border: 'none', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', borderRadius: '8px', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
                             <span style={{ fontSize: '20px', lineHeight: 1 }}>&times;</span> Close Gallery
                         </button>
                     </div>
-                    <div style={{ color: '#fff', marginBottom: 20, textAlign: 'center' }}>
-                        <h2 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>Cluster Images</h2>
-                        <div style={{ fontSize: '13px', opacity: 0.8 }}>
-                            {galleryModal.cluster.department} • {galleryModal.cluster.date || galleryModal.cluster.createdAt?.split('T')[0]} • {galleryModal.cluster.slot}
+                    
+                    <div style={{ display: 'flex', width: '100%', height: '100%', gap: 20, paddingTop: 40 }}>
+                        {/* LEFT: GROUND TRUTH */}
+                        <div style={{ flex: 1, borderRight: '1px solid rgba(255,255,255,0.2)', paddingRight: 20, overflowY: 'auto' }}>
+                             {galleryModal.cluster.closestRollNo ? (
+                                 <GTModal 
+                                     rollNo={galleryModal.cluster.closestRollNo} 
+                                     batchName={`${galleryModal.cluster.degree}_${galleryModal.cluster.department}_${galleryModal.cluster.year}`.toUpperCase()} 
+                                     onClose={() => {}} 
+                                     showToast={showToast} 
+                                     embedded={true} 
+                                 />
+                             ) : (
+                                 <div style={{ color: '#fff', textAlign: 'center', marginTop: 40 }}>
+                                    <h2 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>Ground Truth</h2>
+                                    <p style={{ opacity: 0.8 }}>No closest Roll No assigned</p>
+                                 </div>
+                             )}
                         </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 16, overflowX: 'auto', maxWidth: '100%', padding: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-                        {(galleryModal.cluster.images || ['representative.jpg']).map((imgName, idx) => (
-                            <div key={idx} style={{ background: '#000', borderRadius: 8, overflow: 'hidden', border: imgName === 'representative.jpg' ? `2px solid ${theme.accent}` : '2px solid transparent' }}>
-                                <img 
-                                    src={`${API_BASE}/image/${encodePath(galleryModal.cluster.clusterPath)}/${imgName}`} 
-                                    style={{ height: 200, width: 'auto', objectFit: 'contain', display: 'block' }} 
-                                    alt="Cluster crop" 
-                                />
-                                {imgName === 'representative.jpg' && (
-                                    <div style={{ textAlign: 'center', fontSize: '11px', padding: '4px', background: theme.accent, color: '#fff', fontWeight: 600 }}>Representative</div>
-                                )}
+
+                        {/* RIGHT: UNKNOWN FACES */}
+                        <div style={{ flex: 1, overflowY: 'auto', paddingLeft: 20 }}>
+                            <div style={{ color: '#fff', marginBottom: 20, textAlign: 'center' }}>
+                                <h2 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>Unknown Cluster Images</h2>
+                                <div style={{ fontSize: '13px', opacity: 0.8 }}>
+                                    {galleryModal.cluster.department} • {galleryModal.cluster.date || galleryModal.cluster.createdAt?.split('T')[0]} • {galleryModal.cluster.slot}
+                                </div>
                             </div>
-                        ))}
+                            <div style={{ display: 'flex', gap: 16, overflowX: 'auto', maxWidth: '100%', padding: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                                {(galleryModal.cluster.images || ['representative.jpg']).map((imgName, idx) => (
+                                    <div key={idx} style={{ background: '#000', borderRadius: 8, overflow: 'hidden', border: imgName === 'representative.jpg' ? `2px solid ${theme.accent}` : '2px solid transparent' }}>
+                                        <img 
+                                            src={`${API_BASE}/image/${encodePath(galleryModal.cluster.clusterPath)}/${imgName}`} 
+                                            style={{ height: 200, width: 'auto', objectFit: 'contain', display: 'block' }} 
+                                            alt="Cluster crop" 
+                                        />
+                                        {imgName === 'representative.jpg' && (
+                                            <div style={{ textAlign: 'center', fontSize: '11px', padding: '4px', background: theme.accent, color: '#fff', fontWeight: 600 }}>Representative</div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
         </div>
     );
 }
+
+
