@@ -11,6 +11,9 @@ import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { queryPersister } from './utils/queryPersister';
 
+
+import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -19,8 +22,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 
 const helmetContext = {};
 
