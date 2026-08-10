@@ -83,7 +83,6 @@ const styles = {
         color: theme.text,
         fontFamily: theme.fontBody,
         padding: 'clamp(14px, 3vw, 28px) clamp(12px, 4vw, 32px)',
-        paddingBottom: '80px',
     },
     card: {
         background: theme.surface,
