@@ -759,13 +759,21 @@ function MLDashboard() {
                     </Box>
                   )}
 
-                  <SimpleGrid columns={{ base: 2, md: 5 }} spacing={3}>
+                  {/* The last two tiles are the two ways a face fails, and they
+                      are NOT the same thing. "Unknown" passed detection and
+                      matched no enrolled student (matching stage). "Detector
+                      rejects" never reached matching at all — discarded as too
+                      small / too blurry / a spoof (detector stage). Shown side
+                      by side so which stage lost a student is visible here
+                      rather than inferred. */}
+                  <SimpleGrid columns={{ base: 2, md: 6 }} spacing={3}>
                     {[
                       { label: "Clusters Found", value: summary.unique_clusters_found, color: "blue"   },
                       { label: "Present ✅",     value: summary.present,              color: "green"  },
                       { label: "Review ⚠️",      value: summary.review,               color: "yellow" },
                       { label: "Absent ❌",      value: summary.absent,               color: "red"    },
-                      { label: "Unknown 👤",     value: summary.unknown_faces,         color: "orange" },
+                      { label: "Unknown 👤 (no GT match)", value: summary.unknown_faces ?? summary.unmatched_faces, color: "orange" },
+                      { label: "Detector rejects 🚫", value: summary.detector_rejected?.total, color: "purple" },
                     ].map((stat) => (
                       <Box
                         key={stat.label}

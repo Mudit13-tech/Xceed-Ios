@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useOutletContext } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Badge,
   Box,
@@ -162,28 +163,20 @@ function MaterialRow({ item, classId, isTeacher, onChanged, onEdit }) {
 
 export default function Material() {
   const { classId, klass, isTeacher, reloadClass } = useOutletContext();
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const topics = klass.topics || [];
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setItems(await lmApi.listCoursework(classId, { workType: 'material' }));
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [classId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const {
+    data: items = [],
+    isLoading: loading,
+    error,
+    refetch: load,
+  } = useQuery({
+    queryKey: ['learning', 'material', classId],
+    queryFn: () => lmApi.listCoursework(classId, { workType: 'material' }),
+  });
 
   const openNew = () => {
     setEditing(null);

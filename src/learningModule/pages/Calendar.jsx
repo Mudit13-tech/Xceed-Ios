@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Badge,
   Box,
@@ -181,33 +182,21 @@ function DayDetailModal({ date, items, holiday, onClose }) {
 
 export default function Calendar() {
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
-  const [data, setData] = useState(EMPTY);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  // The day whose full activity list is open, or null.
   const [selectedDay, setSelectedDay] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    // The open day belongs to the month being left behind.
-    setSelectedDay(null);
-    try {
-      const result = await lmApi.calendar({
+  const { data = EMPTY, isLoading: loading, error, refetch: load } = useQuery({
+    queryKey: ['learning', 'calendar', startOfMonth(cursor).toISOString(), endOfMonth(cursor).toISOString()],
+    queryFn: () =>
+      lmApi.calendar({
         from: startOfMonth(cursor).toISOString(),
         to: endOfMonth(cursor).toISOString(),
-      });
-      setData({ ...EMPTY, ...result });
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [cursor]);
+      }),
+  });
 
+  // The open day belongs to the month being left behind.
   useEffect(() => {
-    load();
-  }, [load]);
+    setSelectedDay(null);
+  }, [cursor]);
 
   // Weeks start on Monday, which is how the timetable module presents them.
   const cells = useMemo(() => {

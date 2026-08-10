@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useOutletContext } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Avatar,
   Badge,
@@ -341,28 +342,17 @@ function CourseworkStreamCard({ item, classId }) {
 }
 
 export default function Stream() {
-  const { classId, klass, isTeacher } = useOutletContext();
-  const [data, setData] = useState(null);
-  const [me, setMe] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { classId, klass, isTeacher, me } = useOutletContext();
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const [stream, profile] = await Promise.all([lmApi.getStream(classId), lmApi.me()]);
-      setData(stream);
-      setMe(profile);
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [classId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const {
+    data,
+    isLoading: loading,
+    error,
+    refetch: load,
+  } = useQuery({
+    queryKey: ['learning', 'stream', classId],
+    queryFn: () => lmApi.getStream(classId),
+  });
 
   if (loading) return <Loading label="Loading the stream…" />;
 

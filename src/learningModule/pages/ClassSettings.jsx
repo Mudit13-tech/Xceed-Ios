@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Box,
@@ -17,6 +17,7 @@ import {
   useClipboard,
   useToast,
 } from '@chakra-ui/react';
+import getEnvironment from '../../getenvironment';
 import lmApi from '../api/lmApi';
 import { ClassCardPreview, ColorPicker, SectionCard } from '../components/common';
 import { CLASS_COLORS } from '../format';
@@ -42,7 +43,70 @@ export default function ClassSettings() {
   const [settings, setSettings] = useState({ ...klass.settings });
   const [code, setCode] = useState(klass.code);
   const [saving, setSaving] = useState(false);
+  const [lockedRooms, setLockedRooms] = useState([]);
+  const [loadingRooms, setLoadingRooms] = useState(false);
   const { onCopy, hasCopied } = useClipboard(code);
+
+  useEffect(() => {
+    if (!klass.dept || !klass.semester || !klass.subject) return;
+    
+    let isMounted = true;
+    const fetchRooms = async () => {
+      setLoadingRooms(true);
+      try {
+        const branches = await lmApi.ttBranches();
+        const branch = branches.find(b => b.dept === klass.dept);
+        if (!branch || !branch.code) {
+          if (isMounted) setLoadingRooms(false);
+          return;
+        }
+        
+        const LOCK_API = `${getEnvironment()}/api/v1/timetablemodule/lock`;
+        const url = `${LOCK_API}/lockclasstt/${encodeURIComponent(branch.code)}/${encodeURIComponent(klass.semester)}`;
+        const token = localStorage.getItem('token');
+        const res = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data.timetableData) {
+            const roomSet = new Set();
+            Object.keys(data.timetableData).forEach(day => {
+              if (day === 'sem' || day === 'code') return;
+              const slots = data.timetableData[day];
+              Object.keys(slots).forEach(slot => {
+                const slotArrays = slots[slot];
+                if (Array.isArray(slotArrays)) {
+                  slotArrays.forEach(slotDataArray => {
+                    if (Array.isArray(slotDataArray)) {
+                      slotDataArray.forEach(entry => {
+                        if (entry.subject === klass.subject && entry.room) {
+                          roomSet.add(String(entry.room).trim().toUpperCase());
+                        }
+                      });
+                    }
+                  });
+                }
+              });
+            });
+            const fetchedRooms = [...roomSet].sort();
+            setLockedRooms(fetchedRooms);
+            if (fetchedRooms.length > 0) {
+              setForm(prev => ({ ...prev, room: fetchedRooms.join(', ') }));
+            } else {
+              setForm(prev => ({ ...prev, room: '' }));
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch rooms", err);
+      } finally {
+        if (isMounted) setLoadingRooms(false);
+      }
+    };
+    fetchRooms();
+    return () => { isMounted = false; };
+  }, [klass.dept, klass.semester, klass.subject]);
 
   const set = (field) => (event) => setForm((prev) => ({ ...prev, [field]: event.target.value }));
   const setSetting = (field, value) => setSettings((prev) => ({ ...prev, [field]: value }));
@@ -110,7 +174,7 @@ export default function ClassSettings() {
             <Input value={form.section} onChange={set('section')} />
           </FormControl>
           <FormControl>
-            <FormLabel fontSize="sm">Subject</FormLabel>
+            <FormLabel fontSize="sm">Subject abbreviation</FormLabel>
             <Input value={form.subject} onChange={set('subject')} />
           </FormControl>
           <FormControl>
@@ -119,7 +183,12 @@ export default function ClassSettings() {
           </FormControl>
           <FormControl>
             <FormLabel fontSize="sm">Room</FormLabel>
-            <Input value={form.room} onChange={set('room')} />
+            <Input 
+              value={loadingRooms ? 'Loading...' : form.room} 
+              isReadOnly 
+              bg="gray.50"
+              placeholder="No rooms allotted"
+            />
           </FormControl>
           <FormControl>
             <FormLabel fontSize="sm">Academic year</FormLabel>

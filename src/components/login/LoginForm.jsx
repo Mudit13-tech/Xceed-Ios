@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from "react-router-dom";
+import { useQueryClient } from '@tanstack/react-query';
 import FormHeader from './FormHeader'
 import getEnvironment from '../../getenvironment'
 import { redirectTargetFrom } from '../../authRedirect'
@@ -19,6 +20,7 @@ import {
 } from '@chakra-ui/react'
 
 const LoginForm = () => {
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
@@ -150,12 +152,18 @@ const LoginForm = () => {
         return;
       }
 
+      // Clear the cache to prevent stale 401 errors from instantly kicking the user back out
+      queryClient.clear();
+
       if (responseData.token) {
         setLoginToken(responseData.token);
         setShowPinSetup(true);
         // We will NOT set localStorage here, PinEntry setup will do it
       } else {
         setMessage(responseData.message);
+        // A full load rather than a client-side navigation: the platform navbar
+        // reads the session once on mount, so a router push would land on the
+        // target with a stale "signed out" navbar that bounces straight back.
         window.location.href = redirectTargetFrom(location.search);
       }
     } catch (error) {

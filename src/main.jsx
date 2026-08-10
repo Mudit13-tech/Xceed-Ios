@@ -7,6 +7,18 @@ import './index.css';
 import { RecoilRoot } from 'recoil';
 import axios from 'axios';
 import getEnvironment from './getenvironment';
+import { QueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { queryPersister } from './utils/queryPersister';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 0,
+      gcTime: 24 * 60 * 60 * 1000,
+    },
+  },
+});
 
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 
@@ -83,7 +95,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <HelmetProvider context={helmetContext}>
       <ChakraProvider>
         <RecoilRoot>
-          <App />
+          <PersistQueryClientProvider client={queryClient} persistOptions={{ persister: queryPersister }}>
+            <App />
+          </PersistQueryClientProvider>
         </RecoilRoot>
       </ChakraProvider>
     </HelmetProvider>

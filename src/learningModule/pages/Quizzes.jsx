@@ -45,6 +45,32 @@ const livePulse = keyframes`
   50% { opacity: 0.55; }
 `;
 
+const livePulseGlowGreen = keyframes`
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+    transform: scale(1.02);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+    transform: scale(1);
+  }
+`;
+
+const liveDotBeacon = keyframes`
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.25;
+    transform: scale(1.4);
+  }
+`;
+
 // Two starting points over the same model. "Quiz" is the low-stakes default —
 // one page, free navigation, answers shown straight after. "Exam" switches on
 // the placement-test behaviour the exam engine already supports; everything
@@ -350,8 +376,8 @@ function liveState(quiz, isTeacher) {
   if (isTeacher) {
     const sitting = quiz.sittingNow || 0;
     return {
-      live: sitting > 0,
-      label: sitting > 0 ? `🔴 Live · ${sitting} sitting now` : null,
+      live: sitting > 0 || Boolean(open),
+      label: sitting > 0 ? `Live · ${sitting} sitting now` : 'Live',
       open: Boolean(open && !sitting),
       completedAt: quiz.stats?.lastSubmittedAt || null,
       completedLabel: 'Last submission',
@@ -359,8 +385,8 @@ function liveState(quiz, isTeacher) {
   }
 
   return {
-    live: Boolean(quiz.inProgress),
-    label: quiz.inProgress ? '🔴 Your test is in progress' : null,
+    live: Boolean(quiz.inProgress || open),
+    label: quiz.inProgress ? 'In progress' : 'Live',
     open: Boolean(open && !quiz.inProgress),
     completedAt: quiz.completedAt || null,
     completedLabel: 'You completed this',
@@ -378,20 +404,28 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
   // A sitting to go back to. Only ever set for a student, and only once they
   // have submitted one.
   const reviewable = !isTeacher && Boolean(quiz.lastAttemptId);
+
+  const isLive = Boolean(state.live || state.open);
+  const isCompleted = !isTeacher
+    ? Boolean(state.completedAt || quiz.attemptsUsed > 0)
+    : Boolean(state.completedAt || (quiz.stats?.attempts > 0 && quiz.window?.closed));
+
   return (
     <Flex
       bg="white"
       borderWidth="1px"
-      borderColor="gray.200"
+      borderColor={isLive ? 'green.400' : 'gray.200'}
+      boxShadow={isLive ? '0 2px 12px -2px rgba(34, 197, 94, 0.25)' : 'none'}
       borderRadius="lg"
       p={4}
       mb={3}
       align="center"
       gap={4}
       wrap="wrap"
+      transition="all 0.2s ease"
     >
       <Box flex="1" minW="220px">
-        <HStack>
+        <HStack spacing={2} wrap="wrap">
           <Heading size="sm">{quiz.title}</Heading>
           <Badge colorScheme={isExam ? 'red' : 'blue'}>{isExam ? '🎓 Exam' : '📝 Quiz'}</Badge>
           {quiz.source === 'ai' && <Badge colorScheme="purple">✨ AI</Badge>}
@@ -400,22 +434,48 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
               {scheduled ? 'Scheduled' : quiz.published ? 'Published' : 'Draft'}
             </Badge>
           )}
-          {/* The pulse is the point: a static red dot reads as an error badge,
-              and this one has to be findable while scanning a list of twenty. */}
-          {state.live && (
-            <Badge
-              colorScheme="red"
+          {/* Animated Green LIVE Button in Card Header */}
+          {isLive && !isCompleted && (
+            <Button
+              as={RouterLink}
+              to={
+                isTeacher
+                  ? `/learning/class/${classId}/quiz/${quiz._id}/results`
+                  : `/learning/class/${classId}/quiz/${quiz._id}`
+              }
+              size="xs"
+              colorScheme="green"
               variant="solid"
               borderRadius="full"
-              px={2}
-              sx={{ animation: `${livePulse} 1.8s ease-in-out infinite` }}
+              px={3}
+              py={1}
+              h="auto"
+              leftIcon={
+                <Box
+                  as="span"
+                  w="7px"
+                  h="7px"
+                  bg="white"
+                  borderRadius="full"
+                  display="inline-block"
+                  sx={{ animation: `${liveDotBeacon} 1.2s ease-in-out infinite` }}
+                />
+              }
+              sx={{
+                animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`,
+                fontWeight: 'bold',
+                letterSpacing: '0.4px',
+                _hover: { textDecoration: 'none', transform: 'scale(1.05)' },
+              }}
             >
-              {state.label}
-            </Badge>
+              🟢 {state.label || 'Live'}
+            </Button>
           )}
-          {state.open && (
-            <Badge colorScheme="green" variant="subtle" borderRadius="full" px={2}>
-              🟢 Open now
+
+          {/* Completed badge */}
+          {isCompleted && (
+            <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5} py={0.5}>
+              ✅ Completed
             </Badge>
           )}
         </HStack>
@@ -486,15 +546,32 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
         )}
       </Box>
 
-      <HStack>
+      <HStack spacing={2}>
         {isTeacher ? (
           <>
             <Button as={RouterLink} to={`/learning/class/${classId}/quiz/${quiz._id}/edit`} size="sm" variant="outline">
               Edit
             </Button>
-            <Button as={RouterLink} to={`/learning/class/${classId}/quiz/${quiz._id}/results`} size="sm" variant="outline">
-              Results
-            </Button>
+
+            {isLive ? (
+              <Button
+                as={RouterLink}
+                to={`/learning/class/${classId}/quiz/${quiz._id}/results`}
+                size="sm"
+                colorScheme="green"
+                sx={{
+                  animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`,
+                  fontWeight: 'bold',
+                }}
+              >
+                🟢 Results {quiz.sittingNow ? `(${quiz.sittingNow} live)` : ''}
+              </Button>
+            ) : (
+              <Button as={RouterLink} to={`/learning/class/${classId}/quiz/${quiz._id}/results`} size="sm" variant="outline">
+                Results
+              </Button>
+            )}
+
             {/* Only once published: the link resolves to the student brief, which
                 a draft quiz will not serve to anyone but its author. */}
             {quiz.published && <CopyLinkButton to={`/learning/class/${classId}/quiz/${quiz._id}`} />}
@@ -519,28 +596,41 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
         ) : (
           <Button
             as={RouterLink}
-            /* A finished paper goes straight to its own sitting, which is the
-               only screen that carries the marks and the answer-by-answer
-               review; the brief has neither, so "Review" used to lead to the
-               instructions the student had already read. Everything else goes
-               to the brief, which is what refuses to hand out questions. */
             to={
               reviewable
                 ? `/learning/class/${classId}/quiz/${quiz._id}/attempt/${quiz.lastAttemptId}`
                 : `/learning/class/${classId}/quiz/${quiz._id}`
             }
             size="sm"
-            colorScheme={quiz.resultsUnread ? 'green' : 'purple'}
+            colorScheme={
+              quiz.resultsUnread
+                ? 'green'
+                : isCompleted
+                  ? 'gray'
+                  : isLive || start.can
+                    ? 'green'
+                    : 'purple'
+            }
+            sx={
+              isLive && start.can && !isCompleted
+                ? {
+                    animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`,
+                    fontWeight: 'bold',
+                  }
+                : undefined
+            }
           >
             {reviewable
               ? quiz.resultsUnread
                 ? 'See your result'
-                : 'Review'
+                : 'Completed · Review'
               : quiz.attemptsUsed > 0
-                ? 'Review'
-                : start.can
-                  ? `Start ${isExam ? 'exam' : 'quiz'}`
-                  : 'View instructions'}
+                ? 'Completed'
+                : quiz.inProgress
+                  ? `Resume test`
+                  : start.can
+                    ? `Start test`
+                    : 'View instructions'}
           </Button>
         )}
       </HStack>
