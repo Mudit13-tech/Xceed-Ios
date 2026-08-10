@@ -1,12 +1,22 @@
 import { Capacitor } from '@capacitor/core';
-import { NativeBiometric } from 'capacitor-native-biometric';
+import { NativeBiometric, BiometryType } from 'capacitor-native-biometric';
 
 export const useBiometricAuth = () => {
   const isAvailable = async () => {
     if (!Capacitor.isNativePlatform()) return false;
     try {
       const result = await NativeBiometric.isAvailable();
-      return result.isAvailable;
+      if (!result.isAvailable) return false;
+      
+      // Allow Fingerprint / Touch ID / Multiple (Android often returns Multiple)
+      if (
+        result.biometryType === BiometryType.FINGERPRINT ||
+        result.biometryType === BiometryType.TOUCH_ID ||
+        result.biometryType === BiometryType.MULTIPLE
+      ) {
+        return true;
+      }
+      return false;
     } catch (e) {
       console.error('Biometric isAvailable error:', e);
       return false;
@@ -22,9 +32,10 @@ export const useBiometricAuth = () => {
 
       await NativeBiometric.verifyIdentity({
         reason: reason,
-        title: 'Biometric Authentication',
-        subtitle: 'Log in using your biometric credentials',
-        description: 'Place your finger on the sensor or look at the camera to log in.',
+        title: 'Fingerprint Authentication',
+        subtitle: 'Log in using your fingerprint',
+        description: 'Place your finger on the sensor to log in.',
+        useFallback: false,
       });
       return { success: true };
     } catch (error) {

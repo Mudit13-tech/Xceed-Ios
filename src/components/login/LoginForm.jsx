@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from "react-router-dom";
+import { useBiometricAuth } from '../../utils/useBiometricAuth';
 import { useQueryClient } from '@tanstack/react-query';
 import FormHeader from './FormHeader'
 import getEnvironment from '../../getenvironment'
@@ -43,6 +44,8 @@ const LoginForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const { isAvailable, authenticate } = useBiometricAuth();
+
   useEffect(() => {
     const checkPinConfig = async () => {
       try {
@@ -50,6 +53,17 @@ const LoginForm = () => {
         const tokenResult = await SecureStoragePlugin.get({ key: 'auth_token' });
         
         if (pinResult.value && tokenResult.value) {
+          const available = await isAvailable();
+          if (available) {
+             const result = await authenticate();
+             if (result.success) {
+                localStorage.setItem('token', tokenResult.value);
+                queryClient.invalidateQueries({ queryKey: ['user', 'details'] });
+                navigate(redirectTargetFrom(location.search) || '/userroles');
+                return; // Redirecting immediately
+             }
+          }
+          // If biometric failed or user cancelled, show PIN fallback
           setShowPinLogin(true);
         }
       } catch (error) {
