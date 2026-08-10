@@ -8,6 +8,8 @@ import { Text, Button, Flex } from '@chakra-ui/react';
 import { isStudentOnly } from '../../learningModule/roles';
 import { loginPathFor } from '../../authRedirect';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import lmApi from '../../learningModule/api/lmApi';
 
 export default function Navbar() {
   const [navbarOpen, setNavbarOpen] = useState(false);
@@ -16,47 +18,56 @@ export default function Navbar() {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userDetails, setUserDetails] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: userDetails, isPending, isFetching, isError, error } = useQuery({
+    queryKey: ['user', 'details'],
+    queryFn: async () => {
+      const response = await fetch(`${apiUrl}/user/getuser/`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (response.status === 401) {
+        throw new Error('Unauthorized');
+      }
+      if (!response.ok) {
+        throw new Error('Failed to fetch user details');
+      }
+      return response.json();
+    },
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const isAuthenticated = !!userDetails;
+
+  // isPending is true ONLY when there is no cached data AND no cached error (true initial load)
+  const isInitialLoad = isPending;
+  // Wait for any active fetch to finish before assuming the user is not authenticated
+  const isEvaluatingAuth = isPending || isFetching;
 
   useEffect(() => {
-    const getUserDetails = async () => {
-      try {
-        const response = await fetch(`${apiUrl}/user/getuser/`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
+    if (isAuthenticated) {
+      // Prefetch Learning Module data so it is instantly available when clicking 'Classes'
+      queryClient.prefetchQuery({
+        queryKey: ['learning', 'classes', 'active'],
+        queryFn: () => lmApi.listClasses(),
+        staleTime: 5 * 60 * 1000,
+      });
+      queryClient.prefetchQuery({
+        queryKey: ['learning', 'classes', 'archived'],
+        queryFn: () => lmApi.listClasses('archived'),
+        staleTime: 5 * 60 * 1000,
+      });
+    }
+  }, [isAuthenticated, queryClient]);
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch user details');
-        }
-
-        const userdetail = await response.json();
-        return userdetail;
-      } catch (error) {
-        console.error('Error fetching user details:', error.message);
-        throw error;
-      }
-    };
-
-    const fetchUserDetails = async () => {
-      try {
-        const userDetails = await getUserDetails();
-        setUserDetails(userDetails);
-        setIsAuthenticated(true);
-      } catch (error) {
-        // Handle error (e.g., display an error message or redirect to an error page)
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchUserDetails();
-  }, [apiUrl]);
+  useEffect(() => {
+    if (isError && error?.message === 'Unauthorized') {
+      queryClient.clear();
+      localStorage.removeItem('token');
+    }
+  }, [isError, error, queryClient]);
 
   const handleLogout = async () => {
     try {
@@ -64,6 +75,10 @@ export default function Navbar() {
         method: 'POST',
         credentials: 'include',
       });
+
+      // Clear the cache so another user logging in doesn't see old data/errors
+      queryClient.clear();
+      localStorage.removeItem('token');
 
       if (!response.ok) {
         throw new Error('Failed to logout');
@@ -117,13 +132,13 @@ export default function Navbar() {
       location.pathname.startsWith('/learning/short/join') ||
       location.pathname.startsWith('/learning/short/live/');
 
-    if (!isLoading && !isAuthenticated && !isPublicPath) {
+    if (!isEvaluatingAuth && !isAuthenticated && !isPublicPath) {
       // Replace, not push: the user never chose to visit the login page, so it
       // shouldn't sit in their history between the page they wanted and wherever
       // they came from.
       navigate(loginPathFor(location), { replace: true });
     }
-  }, [isLoading, isAuthenticated, navigate, location]);
+  }, [isEvaluatingAuth, isAuthenticated, navigate, location]);
 
   const excludedRoutes = ['/login', '/cm/c'];
 
@@ -131,7 +146,8 @@ export default function Navbar() {
     location.pathname.startsWith(route)
   );
 
-  if (isLoading || isExcluded) {
+  // We only hide the Navbar on explicitly excluded routes
+  if (isExcluded) {
     return null;
   }
 
@@ -222,7 +238,7 @@ export default function Navbar() {
               </a>
             </li>
             <li>
-              {!isAuthenticated ? (
+              {!isAuthenticated && !isInitialLoad ? (
                 <Link
                   to="/login"
                   className="tw-text-white tw-bg-gradient-to-r tw-from-cyan-600 tw-to-cyan-500 hover:tw-bg-gradient-to-bl focus:tw-ring-4 focus:tw-outline-none focus:tw-ring-cyan-300 dark:focus:tw-ring-cyan-800 tw-font-bold tw-rounded-lg tw-text-sm tw-px-5 tw-py-2.5 tw-text-center"

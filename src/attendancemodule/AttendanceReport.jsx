@@ -852,8 +852,11 @@ export default function AttendanceReport() {
         {[
           ['run', 'Run Attendance (Developers Only)'],
           ['history', 'Saved Reports'],
-          ['unknown', 'Unknown Faces'],
-          ['rejected', 'Rejected Samples'],
+          // Two distinct pipeline stages, named so they can't be confused:
+          // 'unknown' = matched nothing in ground truth (matching stage),
+          // 'rejected' = never reached matching at all (detector stage).
+          ['unknown', 'Unknown Faces (No GT Match)'],
+          ['rejected', 'Detector Rejects'],
           ['export', 'Export Reports'],
           ['cumulative', 'Cumulative (XCEED vs ERP)'],
           ['detail', 'Report Detail'],
@@ -1643,6 +1646,14 @@ export default function AttendanceReport() {
                             >
                               Cam {snap.cam} — {snap.elapsed_sec}s
                             </div>
+                            {/* Elapsed seconds restart every run, so on their
+                                own they don't say when the frame was taken. */}
+                            {snap.captured_at && (
+                              <div style={{ color: theme.textMuted }}>
+                                {snap.captured_at.replace('T', ' ')}
+                                {snap.check_index ? ` · run ${snap.check_index}` : ''}
+                              </div>
+                            )}
                             <div
                               style={{
                                 color:

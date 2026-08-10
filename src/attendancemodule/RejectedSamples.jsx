@@ -1,10 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
 import { theme, styles, cssReset } from './config';
 import getEnvironment from '../getenvironment';
+import DetectionDebugSamples from './DetectionDebugSamples';
+import PipelineStageNote from './PipelineStageNote';
 
 const BASE = `${getEnvironment()}/api/v1/ml/rejected-samples`;
 
+// Two different stores of discarded crops, one page. Liveness rejects are a
+// continuous audit trail keyed by period; detection debug dumps are per-run,
+// opt-in, and cover every filter rather than just liveness.
+const SUB_TABS = [
+    ['liveness', 'Liveness / Spoof'],
+    ['detection', 'All Detector Filters'],
+];
+
 export default function RejectedSamples() {
+    const [subTab, setSubTab] = useState('liveness');
+
     const [summary,       setSummary]       = useState([]);
     const [loadingSummary, setLoadingSummary] = useState(false);
     const [error,         setError]         = useState('');
@@ -57,12 +69,41 @@ export default function RejectedSamples() {
         <div style={{ marginTop: 16 }}>
             <style>{cssReset}</style>
 
+            <div style={{ fontSize: 15, fontWeight: 700, color: theme.text, marginBottom: 10 }}>
+                Detector Rejects
+            </div>
+
+            <PipelineStageNote stage="detector" />
+
+            <div style={{
+                display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16,
+                borderBottom: `1px solid ${theme.border}`, paddingBottom: 10,
+            }}>
+                {SUB_TABS.map(([key, label]) => (
+                    <button
+                        key={key}
+                        onClick={() => setSubTab(key)}
+                        style={{
+                            ...styles.btnGhost,
+                            padding: '6px 14px', fontSize: 12,
+                            fontWeight: subTab === key ? 700 : 500,
+                            background: subTab === key ? `${theme.accent}18` : 'transparent',
+                            color: subTab === key ? theme.accent : theme.textMuted,
+                            borderColor: subTab === key ? theme.accent : theme.border,
+                        }}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+
+            {subTab === 'detection' && <DetectionDebugSamples />}
+
+            {subTab === 'liveness' && (
+            <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-                <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: theme.text, marginBottom: 4 }}>
-                        Rejected Samples
-                    </div>
-                    <div style={{ fontSize: 12, color: theme.textMuted }}>
+                <div style={{ flex: 1, minWidth: 280 }}>
+                    <div style={{ fontSize: 12, color: theme.textMuted, lineHeight: 1.6 }}>
                         Face crops rejected by liveness / anti-spoofing during attendance, grouped by period. Use these to judge whether the threshold is too strict or too lenient. Crops auto-delete after 7 days.
                     </div>
                 </div>
@@ -93,7 +134,7 @@ export default function RejectedSamples() {
             ) : summary.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 40, color: theme.textMuted, fontSize: 13 }}>
                     No rejected crops saved yet. They appear here once attendance runs reject a spoofed face
-                    (requires "Save rejected crops" to be on in ML Fine Tuning).
+                    (requires “Save rejected crops” to be on in ML Fine Tuning).
                 </div>
             ) : (
                 <table className="ams-table">
@@ -227,6 +268,8 @@ export default function RejectedSamples() {
                         Close
                     </button>
                 </div>
+            )}
+            </>
             )}
         </div>
     );

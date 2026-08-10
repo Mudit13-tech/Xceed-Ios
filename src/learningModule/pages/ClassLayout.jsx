@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Badge,
   Box,
@@ -52,35 +53,22 @@ const headerLinkStyles = {
 
 export default function ClassLayout() {
   const { classId } = useParams();
-  const [klass, setKlass] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const navigate = useStableNavigate();
   const toast = useToast();
+
+  const { data: klass, isLoading: loading, error, refetch: load } = useQuery({
+    queryKey: ['learning', 'class', classId],
+    queryFn: () => lmApi.getClass(classId),
+    retry: false, // Don't retry on 401s so we can redirect immediately
+  });
+
   const { onCopy, hasCopied } = useClipboard(klass?.code || '');
 
-  // Refreshes triggered by a child (a new member, a renamed class) must not
-  // unmount the header and tabs underneath the user, so only the initial fetch
-  // for a class touches `loading`.
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setKlass(await lmApi.getClass(classId));
-    } catch (err) {
-      setError(err);
-      // See LearningLayout: `window.location` keeps the current page out of
-      // this callback's dependencies, and matches it under BrowserRouter.
-      if (err.status === 401) navigate(loginPathFor(window.location), { replace: true });
-    } finally {
-      setLoading(false);
-    }
-  }, [classId, navigate]);
-
   useEffect(() => {
-    setLoading(true);
-    setKlass(null);
-    load();
-  }, [load]);
+    if (error?.status === 401) {
+      navigate(loginPathFor(window.location), { replace: true });
+    }
+  }, [error, navigate]);
 
   if (loading) return <Loading label="Opening class…" minH="360px" />;
   if (error) {
@@ -114,43 +102,68 @@ export default function ClassLayout() {
       >
         {/* One row, fixed height: the class identity scrolls out of the way as
             the window narrows, but the actions on the right stay put. */}
-        <Flex justify="space-between" align="center" gap={3} wrap="nowrap">
-          {/* Clips itself rather than pushing the actions off the card: without
-              `overflow`, the nowrap children spill past the right edge and the
-              card's own `overflow="hidden"` eats the settings button. */}
-          <HStack spacing={3} flex="1 1 auto" minW={0} overflow="hidden" fontSize="sm" opacity={0.9}>
-            <Heading size="sm" whiteSpace="nowrap" opacity={1}>
-              {klass.name}
-            </Heading>
-            <Text isTruncated minW={0}>
+        <Flex
+          direction={{ base: 'column', sm: 'row' }}
+          align={{ base: 'stretch', sm: 'center' }}
+          justify="space-between"
+          wrap="wrap"
+          gap={3}
+        >
+          <Box flex={{ base: '0 1 auto', sm: '1 1 220px' }} minW={{ base: 0, sm: '180px' }}>
+            <Flex align="center" gap={2} wrap="wrap">
+              <Heading size="sm">{klass.name}</Heading>
+              {klass.status === 'archived' && <Badge colorScheme="orange">Archived</Badge>}
+            </Flex>
+            <Text fontSize="sm" opacity={0.9} mt={0.5}>
               {[klass.section, klass.subject, klass.room].filter(Boolean).join(' · ')}
             </Text>
-            <Text whiteSpace="nowrap">👤 {klass.ownerName}</Text>
-            <Text whiteSpace="nowrap">📄 {klass.counts?.courseworkCount ?? 0} items</Text>
-            {klass.status === 'archived' && <Badge colorScheme="orange">Archived</Badge>}
-          </HStack>
+            <HStack fontSize="sm" opacity={0.85} mt={0.5} spacing={3} wrap="wrap">
+              <Text whiteSpace="nowrap">👤 {klass.ownerName}</Text>
+              <Text whiteSpace="nowrap">📄 {klass.counts?.courseworkCount ?? 0} items</Text>
+            </HStack>
+          </Box>
 
-          <HStack spacing={2} flexShrink={0}>
+          <HStack spacing={2} flexShrink={0} flexWrap="wrap" rowGap={2}>
+            <IconButton
+              as={NavLink}
+              to={`/learning/class/${classId}/people`}
+              size="sm"
+              aria-label="People"
+              icon={<span>👥 {klass.counts?.studentCount ?? 0}</span>}
+              display={{ base: 'flex', md: 'none' }}
+              {...headerLinkStyles}
+            />
             <Button
               as={NavLink}
               to={`/learning/class/${classId}/people`}
               size="sm"
               leftIcon={<span>👥</span>}
+              display={{ base: 'none', md: 'flex' }}
               {...headerLinkStyles}
             >
               People · {klass.counts?.studentCount ?? 0}
             </Button>
-            {/* Beside People rather than in the teaching tabs: it is about who
-                is in the class, not about another thing to hand in. */}
+
+            <IconButton
+              as={NavLink}
+              to={`/learning/class/${classId}/leaderboard`}
+              size="sm"
+              aria-label="Leaderboard"
+              icon={<span>🏆</span>}
+              display={{ base: 'flex', md: 'none' }}
+              {...headerLinkStyles}
+            />
             <Button
               as={NavLink}
               to={`/learning/class/${classId}/leaderboard`}
               size="sm"
               leftIcon={<span>🏆</span>}
+              display={{ base: 'none', md: 'flex' }}
               {...headerLinkStyles}
             >
               Leaderboard
             </Button>
+
             {isTeacher && (
               <Tooltip label={hasCopied ? 'Copied!' : 'Click to copy class code'}>
                 <Button
@@ -158,6 +171,8 @@ export default function ClassLayout() {
                   size="sm"
                   fontFamily="mono"
                   letterSpacing="wider"
+                  borderRadius="full"
+                  px={4}
                   {...headerLinkStyles}
                 >
                   {klass.code}

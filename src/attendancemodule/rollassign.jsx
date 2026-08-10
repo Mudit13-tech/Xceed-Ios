@@ -1833,7 +1833,7 @@ function ClusterCard({ item, batchName, photoUrl, erpPhotoUrl, onClick, isAssign
 }
 
 // CHANGE 4+9: GTModal with delete photo + move photo (embedding ↔ backup) tabs
-function GTModal({ rollNo, batchName, onClose, showToast, onMoved }) {
+export function GTModal({ rollNo, batchName, onClose, showToast, onMoved, embedded = false }) {
     const [loading,    setLoading]    = useState(true);
     const [student,    setStudent]    = useState(null);
     const [busy,       setBusy]       = useState(null);
@@ -2076,10 +2076,8 @@ function GTModal({ rollNo, batchName, onClose, showToast, onMoved }) {
         );
     };
 
-    return (
-        <div className="roll-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.80)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, paddingTop: 72 }}
-            onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="roll-modal-shell" style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12, width: '100%', maxWidth: 960, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    const modalContent = (
+        <div className="roll-modal-shell" style={{ background: theme.surface, border: embedded ? 'none' : `1px solid ${theme.border}`, borderRadius: embedded ? 0 : 12, width: '100%', height: embedded ? '100%' : 'auto', maxWidth: embedded ? '100%' : 960, maxHeight: embedded ? '100%' : '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
                 {/* Header */}
                 <div className="roll-modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: `1px solid ${theme.border}`, flexShrink: 0 }}>
@@ -2127,13 +2125,21 @@ function GTModal({ rollNo, batchName, onClose, showToast, onMoved }) {
                         {student ? `${embCount} embedding · ${backCount} backup` : ''}
                     </span>
                     <div className="roll-modal-actions" style={{ display: 'flex', gap: 10 }}>
-                        <button onClick={onClose} style={{ padding: '8px 20px', borderRadius: 7, border: `1px solid ${theme.border}`, background: 'transparent', color: theme.textMuted, fontSize: '13px', cursor: 'pointer' }}>Close</button>
+                        {!embedded && <button onClick={onClose} style={{ padding: '8px 20px', borderRadius: 7, border: `1px solid ${theme.border}`, background: 'transparent', color: theme.textMuted, fontSize: '13px', cursor: 'pointer' }}>Close</button>}
                         <button onClick={handleDone} disabled={doneSaving || !student} style={{ padding: '8px 24px', borderRadius: 7, border: 'none', background: theme.success, color: '#000', fontSize: '13px', fontWeight: 700, cursor: (doneSaving || !student) ? 'not-allowed' : 'pointer', opacity: (doneSaving || !student) ? 0.5 : 1 }}>
                             {doneSaving ? 'Saving…' : '✓ Done'}
                         </button>
                     </div>
                 </div>
             </div>
+        );
+
+    if (embedded) return modalContent;
+
+    return (
+        <div className="roll-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.80)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, paddingTop: 72 }}
+            onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            {modalContent}
         </div>
     );
 }

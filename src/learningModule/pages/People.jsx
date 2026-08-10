@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Avatar,
   Badge,
@@ -218,13 +219,11 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
 }
 
 function ProgressModal({ isOpen, onClose, classId, membership }) {
-  const [data, setData] = useState(null);
-
-  useEffect(() => {
-    if (!isOpen || !membership) return;
-    setData(null);
-    lmApi.memberProgress(classId, membership._id).then(setData).catch(() => setData(null));
-  }, [isOpen, membership, classId]);
+  const { data, isLoading } = useQuery({
+    queryKey: ['learning', 'memberProgress', classId, membership?._id],
+    queryFn: () => lmApi.memberProgress(classId, membership._id),
+    enabled: isOpen && !!membership,
+  });
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="xl" scrollBehavior="inside">
@@ -233,7 +232,7 @@ function ProgressModal({ isOpen, onClose, classId, membership }) {
         <ModalHeader>{membership?.name || 'Student'}</ModalHeader>
         <ModalCloseButton />
         <ModalBody pb={6}>
-          {!data ? (
+          {isLoading || !data ? (
             <Loading minH="160px" />
           ) : (
             <>
@@ -524,9 +523,6 @@ function PersonRow({ member, isTeacher, isOwner, classId, onChanged, onViewProgr
 
 export default function People() {
   const { classId, klass, isTeacher, reloadClass } = useOutletContext();
-  const [members, setMembers] = useState({ teachers: [], students: [] });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [progressFor, setProgressFor] = useState(null);
   const [emailFor, setEmailFor] = useState(null);
   const [inviteRole, setInviteRole] = useState('student');
@@ -535,20 +531,15 @@ export default function People() {
   const progress = useDisclosure();
   const emailModal = useDisclosure();
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setMembers(await lmApi.listMembers(classId));
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [classId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const {
+    data: members = { teachers: [], students: [] },
+    isLoading: loading,
+    error,
+    refetch: load,
+  } = useQuery({
+    queryKey: ['learning', 'members', classId],
+    queryFn: () => lmApi.listMembers(classId),
+  });
 
   const afterChange = async () => {
     await load();
