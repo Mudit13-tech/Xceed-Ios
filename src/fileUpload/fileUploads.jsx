@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import Header from '../components/header'
+import NativeCamera from '../components/NativeCamera';
 import {
   Input, Text, Button, useToast, Box, Flex, Center, SimpleGrid,
   Badge, Icon, HStack, Tooltip,
@@ -111,6 +112,19 @@ const fileUploads = () => {
     }
   };
 
+  const handleNativeCapture = (image) => {
+    const byteCharacters = atob(image.base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], {type: `image/${image.format}`});
+    const newFile = new File([blob], `camera-${Date.now()}.${image.format}`, { type: `image/${image.format}` });
+    
+    setFile(newFile);
+  };
+
   const requestDelete = (index) => {
     setDeleteIndex(index);
     setShowDeleteConfirm(true);
@@ -209,6 +223,7 @@ const fileUploads = () => {
               Upload
             </Button>
           </Flex>
+          <NativeCamera onCapture={handleNativeCapture} />
         </Box>
 
         {/* Uploads grid */}

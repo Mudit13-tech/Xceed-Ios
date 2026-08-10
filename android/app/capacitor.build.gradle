@@ -18,6 +18,7 @@ dependencies {
     implementation project(':capawesome-capacitor-file-picker')
     implementation project(':capgo-capacitor-downloader')
     implementation project(':capgo-capacitor-updater')
+    implementation project(':capacitor-native-biometric')
     implementation project(':capacitor-secure-storage-plugin')
 
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   VStack,
   HStack,
@@ -14,6 +14,7 @@ import {
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { redirectTargetFrom } from '../../authRedirect';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useBiometricAuth } from '../../utils/useBiometricAuth';
 
 const PinEntry = ({ onCancel, isSetup, onSetupComplete, loginToken }) => {
   const [pin, setPin] = useState('');
@@ -21,6 +22,36 @@ const PinEntry = ({ onCancel, isSetup, onSetupComplete, loginToken }) => {
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAvailable, authenticate } = useBiometricAuth();
+
+  useEffect(() => {
+    if (!isSetup) {
+      const runBiometric = async () => {
+        const available = await isAvailable();
+        if (available) {
+          const result = await authenticate();
+          if (result.success) {
+            setIsLoading(true);
+            try {
+              const storedTokenResult = await SecureStoragePlugin.get({ key: 'auth_token' });
+              if (storedTokenResult.value) {
+                 localStorage.setItem('token', storedTokenResult.value);
+                 window.location.href = redirectTargetFrom(location.search) || '/userroles';
+              } else {
+                 throw new Error('Token missing');
+              }
+            } catch (err) {
+              console.error(err);
+              toast({ title: 'Error logging in', status: 'error', duration: 3000 });
+            } finally {
+              setIsLoading(false);
+            }
+          }
+        }
+      };
+      runBiometric();
+    }
+  }, [isSetup]);
 
   const handlePinComplete = async (value) => {
     setPin(value);
