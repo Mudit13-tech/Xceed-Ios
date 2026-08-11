@@ -13,6 +13,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ChakraProvider } from '@chakra-ui/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 import LoginForm from '../LoginForm';
@@ -21,13 +22,17 @@ vi.mock('../../../getenvironment', () => ({ default: () => 'http://api.test' }))
 
 const CHALLENGE_SVG = '<svg xmlns="http://www.w3.org/2000/svg"><text>A</text></svg>';
 
+// A client per render, with retries off: the form clears the query cache after a
+// successful sign-in, so it needs a provider even though it runs no queries.
 const renderForm = () =>
   render(
-    <ChakraProvider>
-      <MemoryRouter>
-        <LoginForm />
-      </MemoryRouter>
-    </ChakraProvider>,
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <ChakraProvider>
+        <MemoryRouter>
+          <LoginForm />
+        </MemoryRouter>
+      </ChakraProvider>
+    </QueryClientProvider>,
   );
 
 /** Queues fetch replies in order, so a test reads as the exchange it describes. */

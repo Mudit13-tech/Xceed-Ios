@@ -152,6 +152,10 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
   const [showComments, setShowComments] = useState(false);
   const [reactions, setReactions] = useState(item.reactions || []);
   const [commentCount, setCommentCount] = useState(item.commentCount || 0);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(item.text);
+  const [editAttachments, setEditAttachments] = useState(item.attachments || []);
+  const [saving, setSaving] = useState(false);
   const toast = useToast();
 
   const myReaction = reactions.some((r) => String(r.userId) === String(me?.id));
@@ -186,8 +190,31 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
     }
   };
 
-  const canManage = isTeacher || String(item.authorId) === String(me?.id);
+  const startEdit = () => {
+    setEditText(item.text);
+    setEditAttachments(item.attachments || []);
+    setEditing(true);
+  };
 
+  const cancelEdit = () => setEditing(false);
+
+  const saveEdit = async () => {
+    if (isRichTextEmpty(editText) && !editAttachments.length) return;
+    setSaving(true);
+    try {
+      await lmApi.updateAnnouncement(classId, item._id, {
+        text: editText,
+        attachments: editAttachments,
+      });
+      setEditing(false);
+      onChanged();
+    } catch (error) {
+      toast({ status: 'error', title: 'Could not save', description: error.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+  const canManage = isTeacher || String(item.authorId) === String(me?.id);
   return (
     <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={{ base: 3, sm: 5 }} mb={4} w="100%">
       <Flex gap={3} align="flex-start">
@@ -205,16 +232,42 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
           <Text fontSize="xs" color="gray.500" mt={0.5}>
             {relativeTime(item.publishedAt)}
           </Text>
-          <Box mt={3} wordBreak="break-word" overflowWrap="anywhere">
-            <RichText>{item.text}</RichText>
-          </Box>
-          <AttachmentList attachments={item.attachments} />
+          {editing ? (
+            <Box mt={3}>
+              <RichTextEditor value={editText} onChange={setEditText} placeholder="Edit your post…" />
+              <AttachmentPicker attachments={editAttachments} onChange={setEditAttachments} disabled={saving} />
+              <Flex mt={3} gap={2} justify="flex-end">
+                <Button size="sm" variant="ghost" onClick={cancelEdit} isDisabled={saving}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  colorScheme="blue"
+                  onClick={saveEdit}
+                  isLoading={saving}
+                  isDisabled={isRichTextEmpty(editText) && !editAttachments.length}
+                >
+                  Save
+                </Button>
+              </Flex>
+            </Box>
+          ) : (
+            <>
+              <Box mt={3} wordBreak="break-word" overflowWrap="anywhere">
+                <RichText>{item.text}</RichText>
+              </Box>
+              <AttachmentList attachments={item.attachments} />
+            </>
+          )}
         </Box>
 
-        {canManage && (
+        {canManage && !editing && (
           <Menu>
             <MenuButton as={IconButton} size="sm" variant="ghost" icon={<span>⋮</span>} aria-label="Post actions" flexShrink={0} />
             <MenuList>
+              <MenuItem {...buttonTextStyles} onClick={startEdit}>
+                Edit post
+              </MenuItem>
               {isTeacher && (
                 <MenuItem {...buttonTextStyles} onClick={togglePin}>
                   {item.pinned ? 'Unpin' : 'Pin to top'}

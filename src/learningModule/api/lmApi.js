@@ -362,6 +362,36 @@ const lmApi = {
   /* parameterised tutorials */
   listTutorials: (classId) => request(`/classes/${classId}/tutorials`),
   createTutorial: (classId, body) => request(`/classes/${classId}/tutorials`, { method: 'POST', body }),
+
+  /* ---- building a tutorial from an uploaded question paper ---- */
+  listTutorialImports: (classId) => request(`/classes/${classId}/tutorial-imports`),
+  getTutorialImport: (classId, draftId) => request(`/classes/${classId}/tutorial-imports/${draftId}`),
+  startTutorialImport: (classId, body) =>
+    request(`/classes/${classId}/tutorial-imports`, { method: 'POST', body }),
+  deleteTutorialImport: (classId, draftId) =>
+    request(`/classes/${classId}/tutorial-imports/${draftId}`, { method: 'DELETE' }),
+  suggestImportVariables: (classId, draftId, questionId) =>
+    request(`/classes/${classId}/tutorial-imports/${draftId}/questions/${questionId}/suggest-variables`, {
+      method: 'POST',
+      body: {},
+    }),
+  updateImportQuestion: (classId, draftId, questionId, body) =>
+    request(`/classes/${classId}/tutorial-imports/${draftId}/questions/${questionId}`, {
+      method: 'PATCH',
+      body,
+    }),
+  deriveImportAnswers: (classId, draftId, questionId) =>
+    request(`/classes/${classId}/tutorial-imports/${draftId}/questions/${questionId}/derive`, {
+      method: 'POST',
+      body: {},
+    }),
+  previewTutorialImport: (classId, draftId, body) =>
+    request(`/classes/${classId}/tutorial-imports/${draftId}/preview`, {
+      method: 'POST',
+      body: body || {},
+    }),
+  mergeTutorialImport: (classId, draftId, body) =>
+    request(`/classes/${classId}/tutorial-imports/${draftId}/merge`, { method: 'POST', body }),
   getTutorial: (classId, tutorialId) => request(`/classes/${classId}/tutorials/${tutorialId}`),
   updateTutorial: (classId, tutorialId, body) =>
     request(`/classes/${classId}/tutorials/${tutorialId}`, { method: 'PATCH', body }),
@@ -471,6 +501,14 @@ const lmApi = {
     request(`/classes/${classId}/notebooks/${notebookId}/publish`, { method: 'POST', body: body || {} }),
   notebookAttempt: (classId, notebookId) =>
     request(`/classes/${classId}/notebooks/${notebookId}/attempt`),
+  // Runs the cells in a sandboxed container rather than the browser, for the
+  // libraries Pyodide has no WebAssembly build of. 503s when the deployment has
+  // not configured a runner, which is the default — see notebookRunner/README.md.
+  runNotebookOnServer: (classId, notebookId, cells) =>
+    request(`/classes/${classId}/notebooks/${notebookId}/run`, {
+      method: 'POST',
+      body: { cells },
+    }),
   listNotebookAttempts: (classId, notebookId) =>
     request(`/classes/${classId}/notebooks/${notebookId}/attempts`),
   getNotebookAttempt: (classId, attemptId) => request(`/classes/${classId}/notebook-attempts/${attemptId}`),

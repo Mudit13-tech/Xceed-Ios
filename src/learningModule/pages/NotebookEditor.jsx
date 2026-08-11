@@ -282,6 +282,7 @@ export default function NotebookEditor() {
         // exercise is an edit, and the class calendar reads it from here.
         dueDate: notebook.dueDate || null,
         packages,
+        colabUrl: notebook.colabUrl || '',
         cells: cells.map((cell, order) => ({
           // A `new-…` placeholder must not be sent as an _id; Mongo mints the
           // real one and the reload below picks it up.
@@ -435,7 +436,26 @@ export default function NotebookEditor() {
             <FormHelperText fontSize="xs">
               Installed into the browser kernel before the notebook runs. numpy, pandas, matplotlib, scipy,
               sympy and scikit-learn have prebuilt WebAssembly builds; a package needing a C extension that has
-              not been built for the browser will not install.
+              not been built for the browser will not install. TensorFlow, PyTorch and Keras are refused on
+              save — they have no browser build at all, so use the Colab link below for those lessons.
+            </FormHelperText>
+          </FormControl>
+
+          {/* The honest escape hatch for deep learning. Nothing here can run
+              TensorFlow, so a notebook that needs it points the class at Colab
+              rather than shipping a kernel that fails at the first import. */}
+          <FormControl>
+            <FormLabel fontSize="sm">Open in Colab link (optional)</FormLabel>
+            <Input
+              value={notebook.colabUrl || ''}
+              placeholder="https://colab.research.google.com/drive/…"
+              onChange={(e) => setNotebook({ ...notebook, colabUrl: e.target.value })}
+            />
+            <FormHelperText fontSize="xs">
+              Shows the class a button to open this lesson in Google Colab, for work the browser kernel
+              cannot do — TensorFlow, PyTorch, or anything needing a GPU. Must be a colab.research.google.com
+              address; anything else is discarded on save. Students run it in their own Google account, so
+              their work stays in their Drive and does not come back here.
             </FormHelperText>
           </FormControl>
 
