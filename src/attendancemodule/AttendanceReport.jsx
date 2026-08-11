@@ -12,6 +12,7 @@ import getEnvironment from '../getenvironment';
 import ExportReportsTab from './ExportReportsTab';
 import CumulativeAttendanceTab from './CumulativeAttendanceTab';
 import ProxyModal from './ProxyModal';
+import StudentGroundTruthModal from './StudentGroundTruthModal';
 
 const apiUrl = getEnvironment();
 const REPORT_API = `${apiUrl}/attendancemodule/reports`;
@@ -138,6 +139,10 @@ export default function AttendanceReport() {
   const [saveError, setSaveError] = useState('');
   const [derivedCtx, setDerivedCtx] = useState(null);
 
+  // Batch the just-finished one-shot run belongs to — the ground-truth folder
+  // to look a roll number up under. Same resolution runAttendance uses.
+  const effectiveBatchForGt = derivedCtx?.batch || manualBatch;
+
   // ── Session state (multi-run) ─────────────────────────────────
   const [sessionReportId, setSessionReportId] = useState(null);
   const [sessionActive, setSessionActive] = useState(false);
@@ -199,6 +204,12 @@ export default function AttendanceReport() {
   const [proxyInfo, setProxyInfo] = useState(null);
   const [proxyInfoLoading, setProxyInfoLoading] = useState(true);
   const [showProxyModal, setshowProxyModal] = useState(false);
+
+  // ── Ground truth behind one attendance row ────────────────────────────────
+  // Clicking a roll number anywhere in a report table opens the photos the
+  // match was made against, split embedding vs backup, with the option to
+  // re-assign them. { batch, rollNo, student } | null.
+  const [gtModal, setGtModal] = useState(null);
 
   // ── Camera status from DB ─────────────────────────────────────────────────
   const [cameraStatus, setCameraStatus] = useState(null); // null | 'ok' | 'inactive' | 'none'
@@ -1770,6 +1781,11 @@ export default function AttendanceReport() {
                       }),
                     )}
                     readOnly
+                    onOpenGroundTruth={
+                      effectiveBatchForGt
+                        ? (student) => setGtModal({ batch: effectiveBatchForGt, rollNo: student.rollNo, student })
+                        : undefined
+                    }
                     theme={theme}
                     styles={styles}
                   />
@@ -2252,6 +2268,8 @@ export default function AttendanceReport() {
                     label: 'Unknown',
                     val: detailReport.summary?.unknownFaceCount ?? 0,
                     color: theme.warning,
+                    onClick: () => setTab('unknown'),
+                    hint: 'Open the Unknown Faces tab',
                   },
                   {
                     label: 'Overrides',
@@ -2267,6 +2285,11 @@ export default function AttendanceReport() {
                 <MultiRunTable
                   report={detailReport}
                   readOnly={true}
+                  onOpenGroundTruth={
+                    detailReport.batch
+                      ? (student) => setGtModal({ batch: detailReport.batch, rollNo: student.rollNo, student })
+                      : undefined
+                  }
                   theme={theme}
                   styles={styles}
                 />
@@ -2274,6 +2297,11 @@ export default function AttendanceReport() {
                 <AttendanceTable
                   rows={detailReport.finalReport || []}
                   readOnly={true}
+                  onOpenGroundTruth={
+                    detailReport.batch
+                      ? (student) => setGtModal({ batch: detailReport.batch, rollNo: student.rollNo, student })
+                      : undefined
+                  }
                   theme={theme}
                   styles={styles}
                 />
@@ -2297,11 +2325,48 @@ export default function AttendanceReport() {
         </div>
       )}
       {tab === 'rejected' && <RejectedSamples />}
+
+      {gtModal && (
+        <StudentGroundTruthModal
+          batch={gtModal.batch}
+          rollNo={gtModal.rollNo}
+          student={gtModal.student}
+          onClose={() => setGtModal(null)}
+        />
+      )}
     </div>
   );
 }
 
-function MultiRunTable({ report, readOnly, onOverride, theme, styles }) {
+// Roll number as an affordance into that student's ground truth. Falls back
+// to plain text when no handler is wired, so both tables render the same
+// whether or not the ground-truth lookup is available.
+function RollNoCell({ rollNo, student, onOpenGroundTruth, theme }) {
+  if (!onOpenGroundTruth) return rollNo;
+
+  return (
+    <button
+      type="button"
+      title="View the ground truth photos this match was made against"
+      onClick={() => onOpenGroundTruth(student || { rollNo })}
+      style={{
+        background: 'none',
+        border: 'none',
+        padding: 0,
+        font: 'inherit',
+        color: theme.accent,
+        cursor: 'pointer',
+        textDecoration: 'underline',
+        textDecorationStyle: 'dotted',
+        textUnderlineOffset: 3,
+      }}
+    >
+      {rollNo}
+    </button>
+  );
+}
+
+function MultiRunTable({ report, readOnly, onOverride, onOpenGroundTruth, theme, styles }) {
   const runs = report.slotResults || [];
   const finalLookup = {};
   for (const s of report.finalReport || []) {
@@ -2555,7 +2620,12 @@ function MultiRunTable({ report, readOnly, onOverride, theme, styles }) {
                     color: '#111',
                   }}
                 >
-                  {rollNo}
+                  <RollNoCell
+                    rollNo={rollNo}
+                    student={final || { rollNo }}
+                    onOpenGroundTruth={onOpenGroundTruth}
+                    theme={theme}
+                  />
                   {/* Recognised, but not on this subject's roll list — kept
                       visible (wrong room? proxy?) and excluded from the
                       present/absent counts. */}
@@ -2883,7 +2953,48 @@ function StatBar({ stats, theme, styles }) {
       {stats.map((s) => (
         <div
           key={s.label}
-          style={{ ...styles.card, textAlign: 'center', padding: '18px 12px' }}
+          onClick={s.onClick}
+          role={s.onClick ? 'button' : undefined}
+          tabIndex={s.onClick ? 0 : undefined}
+          title={s.onClick ? s.hint || `View ${s.label}` : undefined}
+          onKeyDown={
+            s.onClick
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    s.onClick();
+                  }
+                }
+              : undefined
+          }
+          style={{
+            ...styles.card,
+            textAlign: 'center',
+            padding: '18px 12px',
+            ...(s.onClick
+              ? {
+                  cursor: 'pointer',
+                  border: `1px solid ${s.color}`,
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                }
+              : {}),
+          }}
+          onMouseEnter={
+            s.onClick
+              ? (e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = `0 6px 16px ${theme.shadow || 'rgba(0,0,0,0.12)'}`;
+                }
+              : undefined
+          }
+          onMouseLeave={
+            s.onClick
+              ? (e) => {
+                  e.currentTarget.style.transform = 'none';
+                  e.currentTarget.style.boxShadow = styles.card.boxShadow || 'none';
+                }
+              : undefined
+          }
         >
           <div
             style={{
@@ -2905,6 +3016,9 @@ function StatBar({ stats, theme, styles }) {
             }}
           >
             {s.label}
+            {s.onClick && (
+              <span style={{ marginLeft: 4, color: s.color }}>&rsaquo;</span>
+            )}
           </div>
         </div>
       ))}
@@ -3022,7 +3136,10 @@ function CameraWarningModal({ status, room, onProceed, onCancel }) {
     </div>
   );
 }
-function AttendanceTable({ rows, readOnly, onOverride, theme, styles }) {
+// `onOpenGroundTruth(student)` — when supplied, roll numbers become buttons
+// that open that student's ground-truth photos. Omitted where the report has
+// no batch to look them up under.
+function AttendanceTable({ rows, readOnly, onOverride, onOpenGroundTruth, theme, styles }) {
   return (
     <div className="report-table-scroll" style={{ ...styles.card, padding: 0 }}>
       <table className="ams-table report-attendance-table">
@@ -3069,7 +3186,12 @@ function AttendanceTable({ rows, readOnly, onOverride, theme, styles }) {
                   color: '#111',
                 }}
               >
-                {s.rollNo}
+                <RollNoCell
+                  rollNo={s.rollNo}
+                  student={s}
+                  onOpenGroundTruth={onOpenGroundTruth}
+                  theme={theme}
+                />
               </td>
 
               {/* ── In List column ── */}

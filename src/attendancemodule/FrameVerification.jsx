@@ -114,8 +114,7 @@ export default function FrameVerification({ fixedDepartment = '' }) {
     const [availabilityLoading, setAvailabilityLoading] = useState(false);
     const [framesLoading, setFramesLoading] = useState(false);
     const [galleryData, setGalleryData] = useState(null);
-    const [activeTab, setActiveTab] = useState('annotated');
-    const [modalState, setModalState] = useState({ open: false, tab: 'annotated', index: 0 });
+    const [modalState, setModalState] = useState({ open: false, index: 0 });
     const [fullscreenActive, setFullscreenActive] = useState(false);
     const [classInfo, setClassInfo] = useState(null);
     const [classInfoLoading, setClassInfoLoading] = useState(false);
@@ -238,11 +237,6 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                 if (!cancelled) {
                     setGalleryData(data);
                     const annotated = data.annotatedFrames || [];
-                    if (annotated.length > 0) {
-                        setActiveTab('annotated');
-                    } else {
-                        setActiveTab('raw');
-                    }
 
                     // Auto-open the frame for a deep-linked student, once.
                     if (!autoOpenedRef.current && annotated.length > 0) {
@@ -251,7 +245,7 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                             : -1;
                         if (matchIdx >= 0) {
                             autoOpenedRef.current = true;
-                            openModal('annotated', matchIdx);
+                            openModal(matchIdx);
                         } else if (Number.isFinite(targetSec)) {
                             // No per-frame roll data (old session) — jump to the
                             // annotated frame nearest the student's firstSeenSec.
@@ -264,7 +258,7 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                             });
                             if (bestIdx >= 0) {
                                 autoOpenedRef.current = true;
-                                openModal('annotated', bestIdx);
+                                openModal(bestIdx);
                             }
                         }
                     }
@@ -274,7 +268,6 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                     setGalleryData({
                         found: false,
                         folder: '',
-                        rawFrames: [],
                         annotatedFrames: [],
                     });
                 }
@@ -358,10 +351,7 @@ export default function FrameVerification({ fixedDepartment = '' }) {
 
         const shiftIndex = (direction) => {
             setModalState((current) => {
-                const list = current.tab === 'annotated'
-                    ? (galleryData?.annotatedFrames || [])
-                    : (galleryData?.rawFrames || []);
-
+                const list = galleryData?.annotatedFrames || [];
                 if (list.length === 0) return current;
 
                 const nextIndex = (current.index + direction + list.length) % list.length;
@@ -392,7 +382,7 @@ export default function FrameVerification({ fixedDepartment = '' }) {
 
         document.addEventListener('keydown', onKeyDown);
         return () => document.removeEventListener('keydown', onKeyDown);
-    }, [modalState.open, modalState.index, modalState.tab, galleryData]);
+    }, [modalState.open, modalState.index, galleryData]);
 
     useEffect(() => {
         const onFullscreenChange = () => {
@@ -403,10 +393,8 @@ export default function FrameVerification({ fixedDepartment = '' }) {
         return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
     }, []);
 
-    const rawFrames = galleryData?.rawFrames || [];
     const annotatedFrames = galleryData?.annotatedFrames || [];
-    const activeFrames = modalState.tab === 'annotated' ? annotatedFrames : rawFrames;
-    const modalFrame = activeFrames[modalState.index] || null;
+    const modalFrame = annotatedFrames[modalState.index] || null;
 
     // Frames containing the deep-linked student (empty if no per-frame roll
     // data). When there are matches, the annotated gallery shows only those;
@@ -420,20 +408,29 @@ export default function FrameVerification({ fixedDepartment = '' }) {
         return relativeUrl ? `${apiUrl}${relativeUrl}` : '';
     }
 
-    function openModal(tab, index) {
-        setModalState({ open: true, tab, index });
+    function openModal(index) {
+        setModalState({ open: true, index });
     }
 
     function moveModal(direction) {
         setModalState((current) => {
-            const list = current.tab === 'annotated'
-                ? (galleryData?.annotatedFrames || [])
-                : (galleryData?.rawFrames || []);
-
+            const list = galleryData?.annotatedFrames || [];
             if (list.length === 0) return current;
 
             const nextIndex = (current.index + direction + list.length) % list.length;
             return { ...current, index: nextIndex };
+        });
+    }
+
+    // Wall-clock capture time for a frame — the sidecar records it at snap
+    // time; older folders fall back to the file's mtime server-side.
+    function formatCapturedAt(value) {
+        if (!value) return '—';
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return '—';
+        return d.toLocaleString([], {
+            year: 'numeric', month: 'short', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
         });
     }
 
@@ -470,11 +467,14 @@ export default function FrameVerification({ fixedDepartment = '' }) {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = modalFrame.filename || `frame-${Date.now()}.jpg`;
+            a.download = modalFrame.filename || 'frame.jpg';
             document.body.appendChild(a);
             a.click();
-            window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
+            // Revoking synchronously after click() tears the blob down before
+            // the browser has started reading it, and the save silently never
+            // happens. Defer past the current task so the download commits.
+            setTimeout(() => window.URL.revokeObjectURL(url), 60000);
         } catch (error) {
             console.error('[Frame Download] Error:', error);
             setDownloadError(error.message || 'Failed to download image');
@@ -607,25 +607,14 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                             {room} · {slotLabel(period)} · {date}
                                         </div>
                                         <div style={{ fontSize: 13, color: theme.textMuted }}>
-                                            {framesLoading ? 'Loading frames...' : 'Open any image to inspect it in the fullscreen viewer.'}
+                                            {framesLoading ? 'Loading frames...' : 'Open any screenshot to see its capture time, run, detected roll numbers and unidentified faces.'}
                                         </div>
                                     </div>
 
                                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                                        <button
-                                            className={`frame-chip ${activeTab === 'annotated' ? 'active' : ''}`}
-                                            onClick={() => setActiveTab('annotated')}
-                                            type="button"
-                                        >
-                                            Annotated Frames ({annotatedFrames.length})
-                                        </button>
-                                        <button
-                                            className={`frame-chip ${activeTab === 'raw' ? 'active' : ''}`}
-                                            onClick={() => setActiveTab('raw')}
-                                            type="button"
-                                        >
-                                            Raw Frames ({rawFrames.length})
-                                        </button>
+                                        <span className="frame-chip active" style={{ cursor: 'default' }}>
+                                            Annotated Screenshots ({annotatedFrames.length})
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -637,59 +626,14 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                 />
                             ) : null}
 
-                            {!framesLoading && activeTab === 'raw' && rawFrames.length === 0 ? (
+                            {!framesLoading && annotatedFrames.length === 0 ? (
                                 <EmptyState
-                                    title="No raw frames for this selection"
-                                    subtitle="Try switching to annotated frames or choose another saved date and period."
+                                    title="No annotated screenshots for this selection"
+                                    subtitle="Choose another saved date and period. Screenshots appear once an attendance run has been processed for this room and period."
                                 />
                             ) : null}
 
-                            {!framesLoading && activeTab === 'annotated' && annotatedFrames.length === 0 ? (
-                                <EmptyState
-                                    title="No annotated frames for this selection"
-                                    subtitle="Try switching to raw frames or choose another saved date and period."
-                                />
-                            ) : null}
-
-                            {!framesLoading && activeTab === 'raw' && rawFrames.length > 0 ? (
-                                <div className="frame-gallery">
-                                    {rawFrames.map((frame, index) => (
-                                        <button
-                                            key={`${frame.filename}-${index}`}
-                                            type="button"
-                                            className="frame-thumb"
-                                            onClick={() => openModal('raw', index)}
-                                            style={{
-                                                ...styles.card,
-                                                padding: 12,
-                                                textAlign: 'left',
-                                                cursor: 'pointer',
-                                                transition: 'transform .15s ease, box-shadow .15s ease',
-                                            }}
-                                        >
-                                            <img
-                                                src={toImageUrl(frame.url)}
-                                                alt={frame.filename}
-                                                style={{
-                                                    width: '100%',
-                                                    height: 180,
-                                                    objectFit: 'cover',
-                                                    borderRadius: 10,
-                                                    border: `1px solid ${theme.border}`,
-                                                    marginBottom: 12,
-                                                    background: theme.surfaceAlt,
-                                                }}
-                                            />
-                                            <div style={{ fontSize: 13, fontWeight: 700, color: theme.text, marginBottom: 8 }}>
-                                                {frame.filename}
-                                            </div>
-                                            <FrameStats frame={frame} />
-                                        </button>
-                                    ))}
-                                </div>
-                            ) : null}
-
-                            {!framesLoading && activeTab === 'annotated' && annotatedFrames.length > 0 ? (
+                            {!framesLoading && annotatedFrames.length > 0 ? (
                                 <>
                                     {rollFilter ? (
                                         <div style={{
@@ -722,7 +666,7 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                             key={`${frame.filename}-${index}`}
                                             type="button"
                                             className="frame-thumb"
-                                            onClick={() => openModal('annotated', index)}
+                                            onClick={() => openModal(index)}
                                             style={{
                                                 ...styles.card,
                                                 padding: 12,
@@ -817,7 +761,7 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                         {modalFrame.filename}
                                     </div>
                                     <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)' }}>
-                                        {modalState.tab === 'annotated' ? 'Annotated frame' : 'Raw frame'} · {modalState.index + 1} of {activeFrames.length}
+                                        Annotated screenshot · {modalState.index + 1} of {annotatedFrames.length}
                                     </div>
                                 </div>
 
@@ -840,7 +784,7 @@ export default function FrameVerification({ fixedDepartment = '' }) {
 
                             <div className="frame-modal-body" style={{
                                 display: 'grid',
-                                gridTemplateColumns: 'minmax(0, 1fr) 280px',
+                                gridTemplateColumns: 'minmax(0, 1fr) 320px',
                                 gap: 0,
                             }}>
                                 <div style={{
@@ -868,7 +812,79 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                     padding: 18,
                                     borderLeft: '1px solid rgba(228,232,245,0.12)',
                                     background: 'rgba(255,255,255,0.03)',
+                                    maxHeight: '72vh',
+                                    overflowY: 'auto',
                                 }}>
+                                    {/* Per-frame capture facts. Deliberately kept
+                                        off the image itself — the screenshot only
+                                        carries the boxes and roll labels. */}
+                                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.62)', marginBottom: 12 }}>
+                                        Frame Details
+                                    </div>
+
+                                    <div style={{ display: 'grid', gap: 8, marginBottom: 20, fontSize: 12 }}>
+                                        {[
+                                            ['Captured at', formatCapturedAt(modalFrame.capturedAt)],
+                                            ['Run', modalFrame.run != null ? `Run ${modalFrame.run}` : '—'],
+                                            ['Camera', modalFrame.camera != null ? `Cam ${modalFrame.camera}` : '—'],
+                                            ['Into run', modalFrame.elapsedSec != null ? `${modalFrame.elapsedSec}s` : '—'],
+                                        ].map(([label, value]) => (
+                                            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                                                <span style={{ color: 'rgba(255,255,255,0.62)' }}>{label}</span>
+                                                <span style={{ fontWeight: 700, textAlign: 'right' }}>{value}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.62)', marginBottom: 12 }}>
+                                        Faces In This Frame
+                                    </div>
+
+                                    <div style={{ display: 'grid', gap: 8, marginBottom: 12, fontSize: 12 }}>
+                                        {[
+                                            ['Detected', modalFrame.facesCount ?? '—', '#ffffff'],
+                                            ['Identified', modalFrame.identified ?? '—', '#86efac'],
+                                            ['Not identified', modalFrame.unidentified ?? '—', '#fcd34d'],
+                                        ].map(([label, value, color]) => (
+                                            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                                                <span style={{ color: 'rgba(255,255,255,0.62)' }}>{label}</span>
+                                                <span style={{ fontWeight: 700, color }}>{value}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div style={{ fontSize: 10, lineHeight: 1.5, color: 'rgba(255,255,255,0.5)', marginBottom: 20 }}>
+                                        Not identified counts faces the detector found in this frame that could not be
+                                        matched to an enrolled roll number — not students absent from the class.
+                                    </div>
+
+                                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.62)', marginBottom: 12 }}>
+                                        Roll Numbers Present ({(modalFrame.rolls || []).length})
+                                    </div>
+
+                                    <div style={{ marginBottom: 20 }}>
+                                        {(modalFrame.rolls || []).length > 0 ? (
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                                                {modalFrame.rolls.map((roll) => (
+                                                    <span
+                                                        key={roll}
+                                                        style={{
+                                                            fontFamily: theme.fontMono, fontSize: 11, fontWeight: 700,
+                                                            padding: '3px 7px', borderRadius: 4,
+                                                            color: roll === rollFilter ? '#0c1228' : '#ffffff',
+                                                            background: roll === rollFilter ? '#86efac' : 'rgba(255,255,255,0.1)',
+                                                        }}
+                                                    >
+                                                        {roll}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
+                                                No roll numbers were matched in this frame.
+                                            </div>
+                                        )}
+                                    </div>
+
                                     <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.62)', marginBottom: 12 }}>
                                         Class Details
                                     </div>
