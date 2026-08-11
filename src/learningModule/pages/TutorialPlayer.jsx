@@ -26,6 +26,41 @@ import { formatDateTime } from '../format';
 const answerId = (questionId, key) => `${questionId}:${key}`;
 
 /**
+ * Splits a question's answer slots into the groups a student reads: the stem's
+ * own answers first, then one group per sub-question with its prompt above it.
+ *
+ * Driven off `partIndex` on each slot rather than off the parts array, so a slot
+ * whose part was deleted after the attempt was generated still renders — under
+ * its stored label — instead of disappearing from a paper the student has
+ * already been marked on.
+ */
+function answerGroups(question) {
+  const groups = [];
+  const stem = (question.answers || []).filter((answer) => answer.partIndex === null || answer.partIndex === undefined);
+  if (stem.length) groups.push({ key: 'stem', label: '', prompt: '', answers: stem });
+
+  const parts = question.parts || [];
+  const byPart = new Map();
+  (question.answers || []).forEach((answer) => {
+    if (answer.partIndex === null || answer.partIndex === undefined) return;
+    if (!byPart.has(answer.partIndex)) byPart.set(answer.partIndex, []);
+    byPart.get(answer.partIndex).push(answer);
+  });
+
+  [...byPart.keys()].sort((a, b) => a - b).forEach((partIndex) => {
+    const answers = byPart.get(partIndex);
+    groups.push({
+      key: `part-${partIndex}`,
+      label: parts[partIndex]?.label || answers[0]?.partLabel || '',
+      prompt: parts[partIndex]?.prompt || '',
+      answers,
+    });
+  });
+
+  return groups;
+}
+
+/**
  * The student's sitting of a parameterised tutorial. Their variable values
  * come from the server and are fixed for this attempt, so the paper is stable
  * across reloads.
@@ -284,7 +319,24 @@ export default function TutorialPlayer() {
             </Flex>
           )}
 
-          {question.answers.map((answer) => {
+          {/* Grouped by sub-question when the question has parts. The answer
+              slots are untouched — each still carries its own marks and its own
+              graded verdict — so a parts question and a flat one mark
+              identically and only read differently. */}
+          {answerGroups(question).map((group) => (
+            <Box key={group.key} mb={group.prompt ? 4 : 0}>
+              {group.prompt ? (
+                <Flex gap={2} mb={2} align="baseline">
+                  <Text fontSize="sm" fontWeight="700" color="purple.600" minW="30px">
+                    {group.label}
+                  </Text>
+                  <Box flex="1">
+                    <RichText fontSize="sm">{group.prompt}</RichText>
+                  </Box>
+                </Flex>
+              ) : null}
+              <Box pl={group.prompt ? 8 : 0}>
+          {group.answers.map((answer) => {
             const id = answerId(question.questionId, answer.key);
             const graded = byKey.get(id);
             return (
@@ -327,6 +379,9 @@ export default function TutorialPlayer() {
               </Box>
             );
           })}
+              </Box>
+            </Box>
+          ))}
 
           {submitted && question.solution && (
             <>

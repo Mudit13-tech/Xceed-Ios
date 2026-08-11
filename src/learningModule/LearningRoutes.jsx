@@ -36,6 +36,7 @@ import ShortReport from './pages/ShortReport';
 import ShortJoin from './pages/ShortJoin';
 import ShortPlay from './pages/ShortPlay';
 import Tutorials from './pages/Tutorials';
+import TutorialImport from './pages/TutorialImport';
 import TutorialEditor from './pages/TutorialEditor';
 import TutorialPlayer from './pages/TutorialPlayer';
 import TutorialResults from './pages/TutorialResults';
@@ -113,6 +114,10 @@ export default function LearningRoutes() {
             <Route path="short/:shortId/sessions" element={<ShortSessions />} />
             <Route path="short/:shortId/report/:sessionId" element={<ShortReport />} />
             <Route path="tutorial/:tutorialId/edit" element={<TutorialEditor />} />
+            {/* Reviewing a tutorial read off an uploaded question paper. Teacher
+                only, and produces nothing a student can see until it is merged
+                and then published. */}
+            <Route path="tutorial-import/:draftId" element={<TutorialImport />} />
             <Route path="tutorial/:tutorialId/results" element={<TutorialResults />} />
           </Route>
 

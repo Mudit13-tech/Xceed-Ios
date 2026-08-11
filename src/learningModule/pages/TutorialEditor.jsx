@@ -11,6 +11,7 @@ import {
   Divider,
   Flex,
   FormControl,
+  FormHelperText,
   FormLabel,
   HStack,
   Heading,
@@ -26,8 +27,8 @@ import {
   Textarea,
   Th,
   Thead,
-  Tr,
   Tooltip,
+  Tr,
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
@@ -362,6 +363,123 @@ function QuestionCard({ classId, question, index, onChange, onRemove }) {
       ))}
       <Button size="xs" variant="link" onClick={() => set('answers', [...(question.answers || []), { ...BLANK_ANSWER }])}>
         + Add answer
+      </Button>
+
+      <Divider my={4} />
+      <Heading size="xs" mb={2} color="gray.700">
+        Sub-questions
+      </Heading>
+      <Text fontSize="xs" color="gray.500" mb={3}>
+        Parts (a), (b), (c) … for a question with several steps. They share the variables above, so
+        part (b) refers to the same numbers part (a) did. Each part has its own prompt and its own
+        answers, and each answer is marked separately on submit. Leave this empty for a
+        single-answer question.
+      </Text>
+      {(question.parts || []).map((part, partIndex) => (
+        <Box key={partIndex} borderWidth="1px" borderRadius="md" p={3} mb={3} bg="purple.50">
+          <Flex justify="space-between" align="center" gap={2} mb={2}>
+            <HStack spacing={2}>
+              <Text fontSize="sm" fontWeight="700" color="purple.700">
+                {part.label?.trim() || `(${String.fromCharCode(97 + partIndex)})`}
+              </Text>
+              <Input
+                size="xs"
+                maxW="130px"
+                placeholder="Label (optional)"
+                value={part.label || ''}
+                onChange={(event) =>
+                  set(
+                    'parts',
+                    question.parts.map((p, i) => (i === partIndex ? { ...p, label: event.target.value } : p)),
+                  )
+                }
+              />
+            </HStack>
+            <Button
+              size="xs"
+              variant="ghost"
+              colorScheme="red"
+              onClick={() =>
+                set('parts', question.parts.filter((_, i) => i !== partIndex))
+              }
+            >
+              Remove part
+            </Button>
+          </Flex>
+
+          <FormControl mb={2}>
+            <FormLabel fontSize="xs">Prompt for this part</FormLabel>
+            <RichTextEditor
+              value={part.prompt || ''}
+              onChange={(value) =>
+                set(
+                  'parts',
+                  question.parts.map((p, i) => (i === partIndex ? { ...p, prompt: value } : p)),
+                )
+              }
+              placeholder="Find the power dissipated in the {{R}} Ω resistor."
+            />
+            <FormHelperText fontSize="xs">
+              Use {'{{name}}'} to insert a variable, the same as the main prompt.
+            </FormHelperText>
+          </FormControl>
+
+          {(part.answers || []).map((answer, answerIndex) => (
+            <AnswerRow
+              key={answerIndex}
+              classId={classId}
+              answer={answer}
+              variableNames={variableNames}
+              onChange={(updated) =>
+                set(
+                  'parts',
+                  question.parts.map((p, i) =>
+                    i === partIndex
+                      ? { ...p, answers: p.answers.map((a, j) => (j === answerIndex ? updated : a)) }
+                      : p,
+                  ),
+                )
+              }
+              onRemove={() =>
+                set(
+                  'parts',
+                  question.parts.map((p, i) =>
+                    i === partIndex
+                      ? { ...p, answers: p.answers.filter((_, j) => j !== answerIndex) }
+                      : p,
+                  ),
+                )
+              }
+            />
+          ))}
+          <Button
+            size="xs"
+            variant="link"
+            onClick={() =>
+              set(
+                'parts',
+                question.parts.map((p, i) =>
+                  i === partIndex ? { ...p, answers: [...(p.answers || []), { ...BLANK_ANSWER }] } : p,
+                ),
+              )
+            }
+          >
+            + Add answer to this part
+          </Button>
+        </Box>
+      ))}
+      <Button
+        size="xs"
+        variant="link"
+        colorScheme="purple"
+        onClick={() =>
+          set('parts', [
+            ...(question.parts || []),
+            { label: '', prompt: '', answers: [{ ...BLANK_ANSWER, label: 'Answer', formula: 'x' }] },
+          ])
+        }
+      >
+        + Add sub-question
       </Button>
 
       <Divider my={4} />

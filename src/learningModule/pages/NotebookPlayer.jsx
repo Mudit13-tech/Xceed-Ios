@@ -87,6 +87,10 @@ export default function NotebookPlayer() {
     Boolean(notebook?.dueDate && attempt?.submittedAt) &&
     new Date(attempt.submittedAt) > new Date(notebook.dueDate);
   const { status, detail, busyCellId, start, restart, runCell, stop } = usePyodide(packages, sources);
+  // Server-side runs are independent of the browser kernel: they work whether or
+  // not it has been started, which is the point for a notebook that cannot run
+  // in it at all.
+  const [serverRunning, setServerRunning] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -310,6 +314,55 @@ export default function NotebookPlayer() {
     [ensureSetup, patchCell, runCell, scheduleSave, status, toast],
   );
 
+  /**
+   * Runs everything in a sandboxed container on the server instead of the
+   * browser.
+   *
+   * The reason this exists is TensorFlow: Pyodide has no WebAssembly build of it
+   * and micropip has no pure-Python wheel to fall back on, so `import tensorflow`
+   * can never work in the browser kernel however long it is left to load.
+   *
+   * The browser stays the default. It is instant, costs nothing and scales to a
+   * cohort without a queue; this path costs real CPU on a shared machine, so it
+   * is a button rather than the behaviour. A 503 means the deployment has not
+   * configured a runner, which is the default — the message says so rather than
+   * leaving a button that looks broken.
+   */
+  const runAllOnServer = useCallback(async () => {
+    setServerRunning(true);
+    try {
+      const payload = cellsRef.current
+        .filter((cell) => cell.type === 'code' && cell.source.trim())
+        .map((cell) => ({ id: cell.key, source: cell.source }));
+      if (!payload.length) return;
+
+      const result = await lmApi.runNotebookOnServer(classId, notebookId, payload);
+
+      const byId = new Map((result.cells || []).map((cell) => [String(cell.id), cell.outputs || []]));
+      setCells((current) =>
+        current.map((cell) =>
+          byId.has(String(cell.key))
+            ? {
+                ...cell,
+                outputs: byId.get(String(cell.key)),
+                executedAt: new Date().toISOString(),
+                runCount: (cell.runCount || 0) + 1,
+              }
+            : cell,
+        ),
+      );
+      scheduleSave();
+
+      if (result.timedOut || result.failed) {
+        toast({ status: 'warning', title: result.message || 'The run did not finish.', duration: 8000 });
+      }
+    } catch (err) {
+      toast({ status: 'error', title: err.message, duration: 8000 });
+    } finally {
+      setServerRunning(false);
+    }
+  }, [classId, notebookId, scheduleSave, toast]);
+
   const runAll = useCallback(async () => {
     if (status !== 'ready') return;
     for (const cell of cellsRef.current) {
@@ -394,6 +447,22 @@ export default function NotebookPlayer() {
       <Flex gap={3} wrap="wrap" align="flex-start">
         <Box flex="1" minW="220px">
           <Heading size="md">{notebook.title}</Heading>
+          {/* Present only when the teacher set one. The browser kernel cannot
+              run TensorFlow at all, so for those lessons this is the lesson. */}
+          {notebook.colabUrl ? (
+            <Button
+              as="a"
+              size="sm"
+              variant="outline"
+              colorScheme="orange"
+              href={notebook.colabUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              mt={2}
+            >
+              Open in Google Colab ↗
+            </Button>
+          ) : null}
           {notebook.description ? (
             <Box fontSize="sm" opacity={0.75} mt={1}>
               <RichText>{notebook.description}</RichText>
@@ -446,6 +515,17 @@ export default function NotebookPlayer() {
               </Button>
               <Button size="sm" variant="outline" leftIcon={<FiRefreshCw />} onClick={restartKernel}>
                 Restart
+              </Button>
+              {/* For the libraries the browser kernel cannot load at all. */}
+              <Button
+                size="sm"
+                variant="outline"
+                colorScheme="purple"
+                onClick={runAllOnServer}
+                isLoading={serverRunning}
+                loadingText="Running on server"
+              >
+                Run on server
               </Button>
               {busyCellId ? (
                 <Button size="sm" colorScheme="red" leftIcon={<FiSquare />} onClick={stopKernel}>
