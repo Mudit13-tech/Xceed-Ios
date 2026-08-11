@@ -56,7 +56,7 @@ const PinEntry = ({ onCancel, isSetup, onSetupComplete, loginToken }) => {
         if (onSetupComplete) {
           onSetupComplete();
         } else {
-          navigate('/userroles');
+          window.location.href = '/userroles';
         }
       } else {
         // Verify PIN
@@ -69,7 +69,7 @@ const PinEntry = ({ onCancel, isSetup, onSetupComplete, loginToken }) => {
           if (storedTokenResult.value) {
              localStorage.setItem('token', storedTokenResult.value);
              queryClient.invalidateQueries({ queryKey: ['user', 'details'] });
-             navigate(redirectTargetFrom(location.search) || '/userroles');
+             window.location.href = redirectTargetFrom(location.search) || '/userroles';
           } else {
              throw new Error('Token missing');
           }
@@ -172,7 +172,7 @@ const PinEntry = ({ onCancel, isSetup, onSetupComplete, loginToken }) => {
             // Skip PIN setup
             localStorage.setItem('token', loginToken);
             if (onSetupComplete) onSetupComplete();
-            else navigate('/userroles');
+            else window.location.href = '/userroles';
           }} fontSize="sm">
             Skip for now
           </Link>

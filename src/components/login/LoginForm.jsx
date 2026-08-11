@@ -59,7 +59,7 @@ const LoginForm = () => {
              if (result.success) {
                 localStorage.setItem('token', tokenResult.value);
                 queryClient.invalidateQueries({ queryKey: ['user', 'details'] });
-                navigate(redirectTargetFrom(location.search) || '/userroles');
+                window.location.href = redirectTargetFrom(location.search) || '/userroles';
                 return; // Redirecting immediately
              }
           }
