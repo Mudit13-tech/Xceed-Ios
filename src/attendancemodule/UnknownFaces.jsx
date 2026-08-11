@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import getEnvironment from '../getenvironment';
 import { theme, styles, cssReset, DEGREES, YEARS, API_BASE as GT_API_BASE } from './config';
 import { useDepartments } from './useDepartments';
@@ -8,6 +8,21 @@ import { GTModal } from './rollassign';
 const apiUrl = getEnvironment();
 const API_BASE = `${apiUrl}/attendancemodule/unknown-faces`;
 const encodePath = (path) => path.split('/').map(encodeURIComponent).join('/');
+
+// Roll numbers mix letters and digits ("22CS7" must sort before "22CS10"), so
+// compare with numeric collation instead of plain string order.
+const rollCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+// Clusters that were never matched to a student have no roll number — they sort
+// to the end so the identified ones read as one clean ascending list.
+const compareByRollNo = (a, b) => {
+    const ra = (a.closestRollNo || '').trim();
+    const rb = (b.closestRollNo || '').trim();
+    if (!ra && !rb) return rollCollator.compare(a.clusterPath || '', b.clusterPath || '');
+    if (!ra) return 1;
+    if (!rb) return -1;
+    return rollCollator.compare(ra, rb) || rollCollator.compare(a.clusterPath || '', b.clusterPath || '');
+};
 
 export default function UnknownFaces({ embedded = false, defaultDate = '', defaultDept = '', fixedDept = '' }) {
     const [clusters, setClusters] = useState([]);
@@ -21,8 +36,34 @@ export default function UnknownFaces({ embedded = false, defaultDate = '', defau
     const [filterDate, setFilterDate] = useState(defaultDate);
     const [filterDept, setFilterDept] = useState(fixedDept || defaultDept);
     const [filterStatus, setFilterStatus] = useState('');
-    
+    const [search, setSearch] = useState('');
+
     const { departments, deptLoading, deptError } = useDepartments();
+
+    // Search is client-side over the already-fetched clusters, then the result is
+    // ordered by roll number.
+    const visibleClusters = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        const matched = !q
+            ? clusters
+            : clusters.filter((c) =>
+                [
+                    c.closestRollNo,
+                    c.closestStudentName,
+                    c.department,
+                    c.year,
+                    c.room,
+                    c.subjectCode,
+                    c.slot,
+                    c.status,
+                    c.failureReason,
+                    c.date || c.createdAt?.split('T')[0],
+                ]
+                    .filter(Boolean)
+                    .some((f) => String(f).toLowerCase().includes(q)),
+            );
+        return [...matched].sort(compareByRollNo);
+    }, [clusters, search]);
 
     const showToast = (msg, type = 'success') => {
         setToast({ msg, type });
@@ -166,7 +207,26 @@ export default function UnknownFaces({ embedded = false, defaultDate = '', defau
                 </div>
             )}
 
-            <div style={{ ...styles.card, marginBottom: 20, display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div style={{ ...styles.card, marginBottom: 20, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 260px', minWidth: 220 }}>
+                    <label style={{ fontSize: '11px', color: theme.textMuted, display: 'block', marginBottom: 4 }}>Search</label>
+                    <div style={{ position: 'relative' }}>
+                        <input
+                            type="search"
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            placeholder="Roll no, name, room, subject, reason…"
+                            style={{ ...styles.input, padding: '8px 28px 8px 8px', fontSize: '13px' }}
+                        />
+                        {search && (
+                            <button
+                                onClick={() => setSearch('')}
+                                title="Clear search"
+                                style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: theme.textMuted, cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: 0 }}
+                            >&times;</button>
+                        )}
+                    </div>
+                </div>
                 <div>
                     <label style={{ fontSize: '11px', color: theme.textMuted, display: 'block', marginBottom: 4 }}>Date</label>
                     <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} style={{ ...styles.input, padding: '8px', fontSize: '13px' }} />
@@ -193,17 +253,25 @@ export default function UnknownFaces({ embedded = false, defaultDate = '', defau
                         </select>
                     )}
                 </div>
-                <button onClick={() => { setFilterDate(''); setFilterDept(fixedDept || ''); setFilterStatus(''); }} style={{ ...styles.btnGhost, marginTop: 18 }}>Clear Filters</button>
+                <button onClick={() => { setFilterDate(''); setFilterDept(fixedDept || ''); setFilterStatus(''); setSearch(''); }} style={{ ...styles.btnGhost, marginTop: 18 }}>Clear Filters</button>
             </div>
+
+            {!loading && clusters.length > 0 && (
+                <div style={{ fontSize: '12px', color: theme.textMuted, marginBottom: 12 }}>
+                    Showing {visibleClusters.length} of {clusters.length} cluster{clusters.length === 1 ? '' : 's'}, sorted by roll number
+                </div>
+            )}
 
             {loading ? (
                 <div style={{ padding: 40, textAlign: 'center', color: theme.textMuted }}>Loading...</div>
-            ) : clusters.length === 0 ? (
-                <div style={{ padding: 40, textAlign: 'center', color: theme.textMuted, ...styles.card }}>No unknown faces found.</div>
+            ) : visibleClusters.length === 0 ? (
+                <div style={{ padding: 40, textAlign: 'center', color: theme.textMuted, ...styles.card }}>
+                    {clusters.length === 0 ? 'No unknown faces found.' : `No clusters match "${search}".`}
+                </div>
             ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20 }}>
-                    {clusters.map((c, i) => (
-                        <div key={i} style={{ ...styles.card, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {visibleClusters.map((c, i) => (
+                        <div key={c.clusterPath || i} style={{ ...styles.card, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                 <div style={{ fontSize: '12px', color: theme.textMuted, fontFamily: theme.fontMono }}>
                                     {c.date || c.createdAt?.split('T')[0]} • {c.slot}

@@ -17,6 +17,9 @@ const SUBJECT_API = `${apiUrl}/timetablemodule/subject`;
 const FACULTY_API = `${apiUrl}/timetablemodule/faculty`;
 
 const DURATION_OPTIONS = [30, 60, 90, 120, 180, 300];
+// Keep in step with AcquisitionControl.globalNumRuns / periods[].numRuns
+// (server/src/models/acquisitionControl.js), which reject anything higher.
+const MAX_RUNS = 15;
 
 export const SCHEDULER_RESPONSIVE_CSS = `
   ${cssReset}
@@ -519,6 +522,12 @@ function GlobalEditor({ config, onSave }) {
 
   const update = (k, v) => setForm((p) => {
     const next = { ...p, [k]: v };
+    // A number input's max= does not stop a typed value, and the schema caps
+    // globalNumRuns at MAX_RUNS — clamp here so an out-of-range entry can't
+    // reach the save and come back as an opaque validation error.
+    if (k === 'globalNumRuns') {
+      next.globalNumRuns = Math.min(MAX_RUNS, Math.max(1, Number(v) || 1));
+    }
     // minRunsPresent can never exceed the total number of runs
     if (next.globalMinRunsPresent > next.globalNumRuns) {
       next.globalMinRunsPresent = next.globalNumRuns;
@@ -562,7 +571,7 @@ function GlobalEditor({ config, onSave }) {
           <input
             type="number"
             min={1}
-            max={10}
+            max={MAX_RUNS}
             value={form.globalNumRuns}
             onChange={(e) => update('globalNumRuns', Number(e.target.value))}
             style={styles.input}

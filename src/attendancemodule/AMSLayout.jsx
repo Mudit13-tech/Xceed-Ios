@@ -6,6 +6,7 @@ import { theme } from './config';
 import getEnvironment from '../getenvironment';
 import { HealthProvider } from './HealthContext';
 import ILeed from './BrandName';
+import useShellOffset from './useShellOffset';
 
 const T = theme;
 const apiUrl = getEnvironment();
@@ -100,7 +101,14 @@ const CSS = `
   .ams-nav-newtab-btn { opacity: 0; transition: opacity .12s, background .12s, color .12s; }
   .ams-nav-item:hover .ams-nav-newtab-btn { opacity: 1; }
   .ams-nav-newtab-btn:hover { background: rgba(99,102,241,0.12) !important; color: #6366f1 !important; }
-  .ams-layout-shell { height: 100vh; height: 100dvh; overflow: hidden; }
+  /* --ams-shell-top is the height of whatever sits above this layout (the
+     platform navbar), measured at runtime — without subtracting it the shell is
+     a full viewport tall *below* the navbar, so its bottom edge falls off screen. */
+  .ams-layout-shell {
+    height: calc(100vh - var(--ams-shell-top, 0px));
+    height: calc(100dvh - var(--ams-shell-top, 0px));
+    overflow: hidden;
+  }
   .ams-sidebar-nav { overscroll-behavior: contain; }
   .ams-main-shell { height: 100%; min-height: 0; overflow: hidden; }
   .ams-page-content {
@@ -119,6 +127,7 @@ export default function AMSLayout() {
   const [isMobile, setIsMobile] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accessChecked, setAccessChecked] = useState(false);
+  const [shellRef, shellTop] = useShellOffset();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -181,7 +190,9 @@ export default function AMSLayout() {
       <style>{CSS}</style>
       <div
         className="ams-layout-shell"
+        ref={shellRef}
         style={{
+          '--ams-shell-top': `${shellTop}px`,
           display: 'flex',
           width: '100%',
           background: T.bg,
@@ -423,9 +434,29 @@ export default function AMSLayout() {
                     <line x1="3" y1="18" x2="21" y2="18" />
                   </svg>
                 </button>
-                <span style={{ fontWeight: 700, fontSize: 16 }}>
+                {/* A real <a> so it can still be middle-clicked / opened in a
+                    new tab; the handler keeps a plain click as an SPA nav. */}
+                <a
+                  href="/attendance"
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+                    e.preventDefault();
+                    setMobileOpen(false);
+                    navigate('/attendance');
+                  }}
+                  title="Go to iLEED dashboard"
+                  style={{
+                    fontWeight: 700,
+                    fontSize: 16,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    textDecoration: 'none',
+                    color: 'inherit',
+                    cursor: 'pointer',
+                  }}
+                >
                   <ILeed style={{ lineHeight: 1, display: 'inline-block', fontSize: 16 }} />
-                </span>
+                </a>
               </div>
               <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>
                 Attendance System
