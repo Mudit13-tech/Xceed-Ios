@@ -6,7 +6,10 @@ import {
   Route,
   Navigate,
   RouterProvider,
+  useLocation,
+  useNavigate,
 } from 'react-router-dom';
+import { App as CapacitorApp } from '@capacitor/app';
 
 import Lottie from 'lottie-react';
 import Timetable from './timetableadmin/timetable';
@@ -211,6 +214,39 @@ import MLFineTuning from './attendancemodule/MLFineTuning';
 import { setupOtaUpdater } from './utils/otaUpdater';
 import { useEffect } from 'react';
 
+const HardwareBackButton = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let listener = null;
+
+    const registerListener = async () => {
+      listener = await CapacitorApp.addListener('backButton', (event) => {
+        // Paths where pressing back should exit the app instead of navigating back
+        const exitPaths = ['/', '/login', '/home', '/learning', '/learning/'];
+        if (exitPaths.includes(location.pathname)) {
+          CapacitorApp.exitApp();
+        } else if (event.canGoBack || window.history.length > 1) {
+          navigate(-1);
+        } else {
+          CapacitorApp.exitApp();
+        }
+      });
+    };
+
+    registerListener();
+
+    return () => {
+      if (listener) {
+        listener.remove();
+      }
+    };
+  }, [location, navigate]);
+
+  return null;
+};
+
 function App() {
   useEffect(() => {
     setupOtaUpdater();
@@ -218,6 +254,7 @@ function App() {
 
   return (
     <Router>
+      <HardwareBackButton />
       {/* <div className="app"> */}
 
       {/* <h1>XCEED-Timetable Module</h1>  */}
