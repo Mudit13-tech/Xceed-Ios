@@ -12,6 +12,7 @@ import {
   Spinner,
   Text,
   Tooltip,
+  useColorModeValue,
   useClipboard,
 } from '@chakra-ui/react';
 import { formatDateTime, relativeTime } from '../format';
@@ -157,16 +158,39 @@ export function SectionCard({ title, subtitle, action, children, ...rest }) {
 }
 
 export function StatTile({ label, value, hint, accent = 'blue.500' }) {
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const secondaryTextColor = useColorModeValue('gray.500', 'gray.300');
+
   return (
-    <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={4}>
-      <Text fontSize="xs" textTransform="uppercase" letterSpacing="wide" color="gray.500">
+    <Box
+      bg={cardBg}
+      borderWidth="1px"
+      borderColor={borderColor}
+      borderRadius="lg"
+      p={4}
+    >
+      <Text
+        fontSize="xs"
+        textTransform="uppercase"
+        letterSpacing="wide"
+        color={secondaryTextColor}
+      >
         {label}
       </Text>
-      <Text fontSize="2xl" fontWeight="700" color={accent} lineHeight="1.2" mt={1}>
+
+      <Text
+        fontSize="2xl"
+        fontWeight="700"
+        color={accent}
+        lineHeight="1.2"
+        mt={1}
+      >
         {value ?? '—'}
       </Text>
+
       {hint && (
-        <Text fontSize="xs" color="gray.500" mt={1}>
+        <Text fontSize="xs" color={secondaryTextColor} mt={1}>
           {hint}
         </Text>
       )}
