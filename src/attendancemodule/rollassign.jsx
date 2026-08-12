@@ -236,7 +236,7 @@ export default function RollAssign({ fixedDepartment = '' }) {
     const [editRollInput,    setEditRollInput]    = useState('');
     const [editRollSaving,   setEditRollSaving]   = useState(false);
     const [deletingAllImgs,  setDeletingAllImgs]  = useState(null); // folderName
-    const [erpStatus,        setErpStatus]        = useState({ loading: false, available: null, pklName: null, studentCount: 0 });
+    const [erpStatus,        setErpStatus]        = useState({ loading: false, available: null, pklName: null, studentCount: null, studentCountSource: null });
 
     const batchName = degree && department && year
         ? `${degree}_${department}_${year}`.toUpperCase()
@@ -340,12 +340,21 @@ export default function RollAssign({ fixedDepartment = '' }) {
     }, [batchName, loadClusters]);
 
     useEffect(() => {
-        if (!batchName) { setErpStatus({ loading: false, available: null, pklName: null, studentCount: 0 }); return; }
+        if (!batchName) { setErpStatus({ loading: false, available: null, pklName: null, studentCount: null, studentCountSource: null }); return; }
         setErpStatus(s => ({ ...s, loading: true, available: null }));
         fetch(`${RA_BASE}/erp-embedding/status/${encodeURIComponent(batchName)}`)
             .then(r => r.ok ? r.json() : Promise.reject())
-            .then(d => setErpStatus({ loading: false, available: !!d.available, pklName: d.pklName || null, studentCount: d.studentCount || 0 }))
-            .catch(() => setErpStatus({ loading: false, available: null, pklName: null, studentCount: 0 }));
+            // studentCount is null when the count could not be established —
+            // leave it null rather than coercing to 0, which reads as an empty
+            // batch instead of an unknown one.
+            .then(d => setErpStatus({
+                loading: false,
+                available: !!d.available,
+                pklName: d.pklName || null,
+                studentCount: Number.isInteger(d.studentCount) ? d.studentCount : null,
+                studentCountSource: d.studentCountSource || null,
+            }))
+            .catch(() => setErpStatus({ loading: false, available: null, pklName: null, studentCount: null, studentCountSource: null }));
     }, [batchName]);
 
    const runAutoMatch = useCallback(async () => {
@@ -982,7 +991,12 @@ export default function RollAssign({ fixedDepartment = '' }) {
                     ) : erpStatus.available === true ? (
                         <div style={{ marginTop: 10, padding: '7px 14px', borderRadius: 6, background: '#f0fdf4', border: '1px solid #86efac', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                             <span style={{ color: '#16a34a', fontWeight: 700, fontSize: '12px' }}>✓ ERP embeddings ready</span>
-                            {erpStatus.studentCount > 0 && <span style={{ fontSize: '12px', color: '#15803d' }}>{erpStatus.studentCount} students</span>}
+                            {erpStatus.studentCount !== null
+                                ? <span style={{ fontSize: '12px', color: '#15803d' }}>
+                                    {erpStatus.studentCount} students in this file
+                                    {erpStatus.studentCountSource === 'recorded' && ' (as last written)'}
+                                  </span>
+                                : <span style={{ fontSize: '12px', color: '#a16207' }}>student count unavailable — ML service could not read the file</span>}
                             {erpStatus.pklName && <span style={{ fontFamily: theme.fontMono, fontSize: '11px', color: '#166534', background: '#dcfce7', padding: '2px 7px', borderRadius: 4 }}>{erpStatus.pklName}</span>}
                         </div>
                     ) : erpStatus.available === false ? (
@@ -2005,21 +2019,37 @@ export function GTModal({ rollNo, batchName, onClose, showToast, onMoved, embedd
     const photoUrl = (filename) =>
         `${GT_BASE}/photo/${encodeURIComponent(batchName)}/${encodeURIComponent(rollNo)}/${encodeURIComponent(filename)}`;
 
+    const allPhotos = [...(student?.embeddingFiles || []), ...(student?.backupFiles || []), ...(student?.untrackedFiles || [])];
+    let maxAddedAt = 0;
+    allPhotos.forEach(p => {
+        if (p.addedAt) {
+            const time = new Date(p.addedAt).getTime();
+            if (time > maxAddedAt) maxAddedAt = time;
+        }
+    });
+
     const PhotoCard = ({ photo, type }) => {
         const busyKey = `${rollNo}::${photo.filename}`;
         const isBusy  = busy === busyKey;
         const isEmbed = type === 'embedding';
         const isOther = type === 'other';
-        const borderC = isEmbed ? theme.success : isOther ? theme.border : theme.warning;
+        
+        const isNew = photo.addedAt && maxAddedAt > 0 && (maxAddedAt - new Date(photo.addedAt).getTime() < 30 * 1000);
+        const borderC = isNew ? theme.accent : (isEmbed ? theme.success : isOther ? theme.border : theme.warning);
         
         const isSelected = selectedPhotos[photo.filename] || false;
         
         return (
-            <div style={{ background: isSelected ? theme.danger + '11' : theme.bg, border: `1.5px solid ${isSelected ? theme.danger : borderC}33`, borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column', opacity: isBusy ? 0.45 : 1, transition: 'opacity 0.15s' }}>
+            <div style={{ background: isSelected ? theme.danger + '11' : theme.bg, border: `1.5px solid ${isSelected ? theme.danger : borderC}33`, boxShadow: isNew ? `0 0 8px ${theme.accent}66` : 'none', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column', opacity: isBusy ? 0.45 : 1, transition: 'opacity 0.15s' }}>
                 <div style={{ position: 'relative', aspectRatio: '1', overflow: 'hidden', cursor: type === 'backup' ? 'pointer' : 'default' }} onClick={() => type === 'backup' && togglePhotoSelection(photo.filename)}>
+                    {isNew && (
+                        <div style={{ position: 'absolute', top: 4, left: 4, background: theme.accent, color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '2px 6px', borderRadius: 4, zIndex: 10, pointerEvents: 'none' }}>
+                            NEW
+                        </div>
+                    )}
                     <img src={photoUrl(photo.filename)} alt={photo.filename} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { e.target.style.opacity = '0.15'; }} />
                     {type === 'backup' && (
-                        <div style={{ position: 'absolute', top: 6, left: 6 }} onClick={e => e.stopPropagation()}>
+                        <div style={{ position: 'absolute', top: isNew ? 22 : 6, left: 6 }} onClick={e => e.stopPropagation()}>
                             <input type="checkbox" checked={isSelected} onChange={(e) => { togglePhotoSelection(photo.filename); }} style={{ width: 16, height: 16, accentColor: theme.danger, cursor: 'pointer' }} />
                         </div>
                     )}

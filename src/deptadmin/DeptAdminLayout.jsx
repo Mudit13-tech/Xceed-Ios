@@ -29,6 +29,9 @@ const CSS = `
   * { box-sizing: border-box; }
   .dept-admin-nav-item { transition: background .15s, color .15s; cursor: pointer; }
   .dept-admin-nav-item:hover { background: rgba(99,102,241,0.06) !important; }
+  .dept-admin-nav-newtab-btn { opacity: 0; transition: opacity .12s, background .12s, color .12s; }
+  .dept-admin-nav-item:hover .dept-admin-nav-newtab-btn { opacity: 1; }
+  .dept-admin-nav-newtab-btn:hover { background: rgba(99,102,241,0.12) !important; color: #6366f1 !important; }
 `;
 
 export default function DeptAdminLayout() {
@@ -175,9 +178,39 @@ export default function DeptAdminLayout() {
                                             {item.label[0]}
                                         </span>
                                     ) : (
-                                        <span style={{ fontSize: 12.5, fontWeight: active ? 600 : 400, whiteSpace: 'nowrap' }}>
+                                        <span style={{ fontSize: 12.5, fontWeight: active ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
                                             {item.label}
                                         </span>
+                                    )}
+                                    {!collapsed && !item.newTab && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                window.open(item.route, '_blank', 'noopener,noreferrer');
+                                            }}
+                                            title={`Open ${item.label} in new tab`}
+                                            className="dept-admin-nav-newtab-btn"
+                                            style={{
+                                                position: 'absolute',
+                                                top: 0,
+                                                bottom: 0,
+                                                right: 4,
+                                                width: 26,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                background: 'transparent',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                color: theme.textMuted,
+                                                fontSize: 18,
+                                                fontWeight: 600,
+                                                lineHeight: 1,
+                                                borderRadius: 6,
+                                            }}
+                                        >
+                                            +
+                                        </button>
                                     )}
                                 </div>
                             );

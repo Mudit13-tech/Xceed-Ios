@@ -31,6 +31,7 @@ import {
   Tabs,
   Text,
   Tooltip,
+  useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
@@ -46,13 +47,14 @@ import { CLASS_COLORS } from '../format';
 import { canCreateClass } from '../roles';
 
 function ClassCard({ klass, onOpen }) {
+  const cardBg = useColorModeValue('white', 'gray.800');
   const isTeacher = ['teacher', 'co-teacher'].includes(klass.myRole);
   return (
     <Box
       as="button"
       textAlign="left"
       onClick={() => onOpen(klass)}
-      bg="white"
+      bg={cardBg}
       borderWidth="1px"
       borderColor="gray.200"
       borderRadius="lg"
@@ -537,14 +539,19 @@ export default function Dashboard() {
     reloadOverview?.();
   };
 
+  const headingColor = useColorModeValue('gray.800', 'white');
+  const secondaryTextColor = useColorModeValue('gray.500', 'gray.300');
+  const cardBg = useColorModeValue('white', 'gray.800');
+
+
   return (
     <Box>
       <Flex justify="space-between" align="center" mb={5} wrap="wrap" gap={3}>
         <Box>
-          <Heading size="lg" color="gray.800">
+          <Heading size="lg" color={headingColor}>
             Your classes
           </Heading>
-          <Text color="gray.500" fontSize="sm">
+          <Text color={secondaryTextColor} fontSize="sm">
             Everything you teach or are enrolled in.
           </Text>
         </Box>

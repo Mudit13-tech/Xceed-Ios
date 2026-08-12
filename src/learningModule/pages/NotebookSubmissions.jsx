@@ -22,6 +22,7 @@ import {
   useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
+import jsPDF from 'jspdf';
 
 import lmApi from '../api/lmApi';
 import {
@@ -36,13 +37,194 @@ import RichText from '../components/RichText';
 import { formatDateTime } from '../format';
 
 /**
- * Marking a coding notebook.
- *
- * Marked by hand, and the page says why: the outputs stored against a cell came
- * from the student's own browser, so they are what the student *saw*, not
- * something the server witnessed. The code is the reliable artefact, so the code
- * is what is put in front of the teacher.
+ * Build a PDF for a single student's attempt: header (name, roll no,
+ * submission time, grade), then each cell's code and its outputs.
+ * Images already come in as base64 PNG, so they drop straight into
+ * jsPDF's addImage without any conversion.
  */
+function buildAttemptPdf(attempt) {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const marginX = 40;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const maxWidth = pageWidth - marginX * 2;
+  let y = 50;
+
+  const ensureSpace = (needed) => {
+    if (y + needed > pageHeight - 40) {
+      doc.addPage();
+      y = 50;
+    }
+  };
+
+  // jsPDF's built-in fonts only cover WinAnsi/Latin-1. Anything outside
+  // that (emoji, arrows, icon-font glyphs like a run-button symbol) comes
+  // back with a wrong measured width, which throws off splitTextToSize
+  // and produces the stretched, cut-off lines. Normalize common "smart"
+  // punctuation to plain ASCII first, then drop whatever's left outside
+  // Latin-1.
+  const sanitizeForPdf = (text) =>
+    String(text ?? '')
+      .replace(/[’‘]/g, "'")
+      .replace(/[“”]/g, '"')
+      .replace(/[–—]/g, '-')
+      .replace(/[•▪●]/g, '*')
+      .replace(/[^\x00-\xFF\n]/g, '');
+
+  const stripInlineMarkdown = (text) =>
+    sanitizeForPdf(text)
+      .replace(/`([^`]*)`/g, '$1')
+      .replace(/\*\*([^*]*)\*\*/g, '$1')
+      .replace(/__([^_]*)__/g, '$1')
+      .replace(/\*([^*]*)\*/g, '$1')
+      .replace(/_([^_]*)_/g, '$1');
+
+  const addWrappedText = (text, { font = 'helvetica', style = 'normal', size = 10, color = '#000000', lineHeight = 14 } = {}) => {
+    doc.setFont(font, style);
+    doc.setFontSize(size);
+    doc.setTextColor(color);
+    const lines = doc.splitTextToSize(sanitizeForPdf(text), maxWidth);
+    lines.forEach((line) => {
+      ensureSpace(lineHeight);
+      doc.text(line, marginX, y);
+      y += lineHeight;
+    });
+  };
+
+  // Very small markdown renderer: headings get bold + a bigger size (no
+  // literal "#" shown), inline **bold**/*italic*/`code` markers are
+  // stripped rather than printed as-is, blank lines add a bit of breathing
+  // room.
+  const addMarkdownBlock = (source) => {
+    String(source ?? '')
+      .split('\n')
+      .forEach((rawLine) => {
+        const headingMatch = rawLine.match(/^(#{1,6})\s+(.*)$/);
+        if (headingMatch) {
+          const level = headingMatch[1].length;
+          const size = Math.max(11, 18 - level * 2);
+          y += 4;
+          addWrappedText(stripInlineMarkdown(headingMatch[2]), { style: 'bold', size, lineHeight: size + 4 });
+          y += 2;
+          return;
+        }
+        if (rawLine.trim() === '') {
+          y += 6;
+          return;
+        }
+        addWrappedText(stripInlineMarkdown(rawLine), { size: 11, lineHeight: 15 });
+      });
+  };
+
+  // Header
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor('#000000');
+  doc.text(attempt.studentName || attempt.studentEmail || 'Student', marginX, y);
+  y += 20;
+
+  const metaBits = [
+    `Roll no: ${attempt.rollNumber || '—'}`,
+    attempt.submittedAt ? `Submitted: ${formatDateTime(attempt.submittedAt)}` : 'Not submitted',
+  ];
+  addWrappedText(metaBits.join('   '), { size: 10, color: '#555555', lineHeight: 14 });
+
+  if (attempt.grade !== null && attempt.grade !== undefined) {
+    addWrappedText(
+      `Grade: ${attempt.grade}${attempt.maxPoints ? `/${attempt.maxPoints}` : ''}`,
+      { size: 10, color: '#555555', lineHeight: 14 },
+    );
+  }
+  if (attempt.feedback) {
+    addWrappedText(`Feedback: ${attempt.feedback}`, { size: 10, color: '#555555', lineHeight: 14 });
+  }
+  y += 10;
+
+  // PDF-only reordering. This never touches attempt.cells itself, so the
+  // on-screen viewer is unaffected — it only decides what order cells are
+  // drawn in *here*. Markdown cells whose first heading matches one of
+  // these names are either dropped entirely (instructions the grader
+  // doesn't need on paper) or pulled to the front with that heading line
+  // removed (so the actual question reads first, without a "Your turn"
+  // label). Add more names to either list if other notebooks use
+  // different section titles.
+  const DROP_HEADINGS = ['getting started'];
+  const PROMOTE_HEADINGS = ['your turn'];
+
+  const firstHeadingOf = (cell) => {
+    if (cell.type !== 'markdown') return null;
+    const match = String(cell.source || '').match(/^#{1,6}\s+(.*)$/m);
+    return match ? match[1].trim().toLowerCase() : null;
+  };
+
+  const withoutFirstHeadingLine = (source) =>
+    String(source || '').replace(/^#{1,6}\s+.*(\n|$)/, '');
+
+  const promoted = [];
+  const rest = [];
+  (attempt.cells || []).forEach((cell) => {
+    const heading = firstHeadingOf(cell);
+    if (heading && DROP_HEADINGS.includes(heading)) return;
+    if (heading && PROMOTE_HEADINGS.includes(heading)) {
+      promoted.push({ ...cell, source: withoutFirstHeadingLine(cell.source) });
+      return;
+    }
+    rest.push(cell);
+  });
+  const pdfCells = [...promoted, ...rest];
+
+  pdfCells.forEach((cell, idx) => {
+    ensureSpace(24);
+
+    if (cell.type === 'markdown') {
+      addMarkdownBlock(cell.source);
+      y += 6;
+      return;
+    }
+
+    // Cell index label
+    ensureSpace(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor('#7c3aed');
+    doc.text(`[${idx + 1}]`, marginX, y);
+    y += 12;
+
+    // Code, monospace
+    addWrappedText(cell.source || '(empty)', { font: 'courier', size: 9, color: '#111111', lineHeight: 12 });
+    y += 4;
+
+    (cell.outputs || []).forEach((output) => {
+      if (output.type === 'image') {
+        try {
+          const dataUrl = `data:image/png;base64,${output.text}`;
+          const imgProps = doc.getImageProperties(dataUrl);
+          const imgWidth = Math.min(maxWidth, imgProps.width);
+          const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+          ensureSpace(imgHeight + 10);
+          doc.addImage(dataUrl, 'PNG', marginX, y, imgWidth, imgHeight);
+          y += imgHeight + 10;
+        } catch {
+          addWrappedText('[image could not be embedded]', { size: 9, color: '#999999', lineHeight: 12 });
+        }
+      } else {
+        const isErr = output.type === 'stderr' || output.type === 'error';
+        addWrappedText(output.text, {
+          font: 'courier',
+          size: 9,
+          color: isErr ? '#cc3333' : '#333333',
+          lineHeight: 12,
+        });
+      }
+    });
+
+    y += 10;
+  });
+
+  const fileName = `${(attempt.studentName || attempt.studentEmail || 'submission').replace(/\s+/g, '_')}_notebook.pdf`;
+  doc.save(fileName);
+}
+
 export default function NotebookSubmissions() {
   const { classId } = useOutletContext();
   const { notebookId } = useParams();
@@ -55,6 +237,7 @@ export default function NotebookSubmissions() {
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(null);
   const [draft, setDraft] = useState({ grade: '', maxPoints: '', feedback: '' });
+  const [downloadingId, setDownloadingId] = useState(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -117,6 +300,22 @@ export default function NotebookSubmissions() {
     }
   };
 
+  // Downloads a PDF for a row without needing it expanded first — reuses
+  // the already-open attempt's full data if it's the one currently open,
+  // otherwise fetches it fresh.
+  const downloadPdf = async (row) => {
+    setDownloadingId(row._id);
+    try {
+      const data =
+        open?.attempt?._id === row._id ? open : await lmApi.getNotebookAttempt(classId, row._id);
+      buildAttemptPdf(data.attempt);
+    } catch (err) {
+      toast({ status: 'error', title: 'Could not build PDF', description: err.message });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   const codeBg = useColorModeValue('gray.50', 'blackAlpha.400');
 
   if (loading) return <Loading label="Loading submissions…" />;
@@ -152,10 +351,6 @@ export default function NotebookSubmissions() {
         </Box>
       </Alert>
 
-      {/* The deadline's whole purpose, as four numbers. "Completed" is every
-          code cell run with nothing left erroring — the difference between
-          working through the exercise and opening it and pressing submit. It is
-          effort, not a mark: the outputs come from the student's own browser. */}
       {tally && attempts.length > 0 && (
         <Flex gap={3} wrap="wrap" align="center">
           <StatTile label="Started" value={tally.started} />
@@ -215,8 +410,6 @@ export default function NotebookSubmissions() {
                     {row.codeCells ? `${row.cellsRun}/${row.codeCells}` : row.cellsRun}
                   </Td>
                   <Td>
-                    {/* Blank until submitted: a notebook still being worked on
-                        is not an incomplete submission. */}
                     {row.completed === null ? (
                       <Text fontSize="xs" opacity={0.5}>
                         —
@@ -238,6 +431,14 @@ export default function NotebookSubmissions() {
                     <HStack spacing={1} justify="flex-end">
                       <Button size="xs" variant="outline" onClick={() => openAttempt(row)}>
                         {open?.attempt?._id === row._id ? 'Close' : 'Read'}
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        isLoading={downloadingId === row._id}
+                        onClick={() => downloadPdf(row)}
+                      >
+                        PDF
                       </Button>
                       {row.submittedAt && (
                         <Button size="xs" variant="ghost" onClick={() => reopen(row)}>
@@ -263,6 +464,17 @@ export default function NotebookSubmissions() {
           }
         >
           <VStack align="stretch" spacing={3}>
+            <Flex justify="flex-end">
+              <Button
+                size="xs"
+                variant="outline"
+                isLoading={downloadingId === open.attempt._id}
+                onClick={() => downloadPdf(open.attempt)}
+              >
+                Download PDF
+              </Button>
+            </Flex>
+
             {(open.attempt.cells || []).map((cell) => (
               <Box key={cell._id} borderWidth="1px" borderRadius="md" overflow="hidden">
                 {cell.type === 'markdown' ? (

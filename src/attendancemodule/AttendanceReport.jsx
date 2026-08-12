@@ -195,6 +195,7 @@ export default function AttendanceReport() {
   const [availableSems, setAvailableSems] = useState([]);
   const [semsLoading, setSemsLoading] = useState(false);
   const [canDeleteReports, setCanDeleteReports] = useState(false);
+  const [isDeptAdminOnly, setIsDeptAdminOnly] = useState(false);
   const [deletingReportId, setDeletingReportId] = useState(null);
 
   // ── Detail ────────────────────────────────────────────────────
@@ -375,6 +376,13 @@ export default function AttendanceReport() {
     if (tab === 'history') fetchReports();
   }, [tab, fetchReports]);
 
+  // Belt-and-braces: if role loads in as dept-admin-only while somehow
+  // already on the run tab (the initial tab is 'run' on mount), bounce to
+  // a tab they're actually allowed to see.
+  useEffect(() => {
+    if (isDeptAdminOnly && tab === 'run') setTab('history');
+  }, [isDeptAdminOnly, tab]);
+
   // Platform admins and iams-admin have deletion access by default. The
   // platform-admin setting only opts iams-dept-admin into the action; the
   // backend independently enforces the same role and department rules.
@@ -389,7 +397,9 @@ export default function AttendanceReport() {
         if (!userResponse.ok) return;
         const userData = await userResponse.json();
         const roles = Array.isArray(userData?.user?.role) ? userData.user.role : [];
-        if (roles.includes('admin') || roles.includes('iams-admin')) {
+        const isFullAccess = roles.includes('admin') || roles.includes('iams-admin');
+        setIsDeptAdminOnly(!isFullAccess && roles.includes('iams-dept-admin'));
+        if (isFullAccess) {
           setCanDeleteReports(true);
           return;
         }
@@ -873,7 +883,8 @@ export default function AttendanceReport() {
           ['detail', 'Report Detail'],
         ].map(
           ([id, label]) =>
-            (id !== 'detail' || detailReport) && (
+            (id !== 'detail' || detailReport)  &&
+            (id !== 'run' || !isDeptAdminOnly) && (
               <button
                 key={id}
                 className={`ams-tab${tab === id ? ' active' : ''}`}
@@ -886,7 +897,7 @@ export default function AttendanceReport() {
       </div>
 
       {/* ════ RUN TAB ════ */}
-      {tab === 'run' && (
+      {tab === 'run' && !isDeptAdminOnly && (
         <div>
           <div className="report-card" style={{ ...styles.card, marginBottom: 16 }}>
             <div style={{ ...styles.sectionTitle, marginBottom: 14 }}>

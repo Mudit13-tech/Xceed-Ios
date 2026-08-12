@@ -1041,6 +1041,11 @@ export default function GroundTruthUpload({ fixedDepartment = '' }) {
                                             const embOk  = !!row.hasEmbedding;
                                             const summaryReady = row.faceNotDetectedCount != null;
                                             const failedRollNos = Array.isArray(row.failedRollNos) ? row.failedRollNos : [];
+                                            // Every photo should be either in the .pkl or on the
+                                            // face-not-detected list. Anything left over is a student
+                                            // the matcher will never see.
+                                            const countsAgree = !summaryReady
+                                                || row.completedEmbeddingCount + (row.faceNotDetectedCount || 0) >= row.count;
                                             const updatedAt = row.embeddingSummaryUpdatedAt || row.embeddingUpdatedAt;
                                             const lastDt = updatedAt ? new Date(updatedAt) : null;
                                             const busy   = !!regenning[row.batch];
@@ -1076,12 +1081,20 @@ export default function GroundTruthUpload({ fixedDepartment = '' }) {
                                                         <span className="status-pill na">⏳ Generating…</span>
                                                     ) : summaryReady ? (
                                                         <>
-                                                            <span style={{ fontSize: 16, fontWeight: 800, color: T.success }}>
+                                                            <span style={{ fontSize: 16, fontWeight: 800, color: countsAgree ? T.success : T.warning }}>
                                                                 {row.completedEmbeddingCount}
                                                             </span>
                                                             <span style={{ fontSize: 10, color: T.textMuted, display: 'block', marginTop: 1 }}>
-                                                                of {row.count} completed
+                                                                of {row.count} in the .pkl
                                                             </span>
+                                                            {/* The Roll Assignment page matches against the .pkl, so a
+                                                                batch whose photo count outruns it has students that can
+                                                                never be matched. Regenerating rebuilds from the photos. */}
+                                                            {!countsAgree && (
+                                                                <span style={{ fontSize: 10, color: T.warning, display: 'block', marginTop: 2 }}>
+                                                                    {row.count - row.completedEmbeddingCount - (row.faceNotDetectedCount || 0)} unmatched — regenerate
+                                                                </span>
+                                                            )}
                                                         </>
                                                     ) : embOk ? (
                                                         <span className="status-pill ok">✓ Available</span>
