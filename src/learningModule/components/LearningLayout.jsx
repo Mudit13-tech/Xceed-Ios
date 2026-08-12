@@ -94,19 +94,11 @@ const PORTABLE_TABS = new Set([
 function ClassSwitcher({ classes, activeClassId, carriedTab, onNavigate }) {
   if (!classes) return null;
 
-  const switcherBg = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const secondaryTextColor = useColorModeValue('gray.500', 'gray.400');
-  const itemColor = useColorModeValue('gray.700', 'gray.200');
-  const activeBg = useColorModeValue('blue.50', 'blue.900');
-  const activeColor = useColorModeValue('blue.800', 'blue.100');
-  const hoverBg = useColorModeValue('gray.50', 'gray.700');
-
   const href = (klass) =>
     `/learning/class/${klass._id}${carriedTab ? `/${carriedTab}` : ''}`;
 
   return (
-    <Box mt={6} bg={switcherBg} borderRadius="lg" borderWidth="1px" borderColor={borderColor} overflow="hidden">
+    <Box mt={6} bg="white" borderRadius="lg" borderWidth="1px" borderColor="gray.200" overflow="hidden">
       <Text
         px={4}
         pt={3}
@@ -115,13 +107,13 @@ function ClassSwitcher({ classes, activeClassId, carriedTab, onNavigate }) {
         fontWeight="700"
         textTransform="uppercase"
         letterSpacing="wide"
-        color={secondaryTextColor}
+        color="gray.500"
       >
         {activeClassId ? 'Switch class' : 'My classes'}
       </Text>
 
       {classes.length === 0 ? (
-        <Text px={4} pb={3} fontSize="xs" color={secondaryTextColor}>
+        <Text px={4} pb={3} fontSize="xs" color="gray.500">
           You are not in any class yet. Use <b>Join class</b> above with the code your teacher gave you.
         </Text>
       ) : (
@@ -144,12 +136,12 @@ function ClassSwitcher({ classes, activeClassId, carriedTab, onNavigate }) {
                   px={4}
                   py={2}
                   fontSize="sm"
-                  bg={active ? activeBg : 'transparent'}
-                  color={active ? activeColor : itemColor}
+                  bg={active ? 'blue.50' : 'transparent'}
+                  color={active ? 'blue.800' : 'gray.700'}
                   fontWeight={active ? '600' : '400'}
                   borderLeftWidth="3px"
                   borderLeftColor={active ? 'blue.500' : 'transparent'}
-                  _hover={{ bg: active ? activeBg : hoverBg, textDecoration: 'none' }}
+                  _hover={{ bg: active ? 'blue.50' : 'gray.50', textDecoration: 'none' }}
                 >
                   {/* The class's own colour, the same one the header and the
                       dashboard card use — it is how people recognise a class
@@ -190,12 +182,6 @@ function ClassSwitcher({ classes, activeClassId, carriedTab, onNavigate }) {
 }
 
 function NavItems({ onNavigate, studentOnly = false, isAdmin = false }) {
-  const navColor = useColorModeValue('gray.700', 'gray.200');
-  const navBorderColor = useColorModeValue('gray.200', 'gray.700');
-  const navHoverBg = useColorModeValue('gray.100', 'gray.700');
-  const activeBg = useColorModeValue('blue.50', 'blue.900');
-  const activeColor = useColorModeValue('blue.700', 'blue.100');
-
   return (
     <>
       {NAV_ITEMS.filter((item) => (!item.studentOnly || studentOnly) && (!item.adminOnly || isAdmin)).map((item) => (
@@ -209,7 +195,7 @@ function NavItems({ onNavigate, studentOnly = false, isAdmin = false }) {
           // go, it is the escape hatch when a place you went is broken.
           mt={item.foot ? 4 : undefined}
           borderTopWidth={item.foot ? '1px' : undefined}
-          borderColor={navBorderColor}
+          borderColor="gray.200"
           pt={item.foot ? 4 : undefined}
           px={4}
           py={2.5}
@@ -219,10 +205,10 @@ function NavItems({ onNavigate, studentOnly = false, isAdmin = false }) {
           gap={3}
           fontSize="sm"
           fontWeight="500"
-          color={navColor}
-          _hover={{ bg: navHoverBg }}
+          color="gray.700"
+          _hover={{ bg: 'gray.100' }}
           sx={{
-            '&.active': { bg: activeBg, color: activeColor, fontWeight: '600' },
+            '&.active': { bg: 'blue.50', color: 'blue.700', fontWeight: '600' },
           }}
         >
           <Text as="span">{item.icon}</Text>
@@ -240,11 +226,6 @@ function NavItems({ onNavigate, studentOnly = false, isAdmin = false }) {
 export default function LearningLayout() {
   const { colorMode, toggleColorMode } = useColorMode();
   const pageBg = useColorModeValue('gray.50', 'gray.900');
-  const menuTextColor = useColorModeValue('gray.800', 'gray.100');
-  const headerBg = useColorModeValue('white', 'gray.800');
-  const headerBorderColor = useColorModeValue('gray.200', 'gray.700');
-  const headerTitleColor = useColorModeValue('gray.800', 'white');
-  const headerSecondaryColor = useColorModeValue('gray.500', 'gray.400');
 
   const [me, setMe] = useState(null);
   const [overview, setOverview] = useState(null);
@@ -308,7 +289,7 @@ export default function LearningLayout() {
 
   return (
     <Box minH={studentOnly ? '100vh' : 'calc(100vh - 64px)'} bg={pageBg}>
-      <Box bg={headerBg} borderBottomWidth="1px" borderColor={headerBorderColor} position="sticky" top={0} zIndex={20}>
+      <Box bg="white" borderBottomWidth="1px" borderColor="gray.200" position="sticky" top={0} zIndex={20}>
         <Container maxW="1400px" py={3}>
           <Flex align="center" gap={3}>
             <IconButton
@@ -321,10 +302,10 @@ export default function LearningLayout() {
             <Flex as={RouterLink} to="/learning" align="center" gap={2} _hover={{ textDecoration: 'none' }}>
               <Text fontSize="xl">🎓</Text>
               <Box>
-                <Heading size="sm" color={headerTitleColor} lineHeight="1.1">
+                <Heading size="sm" color="gray.800" lineHeight="1.1">
                   XCEED Learning
                 </Heading>
-                <Text fontSize="xs" color={headerSecondaryColor} display={{ base: 'none', sm: 'block' }}>
+                <Text fontSize="xs" color="gray.500" display={{ base: 'none', sm: 'block' }}>
                   Classes, coursework & AI study material
                 </Text>
               </Box>
@@ -376,11 +357,11 @@ export default function LearningLayout() {
                     </Text>
                   </Box>
                   <MenuDivider />
-                  <MenuItem color={menuTextColor} onClick={toggleColorMode}>
+                  <MenuItem {...buttonTextStyles} onClick={toggleColorMode}>
                     {colorMode === 'light' ? '🌙 Dark mode' : '☀️ Light mode'}
                   </MenuItem>
                   <MenuDivider />
-                  <MenuItem color={menuTextColor} onClick={handleLogout}>
+                  <MenuItem {...buttonTextStyles} onClick={handleLogout}>
                     Log out
                   </MenuItem>
                 </MenuList>

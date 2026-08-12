@@ -190,13 +190,20 @@ export default function StudentGroundTruthModal({ batch, rollNo, student, onClos
         }
     });
     
+    let hasOlderPhotos = false;
+    allPhotos.forEach(p => {
+        if (p.addedAt && maxAddedAt - new Date(p.addedAt).getTime() >= 30 * 1000) {
+            hasOlderPhotos = true;
+        }
+    });
+    
     function PhotoCard({ photo }) {
         const group = GROUPS[photo.group];
         // Where this photo can go — never back to "other", which is a
         // read-only "found in the folder, unclassified" bucket.
         const targets = ['embedding', 'backup'].filter((g) => g !== photo.group);
 
-        const isNew = photo.addedAt && maxAddedAt > 0 && (maxAddedAt - new Date(photo.addedAt).getTime() < 30 * 1000);
+        const isNew = hasOlderPhotos && photo.addedAt && maxAddedAt > 0 && (maxAddedAt - new Date(photo.addedAt).getTime() < 30 * 1000);
 
         return (
             <div

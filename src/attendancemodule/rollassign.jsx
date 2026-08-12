@@ -2027,6 +2027,13 @@ export function GTModal({ rollNo, batchName, onClose, showToast, onMoved, embedd
             if (time > maxAddedAt) maxAddedAt = time;
         }
     });
+    
+    let hasOlderPhotos = false;
+    allPhotos.forEach(p => {
+        if (p.addedAt && maxAddedAt - new Date(p.addedAt).getTime() >= 30 * 1000) {
+            hasOlderPhotos = true;
+        }
+    });
 
     const PhotoCard = ({ photo, type }) => {
         const busyKey = `${rollNo}::${photo.filename}`;
@@ -2034,7 +2041,8 @@ export function GTModal({ rollNo, batchName, onClose, showToast, onMoved, embedd
         const isEmbed = type === 'embedding';
         const isOther = type === 'other';
         
-        const isNew = photo.addedAt && maxAddedAt > 0 && (maxAddedAt - new Date(photo.addedAt).getTime() < 30 * 1000);
+        // Only highlight as NEW if there is at least one older photo to distinguish it from.
+        const isNew = hasOlderPhotos && photo.addedAt && maxAddedAt > 0 && (maxAddedAt - new Date(photo.addedAt).getTime() < 30 * 1000);
         const borderC = isNew ? theme.accent : (isEmbed ? theme.success : isOther ? theme.border : theme.warning);
         
         const isSelected = selectedPhotos[photo.filename] || false;
