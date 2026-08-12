@@ -47,6 +47,9 @@ import {
   ModalOverlay,
   NumberInput,
   NumberInputField,
+  Select,
+  InputGroup,
+  InputLeftElement,
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
@@ -1048,6 +1051,8 @@ export default function QuizResults() {
   const [updatedAt, setUpdatedAt] = useState(null);
   // How far this browser's clock is ahead of the server's, so the countdowns
   // shown to an invigilator agree with the deadline the server will enforce.
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentStatusFilter, setStudentStatusFilter] = useState('all');
   const skewRef = useRef(0);
   const toast = useToast();
 
@@ -1133,6 +1138,61 @@ export default function QuizResults() {
   const results = data.results || { released: resultsVisible };
   const maxBand = Math.max(1, ...distribution.map((band) => band.count));
 
+  const filteredAttempts = useMemo(() => {
+    if (!attempts) return [];
+    return attempts.filter((item) => {
+      if (studentStatusFilter === 'pass' && (item.status === 'in_progress' || item.status === 'terminated' || !item.passed)) return false;
+      if (studentStatusFilter === 'fail' && (item.status === 'in_progress' || item.status === 'terminated' || item.passed)) return false;
+      if (studentStatusFilter === 'in_progress' && item.status !== 'in_progress') return false;
+      if (studentStatusFilter === 'terminated' && item.status !== 'terminated') return false;
+
+      if (studentSearch.trim()) {
+        const q = studentSearch.toLowerCase().trim();
+        const name = (item.studentName || item.studentEmail || '').toLowerCase();
+        const roll = (item.rollNumber || '').toLowerCase();
+        if (!name.includes(q) && !roll.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [attempts, studentStatusFilter, studentSearch]);
+
+  const questionInsights = useMemo(() => {
+    if (!perQuestion?.length) return null;
+    let hardest = perQuestion[0];
+    let mostSkipped = perQuestion[0];
+
+    perQuestion.forEach((q) => {
+      if (q.correctPercent !== null && (hardest.correctPercent === null || q.correctPercent < hardest.correctPercent)) {
+        hardest = q;
+      }
+      if (q.skipRate !== null && (mostSkipped.skipRate === null || q.skipRate > mostSkipped.skipRate)) {
+        mostSkipped = q;
+      }
+    });
+
+    return { hardest, mostSkipped };
+  }, [perQuestion]);
+
+  const isConducted = useMemo(() => {
+    if (typeof results.isConducted === 'boolean') return results.isConducted;
+
+    if (!quiz?.published) return false;
+    const now = data.serverTime ? new Date(data.serverTime) : new Date();
+    if (quiz.publishAt && now < new Date(quiz.publishAt)) return false;
+    if (quiz.settings?.availableFrom && now < new Date(quiz.settings.availableFrom)) return false;
+
+    const inProgress = summary.inProgress || 0;
+    const submitted = summary.submitted || 0;
+    const enrolled = summary.enrolled || 0;
+
+    if (inProgress > 0) return false;
+    if (quiz.settings?.availableTo && now >= new Date(quiz.settings.availableTo)) return true;
+    if (enrolled > 0 && submitted >= enrolled) return true;
+    if (submitted > 0) return true;
+
+    return false;
+  }, [results, quiz, summary, data.serverTime]);
+
   return (
     <Box>
       <Flex justify="space-between" align="flex-start" mb={4} gap={3} wrap="wrap">
@@ -1154,9 +1214,26 @@ export default function QuizResults() {
               finished checking the marks — not buried back in the publish
               dialog, which is about setting the paper rather than closing it. */}
           {!results.released && (
-            <Button size="sm" colorScheme="green" onClick={releaseNow} isLoading={releasing}>
-              📢 Publish results now
-            </Button>
+            <Tooltip
+              label={
+                !isConducted
+                  ? 'Results can only be published after the conduction of the quiz.'
+                  : ''
+              }
+              isDisabled={isConducted}
+            >
+              <Box display="inline-block">
+                <Button
+                  size="sm"
+                  colorScheme="green"
+                  onClick={releaseNow}
+                  isLoading={releasing}
+                  isDisabled={!isConducted}
+                >
+                  📢 Publish results now
+                </Button>
+              </Box>
+            </Tooltip>
           )}
           <Button size="sm" colorScheme="purple" onClick={() => setKeyOpen(true)}>
             Edit answer key
@@ -1277,6 +1354,39 @@ export default function QuizResults() {
               <EmptyState icon="📊" title="No attempts yet" description="Results appear as students sit the test." />
             ) : (
               <SectionCard>
+                <Flex justify="space-between" align="center" gap={3} mb={4} wrap="wrap">
+                  <HStack spacing={2}>
+                    <Text fontSize="xs" fontWeight="700" color="gray.600" textTransform="uppercase">
+                      Filter Status:
+                    </Text>
+                    <Select
+                      size="xs"
+                      w="140px"
+                      value={studentStatusFilter}
+                      onChange={(e) => setStudentStatusFilter(e.target.value)}
+                      borderRadius="md"
+                    >
+                      <option value="all">All Attempts ({attempts.length})</option>
+                      <option value="pass">Passed</option>
+                      <option value="fail">Failed</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="terminated">Terminated</option>
+                    </Select>
+                  </HStack>
+
+                  <InputGroup size="xs" maxW="240px">
+                    <InputLeftElement pointerEvents="none" color="gray.400">
+                      🔍
+                    </InputLeftElement>
+                    <Input
+                      placeholder="Search student or roll..."
+                      value={studentSearch}
+                      onChange={(e) => setStudentSearch(e.target.value)}
+                      borderRadius="md"
+                    />
+                  </InputGroup>
+                </Flex>
+
                 <Box overflowX="auto">
                   <Table size="sm">
                     <Thead>
@@ -1294,86 +1404,90 @@ export default function QuizResults() {
                         <Th isNumeric>Time</Th>
                         <Th>Flags</Th>
                         <Th>Submitted</Th>
-                        {/* Was a "Fix" menu duplicating the one on the Live
-                            monitor, where reopening and resetting a sitting
-                            belong. This column answers the question the table
-                            cannot: what did this student actually write. */}
                         <Th>Answers</Th>
                       </Tr>
                     </Thead>
                     <Tbody>
-                      {attempts.map((attempt) => (
-                        <Tr key={attempt._id} bg={attempt.status === 'terminated' ? 'red.50' : undefined}>
-                          <Td>{attempt.studentName || attempt.studentEmail}</Td>
-                          <Td fontSize="xs">{attempt.rollNumber}</Td>
-                          <Td isNumeric>{attempt.attemptNumber}</Td>
-                          <Td isNumeric>
-                            {attempt.score}/{attempt.maxScore}
-                          </Td>
-                          <Td isNumeric>{attempt.percent}%</Td>
-                          <Td>
-                            {attempt.status === 'in_progress' ? (
-                              <Badge colorScheme="orange">in progress</Badge>
-                            ) : attempt.status === 'terminated' ? (
-                              <Badge colorScheme="red">terminated</Badge>
-                            ) : (
-                              <Badge colorScheme={attempt.passed ? 'green' : 'red'}>
-                                {attempt.passed ? 'Pass' : 'Fail'}
-                              </Badge>
-                            )}
-                          </Td>
-                          <Td isNumeric color="green.600">
-                            {attempt.totalCorrect}
-                          </Td>
-                          <Td isNumeric color="red.600">
-                            {attempt.totalWrong}
-                          </Td>
-                          <Td isNumeric color="gray.500">
-                            {attempt.totalUnattempted}
-                          </Td>
-                          <Td isNumeric>{attempt.negativeApplied ? `−${attempt.negativeApplied}` : '—'}</Td>
-                          <Td isNumeric fontSize="xs">
-                            {duration(attempt.durationSec)}
-                          </Td>
-                          <Td>
-                            <AttemptFlags attempt={attempt} />
-                          </Td>
-                          <Td fontSize="xs">
-                            {attempt.status === 'in_progress' ? (
-                              <Badge colorScheme="red" fontSize="0.6rem">
-                                sitting now
-                              </Badge>
-                            ) : attempt.submittedAt ? (
-                              formatDateTime(attempt.submittedAt)
-                            ) : (
-                              '—'
-                            )}
-                            {attempt.reopenCount > 0 && (
-                              <Text color="purple.600" fontSize="0.65rem">
-                                reopened ×{attempt.reopenCount}
-                                {attempt.reopenedByName ? ` by ${attempt.reopenedByName}` : ''}
-                              </Text>
-                            )}
-                            {attempt.regradedAt && (
-                              <Text color="blue.600" fontSize="0.65rem">
-                                re-marked {relativeTime(attempt.regradedAt)}
-                                {attempt.regradedByName ? ` by ${attempt.regradedByName}` : ''}
-                              </Text>
-                            )}
-                          </Td>
-                          <Td>
-                            <Button
-                              size="xs"
-                              variant="outline"
-                              colorScheme="purple"
-                              isDisabled={attempt.status === 'in_progress'}
-                              onClick={() => setViewing(attempt)}
-                            >
-                              View answers
-                            </Button>
+                      {filteredAttempts.length === 0 ? (
+                        <Tr>
+                          <Td colSpan={14} textAlign="center" py={6} color="gray.500">
+                            No student attempts match your search or filter criteria.
                           </Td>
                         </Tr>
-                      ))}
+                      ) : (
+                        filteredAttempts.map((attempt) => (
+                          <Tr key={attempt._id} bg={attempt.status === 'terminated' ? 'red.50' : undefined}>
+                            <Td fontWeight="500">{attempt.studentName || attempt.studentEmail}</Td>
+                            <Td fontSize="xs">{attempt.rollNumber}</Td>
+                            <Td isNumeric>{attempt.attemptNumber}</Td>
+                            <Td isNumeric fontWeight="600">
+                              {attempt.score}/{attempt.maxScore}
+                            </Td>
+                            <Td isNumeric fontWeight="600">{attempt.percent}%</Td>
+                            <Td>
+                              {attempt.status === 'in_progress' ? (
+                                <Badge colorScheme="orange">in progress</Badge>
+                              ) : attempt.status === 'terminated' ? (
+                                <Badge colorScheme="red">terminated</Badge>
+                              ) : (
+                                <Badge colorScheme={attempt.passed ? 'green' : 'red'}>
+                                  {attempt.passed ? 'Pass' : 'Fail'}
+                                </Badge>
+                              )}
+                            </Td>
+                            <Td isNumeric color="green.600" fontWeight="600">
+                              {attempt.totalCorrect}
+                            </Td>
+                            <Td isNumeric color="red.600">
+                              {attempt.totalWrong}
+                            </Td>
+                            <Td isNumeric color="gray.500">
+                              {attempt.totalUnattempted}
+                            </Td>
+                            <Td isNumeric>{attempt.negativeApplied ? `−${attempt.negativeApplied}` : '—'}</Td>
+                            <Td isNumeric fontSize="xs">
+                              {duration(attempt.durationSec)}
+                            </Td>
+                            <Td>
+                              <AttemptFlags attempt={attempt} />
+                            </Td>
+                            <Td fontSize="xs">
+                              {attempt.status === 'in_progress' ? (
+                                <Badge colorScheme="red" fontSize="0.6rem">
+                                  sitting now
+                                </Badge>
+                              ) : attempt.submittedAt ? (
+                                formatDateTime(attempt.submittedAt)
+                              ) : (
+                                '—'
+                              )}
+                              {attempt.reopenCount > 0 && (
+                                <Text color="purple.600" fontSize="0.65rem">
+                                  reopened ×{attempt.reopenCount}
+                                  {attempt.reopenedByName ? ` by ${attempt.reopenedByName}` : ''}
+                                </Text>
+                              )}
+                              {attempt.regradedAt && (
+                                <Text color="blue.600" fontSize="0.65rem">
+                                  re-marked {relativeTime(attempt.regradedAt)}
+                                  {attempt.regradedByName ? ` by ${attempt.regradedByName}` : ''}
+                                </Text>
+                              )}
+                            </Td>
+                            <Td>
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                colorScheme="purple"
+                                isDisabled={attempt.status === 'in_progress'}
+                                onClick={() => setViewing(attempt)}
+                              >
+                                View answers
+                              </Button>
+                            </Td>
+                          </Tr>
+                        ))
+                      )}
                     </Tbody>
                   </Table>
                 </Box>
@@ -1401,6 +1515,33 @@ export default function QuizResults() {
               title="Question analysis"
               subtitle="Success rate is measured over students who actually attempted the question, so a high skip rate shows up separately rather than masquerading as difficulty."
             >
+              {questionInsights && (
+                <Grid templateColumns={{ base: '1fr', md: '1fr 1fr' }} gap={3} mb={4}>
+                  <Box p={3} bg="red.50" borderWidth="1px" borderColor="red.200" borderRadius="md">
+                    <Text fontSize="xs" fontWeight="700" color="red.700" textTransform="uppercase">
+                      ⚠️ Most Difficult Question
+                    </Text>
+                    <Text fontSize="xs" fontWeight="600" color="gray.800" mt={1} noOfLines={2}>
+                      {richTextToPlain(questionInsights.hardest.question || '')}
+                    </Text>
+                    <Text fontSize="xs" color="red.600" mt={1}>
+                      Success rate: <b>{questionInsights.hardest.correctPercent ?? 0}%</b> ({questionInsights.hardest.correct}/{questionInsights.hardest.attempted} correct)
+                    </Text>
+                  </Box>
+                  <Box p={3} bg="orange.50" borderWidth="1px" borderColor="orange.200" borderRadius="md">
+                    <Text fontSize="xs" fontWeight="700" color="orange.700" textTransform="uppercase">
+                      ⏩ Most Skipped Question
+                    </Text>
+                    <Text fontSize="xs" fontWeight="600" color="gray.800" mt={1} noOfLines={2}>
+                      {richTextToPlain(questionInsights.mostSkipped.question || '')}
+                    </Text>
+                    <Text fontSize="xs" color="orange.600" mt={1}>
+                      Skip rate: <b>{questionInsights.mostSkipped.skipRate ?? 0}%</b>
+                    </Text>
+                  </Box>
+                </Grid>
+              )}
+
               <Box overflowX="auto">
                 <Table size="sm">
                   <Thead>
@@ -1418,7 +1559,7 @@ export default function QuizResults() {
                   <Tbody>
                     {perQuestion.map((entry, index) => (
                       <Tr key={entry.questionId}>
-                        <Td>{index + 1}</Td>
+                        <Td fontWeight="600">{index + 1}</Td>
                         <Td maxW="260px">
                           <Text fontSize="xs" noOfLines={2}>
                             {richTextToPlain(entry.question)}

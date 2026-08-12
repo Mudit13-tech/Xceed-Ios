@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import getEnvironment from '../getenvironment';
 import { theme, styles, cssReset, DEGREES } from './config';
+import { usePeriods } from './usePeriods';
 
 const apiUrl = getEnvironment();
 const REPORTS_API = `${apiUrl}/attendancemodule/reports`;
@@ -65,6 +66,431 @@ function Toast({ toast }) {
   );
 }
 
+// Review Audit tab
+//
+// Ground-truth triage. Two cuts from /reports/review-audit, both dept-wise:
+//   1. students the model NEVER marked present in a finished class run, yet
+//      pushed to review at least once — their enrolled faces are the prime
+//      suspects;
+//   2. students pushed to review >= minReviews times inside one subject, which
+//      localises the failure to a subject/room/period rather than the student.
+// Every listed review carries the subject and the period it happened in, so a
+// coordinator can go straight to that frame and fix the ground truth.
+
+function ReviewAuditPanel({ fixedDepartment = '', showToast }) {
+  const { slotLabel } = usePeriods();
+  const [days, setDays] = useState('60');
+  const [minReviews, setMinReviews] = useState('3');
+  const [dept, setDept] = useState(fixedDepartment);
+  const [departments, setDepartments] = useState([]);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState(() => new Set());
+
+  // Department picker is for full-access admins only; a dept admin is locked
+  // to their own department (and the server enforces that regardless).
+  useEffect(() => {
+    if (fixedDepartment) return;
+    fetch(`${GT_API}/departments`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => {
+        setDepartments(
+          (d.departments || [])
+            .map((item) => (typeof item === 'string' ? item : item.dept))
+            .filter(Boolean),
+        );
+      })
+      .catch(() => {});
+  }, [fixedDepartment]);
+
+  const fetchAudit = useCallback(async () => {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams({ days, minReviews });
+      if (dept) qs.set('department', dept);
+      const res = await fetch(`${REPORTS_API}/review-audit?${qs}`, {
+        credentials: 'include',
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || json.message || 'Failed to fetch');
+      setData(json);
+      setExpanded(new Set());
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [days, minReviews, dept, showToast]);
+
+  useEffect(() => {
+    fetchAudit();
+  }, [fetchAudit]);
+
+  const toggle = (key) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const matchesSearch = (rollNo) =>
+    !search || rollNo.toLowerCase().includes(search.toLowerCase());
+
+  const deptBlocks = (data?.departments || [])
+    .map((d) => ({
+      ...d,
+      alwaysReview: d.alwaysReview.filter((s) => matchesSearch(s.rollNo)),
+      repeatReview: d.repeatReview.filter((s) => matchesSearch(s.rollNo)),
+    }))
+    .filter((d) => d.alwaysReview.length || d.repeatReview.length);
+
+  // "12-05 · Period 3 — 10:20–11:10 · DSP · LT103"
+  const sessionRows = (sessions) => (
+    <table className="cm-table cm-session-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Subject</th>
+          <th>Period</th>
+          <th>Room</th>
+          <th>Faculty</th>
+          <th>Conf</th>
+          <th>ERP</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sessions.map((s, i) => (
+          <tr key={`${s.date}-${s.timeSlot}-${s.subject}-${i}`}>
+            <td style={{ fontFamily: theme.fontMono }}>{s.date}</td>
+            <td style={{ fontWeight: 600 }}>{s.subject || '—'}</td>
+            <td>{slotLabel(s.timeSlot) || s.timeSlot || '—'}</td>
+            <td>{s.room || '—'}</td>
+            <td>{s.faculty || '—'}</td>
+            <td style={{ textAlign: 'center' }}>
+              {s.confidence > 0 ? (
+                <span
+                  className="cm-conf-cell"
+                  style={{
+                    background: confidenceBg(s.confidence),
+                    color: confidenceColor(s.confidence),
+                  }}
+                >
+                  {(s.confidence * 100).toFixed(0)}%
+                </span>
+              ) : (
+                <span style={{ color: theme.textMuted }}>—</span>
+              )}
+            </td>
+            <td>
+              {s.erpOverriddenStatus ? (
+                <span className="normal-badge">→ {s.erpOverriddenStatus}</span>
+              ) : (
+                <span style={{ color: theme.border }}>·</span>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
+  return (
+    <>
+      <section style={{ ...styles.card, marginBottom: 18 }}>
+        <div className="cm-controls-row">
+          <div style={{ minWidth: 200, flex: '2 1 200px' }}>
+            <label style={styles.label}>Department</label>
+            {fixedDepartment ? (
+              <div
+                style={{
+                  ...styles.select,
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: theme.surfaceAlt,
+                  color: theme.textMuted,
+                  cursor: 'not-allowed',
+                }}
+              >
+                {fixedDepartment.replace(/_/g, ' ')}
+              </div>
+            ) : (
+              <select
+                value={dept}
+                onChange={(e) => setDept(e.target.value)}
+                style={styles.select}
+              >
+                <option value="">All departments</option>
+                {departments.map((d) => (
+                  <option key={d} value={d}>
+                    {d.replace(/_/g, ' ')}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div style={{ minWidth: 130, flex: '1 1 130px' }}>
+            <label style={styles.label}>Time Range</label>
+            <select
+              value={days}
+              onChange={(e) => setDays(e.target.value)}
+              style={styles.select}
+            >
+              <option value="7">Last 7 days</option>
+              <option value="14">Last 14 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="60">Last 60 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+          </div>
+
+          <div style={{ minWidth: 150, flex: '1 1 150px' }}>
+            <label style={styles.label}>Repeat threshold</label>
+            <select
+              value={minReviews}
+              onChange={(e) => setMinReviews(e.target.value)}
+              style={styles.select}
+            >
+              <option value="2">2+ reviews in a subject</option>
+              <option value="3">3+ reviews in a subject</option>
+              <option value="5">5+ reviews in a subject</option>
+            </select>
+          </div>
+
+          <div style={{ minWidth: 160, flex: '1 1 160px' }}>
+            <label style={styles.label}>Search</label>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Roll number..."
+              maxLength={12}
+              style={styles.input}
+            />
+          </div>
+
+          <button
+            className="cm-fetch-btn"
+            onClick={fetchAudit}
+            disabled={loading}
+            style={{
+              ...styles.btnPrimary,
+              opacity: loading ? 0.6 : 1,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {loading ? 'Loading...' : 'Refresh'}
+          </button>
+        </div>
+
+        {data && (
+          <div style={{ marginTop: 12, fontSize: 11, color: theme.textMuted }}>
+            Completed class runs since{' '}
+            <strong style={{ color: theme.text, fontFamily: theme.fontMono }}>
+              {data.from}
+            </strong>{' '}
+            · {data.stats.studentsScanned} students scanned ·{' '}
+            <strong style={{ color: theme.danger }}>
+              {data.stats.alwaysReviewStudents}
+            </strong>{' '}
+            never marked present ·{' '}
+            <strong style={{ color: theme.warning }}>
+              {data.stats.repeatReviewRows}
+            </strong>{' '}
+            repeat-review student/subject pairs
+          </div>
+        )}
+      </section>
+
+      {loading && !data && (
+        <div style={{ textAlign: 'center', padding: 48, color: theme.textMuted }}>
+          Loading review audit...
+        </div>
+      )}
+
+      {data && deptBlocks.length === 0 && (
+        <section style={styles.card}>
+          <div style={{ color: theme.textMuted, fontSize: 13 }}>
+            No review-only or repeat-review students in this window. Nothing to
+            fix — or no completed class runs yet.
+          </div>
+        </section>
+      )}
+
+      {deptBlocks.map((d) => (
+        <section
+          key={d.department}
+          style={{ ...styles.card, marginBottom: 18 }}
+        >
+          <div className="sem-header">
+            <span className="sem-badge">{d.department.replace(/_/g, ' ')}</span>
+            <span style={{ fontSize: 11, color: theme.danger, fontWeight: 700 }}>
+              Review-only: {d.alwaysReview.length}
+            </span>
+            <span style={{ fontSize: 11, color: theme.warning, fontWeight: 700 }}>
+              Repeat ({data.minReviews}+): {d.repeatReview.length}
+            </span>
+          </div>
+
+          {/* 1. Never present in any completed run */}
+          <div style={{ marginBottom: 24 }}>
+            <div className="cm-subhead">
+              Marked for review only — not present in a single completed class
+              run
+            </div>
+            {d.alwaysReview.length === 0 ? (
+              <div className="cm-empty">None.</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="cm-table">
+                  <thead>
+                    <tr>
+                      <th />
+                      <th>Roll No</th>
+                      <th>Batch</th>
+                      <th>Sem</th>
+                      <th>Runs</th>
+                      <th>Reviews</th>
+                      <th>Absents</th>
+                      <th>Subjects</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.alwaysReview.map((s) => {
+                      const key = `a-${d.department}-${s.rollNo}`;
+                      const open = expanded.has(key);
+                      return [
+                        <tr key={key}>
+                          <td>
+                            <button
+                              className="cm-expand-btn"
+                              onClick={() => toggle(key)}
+                              aria-label={open ? 'Collapse' : 'Expand'}
+                            >
+                              {open ? '▾' : '▸'}
+                            </button>
+                          </td>
+                          <td
+                            style={{
+                              fontWeight: 700,
+                              fontFamily: theme.fontMono,
+                            }}
+                          >
+                            {s.rollNo}
+                          </td>
+                          <td style={{ fontSize: 11, color: theme.textMuted }}>
+                            {s.batch}
+                          </td>
+                          <td>{s.semester || '—'}</td>
+                          <td style={{ textAlign: 'center' }}>{s.runs}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span className="low-badge">{s.review}</span>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>{s.absent}</td>
+                          <td style={{ fontSize: 11 }}>
+                            {s.subjects.join(', ') || '—'}
+                          </td>
+                        </tr>,
+                        open && (
+                          <tr key={`${key}-d`}>
+                            <td colSpan={8} style={{ background: theme.surfaceAlt }}>
+                              {sessionRows(s.sessions)}
+                            </td>
+                          </tr>
+                        ),
+                      ];
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* 2. Repeat reviews inside one subject */}
+          <div>
+            <div className="cm-subhead">
+              Marked for review {data.minReviews}+ times in the same subject
+            </div>
+            {d.repeatReview.length === 0 ? (
+              <div className="cm-empty">None.</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="cm-table">
+                  <thead>
+                    <tr>
+                      <th />
+                      <th>Roll No</th>
+                      <th>Sem</th>
+                      <th>Subject</th>
+                      <th>Code</th>
+                      <th>Runs</th>
+                      <th>Reviews</th>
+                      <th>Present</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.repeatReview.map((s) => {
+                      const key = `r-${d.department}-${s.rollNo}-${s.subject}`;
+                      const open = expanded.has(key);
+                      return [
+                        <tr key={key}>
+                          <td>
+                            <button
+                              className="cm-expand-btn"
+                              onClick={() => toggle(key)}
+                              aria-label={open ? 'Collapse' : 'Expand'}
+                            >
+                              {open ? '▾' : '▸'}
+                            </button>
+                          </td>
+                          <td
+                            style={{
+                              fontWeight: 700,
+                              fontFamily: theme.fontMono,
+                            }}
+                          >
+                            {s.rollNo}
+                          </td>
+                          <td>{s.semester || '—'}</td>
+                          <td style={{ fontWeight: 600 }}>
+                            {s.subjectName || s.subject}
+                          </td>
+                          <td
+                            style={{
+                              fontSize: 11,
+                              fontFamily: theme.fontMono,
+                              color: theme.textMuted,
+                            }}
+                          >
+                            {s.subjectCode || '—'}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>{s.runs}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span className="low-badge">{s.review}</span>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>{s.present}</td>
+                        </tr>,
+                        open && (
+                          <tr key={`${key}-d`}>
+                            <td colSpan={8} style={{ background: theme.surfaceAlt }}>
+                              {sessionRows(s.sessions)}
+                            </td>
+                          </tr>
+                        ),
+                      ];
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+      ))}
+    </>
+  );
+}
+
 // Main Component
 
 export default function ConfidenceMonitor({ fixedDepartment = '' }) {
@@ -81,6 +507,9 @@ export default function ConfidenceMonitor({ fixedDepartment = '' }) {
   const [depsLoading, setDepsLoading] = useState(false);
   const [filter, setFilter] = useState('low'); // 'low' | 'normal' | 'high' | 'undefined' | 'all'
   const [search, setSearch] = useState('');
+  // Review audit leads — it is the actionable list; the per-day confidence
+  // grid behind it is the deep dive.
+  const [tab, setTab] = useState('review'); // 'review' | 'trend'
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
 
@@ -341,6 +770,57 @@ export default function ConfidenceMonitor({ fixedDepartment = '' }) {
                         max-width: none;
                     }
                 }
+                .cm-tabs {
+                    display: flex;
+                    gap: 6px;
+                    flex-wrap: wrap;
+                    margin-bottom: 18px;
+                    border-bottom: 1px solid ${theme.border};
+                }
+                .cm-tab {
+                    padding: 10px 18px;
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: ${theme.textMuted};
+                    background: transparent;
+                    border: none;
+                    border-bottom: 2px solid transparent;
+                    cursor: pointer;
+                    transition: all 0.15s;
+                }
+                .cm-tab:hover { color: ${theme.text}; }
+                .cm-tab.active {
+                    color: ${theme.accent};
+                    border-bottom-color: ${theme.accent};
+                }
+                .cm-subhead {
+                    font-size: 12px;
+                    font-weight: 700;
+                    color: ${theme.text};
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    margin-bottom: 8px;
+                }
+                .cm-empty {
+                    padding: 10px 0;
+                    font-size: 12px;
+                    color: ${theme.textMuted};
+                }
+                .cm-expand-btn {
+                    border: none;
+                    background: transparent;
+                    color: ${theme.accent};
+                    font-size: 12px;
+                    cursor: pointer;
+                    padding: 2px 4px;
+                }
+                .cm-session-table {
+                    background: ${theme.surface};
+                    border: 1px solid ${theme.border};
+                    border-radius: 8px;
+                    margin: 4px 0;
+                }
+                .cm-session-table th { background: ${theme.surface}; }
             `}</style>
 
       <Toast toast={toast} />
@@ -357,6 +837,30 @@ export default function ConfidenceMonitor({ fixedDepartment = '' }) {
         Student Confidence Monitor
       </div>
 
+      <div className="cm-tabs">
+        <button
+          className={`cm-tab ${tab === 'review' ? 'active' : ''}`}
+          onClick={() => setTab('review')}
+        >
+          Review Audit
+        </button>
+        <button
+          className={`cm-tab ${tab === 'trend' ? 'active' : ''}`}
+          onClick={() => setTab('trend')}
+        >
+          Confidence Trend
+        </button>
+      </div>
+
+      {tab === 'review' && (
+        <ReviewAuditPanel
+          fixedDepartment={fixedDepartment}
+          showToast={showToast}
+        />
+      )}
+
+      {tab === 'trend' && (
+        <>
       {/* Controls */}
       <section style={{ ...styles.card, marginBottom: 18 }}>
         <div className="cm-controls-row">
@@ -651,6 +1155,8 @@ export default function ConfidenceMonitor({ fixedDepartment = '' }) {
           />
           Loading confidence data...
         </div>
+      )}
+        </>
       )}
     </div>
   );

@@ -12,6 +12,10 @@ import {
   HStack,
   Heading,
   Input,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -37,6 +41,7 @@ import lmApi from '../api/lmApi';
 import { CopyLinkButton, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import PublishQuizModal from '../components/PublishQuizModal';
 import { formatDateTime, relativeTime } from '../format';
+import { generateQuizPdf } from '../utils/quizPdfGenerator';
 
 // Slow enough to read as "running" rather than "alarm" — this sits in a list a
 // teacher scans, not on a monitoring dashboard.
@@ -394,6 +399,29 @@ function liveState(quiz, isTeacher) {
 }
 
 function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete }) {
+  const [downloadingPdf, setDownloadingPdf] = useState(null);
+  const toast = useToast();
+
+  const handleDownloadPdf = async (withAnswers) => {
+    setDownloadingPdf(withAnswers ? 'answers' : 'questions');
+    try {
+      const pdfData = await lmApi.exportQuizQuestions(classId, quiz._id, withAnswers);
+      generateQuizPdf(pdfData, withAnswers);
+      toast({
+        status: 'success',
+        title: withAnswers ? 'Questions & Answers PDF downloaded' : 'Questions PDF downloaded',
+      });
+    } catch (err) {
+      toast({
+        status: 'error',
+        title: 'Could not download PDF',
+        description: err.message || 'An error occurred while generating the PDF.',
+      });
+    } finally {
+      setDownloadingPdf(null);
+    }
+  };
+
   const isExam = quiz.settings?.deliveryMode === 'one_at_a_time';
   const questionCount = quiz.questionCount ?? quiz.questions?.length ?? 0;
   const start = isTeacher ? { can: true, why: null } : startState(quiz);
@@ -401,9 +429,8 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
   const opensAt = quiz.settings?.availableFrom;
   const entryCloses = quiz.window?.startDeadline;
   const state = liveState(quiz, isTeacher);
-  // A sitting to go back to. Only ever set for a student, and only once they
-  // have submitted one.
-  const reviewable = !isTeacher && Boolean(quiz.lastAttemptId);
+  // A sitting to go back to. Only ever set for a student once results are released.
+  const reviewable = !isTeacher && Boolean(quiz.lastAttemptId) && !quiz.resultsPending;
 
   const isLive = Boolean(state.live || state.open);
   const isCompleted = !isTeacher
@@ -547,6 +574,32 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
       </Box>
 
       <HStack spacing={2}>
+        <Menu>
+          <MenuButton
+            as={Button}
+            size="sm"
+            variant="outline"
+            colorScheme="purple"
+            isLoading={Boolean(downloadingPdf)}
+          >
+            📄 PDF ▾
+          </MenuButton>
+          <MenuList zIndex={10}>
+            <MenuItem
+              isDisabled={downloadingPdf === 'questions'}
+              onClick={() => handleDownloadPdf(false)}
+            >
+              📝 Questions Only
+            </MenuItem>
+            <MenuItem
+              isDisabled={downloadingPdf === 'answers'}
+              onClick={() => handleDownloadPdf(true)}
+            >
+              💡 Questions with Answers
+            </MenuItem>
+          </MenuList>
+        </Menu>
+
         {isTeacher ? (
           <>
             <Button as={RouterLink} to={`/learning/class/${classId}/quiz/${quiz._id}/edit`} size="sm" variant="outline">
@@ -594,44 +647,61 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
             </Button>
           </>
         ) : (
-          <Button
-            as={RouterLink}
-            to={
-              reviewable
-                ? `/learning/class/${classId}/quiz/${quiz._id}/attempt/${quiz.lastAttemptId}`
-                : `/learning/class/${classId}/quiz/${quiz._id}`
-            }
-            size="sm"
-            colorScheme={
-              quiz.resultsUnread
-                ? 'green'
-                : isCompleted
-                  ? 'gray'
-                  : isLive || start.can
+          <>
+            {reviewable ? (
+              <Button
+                as={RouterLink}
+                to={`/learning/class/${classId}/quiz/${quiz._id}/attempt/${quiz.lastAttemptId}`}
+                size="sm"
+                colorScheme={quiz.resultsUnread ? 'green' : 'blue'}
+                variant={quiz.resultsUnread ? 'solid' : 'outline'}
+                leftIcon={<span>🎯</span>}
+                sx={
+                  quiz.resultsUnread
+                    ? {
+                        animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`,
+                        fontWeight: 'bold',
+                      }
+                    : undefined
+                }
+              >
+                {quiz.resultsUnread ? 'See your result' : 'View Result'}
+              </Button>
+            ) : quiz.resultsPending ? (
+              <Tooltip label="Your teacher has not released the results for this test yet.">
+                <Button size="sm" variant="outline" colorScheme="orange" isDisabled>
+                  🔒 Results pending
+                </Button>
+              </Tooltip>
+            ) : (
+              <Button
+                as={RouterLink}
+                to={`/learning/class/${classId}/quiz/${quiz._id}`}
+                size="sm"
+                colorScheme={
+                  isLive || start.can
                     ? 'green'
                     : 'purple'
-            }
-            sx={
-              isLive && start.can && !isCompleted
-                ? {
-                    animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`,
-                    fontWeight: 'bold',
-                  }
-                : undefined
-            }
-          >
-            {reviewable
-              ? quiz.resultsUnread
-                ? 'See your result'
-                : 'Completed · Review'
-              : quiz.attemptsUsed > 0
-                ? 'Completed'
-                : quiz.inProgress
-                  ? `Resume test`
-                  : start.can
-                    ? `Start test`
-                    : 'View instructions'}
-          </Button>
+                }
+                sx={
+                  isLive && start.can && !isCompleted
+                    ? {
+                        animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`,
+                        fontWeight: 'bold',
+                      }
+                    : undefined
+                }
+              >
+                {quiz.attemptsUsed > 0
+                  ? 'Completed'
+                  : quiz.inProgress
+                    ? 'Resume test'
+                    : start.can
+                      ? 'Start test'
+                      : 'View instructions'}
+              </Button>
+            )}
+          </>
         )}
       </HStack>
     </Flex>

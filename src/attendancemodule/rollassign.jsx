@@ -934,6 +934,7 @@ export default function RollAssign({ fixedDepartment = '' }) {
             <div className="ams-tabs">
                 <button className={`ams-tab${activeTab === 'assign' ? ' active' : ''}`} onClick={() => setActiveTab('assign')}>Assign</button>
                 <button className={`ams-tab${activeTab === 'summary' ? ' active' : ''}`} onClick={() => setActiveTab('summary')}>Summary</button>
+                <button className={`ams-tab${activeTab === 'images' ? ' active' : ''}`} onClick={() => setActiveTab('images')}>Image Counts</button>
             </div>
 
             {activeTab === 'assign' && (<>
@@ -1213,6 +1214,10 @@ export default function RollAssign({ fixedDepartment = '' }) {
             {activeTab === 'summary' && (
                 <SummaryPanel summary={summary} summaryLoading={summaryLoading} summaryError={summaryError} fixedDepartment={fixedDepartment} />
             )}
+
+            {activeTab === 'images' && (
+                <ImageStatsPanel fixedDepartment={fixedDepartment} showToast={showToast} />
+            )}
         </div>
     );
 }
@@ -1356,6 +1361,572 @@ function SummaryPanel({ summary, summaryLoading, summaryError, fixedDepartment }
                     </div>
                 );
             })}
+        </div>
+    );
+}
+
+// ── Image Counts tab ──────────────────────────────────────────────
+// Batch-wise breakdown of how many ground-truth images each student has in
+// each category (embedding, backup, untracked, approved, unapproved). One row
+// per batch; per-student rows load only when a row is expanded. Roll numbers
+// open the same ground-truth modal the Assign tab uses, so images can be
+// updated without leaving the page.
+
+const IMG_CATEGORIES = [
+    { key: 'total',      label: 'Total',      color: theme.text,     hint: 'All images in the student folder' },
+    { key: 'embedding',  label: 'Embedding',  color: theme.accent,   hint: 'Images used to build the face embedding' },
+    { key: 'backup',     label: 'Backup',     color: '#0284c7',      hint: 'Classified images kept in reserve' },
+    { key: 'untracked',  label: 'Untracked',  color: '#a78bfa',      hint: 'On disk but in neither embedding nor backup' },
+    { key: 'approved',   label: 'Approved',   color: theme.success,  hint: 'Operator-approved images' },
+    { key: 'unapproved', label: 'Unapproved', color: '#f59e0b',      hint: 'Awaiting operator approval' },
+];
+
+const EMPTY_TOTALS = { total: 0, embedding: 0, backup: 0, untracked: 0, approved: 0, unapproved: 0, students: 0 };
+
+const sumCategories = (list, pick = (r) => r) => list.reduce((acc, row) => {
+    const r = pick(row);
+    for (const c of IMG_CATEGORIES) acc[c.key] += r[c.key] || 0;
+    acc.students += row.studentCount != null ? row.studentCount : 1;
+    return acc;
+}, { ...EMPTY_TOTALS });
+
+const batchLabel = (r) => [r.degree, (r.department || '').replace(/_/g, ' '), r.year].filter(Boolean).join(' · ') || r.batch;
+
+// Numeric-aware so 22CS2 sorts before 22CS10, not after it.
+const byRollNo = (a, b) => String(a.rollNo).localeCompare(String(b.rollNo), 'en', { numeric: true, sensitivity: 'base' });
+
+// Default order puts the students who need attention first: fewest images at
+// the top, ties broken by roll number. 'roll' switches to plain ascending.
+const SORT_MODES = [
+    { key: 'fewest', label: 'Fewest images' },
+    { key: 'roll',   label: 'Roll No' },
+];
+const sortStudents = (list, mode) => [...list].sort(
+    mode === 'roll' ? byRollNo : (a, b) => (a.total - b.total) || byRollNo(a, b),
+);
+
+// A folder with no images is a hole in the ground truth; under the 5 the
+// embedding builder wants is thin but usable.
+const LOW_IMAGE_THRESHOLD = 5;
+const totalCellColor = (total) => (
+    total === 0 ? theme.danger : total < LOW_IMAGE_THRESHOLD ? theme.warning : theme.text
+);
+
+function ImageStatsPanel({ fixedDepartment, showToast }) {
+    const [rows,        setRows]        = useState([]);
+    const [loading,     setLoading]     = useState(true);
+    const [error,       setError]       = useState(null);
+    const [generatedAt, setGeneratedAt] = useState(null);
+
+    const [deptFilter, setDeptFilter] = useState('');
+    const [yearFilter, setYearFilter] = useState('');
+    const [expanded,   setExpanded]   = useState(null);   // batch name, or null
+    const [details,    setDetails]    = useState({});     // batch → { loading, error, students }
+
+    // Roll-no search runs against every batch the user may see, so a student
+    // can be found without knowing which batch they sit in.
+    const [searchInput, setSearchInput] = useState('');
+    const [search,      setSearch]      = useState(null); // { loading, error, students, truncated, totalMatches }
+
+    // Ground-truth modal — same component the Assign tab opens on a cluster.
+    const [gtTarget, setGtTarget] = useState(null);       // { batch, rollNo }
+
+    const load = useCallback((refresh = false) => {
+        setLoading(true);
+        setError(null);
+        fetch(`${RA_BASE}/image-stats${refresh ? '?refresh=1' : ''}`)
+            .then(r => r.ok ? r.json() : Promise.reject(new Error('Failed to load image counts')))
+            .then(d => {
+                setRows(d.batches || []);
+                setGeneratedAt(d.generatedAt || null);
+                if (refresh) { setDetails({}); setSearch(null); }
+            })
+            .catch(e => setError(e.message))
+            .finally(() => setLoading(false));
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    // Re-read one batch straight from disk and fold the new numbers into both
+    // the expanded student list and its rollup row.
+    const refreshBatch = useCallback(async (batch) => {
+        setDetails(prev => ({ ...prev, [batch]: { ...(prev[batch] || {}), loading: true } }));
+        try {
+            const res = await fetch(`${RA_BASE}/image-stats/${encodeURIComponent(batch)}?refresh=1`);
+            if (!res.ok) throw new Error('Failed to load students');
+            const d = await res.json();
+            const students = d.students || [];
+            setDetails(prev => ({ ...prev, [batch]: { loading: false, students } }));
+
+            const totals = sumCategories(students);
+            setRows(prev => prev.map(r => r.batch === batch ? {
+                ...r,
+                ...IMG_CATEGORIES.reduce((acc, c) => ({ ...acc, [c.key]: totals[c.key] }), {}),
+                studentCount:       students.length,
+                emptyStudents:      students.filter(s => s.total === 0).length,
+                unassignedClusters: d.unassignedClusters ?? r.unassignedClusters,
+                unassignedImages:   d.unassignedImages   ?? r.unassignedImages,
+            } : r));
+        } catch (e) {
+            setDetails(prev => ({ ...prev, [batch]: { loading: false, error: e.message } }));
+        }
+    }, []);
+
+    const toggleRow = (batch) => {
+        if (expanded === batch) { setExpanded(null); return; }
+        setExpanded(batch);
+        if (details[batch]?.students && !details[batch].error) return;
+
+        setDetails(prev => ({ ...prev, [batch]: { loading: true } }));
+        fetch(`${RA_BASE}/image-stats/${encodeURIComponent(batch)}`)
+            .then(r => r.ok ? r.json() : Promise.reject(new Error('Failed to load students')))
+            .then(d => setDetails(prev => ({ ...prev, [batch]: { loading: false, students: d.students || [] } })))
+            .catch(e => setDetails(prev => ({ ...prev, [batch]: { loading: false, error: e.message } })));
+    };
+
+    const runSearch = (raw) => {
+        const q = String(raw ?? searchInput).trim();
+        if (q.length < 2) {
+            setSearch({ error: 'Enter at least 2 characters of a roll number' });
+            return;
+        }
+        setSearch({ loading: true });
+        fetch(`${RA_BASE}/image-stats-search?rollNo=${encodeURIComponent(q)}`)
+            .then(async r => {
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.error || 'Search failed');
+                return d;
+            })
+            .then(d => setSearch({ loading: false, ...d }))
+            .catch(e => setSearch({ loading: false, error: e.message }));
+    };
+
+    const clearSearch = () => { setSearchInput(''); setSearch(null); };
+
+    // After the GT modal edits a student, both the batch row and any open
+    // search result need the fresh numbers.
+    const handleGtClose = () => {
+        const batch = gtTarget?.batch;
+        setGtTarget(null);
+        if (!batch) return;
+        refreshBatch(batch);
+        if (search?.students?.length) runSearch();
+    };
+
+    if (loading) return (
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: theme.textMuted, fontSize: '14px' }}>Counting images…</div>
+    );
+    if (error) return (
+        <div style={{ ...styles.card, color: '#ef4444', padding: 20, fontSize: '13px' }}>Error: {error}</div>
+    );
+
+    const inScope = rows.filter(r => !fixedDepartment || (r.department || '').toLowerCase() === fixedDepartment.toLowerCase());
+    const visible = inScope.filter(r => (
+        (!deptFilter || r.department === deptFilter)
+        && (!yearFilter || r.year === yearFilter)
+    ));
+
+    const allDepts = [...new Set(inScope.map(r => r.department).filter(Boolean))].sort();
+    const allYears = [...new Set(inScope.map(r => r.year).filter(Boolean))].sort().reverse();
+
+    const grand = sumCategories(visible);
+
+    const num = (val, color) => (
+        <span style={{ fontWeight: val > 0 ? 700 : 400, color: val > 0 ? color : theme.textMuted }}>{val}</span>
+    );
+
+    return (
+        <div>
+            {gtTarget && createPortal(
+                <GTModal
+                    rollNo={gtTarget.rollNo}
+                    batchName={gtTarget.batch}
+                    onClose={handleGtClose}
+                    showToast={showToast}
+                    onMoved={() => refreshBatch(gtTarget.batch)}
+                />,
+                document.body
+            )}
+
+            <div className="roll-page-card" style={{ ...styles.card, marginBottom: 20 }}>
+                <div style={{ display: 'flex', gap: 14, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                    {!fixedDepartment && (
+                        <div style={{ minWidth: 180, flex: '1 1 180px' }}>
+                            <label style={styles.label}>Department</label>
+                            <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)} style={styles.select}>
+                                <option value="">All departments</option>
+                                {allDepts.map(d => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
+                            </select>
+                        </div>
+                    )}
+                    <div style={{ minWidth: 130, flex: '0 1 150px' }}>
+                        <label style={styles.label}>Batch Year</label>
+                        <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} style={styles.select}>
+                            <option value="">All years</option>
+                            {allYears.map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                    </div>
+                    <div style={{ minWidth: 200, flex: '1 1 220px' }}>
+                        <label style={styles.label}>Search Roll No (all batches)</label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <input
+                                value={searchInput}
+                                onChange={e => setSearchInput(e.target.value.toUpperCase())}
+                                onKeyDown={e => { if (e.key === 'Enter') runSearch(); if (e.key === 'Escape') clearSearch(); }}
+                                placeholder="e.g. 22CS045"
+                                style={{ ...styles.input, fontFamily: theme.fontMono }}
+                            />
+                            <button onClick={() => runSearch()} style={{ ...styles.btnPrimary, padding: '9px 16px', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                🔍
+                            </button>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => load(true)}
+                        style={{ padding: '9px 18px', fontSize: '13px', fontWeight: 600, borderRadius: 7, border: `1px solid ${theme.border}`, background: 'transparent', color: theme.accent, cursor: 'pointer' }}
+                    >
+                        ↻ Recount
+                    </button>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
+                    <StatTile label="Batches"  value={visible.length} color={theme.text} />
+                    <StatTile label="Students" value={grand.students} color={theme.text} />
+                    {IMG_CATEGORIES.map(c => (
+                        <StatTile key={c.key} label={c.label} value={grand[c.key]} color={c.color} hint={c.hint} />
+                    ))}
+                </div>
+
+                {generatedAt && (
+                    <div style={{ fontSize: '11px', color: theme.textMuted, marginTop: 12 }}>
+                        Counted from disk at {new Date(generatedAt).toLocaleString()} — click Recount for fresh numbers.
+                    </div>
+                )}
+            </div>
+
+            {search && (
+                <SearchResults
+                    search={search}
+                    query={searchInput}
+                    onClear={clearSearch}
+                    onOpenGt={(batch, rollNo) => setGtTarget({ batch, rollNo })}
+                />
+            )}
+
+            {!visible.length ? (
+                <div style={{ ...styles.card, textAlign: 'center', padding: '60px 20px', borderStyle: 'dashed' }}>
+                    <div style={{ fontSize: '36px', opacity: 0.3, marginBottom: 12 }}>🖼️</div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: 6 }}>No ground truth images found</div>
+                    <div style={{ fontSize: '13px', color: theme.textMuted }}>Acquire ground truth for a batch to see per-student image counts</div>
+                </div>
+            ) : (
+                <div style={{ ...styles.card, overflow: 'hidden', padding: 0 }}>
+                    <div style={{ padding: '14px 18px', borderBottom: `1px solid ${theme.border}`, background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                        <div style={{ fontWeight: 700, fontSize: '14px', color: theme.text }}>Images per Batch</div>
+                        <div style={{ fontSize: '12px', color: theme.textMuted }}>
+                            {visible.length} batch{visible.length !== 1 ? 'es' : ''} · {grand.students} students · {grand.total} images
+                        </div>
+                    </div>
+                    <div className="roll-summary-scroll">
+                        <table className="ams-table roll-summary-table">
+                            <thead>
+                                <tr>
+                                    <th>Batch</th>
+                                    <th style={{ textAlign: 'right' }}>Students</th>
+                                    {IMG_CATEGORIES.map(c => (
+                                        <th key={c.key} style={{ textAlign: 'right', color: c.color }} title={c.hint}>{c.label}</th>
+                                    ))}
+                                    <th style={{ textAlign: 'right' }}>Avg / Student</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {visible.map(r => {
+                                    const isExpanded = expanded === r.batch;
+                                    return (
+                                        <Fragment key={r.batch}>
+                                            <tr>
+                                                <td>
+                                                    <span style={{ fontWeight: 600 }}>{batchLabel(r)}</span>
+                                                    {r.emptyStudents > 0 && (
+                                                        <span title="Students with an assigned roll number but no images on disk"
+                                                            style={{ marginLeft: 8, fontSize: '10px', padding: '1px 6px', borderRadius: 99, background: theme.dangerDim, color: theme.danger }}>
+                                                            {r.emptyStudents} empty
+                                                        </span>
+                                                    )}
+                                                    {r.unassignedClusters > 0 && (
+                                                        <span title={`${r.unassignedClusters} unassigned person_XXX clusters holding ${r.unassignedImages} images`}
+                                                            style={{ marginLeft: 8, fontSize: '10px', padding: '1px 6px', borderRadius: 99, background: theme.accentDim, color: theme.accent }}>
+                                                            {r.unassignedClusters} unassigned
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td style={{ textAlign: 'right' }}>{r.studentCount}</td>
+                                                {IMG_CATEGORIES.map(c => (
+                                                    <td key={c.key} style={{ textAlign: 'right' }}>{num(r[c.key] || 0, c.color)}</td>
+                                                ))}
+                                                <td style={{ textAlign: 'right', color: theme.textMuted }}>
+                                                    {r.studentCount ? (r.total / r.studentCount).toFixed(1) : '—'}
+                                                </td>
+                                                <td style={{ textAlign: 'right' }}>
+                                                    <button
+                                                        onClick={() => toggleRow(r.batch)}
+                                                        style={{
+                                                            padding: '3px 10px', fontSize: '11px', fontWeight: 600,
+                                                            borderRadius: 6, border: `1px solid ${theme.border}`,
+                                                            background: isExpanded ? theme.accent : 'transparent',
+                                                            color: isExpanded ? '#fff' : theme.accent, cursor: 'pointer',
+                                                        }}
+                                                    >
+                                                        Students {isExpanded ? '▲' : '▼'}
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            {isExpanded && (
+                                                <tr>
+                                                    <td colSpan={IMG_CATEGORIES.length + 4} style={{ background: theme.bg, padding: '12px 18px' }}>
+                                                        <StudentImageTable
+                                                            batch={r.batch}
+                                                            detail={details[r.batch]}
+                                                            onOpenGt={(rollNo) => setGtTarget({ batch: r.batch, rollNo })}
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </Fragment>
+                                    );
+                                })}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td style={{ fontSize: '11px', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total</td>
+                                    <td style={{ textAlign: 'right' }}>{grand.students}</td>
+                                    {IMG_CATEGORIES.map(c => (
+                                        <td key={c.key} style={{ textAlign: 'right' }}>{num(grand[c.key], c.color)}</td>
+                                    ))}
+                                    <td style={{ textAlign: 'right', color: theme.textMuted }}>
+                                        {grand.students ? (grand.total / grand.students).toFixed(1) : '—'}
+                                    </td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function StatTile({ label, value, color, hint }) {
+    return (
+        <div title={hint} style={{
+            flex: '1 1 100px', minWidth: 92, padding: '10px 14px', borderRadius: 8,
+            background: theme.bg, border: `1px solid ${theme.border}`,
+        }}>
+            <div style={{ fontSize: '11px', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color, fontFamily: theme.fontMono }}>{value}</div>
+        </div>
+    );
+}
+
+// One count cell. The Total column is tinted by how thin the student's ground
+// truth is (red = nothing on disk, amber = under the embedding target) so the
+// students needing photos stand out even when sorted by roll number.
+function StudentCountCell({ category, student }) {
+    const value = student[category.key] || 0;
+    const color = category.key === 'total'
+        ? totalCellColor(student.total || 0)
+        : (value > 0 ? category.color : theme.textMuted);
+    return (
+        <td style={{ textAlign: 'right', color, fontWeight: value > 0 || category.key === 'total' ? 700 : 400 }}>
+            {value}
+        </td>
+    );
+}
+
+// Roll number rendered as a link into the ground-truth modal, where the
+// student's images can be moved between embedding/backup, deleted or approved.
+function RollNoLink({ rollNo, onClick }) {
+    return (
+        <button
+            onClick={onClick}
+            title={`Open ground truth for ${rollNo} — update images`}
+            style={{
+                padding: 0, border: 'none', background: 'transparent', cursor: 'pointer',
+                fontFamily: theme.fontMono, fontWeight: 700, fontSize: '13px',
+                color: theme.accent, textDecoration: 'underline', textUnderlineOffset: 3,
+            }}
+        >
+            {rollNo}
+        </button>
+    );
+}
+
+function SearchResults({ search, query, onClear, onOpenGt }) {
+    const shell = (children) => (
+        <div style={{ ...styles.card, marginBottom: 20, padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '12px 18px', borderBottom: `1px solid ${theme.border}`, background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ fontWeight: 700, fontSize: '14px' }}>
+                    Search results{query ? <span style={{ fontFamily: theme.fontMono, color: theme.accent }}> · {query}</span> : null}
+                </div>
+                <button onClick={onClear} style={{ padding: '4px 12px', fontSize: '11px', fontWeight: 600, borderRadius: 6, border: `1px solid ${theme.border}`, background: 'transparent', color: theme.textMuted, cursor: 'pointer' }}>
+                    Clear
+                </button>
+            </div>
+            {children}
+        </div>
+    );
+
+    if (search.loading) return shell(<div style={{ padding: '18px', fontSize: '12px', color: theme.textMuted }}>Searching…</div>);
+    if (search.error)   return shell(<div style={{ padding: '18px', fontSize: '12px', color: theme.danger }}>{search.error}</div>);
+
+    // Fewest images first here too — a search usually means "what is thin?"
+    const students = sortStudents(search.students || [], 'fewest');
+    if (!students.length) return shell(<div style={{ padding: '18px', fontSize: '12px', color: theme.textMuted }}>No roll number matches this search.</div>);
+
+    return shell(
+        <>
+            <div className="roll-summary-scroll">
+                <table className="ams-table roll-summary-table">
+                    <thead>
+                        <tr>
+                            <th>Roll No</th>
+                            <th>Batch</th>
+                            {IMG_CATEGORIES.map(c => (
+                                <th key={c.key} style={{ textAlign: 'right', color: c.color }} title={c.hint}>{c.label}</th>
+                            ))}
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {students.map(s => (
+                            <tr key={`${s.batch}::${s.rollNo}`}>
+                                <td><RollNoLink rollNo={s.rollNo} onClick={() => onOpenGt(s.batch, s.rollNo)} /></td>
+                                <td style={{ fontSize: '12px', color: theme.textMuted }}>{batchLabel(s)}</td>
+                                {IMG_CATEGORIES.map(c => <StudentCountCell key={c.key} category={c} student={s} />)}
+                                <td style={{ textAlign: 'right' }}>
+                                    <button
+                                        onClick={() => onOpenGt(s.batch, s.rollNo)}
+                                        style={{ padding: '3px 10px', fontSize: '11px', fontWeight: 600, borderRadius: 6, border: `1px solid ${theme.border}`, background: 'transparent', color: theme.accent, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                    >
+                                        Update images →
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            {search.truncated && (
+                <div style={{ padding: '10px 18px', fontSize: '11px', color: theme.warning, borderTop: `1px solid ${theme.border}` }}>
+                    Showing the first {students.length} of {search.totalMatches} matches — type more of the roll number to narrow it down.
+                </div>
+            )}
+        </>
+    );
+}
+
+function StudentImageTable({ batch, detail, onOpenGt }) {
+    const [query,    setQuery]    = useState('');
+    const [sortMode, setSortMode] = useState('fewest');
+
+    if (!detail || detail.loading) return (
+        <div style={{ fontSize: '12px', color: theme.textMuted, padding: '8px 0' }}>Loading students…</div>
+    );
+    if (detail.error) return (
+        <div style={{ fontSize: '12px', color: theme.danger, padding: '8px 0' }}>{detail.error}</div>
+    );
+    if (!detail.students?.length) return (
+        <div style={{ fontSize: '12px', color: theme.textMuted, padding: '8px 0' }}>No students with assigned roll numbers in this batch.</div>
+    );
+
+    const q = query.trim().toUpperCase();
+    const filtered = q ? detail.students.filter(s => s.rollNo.toUpperCase().includes(q)) : detail.students;
+    const students = sortStudents(filtered, sortMode);
+    const lowCount = filtered.filter(s => s.total < LOW_IMAGE_THRESHOLD).length;
+
+    const exportCsv = () => {
+        const header = ['Roll No', ...IMG_CATEGORIES.map(c => c.label)];
+        const lines  = [header.join(',')];
+        for (const s of students) lines.push([s.rollNo, ...IMG_CATEGORIES.map(c => s[c.key] ?? 0)].join(','));
+        const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' }));
+        const a   = document.createElement('a');
+        a.href = url;
+        a.download = `${batch}_image_counts.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    return (
+        <div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+                <input
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder="Filter this batch by roll no…"
+                    style={{ ...styles.input, maxWidth: 240, fontSize: '12px', padding: '6px 10px' }}
+                />
+                <div style={{ display: 'flex', gap: 0, borderRadius: 6, overflow: 'hidden', border: `1px solid ${theme.border}` }}>
+                    {SORT_MODES.map(m => (
+                        <button
+                            key={m.key}
+                            onClick={() => setSortMode(m.key)}
+                            style={{
+                                padding: '5px 12px', fontSize: '11px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                                background: sortMode === m.key ? theme.accent : 'transparent',
+                                color:      sortMode === m.key ? '#fff' : theme.textMuted,
+                            }}
+                        >
+                            {m.label} ↑
+                        </button>
+                    ))}
+                </div>
+                <span style={{ fontSize: '11px', color: theme.textMuted }}>
+                    {students.length} of {detail.students.length} students
+                    {lowCount > 0 && (
+                        <span style={{ color: theme.warning, fontWeight: 700 }}> · {lowCount} under {LOW_IMAGE_THRESHOLD} images</span>
+                    )}
+                </span>
+                <button
+                    onClick={exportCsv}
+                    style={{ marginLeft: 'auto', padding: '5px 12px', fontSize: '11px', fontWeight: 600, borderRadius: 6, border: `1px solid ${theme.border}`, background: 'transparent', color: theme.accent, cursor: 'pointer' }}
+                >
+                    ⬇ Export CSV
+                </button>
+            </div>
+            <div style={{ maxHeight: 380, overflowY: 'auto', border: `1px solid ${theme.border}`, borderRadius: 8 }}>
+                <table className="ams-table" style={{ margin: 0 }}>
+                    <thead>
+                        <tr>
+                            <th>Roll No</th>
+                            {IMG_CATEGORIES.map(c => (
+                                <th key={c.key} style={{ textAlign: 'right', color: c.color }} title={c.hint}>{c.label}</th>
+                            ))}
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {students.map(s => (
+                            <tr key={s.rollNo}>
+                                <td><RollNoLink rollNo={s.rollNo} onClick={() => onOpenGt(s.rollNo)} /></td>
+                                {IMG_CATEGORIES.map(c => <StudentCountCell key={c.key} category={c} student={s} />)}
+                                <td style={{ textAlign: 'right' }}>
+                                    <button
+                                        onClick={() => onOpenGt(s.rollNo)}
+                                        style={{ padding: '3px 10px', fontSize: '11px', fontWeight: 600, borderRadius: 6, border: `1px solid ${theme.border}`, background: 'transparent', color: theme.accent, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                    >
+                                        Update images →
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                        {!students.length && (
+                            <tr><td colSpan={IMG_CATEGORIES.length + 2} style={{ color: theme.textMuted, fontSize: '12px' }}>No roll number matches this filter.</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }
@@ -2027,6 +2598,13 @@ export function GTModal({ rollNo, batchName, onClose, showToast, onMoved, embedd
             if (time > maxAddedAt) maxAddedAt = time;
         }
     });
+    
+    let hasOlderPhotos = false;
+    allPhotos.forEach(p => {
+        if (p.addedAt && maxAddedAt - new Date(p.addedAt).getTime() >= 30 * 1000) {
+            hasOlderPhotos = true;
+        }
+    });
 
     const PhotoCard = ({ photo, type }) => {
         const busyKey = `${rollNo}::${photo.filename}`;
@@ -2034,7 +2612,8 @@ export function GTModal({ rollNo, batchName, onClose, showToast, onMoved, embedd
         const isEmbed = type === 'embedding';
         const isOther = type === 'other';
         
-        const isNew = photo.addedAt && maxAddedAt > 0 && (maxAddedAt - new Date(photo.addedAt).getTime() < 30 * 1000);
+        // Only highlight as NEW if there is at least one older photo to distinguish it from.
+        const isNew = hasOlderPhotos && photo.addedAt && maxAddedAt > 0 && (maxAddedAt - new Date(photo.addedAt).getTime() < 30 * 1000);
         const borderC = isNew ? theme.accent : (isEmbed ? theme.success : isOther ? theme.border : theme.warning);
         
         const isSelected = selectedPhotos[photo.filename] || false;
