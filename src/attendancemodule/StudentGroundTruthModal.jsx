@@ -14,6 +14,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import getEnvironment from '../getenvironment';
 import { theme, styles } from './config';
+import { Trash2 } from 'lucide-react';
 
 const apiUrl = getEnvironment();
 const GT_BASE = `${apiUrl}/attendancemodule/ground-truth`;
@@ -155,6 +156,28 @@ export default function StudentGroundTruthModal({ batch, rollNo, student, onClos
         }
     }
 
+    async function deletePhoto(filename) {
+        if (!window.confirm(`Permanently delete ${filename}?`)) return;
+        setSaving(true);
+        setNotice('');
+        setError('');
+        try {
+            const res = await fetchWithAuth(
+                `${GT_BASE}/photo/${encodeURIComponent(batch)}/${encodeURIComponent(rollNo)}/${encodeURIComponent(filename)}`,
+                { method: 'DELETE' }
+            );
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Could not delete photo');
+            setNotice(`Deleted ${filename}.`);
+            // Removing from state
+            setPhotos((current) => current.filter((p) => p.filename !== filename));
+        } catch (err) {
+            setError(err.message || 'Could not delete photo');
+        } finally {
+            setSaving(false);
+        }
+    }
+
     const photoUrl = (filename) =>
         `${GT_BASE}/photo/${encodeURIComponent(batch)}/${encodeURIComponent(rollNo)}/${encodeURIComponent(filename)}`;
 
@@ -236,6 +259,23 @@ export default function StudentGroundTruthModal({ batch, rollNo, student, onClos
                                 → {target === 'embedding' ? 'Embedding' : 'Backup'}
                             </button>
                         ))}
+                        <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => deletePhoto(photo.filename)}
+                            style={{
+                                ...styles.btnGhost,
+                                color: theme.danger,
+                                padding: '3px 6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                opacity: saving ? 0.5 : 1,
+                            }}
+                            title="Delete"
+                        >
+                            <Trash2 size={14} />
+                        </button>
                     </div>
                 </div>
             </div>
