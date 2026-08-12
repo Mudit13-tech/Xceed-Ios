@@ -19,10 +19,26 @@ import {
   Text,
   Wrap,
   WrapItem,
+  Image,
 } from '@chakra-ui/react';
+import { keyframes } from '@emotion/react';
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { useRive, Layout, Fit, Alignment } from '@rive-app/react-canvas';
 import { courseworkLink, courseworkMeta, formatDate, formatDateTime } from '../format';
+const pulseRing = keyframes`
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+`;
+
+const AnimatedXceedLogo = () => {
+  return (
+    <Box h="24px" w="auto" ml="auto" animation={`${pulseRing} 3s ease-in-out infinite`}>
+      <Image src="/clublogo.png" h="100%" w="auto" objectFit="contain" />
+    </Box>
+  );
+};
 
 const startOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
 const endOfMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59);
@@ -357,8 +373,8 @@ export default function Calendar() {
             ))}
           </Wrap>
 
-          <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={3} mb={5} overflowX="auto">
-            <Grid templateColumns="repeat(7, minmax(90px, 1fr))" gap={1} minW="640px">
+          <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={3} mb={5}>
+            <Grid templateColumns="repeat(7, 1fr)" gap={1}>
               {WEEKDAYS.map((day) => (
                 <Text key={day} fontSize="xs" fontWeight="600" color="gray.500" textAlign="center" py={1}>
                   {day}
@@ -374,12 +390,12 @@ export default function Calendar() {
                 let borderColor = 'gray.100';
                 let bg = 'white';
                 if (holiday) {
-                  borderColor = 'red.200';
-                  bg = 'red.50';
+                  borderColor = 'blue.200';
+                  bg = 'blue.50';
                 }
                 if (isToday) {
-                  borderColor = 'blue.400';
-                  bg = holiday ? 'red.50' : 'blue.50';
+                  borderColor = 'blue.800';
+                  bg = '#2c5f99';
                 }
 
                 const openable = dayItems.length > 0 || !!holiday;
@@ -409,26 +425,33 @@ export default function Calendar() {
                             }
                           },
                           'aria-label': `${formatDate(date)} — ${dayItems.length} activities`,
-                          _hover: { borderColor: 'blue.300' },
+                          _hover: isToday ? { borderColor: 'blue.500', bg: 'blue.700' } : { borderColor: 'blue.300' },
                         }
                       : {})}
                   >
                     <Flex align="center" justify="space-between" gap={1}>
-                      <Text
-                        fontSize="xs"
-                        fontWeight={isToday ? '700' : '500'}
-                        color={isToday ? 'blue.700' : holiday ? 'red.600' : 'gray.600'}
-                      >
-                        {date.getDate()}
-                      </Text>
-                      {holiday && (
-                        <Text fontSize="0.55rem" color="red.500" fontWeight="600">
-                          OFF
+                      <HStack gap={2} align="center">
+                        <Text
+                          fontSize="xs"
+                          fontWeight={isToday ? '700' : '500'}
+                          color={isToday ? 'white' : holiday ? 'blue.600' : 'gray.600'}
+                        >
+                          {date.getDate()}
                         </Text>
-                      )}
+                        {holiday && (
+                          <Badge 
+                            fontSize="0.55rem" 
+                            colorScheme={isToday ? "whiteAlpha" : "blue"} 
+                            variant={isToday ? "solid" : "subtle"}
+                          >
+                            OFF
+                          </Badge>
+                        )}
+                      </HStack>
+                      {isToday && <AnimatedXceedLogo />}
                     </Flex>
                     {holiday && (
-                      <Text fontSize="0.6rem" color="red.600" noOfLines={1} title={holiday.remark}>
+                      <Text fontSize="0.6rem" color={isToday ? "white" : "blue.600"} noOfLines={1} title={holiday.remark}>
                         {holiday.remark}
                       </Text>
                     )}
@@ -445,7 +468,7 @@ export default function Calendar() {
                     {dayItems.length > CHIPS_PER_CELL && (
                       <Text
                         fontSize="0.6rem"
-                        color="blue.600"
+                        color={isToday ? 'white' : 'blue.600'}
                         fontWeight="600"
                         mt={0.5}
                         _hover={{ textDecoration: 'underline' }}

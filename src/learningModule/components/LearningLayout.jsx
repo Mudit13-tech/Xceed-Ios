@@ -24,6 +24,8 @@ import {
   MenuList,
   Text,
   Tooltip,
+  useColorMode,
+  useColorModeValue,
   useDisclosure,
 } from '@chakra-ui/react';
 import getEnvironment from '../../getenvironment';
@@ -219,6 +221,9 @@ function NavItems({ onNavigate, studentOnly = false }) {
  * mobile, and the header that carries the join/create actions.
  */
 export default function LearningLayout() {
+  const { colorMode, toggleColorMode } = useColorMode();
+  const pageBg = useColorModeValue('gray.50', 'gray.900');
+
   const [me, setMe] = useState(null);
   const [overview, setOverview] = useState(null);
   const [classes, setClasses] = useState(null);
@@ -286,7 +291,7 @@ export default function LearningLayout() {
   const studentOnly = isStudentOnly(me?.roles);
 
   return (
-    <Box minH={studentOnly ? '100vh' : 'calc(100vh - 64px)'} bg="gray.50">
+    <Box minH={studentOnly ? '100vh' : 'calc(100vh - 64px)'} bg={pageBg}>
       <Box bg="white" borderBottomWidth="1px" borderColor="gray.200" position="sticky" top={0} zIndex={20}>
         <Container maxW="1400px" py={3}>
           <Flex align="center" gap={3}>
@@ -354,6 +359,10 @@ export default function LearningLayout() {
                       {me.email}
                     </Text>
                   </Box>
+                  <MenuDivider />
+                  <MenuItem {...buttonTextStyles} onClick={toggleColorMode}>
+                    {colorMode === 'light' ? '🌙 Dark mode' : '☀️ Light mode'}
+                  </MenuItem>
                   <MenuDivider />
                   <MenuItem {...buttonTextStyles} onClick={handleLogout}>
                     Log out

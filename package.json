@@ -63,7 +63,7 @@
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.10.1",
     "jodit-react": "^4.0.15",
-    "jspdf": "^2.5.1",
+    "jspdf": "^4.2.1",
     "jspdf-autotable": "^3.8.2",
     "katex": "^0.16.22",
     "lodash.debounce": "^4.0.8",

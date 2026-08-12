@@ -158,23 +158,41 @@ export default function StudentGroundTruthModal({ batch, rollNo, student, onClos
     const photoUrl = (filename) =>
         `${GT_BASE}/photo/${encodeURIComponent(batch)}/${encodeURIComponent(rollNo)}/${encodeURIComponent(filename)}`;
 
+    const allPhotos = [...(student.embeddingFiles || []), ...(student.backupFiles || []), ...(student.untrackedFiles || [])];
+    let maxAddedAt = 0;
+    allPhotos.forEach(p => {
+        if (p.addedAt) {
+            const time = new Date(p.addedAt).getTime();
+            if (time > maxAddedAt) maxAddedAt = time;
+        }
+    });
+    
     function PhotoCard({ photo }) {
         const group = GROUPS[photo.group];
         // Where this photo can go — never back to "other", which is a
         // read-only "found in the folder, unclassified" bucket.
         const targets = ['embedding', 'backup'].filter((g) => g !== photo.group);
 
+        const isNew = photo.addedAt && maxAddedAt > 0 && (maxAddedAt - new Date(photo.addedAt).getTime() < 30 * 1000);
+
         return (
             <div
                 className="gt-photo-card"
                 style={{
-                    border: `1px solid ${theme.border}`,
-                    borderTop: `3px solid ${group.color}`,
+                    border: `1px solid ${isNew ? theme.accent : theme.border}`,
+                    borderTop: `3px solid ${isNew ? theme.accent : group.color}`,
+                    boxShadow: isNew ? `0 0 8px ${theme.accent}66` : 'none',
                     borderRadius: 8,
                     overflow: 'hidden',
                     background: theme.surface,
+                    position: 'relative',
                 }}
             >
+                {isNew && (
+                    <div style={{ position: 'absolute', top: 4, right: 4, background: theme.accent, color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '2px 6px', borderRadius: 4, zIndex: 10 }}>
+                        NEW
+                    </div>
+                )}
                 <img
                     src={photoUrl(photo.filename)}
                     alt={photo.filename}
