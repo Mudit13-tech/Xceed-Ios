@@ -454,11 +454,6 @@ export default function QuizAttempt() {
             </Alert>
           )}
 
-          {/* `pending` and the score fields are decided by one answer on the
-              server, so this branch is the only place a missing score can be
-              rendered. The two used to be judged separately, which is how a
-              submitted exam reported its results as ready and then printed
-              `undefined/undefined` where the marks should have been. */}
           {pending ? (
             <Alert status="info" borderRadius="md">
               <AlertIcon />
@@ -473,15 +468,13 @@ export default function QuizAttempt() {
             </Alert>
           ) : (
             <>
+              {/* Stats Cards */}
               <Flex gap={3} wrap="wrap" mb={4}>
-                {/* `?? '—'` rather than trusting the payload: a mark that is
-                    genuinely missing should read as missing, not as the word
-                    "undefined" printed where a student's score belongs. */}
                 <StatTile label="Score" value={`${attempt.score ?? '—'}/${attempt.maxScore ?? '—'}`} />
                 <StatTile
                   label="Percent"
                   value={attempt.percent === undefined ? '—' : `${attempt.percent}%`}
-                  accent={attempt.passed ? 'green.500' : 'red.500'}
+                  accent="blue.500"
                 />
                 <StatTile label="Correct" value={attempt.totalCorrect ?? '—'} accent="green.500" />
                 <StatTile label="Wrong" value={attempt.totalWrong ?? '—'} accent="red.500" />
@@ -490,9 +483,10 @@ export default function QuizAttempt() {
                   <StatTile label="Negative" value={`−${attempt.negativeApplied}`} accent="red.500" />
                 )}
               </Flex>
+
               <Progress
                 value={attempt.percent || 0}
-                colorScheme={attempt.passed ? 'green' : 'red'}
+                colorScheme="purple"
                 borderRadius="full"
                 mb={4}
               />
@@ -885,6 +879,7 @@ export default function QuizAttempt() {
       subject={[banner.subject, klass?.subject, klass?.name].find(Boolean)}
       faculty={[banner.facultyName, klass?.ownerName].find(Boolean)}
       title={banner.title}
+      autoFullscreen={!loading && !finished && Boolean(current || attempt?.status === 'in_progress')}
     >
       {content}
     </QuizStage>

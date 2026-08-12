@@ -48,6 +48,10 @@ import { canCreateClass } from '../roles';
 
 function ClassCard({ klass, onOpen }) {
   const cardBg = useColorModeValue('white', 'gray.800');
+  const cardBorder = useColorModeValue('gray.200', 'gray.700');
+  const ownerColor = useColorModeValue('gray.600', 'gray.300');
+  const metaColor = useColorModeValue('gray.500', 'gray.400');
+
   const isTeacher = ['teacher', 'co-teacher'].includes(klass.myRole);
   return (
     <Box
@@ -56,7 +60,7 @@ function ClassCard({ klass, onOpen }) {
       onClick={() => onOpen(klass)}
       bg={cardBg}
       borderWidth="1px"
-      borderColor="gray.200"
+      borderColor={cardBorder}
       borderRadius="lg"
       overflow="hidden"
       transition="all 0.15s"
@@ -81,10 +85,10 @@ function ClassCard({ klass, onOpen }) {
         </Badge>
       </Box>
       <Box px={5} py={4}>
-        <Text fontSize="sm" color="gray.600" noOfLines={1}>
+        <Text fontSize="sm" color={ownerColor} noOfLines={1}>
           {klass.ownerName}
         </Text>
-        <HStack mt={3} spacing={4} fontSize="xs" color="gray.500">
+        <HStack mt={3} spacing={4} fontSize="xs" color={metaColor}>
           <Text>👥 {klass.stats?.studentCount ?? 0}</Text>
           <Text>📄 {klass.stats?.courseworkCount ?? 0}</Text>
           {isTeacher && <Text>🔑 {klass.code}</Text>}
@@ -541,7 +545,6 @@ export default function Dashboard() {
 
   const headingColor = useColorModeValue('gray.800', 'white');
   const secondaryTextColor = useColorModeValue('gray.500', 'gray.300');
-  const cardBg = useColorModeValue('white', 'gray.800');
 
 
   return (

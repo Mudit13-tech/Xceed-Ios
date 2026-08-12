@@ -285,6 +285,8 @@ const lmApi = {
   listQuizzes: (classId) => request(`/classes/${classId}/quizzes`),
   createQuiz: (classId, body) => request(`/classes/${classId}/quizzes`, { method: 'POST', body }),
   getQuiz: (classId, quizId) => request(`/classes/${classId}/quizzes/${quizId}`),
+  exportQuizQuestions: (classId, quizId, withAnswers = false) =>
+    request(`/classes/${classId}/quizzes/${quizId}/export-questions${qs({ withAnswers })}`),
   updateQuiz: (classId, quizId, body) => request(`/classes/${classId}/quizzes/${quizId}`, { method: 'PATCH', body }),
   deleteQuiz: (classId, quizId) => request(`/classes/${classId}/quizzes/${quizId}`, { method: 'DELETE' }),
   publishQuiz: (classId, quizId, body) =>

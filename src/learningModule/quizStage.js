@@ -55,14 +55,19 @@ export function scrollStageToTop() {
  * means the test always fills the screen, and a refusal costs nothing but the
  * browser's own chrome.
  */
-export function openQuizStage() {
+export function openQuizStage(options = {}) {
+  const { autoFullscreen = true } = typeof options === 'boolean' ? { autoFullscreen: options } : options;
   const host = getQuizStageHost();
   openCount += 1;
   host.style.display = 'block';
   document.body.style.overflow = 'hidden';
   // Arriving from a link click still carries that click's transient activation,
   // so this normally lands without the student doing anything.
-  if (openCount === 1) requestQuizFullscreen();
+  if (openCount === 1 && autoFullscreen) {
+    requestQuizFullscreen();
+  } else if (!autoFullscreen && document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
 
   return () => {
     openCount -= 1;

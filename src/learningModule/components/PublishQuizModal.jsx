@@ -388,7 +388,7 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
                     />
                     <FormHelperText fontSize="xs">
                       You can always release them sooner — the results page has a “Publish results
-                      now” button that overrides this.
+                      now” button that overrides this once the quiz is conducted.
                     </FormHelperText>
                   </Box>
                 )}

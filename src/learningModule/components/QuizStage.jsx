@@ -13,7 +13,7 @@ import StageBar from './StageBar';
  * stage carries the only chrome a test is allowed: which paper this is, for
  * which subject, set by whom.
  */
-export default function QuizStage({ subject, faculty, title, children }) {
+export default function QuizStage({ subject, faculty, title, children, autoFullscreen = true }) {
   const [host] = useState(getQuizStageHost);
   const [isFullscreen, setIsFullscreen] = useState(() => Boolean(document.fullscreenElement));
 
@@ -23,7 +23,7 @@ export default function QuizStage({ subject, faculty, title, children }) {
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
 
-  useEffect(() => openQuizStage(), []);
+  useEffect(() => openQuizStage({ autoFullscreen }), [autoFullscreen]);
 
   const enter = useCallback(() => {
     requestQuizFullscreen();
