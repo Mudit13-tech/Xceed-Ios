@@ -209,9 +209,9 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
   return (
     <Modal isOpen={isOpen} onClose={close} size="lg">
       <ModalOverlay />
-      <ModalContent pt={4}>
+      <ModalContent mt="100px" mb="50px" pt={6} pb={4}>
         <ModalHeader>Create a quiz</ModalHeader>
-        <ModalCloseButton />
+        <ModalCloseButton top={8} />
         <ModalBody>
           <FormControl isRequired mb={4}>
             <FormLabel fontSize="sm">Title</FormLabel>
@@ -573,7 +573,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
         )}
       </Box>
 
-      <HStack spacing={2}>
+      <Flex gap={2} wrap="wrap" align="center" maxW="100%">
         <Menu>
           <MenuButton
             as={Button}
@@ -703,7 +703,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
             )}
           </>
         )}
-      </HStack>
+      </Flex>
     </Flex>
   );
 }

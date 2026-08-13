@@ -116,7 +116,8 @@ export default function FrameVerification({ fixedDepartment = '' }) {
     const [galleryData, setGalleryData] = useState(null);
     const [modalState, setModalState] = useState({ open: false, index: 0 });
     const [fullscreenActive, setFullscreenActive] = useState(false);
-    const [classInfo, setClassInfo] = useState(null);
+    // The live timetable answer, used ONLY as a fallback — see classInfo below.
+    const [liveClassInfo, setLiveClassInfo] = useState(null);
     const [classInfoLoading, setClassInfoLoading] = useState(false);
     const [downloadError, setDownloadError] = useState(null);
     const modalRef = useRef(null);
@@ -288,7 +289,7 @@ export default function FrameVerification({ fixedDepartment = '' }) {
 
     useEffect(() => {
         if (!room || !period) {
-            setClassInfo(null);
+            setLiveClassInfo(null);
             return;
         }
 
@@ -301,7 +302,7 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                 const res = await fetch(`${CLASS_INFO_API}?${params.toString()}`);
                 const data = await res.json();
                 if (!cancelled) {
-                    setClassInfo({
+                    setLiveClassInfo({
                         subject: data.subject || '-',
                         faculty: data.faculty || '-',
                         batch: data.batch || '-',
@@ -311,7 +312,7 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                 }
             } catch (_) {
                 if (!cancelled) {
-                    setClassInfo({
+                    setLiveClassInfo({
                         subject: '-',
                         faculty: '-',
                         batch: '-',
@@ -326,6 +327,17 @@ export default function FrameVerification({ fixedDepartment = '' }) {
 
         return () => { cancelled = true; };
     }, [room, period]);
+
+    // What the class WAS when these frames were captured, straight off the disk
+    // (frameVerificationController → _class.json), in preference to what the
+    // timetable says now. The live lookup is answered for TODAY — it takes no
+    // date at all — so on any past date it describes a different day of the
+    // week, and any timetable edit since the capture silently relabels history.
+    // Only folders written before contexts were stored fall back to it, and
+    // those are marked so nobody mistakes a guess for a record.
+    const classInfo = galleryData?.classInfo || liveClassInfo;
+    const classInfoIsStored = !!galleryData?.classInfo;
+    const classInfoStale = !!galleryData?.found && !classInfoIsStored;
 
     const visiblePeriods = date
         ? [...new Set(
@@ -567,6 +579,24 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                 <StatBadge label="Subject" value={classInfo?.subject || (classInfoLoading ? '...' : '-')} tone="success" />
                                 <StatBadge label="Faculty" value={classInfo?.faculty || (classInfoLoading ? '...' : '-')} tone="warning" />
                                 <StatBadge label="Batch" value={classInfo?.batch || (classInfoLoading ? '...' : '-')} tone="danger" />
+                                {classInfo?.sem && <StatBadge label="Sem" value={classInfo.sem} />}
+                                {classInfo?.dept && <StatBadge label="Dept" value={classInfo.dept} />}
+                                {/* A substitution or extra class recorded at capture time. Worth
+                                    showing outright: it is exactly the case where the timetable
+                                    read today would disagree with what actually happened. */}
+                                {classInfoIsStored && classInfo?.altered && (
+                                    <StatBadge
+                                        label="Altered"
+                                        value={`was ${classInfo.originalSubject || '?'}${
+                                            classInfo.originalFaculty ? ` / ${classInfo.originalFaculty}` : ''}`}
+                                        tone="warning"
+                                    />
+                                )}
+                                {classInfoIsStored ? (
+                                    <StatBadge label="Source" value="recorded at capture" tone="success" />
+                                ) : classInfoStale ? (
+                                    <StatBadge label="Source" value="live timetable — not recorded for these frames" tone="danger" />
+                                ) : null}
                             </div>
                         )}
                     </div>
@@ -857,27 +887,66 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                         matched to an enrolled roll number — not students absent from the class.
                                     </div>
 
+                                    {/* "Labelled", not "Present". A label means the
+                                        face cleared reviewThreshold; the report
+                                        needs autoThreshold to mark a student
+                                        present, so this count is an upper bound on
+                                        the report's and heading it "Present"
+                                        invited exactly the comparison that does
+                                        not hold. */}
                                     <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.62)', marginBottom: 12 }}>
-                                        Roll Numbers Present ({(modalFrame.rolls || []).length})
+                                        Roll Numbers Labelled ({(modalFrame.rolls || []).length})
                                     </div>
 
                                     <div style={{ marginBottom: 20 }}>
                                         {(modalFrame.rolls || []).length > 0 ? (
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                                                {modalFrame.rolls.map((roll) => (
-                                                    <span
-                                                        key={roll}
-                                                        style={{
-                                                            fontFamily: theme.fontMono, fontSize: 11, fontWeight: 700,
-                                                            padding: '3px 7px', borderRadius: 4,
-                                                            color: roll === rollFilter ? '#0c1228' : '#ffffff',
-                                                            background: roll === rollFilter ? '#86efac' : 'rgba(255,255,255,0.1)',
-                                                        }}
-                                                    >
-                                                        {roll}
-                                                    </span>
-                                                ))}
-                                            </div>
+                                            <>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                                                    {modalFrame.rolls.map((roll) => {
+                                                        // Same three states as the drawn boxes, same
+                                                        // colours. Frames captured before the split
+                                                        // have no reviewRolls and stay neutral rather
+                                                        // than claiming a state they never recorded.
+                                                        const mark = (modalFrame.faceMarks || []).find((m) => m.roll === roll);
+                                                        const isReview = modalFrame.reviewRolls
+                                                            ? modalFrame.reviewRolls.includes(roll)
+                                                            : false;
+                                                        const known = !!modalFrame.reviewRolls;
+                                                        const bg = roll === rollFilter ? '#86efac'
+                                                            : !known ? 'rgba(255,255,255,0.1)'
+                                                            : isReview ? 'rgba(250,204,21,0.22)'
+                                                            : 'rgba(34,197,94,0.22)';
+                                                        const fg = roll === rollFilter ? '#0c1228'
+                                                            : !known ? '#ffffff'
+                                                            : isReview ? '#fde68a' : '#86efac';
+                                                        return (
+                                                            <span
+                                                                key={roll}
+                                                                title={mark?.score != null
+                                                                    ? `score ${mark.score.toFixed(2)} — ${mark.state}`
+                                                                    : undefined}
+                                                                style={{
+                                                                    fontFamily: theme.fontMono, fontSize: 11, fontWeight: 700,
+                                                                    padding: '3px 7px', borderRadius: 4,
+                                                                    color: fg, background: bg,
+                                                                }}
+                                                            >
+                                                                {roll}{isReview && mark?.score != null ? ` ${mark.score.toFixed(2)}` : ''}
+                                                            </span>
+                                                        );
+                                                    })}
+                                                </div>
+                                                {modalFrame.reviewRolls && (
+                                                    <div style={{ fontSize: 10, lineHeight: 1.5, color: 'rgba(255,255,255,0.5)', marginTop: 8 }}>
+                                                        {(modalFrame.presentRolls || []).length} cleared the present
+                                                        threshold ({modalFrame.autoThreshold?.toFixed(2) ?? '?'}),
+                                                        {' '}{modalFrame.reviewRolls.length} matched only in the review band
+                                                        ({modalFrame.reviewThreshold?.toFixed(2) ?? '?'}–{modalFrame.autoThreshold?.toFixed(2) ?? '?'}).
+                                                        The report decides on the whole run&apos;s clusters, not on
+                                                        this one frame, so its counts can still differ from both.
+                                                    </div>
+                                                )}
+                                            </>
                                         ) : (
                                             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
                                                 No roll numbers were matched in this frame.
@@ -889,10 +958,39 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                         Class Details
                                     </div>
 
+                                    {/* This frame's OWN recorded context, not the
+                                        folder's: the checks of one period are
+                                        resolved separately, so an extra class or
+                                        a substitution can make one run a
+                                        different class from the next. Falls back
+                                        to the header's answer only when the frame
+                                        predates stored contexts. */}
                                     <div style={{ display: 'grid', gap: 10, marginBottom: 20 }}>
-                                        <StatBadge label="Subject" value={classInfo?.subject || '-'} tone="success" />
-                                        <StatBadge label="Faculty" value={classInfo?.faculty || '-'} tone="warning" />
-                                        <StatBadge label="Batch" value={classInfo?.batch || '-'} tone="danger" />
+                                        <StatBadge label="Subject" value={(modalFrame.classContext || classInfo)?.subject || '-'} tone="success" />
+                                        <StatBadge label="Faculty" value={(modalFrame.classContext || classInfo)?.faculty || '-'} tone="warning" />
+                                        <StatBadge label="Batch" value={(modalFrame.classContext || classInfo)?.batch || '-'} tone="danger" />
+                                        {(modalFrame.classContext || classInfo)?.sem && (
+                                            <StatBadge label="Sem" value={(modalFrame.classContext || classInfo).sem} />
+                                        )}
+                                        {(modalFrame.classContext || classInfo)?.dept && (
+                                            <StatBadge label="Dept" value={(modalFrame.classContext || classInfo).dept} />
+                                        )}
+                                        {modalFrame.classContext?.altered && (
+                                            <StatBadge
+                                                label="Altered"
+                                                value={`was ${modalFrame.classContext.originalSubject || '?'}${
+                                                    modalFrame.classContext.originalFaculty
+                                                        ? ` / ${modalFrame.classContext.originalFaculty}` : ''}`}
+                                                tone="warning"
+                                            />
+                                        )}
+                                        <StatBadge
+                                            label="Source"
+                                            value={modalFrame.classContext
+                                                ? 'recorded at capture'
+                                                : 'live timetable — not recorded for this frame'}
+                                            tone={modalFrame.classContext ? 'success' : 'danger'}
+                                        />
                                     </div>
 
                                     {/* Which run of this period the open frame

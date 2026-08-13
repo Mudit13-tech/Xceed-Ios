@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { theme, styles, cssReset } from './config';
+import EnrollmentWarning from './EnrollmentWarning';
 import getEnvironment from '../getenvironment';
 
 const apiUrl = getEnvironment();
@@ -349,6 +350,10 @@ function RoomCard({ r, onClickReport, pastPeriod }) {
               {noCam ? 'No camera registered — run may fail' : 'Camera offline — run may fail'}
             </div>
           )}
+
+          {/* Ran, but against a fallback gallery — the result is real but
+              needs a human before it is trusted. */}
+          <EnrollmentWarning enrollment={r.enrollment} />
 
           {/* in-progress is tested before pending: during the first capture no
               report row exists yet, so status is still 'pending' and testing it
