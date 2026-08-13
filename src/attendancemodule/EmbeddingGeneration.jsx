@@ -5,6 +5,12 @@ import { useDepartments } from './useDepartments';
 import getEnvironment from '../getenvironment';
 import * as XLSX from 'xlsx';
 import ERPSync from './ERPSync';
+import {
+    buildMissingGroundTruthCsv,
+    buildSemesterEmbeddingCsv,
+    csvFilenamePart,
+    downloadCsv,
+} from './embeddingCsvExport';
 import { AmsSubtab } from './SubtabNewTabButton';
 import { readSubtabFromSearch } from './subtabNavigation';
 
@@ -897,6 +903,24 @@ function ViewTab({ departments, deptLoading, deptError, onUpdate, fixedDepartmen
         });
     };
 
+    const downloadSemesterCsv = (sem, files) => {
+        const deptPart = csvFilenamePart(dept, 'department');
+        const semPart = csvFilenamePart(sem, 'semester');
+        downloadCsv(
+            buildSemesterEmbeddingCsv(files),
+            `${deptPart}_semester_${semPart}_embedding_status.csv`,
+        );
+    };
+
+    const downloadMissingGroundTruthCsv = (sem, files) => {
+        const deptPart = csvFilenamePart(dept, 'department');
+        const semPart = csvFilenamePart(sem, 'semester');
+        downloadCsv(
+            buildMissingGroundTruthCsv(files),
+            `${deptPart}_semester_${semPart}_missing_ground_truth.csv`,
+        );
+    };
+
     const handleDelete = async (file) => {
         // Keyed on relPath throughout — filenames repeat across sessions and
         // across ERP batch folders, so filtering by one would drop sibling rows.
@@ -1064,6 +1088,7 @@ function ViewTab({ departments, deptLoading, deptError, onUpdate, fixedDepartmen
                                             {/* Semester header */}
                                             <div style={{
                                                 display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10,
+                                                flexWrap: 'wrap',
                                             }}>
                                                 <span style={{
                                                     fontSize: '11px', fontWeight: 700, color: theme.accent,
@@ -1075,6 +1100,22 @@ function ViewTab({ departments, deptLoading, deptError, onUpdate, fixedDepartmen
                                                 </span>
                                                 <div style={{ flex: 1, height: 1, background: theme.border }} />
                                                 <span style={{ fontSize: '11px', color: theme.textMuted }}>{grouped[sem].length} subject{grouped[sem].length !== 1 ? 's' : ''}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => downloadSemesterCsv(sem, grouped[sem])}
+                                                    title={`Download the complete Semester ${sem} embedding status as CSV`}
+                                                    style={{ ...styles.btnGhost, padding: '6px 10px', fontSize: '11px', whiteSpace: 'nowrap' }}
+                                                >
+                                                    ↓ Complete CSV
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => downloadMissingGroundTruthCsv(sem, grouped[sem])}
+                                                    title={`Download unique missing-ground-truth rolls for Semester ${sem}`}
+                                                    style={{ ...styles.btnGhost, padding: '6px 10px', fontSize: '11px', whiteSpace: 'nowrap' }}
+                                                >
+                                                    ↓ Missing GT CSV
+                                                </button>
                                             </div>
 
                                             {/* Files for this semester */}
@@ -1125,6 +1166,31 @@ function ViewTab({ departments, deptLoading, deptError, onUpdate, fixedDepartmen
                                                                     <div style={{ fontSize: '12px', fontWeight: 700, color: theme.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={file.displayName || file.filename}>
                                                                         {file.displayName || <span style={{ color: theme.textMuted, fontStyle: 'italic' }}>Unnamed</span>}
                                                                     </div>
+                                                                    {/* A run for this subject no longer skips when its embeddings
+                                                                        are unusable — it falls back to a wider gallery and flags the
+                                                                        report. Saying so here is the difference between "this file is
+                                                                        incomplete" and "attendance will be wrong until it is fixed". */}
+                                                                    {(health === 'bad' || rosterBroken) && (
+                                                                        <div
+                                                                            title={
+                                                                                health === 'bad'
+                                                                                    ? 'No roll number in this file has a ground-truth embedding — attendance runs will fall back to a wider gallery and the report will be flagged'
+                                                                                    : rosterUnknown
+                                                                                        ? 'No Subject record is linked, so attendance cannot scope the run to this class'
+                                                                                        : 'No roster on this subject — attendance will match against the whole batch'
+                                                                            }
+                                                                            style={{
+                                                                                marginTop: 4, alignSelf: 'flex-start',
+                                                                                fontSize: 9, fontWeight: 800, letterSpacing: '.05em',
+                                                                                textTransform: 'uppercase', color: theme.warning,
+                                                                                background: theme.warningDim,
+                                                                                border: `1px solid ${theme.warning}44`,
+                                                                                padding: '2px 6px', borderRadius: 5, whiteSpace: 'nowrap',
+                                                                            }}
+                                                                        >
+                                                                            Runs degraded
+                                                                        </div>
+                                                                    )}
                                                                 </div>
 
                                                                 {/* Stat: Embedded */}

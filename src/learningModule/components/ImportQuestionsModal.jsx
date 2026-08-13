@@ -172,9 +172,9 @@ export default function ImportQuestionsModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="xl" scrollBehavior="inside">
       <ModalOverlay />
-      <ModalContent>
+      <ModalContent mt="100px" mb="50px" pt={6} pb={4}>
         <ModalHeader>Import {partLabel} from another subject</ModalHeader>
-        <ModalCloseButton />
+        <ModalCloseButton top={8} />
         <ModalBody>
           <ErrorState error={error} onRetry={loadParts} />
 

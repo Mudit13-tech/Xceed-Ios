@@ -71,8 +71,16 @@ const GT_LABELS = {
 
 const ATTEND_OPTIONS = {
     threshold:              [0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60],
-    auto_present_threshold: [0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75],
-    review_threshold:       [0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50],
+    // Down to 0.20: a run whose clusters score in the 0.2–0.4 band produced
+    // students who were plainly visible in every frame and still came back
+    // Absent, and the old floor of 0.40 gave no way to accept them.
+    auto_present_threshold: [0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75],
+    // Has to reach below auto-present or the pair is incoherent, hence 0.10.
+    // Note what the low end costs: impostor pairs between two DIFFERENT people
+    // score ~0.15 on average in this embedding space, so at 0.10 essentially
+    // every frame will put a roll number on a face that does not belong to it,
+    // and at 0.15 about half will. 0.20 is the lowest value measured clean.
+    review_threshold:       [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50],
     min_detections:         [1, 2, 3, 4, 5, 7, 10],
     auto_enroll_threshold:  [0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95],
     alert_confidence:       [0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70],
@@ -81,8 +89,8 @@ const ATTEND_OPTIONS = {
 
 const ATTEND_LABELS = {
     threshold:              { label: 'Recognition threshold',    unit: '',       hint: 'Minimum cosine similarity to match a detected face to a known student.' },
-    auto_present_threshold: { label: 'Auto-present threshold',   unit: '',       hint: 'Confidence at or above this marks a student as Present automatically.' },
-    review_threshold:       { label: 'Review threshold',         unit: '',       hint: 'Scores between this and auto-present are flagged for manual review (R).' },
+    auto_present_threshold: { label: 'Auto-present threshold',   unit: '',       hint: 'Confidence at or above this marks a student as Present automatically. Scored on the cluster mean of a student\'s detections across the whole run, which sits lower than any single frame\'s score.' },
+    review_threshold:       { label: 'Review threshold',         unit: '',       hint: 'Scores between this and auto-present are flagged for manual review (R). Also the floor for putting a roll number on a face in the saved frames — below 0.20 the frames start labelling faces wrongly.' },
     min_detections:         { label: 'Min detections',           unit: 'frames', hint: 'Student must appear in at least this many frames to be considered detected.' },
     auto_enroll_threshold:  { label: 'Auto-enroll threshold',    unit: '',       hint: 'Confidence required to auto-add a new face to the ground-truth dataset.' },
     alert_confidence:       { label: 'Low-confidence alert',     unit: '',       hint: 'Students with average confidence below this trigger a low-confidence notification.' },
@@ -1165,6 +1173,29 @@ export default function MLFineTuning() {
                                 ⚠ Review threshold must be lower than auto-present threshold.
                             </div>
                         )}
+
+                        {/* Warned, not blocked: the low end is legitimately useful when
+                            students are being missed, and the cost is specific enough to
+                            state rather than hide behind a disabled option. */}
+                        {(attendThresh.review_threshold ?? ATTEND_DEFAULTS.review_threshold) < 0.20 && (
+                            <div style={{ marginTop: 12, fontSize: 12, color: theme.warning }}>
+                                ⚠ Below 0.20 the matcher starts putting roll numbers on the wrong
+                                faces. Two different people score about 0.15 against each other in
+                                this embedding space, so at 0.15 roughly half of saved frames will
+                                carry at least one wrong label, and at 0.10 nearly all of them will —
+                                including students who were never in the room. Frames stop being
+                                usable as evidence at that point.
+                            </div>
+                        )}
+
+                        {(attendThresh.auto_present_threshold ?? ATTEND_DEFAULTS.auto_present_threshold) < 0.40 && (
+                            <div style={{ marginTop: 12, fontSize: 12, color: theme.warning }}>
+                                ⚠ Auto-present below 0.40 marks students Present on weak evidence.
+                                Use it when people who are visibly in the room are coming back Absent —
+                                but check the run&apos;s discarded-noise figure first: if their detections
+                                are being dropped before matching, no threshold here will recover them.
+                            </div>
+                        )}
                     </>
                 )}
             </div>
@@ -1456,7 +1487,7 @@ export default function MLFineTuning() {
                             ))}
                         </select>
                         <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4 }}>
-                            Minimum "live" probability required. Only used if an ONNX model file is present.
+                            Minimum &quot;live&quot; probability required. Only used if an ONNX model file is present.
                         </div>
                     </div>
 

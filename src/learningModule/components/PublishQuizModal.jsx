@@ -196,9 +196,9 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="lg" scrollBehavior="inside">
       <ModalOverlay />
-      <ModalContent mt="80px" pt={4}>
+      <ModalContent mt="100px" mb="50px" pt={6} pb={4}>
         <ModalHeader>{link ? 'Published' : `Publish "${quiz.title}"`}</ModalHeader>
-        <ModalCloseButton top={6} />
+        <ModalCloseButton top={8} />
         <ModalBody>
           {link ? (
             <>

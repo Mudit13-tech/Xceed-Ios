@@ -57,13 +57,12 @@ export function DeptAttendanceReport() {
     return <AttendanceReport fixedDepartment={deptToUse} />;
 }
 
+// Unscoped for every role, same as the iams-admin view: the page lists the
+// rooms that have a camera registered, with no department filter applied.
 export function DeptClassVerification() {
-    const { department, batchDepartment, fullAccess, loading } = useOutletContext();
+    const { loading } = useOutletContext();
     if (loading) return null;
-    if (fullAccess) return <FrameVerification />;
-    const deptToUse = department || batchDepartment;
-    if (!deptToUse) return null;
-    return <FrameVerification fixedDepartment={deptToUse} />;
+    return <FrameVerification />;
 }
 
 export function DeptSubjectEmbeddings() {

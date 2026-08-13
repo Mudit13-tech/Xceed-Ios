@@ -13,6 +13,7 @@ import ExportReportsTab from './ExportReportsTab';
 import CumulativeAttendanceTab from './CumulativeAttendanceTab';
 import ProxyModal from './ProxyModal';
 import StudentGroundTruthModal from './StudentGroundTruthModal';
+import EnrollmentWarning from './EnrollmentWarning';
 import { AmsSubtab } from './SubtabNewTabButton';
 import { readSubtabFromSearch } from './subtabNavigation';
 
@@ -135,6 +136,9 @@ export default function AttendanceReport() {
   // ── Run state ─────────────────────────────────────────────────
   const [processing, setProcessing] = useState(false);
   const [streamLog, setStreamLog] = useState([]);
+  // resolveEnrollment's diagnostic block for the run in flight — see the
+  // 'enrollment' SSE event below and EnrollmentWarning.
+  const [enrollment, setEnrollment] = useState(null);
   const [liveStats, setLiveStats] = useState(null);
   const [liveFrame, setLiveFrame] = useState(null);
   const [activeCam, setActiveCam] = useState(null); // 1 | 2 | null
@@ -594,6 +598,13 @@ export default function AttendanceReport() {
             }
             if (ev.type === 'stage') {
               setStreamLog((prev) => [...prev, ev.message]);
+            }
+            // Emitted by the server before Python's own stream: which gallery
+            // this run is matching against. A run is never skipped for missing
+            // embeddings any more, so this is the only warning that the result
+            // came from a fallback rather than the class's own data.
+            if (ev.type === 'enrollment') {
+              setEnrollment(ev);
             }
 
             if (ev.type === 'frame') {
@@ -1339,6 +1350,15 @@ export default function AttendanceReport() {
                 </button>
               </div>
             </div>
+
+            {/* Which gallery this run matched against. Shown above the log
+                because it decides how to read everything below it: with a
+                fallback gallery, "absent" may mean "never enrolled". */}
+            {enrollment && (
+              <div style={{ marginTop: 14 }}>
+                <EnrollmentWarning enrollment={enrollment} />
+              </div>
+            )}
 
             {/* Run log — kept visible after the run ends, since a run-room
                 call reports its preflight trail only in its final response */}
