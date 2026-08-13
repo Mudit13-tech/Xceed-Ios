@@ -26,7 +26,6 @@ import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import { useRive, Layout, Fit, Alignment } from '@rive-app/react-canvas';
 import { courseworkLink, courseworkMeta, formatDate, formatDateTime } from '../format';
-import TimetableWidget from '../components/TimetableWidget';
 const pulseRing = keyframes`
   0% { transform: scale(0.95); opacity: 0.8; }
   50% { transform: scale(1.05); opacity: 1; }
@@ -482,12 +481,6 @@ export default function Calendar() {
                 );
               })}
             </Grid>
-          </Box>
-
-          <Box mb={5}>
-            <SectionCard title="Weekly Timetable">
-              <TimetableWidget me={me} />
-            </SectionCard>
           </Box>
 
           <SectionCard title="Coursework this month">

@@ -21,7 +21,9 @@ import { courseworkMeta } from '../format';
 function WorkRow({ entry, showStudent }) {
   const meta = courseworkMeta(entry);
   const link = entry.class
-    ? `/learning/class/${entry.class._id}/work/${entry.courseworkId}`
+    ? entry.notebookId
+      ? `/learning/class/${entry.class._id}/notebook/${entry.notebookId}`
+      : `/learning/class/${entry.class._id}/work/${entry.courseworkId}`
     : '/learning';
 
   return (

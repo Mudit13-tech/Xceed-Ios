@@ -4,6 +4,8 @@ import getEnvironment from '../getenvironment';
 import { theme, styles, cssReset, DEGREES } from './config';
 import { useDepartments } from './useDepartments';
 import { useBatchYears } from './useBatchYears';
+import SubtabNewTabButton from './SubtabNewTabButton';
+import { readSubtabFromSearch } from './subtabNavigation';
 
 const _apiUrl    = getEnvironment();
 const CAM_API    = `${_apiUrl}/attendancemodule/cameras`;
@@ -99,8 +101,15 @@ useEffect(() => {
     localStorage.setItem('recordingHistory', JSON.stringify(history));
 }, [history]);
 
-  const [activeTab, setActiveTab] = useState('Recordings');
-  const [mainTab,   setMainTab]   = useState('Recording');
+  const [activeTab, setActiveTab] = useState(() => readSubtabFromSearch(
+    ['Recordings', 'History'],
+    'Recordings',
+    'recordTab',
+  ));
+  const [mainTab, setMainTab] = useState(() => readSubtabFromSearch(
+    ['Recording', 'Scheduler'],
+    'Recording',
+  ));
   const [scheduleDate,      setScheduleDate]      = useState('');
 const [schedules,         setSchedules]         = useState([]);
 const [scheduleLoading,   setScheduleLoading]   = useState(false);
@@ -536,19 +545,31 @@ async function handleSchedulerSubmit() {
             {/* ── Top-level tabs ── */}
             <div style={{ display: 'flex', borderBottom: `2px solid ${T.border}`, marginBottom: 24 }}>
                 {[{ id: 'Recording', icon: '⏺' }, { id: 'Scheduler', icon: '🗓' }].map(({ id, icon }) => (
-                    <button
-                        key={id}
-                        onClick={() => setMainTab(id)}
-                        style={{
-                            padding: '12px 32px', fontSize: 14, fontWeight: 700,
-                            background: 'transparent', border: 'none', cursor: 'pointer',
-                            color: mainTab === id ? T.accent : T.textMuted,
-                            borderBottom: mainTab === id ? `2px solid ${T.accent}` : '2px solid transparent',
-                            marginBottom: -2, display: 'flex', alignItems: 'center', gap: 7,
-                        }}
-                    >
-                        <span>{icon}</span> {id}
-                    </button>
+                    <span key={id} style={{ display: 'inline-flex', alignItems: 'stretch', flexShrink: 0 }}>
+                        <button
+                            type="button"
+                            onClick={() => setMainTab(id)}
+                            style={{
+                                padding: '12px 20px 12px 32px', fontSize: 14, fontWeight: 700,
+                                background: 'transparent', border: 'none', cursor: 'pointer',
+                                color: mainTab === id ? T.accent : T.textMuted,
+                                borderBottom: mainTab === id ? `2px solid ${T.accent}` : '2px solid transparent',
+                                marginBottom: -2, display: 'flex', alignItems: 'center', gap: 7,
+                            }}
+                        >
+                            <span>{icon}</span> {id}
+                        </button>
+                        <SubtabNewTabButton
+                            value={id}
+                            label={id}
+                            active={mainTab === id}
+                            style={{
+                                borderRadius: 0,
+                                borderBottom: mainTab === id ? `2px solid ${T.accent}` : '2px solid transparent',
+                                marginBottom: -2,
+                            }}
+                        />
+                    </span>
                 ))}
             </div>
 
@@ -712,19 +733,32 @@ async function handleSchedulerSubmit() {
     {/* Tab headers */}
     <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: `1px solid ${T.border}` }}>
         {['Recordings', 'History'].map(tab => (
-            <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                style={{
-                    padding: '10px 20px', fontSize: 14, fontWeight: 600,
-                    background: 'transparent', border: 'none', cursor: 'pointer',
-                    color: activeTab === tab ? T.accent : T.textMuted,
-                    borderBottom: activeTab === tab ? `2px solid ${T.accent}` : '2px solid transparent',
-                    marginBottom: -1,
-                }}
-            >
-                {tab}
-            </button>
+            <span key={tab} style={{ display: 'inline-flex', alignItems: 'stretch', flexShrink: 0 }}>
+                <button
+                    type="button"
+                    onClick={() => setActiveTab(tab)}
+                    style={{
+                        padding: '10px 12px 10px 20px', fontSize: 14, fontWeight: 600,
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        color: activeTab === tab ? T.accent : T.textMuted,
+                        borderBottom: activeTab === tab ? `2px solid ${T.accent}` : '2px solid transparent',
+                        marginBottom: -1,
+                    }}
+                >
+                    {tab}
+                </button>
+                <SubtabNewTabButton
+                    value={tab}
+                    label={tab}
+                    queryKey="recordTab"
+                    active={activeTab === tab}
+                    style={{
+                        borderRadius: 0,
+                        borderBottom: activeTab === tab ? `2px solid ${T.accent}` : '2px solid transparent',
+                        marginBottom: -1,
+                    }}
+                />
+            </span>
         ))}
     </div>
 

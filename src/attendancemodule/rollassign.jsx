@@ -5,6 +5,8 @@ import getEnvironment from '../getenvironment';
 import { DEGREES, theme, styles, cssReset } from './config';
 import { useDepartments } from './useDepartments';
 import { useBatchYears } from './useBatchYears';
+import { AmsSubtab } from './SubtabNewTabButton';
+import { readSubtabFromSearch } from './subtabNavigation';
 
 const apiUrl    = getEnvironment();
 const RA_BASE   = `${apiUrl}/attendancemodule/roll-assign`;
@@ -163,7 +165,12 @@ export default function RollAssign({ fixedDepartment = '' }) {
     const { batchYears, batchYearsLoading } = useBatchYears();
 
     const [searchParams] = useSearchParams();
-    const [activeTab,      setActiveTab]      = useState(()=> searchParams.get('tab')|| 'assign');
+    const [activeTab,      setActiveTab]      = useState(() => readSubtabFromSearch(
+        ['assign', 'summary', 'images'],
+        'assign',
+        'tab',
+        searchParams.toString(),
+    ));
     const [summary,        setSummary]        = useState([]);
     const [summaryLoading, setSummaryLoading] = useState(false);
     const [summaryError,   setSummaryError]   = useState(null);
@@ -932,9 +939,9 @@ export default function RollAssign({ fixedDepartment = '' }) {
             </div>
 
             <div className="ams-tabs">
-                <button className={`ams-tab${activeTab === 'assign' ? ' active' : ''}`} onClick={() => setActiveTab('assign')}>Assign</button>
-                <button className={`ams-tab${activeTab === 'summary' ? ' active' : ''}`} onClick={() => setActiveTab('summary')}>Summary</button>
-                <button className={`ams-tab${activeTab === 'images' ? ' active' : ''}`} onClick={() => setActiveTab('images')}>Image Counts</button>
+                <AmsSubtab value="assign" label="Assign" active={activeTab === 'assign'} onSelect={setActiveTab} />
+                <AmsSubtab value="summary" label="Summary" active={activeTab === 'summary'} onSelect={setActiveTab} />
+                <AmsSubtab value="images" label="Image Counts" active={activeTab === 'images'} onSelect={setActiveTab} />
             </div>
 
             {activeTab === 'assign' && (<>
@@ -2598,7 +2605,7 @@ export function GTModal({ rollNo, batchName, onClose, showToast, onMoved, embedd
             if (time > maxAddedAt) maxAddedAt = time;
         }
     });
-    
+
     let hasOlderPhotos = false;
     allPhotos.forEach(p => {
         if (p.addedAt && maxAddedAt - new Date(p.addedAt).getTime() >= 30 * 1000) {
@@ -2704,28 +2711,42 @@ export function GTModal({ rollNo, batchName, onClose, showToast, onMoved, embedd
                 </div>
 
                 {/* Body */}
-                <div className="roll-modal-body" style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-                    {loading && <div style={{ textAlign: 'center', padding: '40px 0', color: theme.textMuted }}>Loading…</div>}
+                <div className="roll-modal-body" style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'grid', gridTemplateColumns: '1fr 220px', gap: 20 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        {loading && <div style={{ textAlign: 'center', padding: '40px 0', color: theme.textMuted }}>Loading…</div>}
 
-                    {!loading && totalCount === 0 && (
-                        <div style={{ textAlign: 'center', padding: '40px 0', color: theme.textMuted }}>No photos found</div>
-                    )}
+                        {!loading && totalCount === 0 && (
+                            <div style={{ textAlign: 'center', padding: '40px 0', color: theme.textMuted }}>No photos found</div>
+                        )}
 
-                    {!loading && student && (
-                        <>
-                            <SectionRow label="Embedding" color={theme.success} bg={theme.successDim}
-                                photos={student.embeddingFiles || []} type="embedding"
-                                empty="No embedding images — move some from Backup" />
-                            <SectionRow label="Backup" color={theme.warning} bg={theme.warningDim}
-                                photos={student.backupFiles || []} type="backup"
-                                empty="No backup images" onDeleteAll={deleteAllBackups} />
-                            {othCount > 0 && (
-                                <SectionRow label="Other" color={theme.textMuted} bg={theme.border}
-                                    photos={student.untrackedFiles || []} type="other"
-                                    empty="" />
-                            )}
-                        </>
-                    )}
+                        {!loading && student && (
+                            <>
+                                <SectionRow label="Embedding" color={theme.success} bg={theme.successDim}
+                                    photos={student.embeddingFiles || []} type="embedding"
+                                    empty="No embedding images — move some from Backup" />
+                                <SectionRow label="Backup" color={theme.warning} bg={theme.warningDim}
+                                    photos={student.backupFiles || []} type="backup"
+                                    empty="No backup images" onDeleteAll={deleteAllBackups} />
+                                {othCount > 0 && (
+                                    <SectionRow label="Other" color={theme.textMuted} bg={theme.border}
+                                        photos={student.untrackedFiles || []} type="other"
+                                        empty="" />
+                                )}
+                            </>
+                        )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: theme.textMuted, marginBottom: 10, paddingBottom: 8, borderBottom: `1px solid ${theme.border}`, textTransform: 'uppercase', letterSpacing: '0.05em' }}>ERP Reference</div>
+                        <div style={{ background: theme.bg, borderRadius: 8, border: `1px solid ${theme.border}`, overflow: 'hidden' }}>
+                            <img src={`${RA_BASE}/erp-photo-by-roll/${encodeURIComponent(batchName)}/${encodeURIComponent(rollNo)}`}
+                                 style={{ width: '100%', display: 'block', objectFit: 'cover' }}
+                                 onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} alt="ERP" />
+                            <div style={{ display: 'none', padding: '40px 20px', textAlign: 'center', color: theme.textMuted, fontSize: '12px' }}>
+                                <div style={{ fontSize: '24px', marginBottom: 8, opacity: 0.3 }}>📷</div>
+                                No ERP photo found
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                {/* Footer */}

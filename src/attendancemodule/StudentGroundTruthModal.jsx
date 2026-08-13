@@ -37,6 +37,12 @@ const MODAL_CSS = `
     @media (max-width: 720px) {
         .gt-modal-shell { width: 100% !important; padding: 16px !important; }
         .gt-modal-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+        .gt-modal-body { grid-template-columns: 1fr !important; }
+    }
+    .gt-modal-body {
+        display: grid;
+        grid-template-columns: 1fr 220px;
+        gap: 20px;
     }
 `;
 
@@ -412,39 +418,55 @@ export default function StudentGroundTruthModal({ batch, rollNo, student, onClos
                         ))}
                     </div>
 
-                    {error ? (
-                        <div style={{
-                            padding: '10px 14px', borderRadius: 8, marginBottom: 16,
-                            background: theme.dangerDim, color: theme.danger, fontSize: 12,
-                        }}>
-                            {error}
-                        </div>
-                    ) : null}
+                    <div className="gt-modal-body">
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            {error ? (
+                                <div style={{
+                                    padding: '10px 14px', borderRadius: 8, marginBottom: 16,
+                                    background: theme.dangerDim, color: theme.danger, fontSize: 12,
+                                }}>
+                                    {error}
+                                </div>
+                            ) : null}
 
-                    {notice ? (
-                        <div style={{
-                            padding: '10px 14px', borderRadius: 8, marginBottom: 16,
-                            background: theme.accentDim, color: theme.accent, fontSize: 12,
-                        }}>
-                            {notice}
-                        </div>
-                    ) : null}
+                            {notice ? (
+                                <div style={{
+                                    padding: '10px 14px', borderRadius: 8, marginBottom: 16,
+                                    background: theme.accentDim, color: theme.accent, fontSize: 12,
+                                }}>
+                                    {notice}
+                                </div>
+                            ) : null}
 
-                    {loading ? (
-                        <div style={{ padding: '28px 0', textAlign: 'center', color: theme.textMuted, fontSize: 13 }}>
-                            Loading ground truth photos…
+                            {loading ? (
+                                <div style={{ padding: '28px 0', textAlign: 'center', color: theme.textMuted, fontSize: 13 }}>
+                                    Loading ground truth photos…
+                                </div>
+                            ) : photos.length === 0 && !error ? (
+                                <div style={{ padding: '28px 0', textAlign: 'center', color: theme.textMuted, fontSize: 13 }}>
+                                    No ground truth photos on file for this student.
+                                </div>
+                            ) : (
+                                <>
+                                    <Section group="embedding" />
+                                    <Section group="backup" />
+                                    <Section group="other" />
+                                </>
+                            )}
                         </div>
-                    ) : photos.length === 0 && !error ? (
-                        <div style={{ padding: '28px 0', textAlign: 'center', color: theme.textMuted, fontSize: 13 }}>
-                            No ground truth photos on file for this student.
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 700, color: theme.textMuted, marginBottom: 10, paddingBottom: 8, borderBottom: `1px solid ${theme.border}`, textTransform: 'uppercase', letterSpacing: '0.05em' }}>ERP Reference</div>
+                            <div style={{ background: theme.surfaceAlt, borderRadius: 8, border: `1px solid ${theme.border}`, overflow: 'hidden' }}>
+                                <img src={`${apiUrl}/attendancemodule/roll-assign/erp-photo-by-roll/${encodeURIComponent(batch)}/${encodeURIComponent(rollNo)}`} 
+                                     style={{ width: '100%', display: 'block', objectFit: 'cover' }}
+                                     onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} alt="ERP" />
+                                <div style={{ display: 'none', padding: '40px 20px', textAlign: 'center', color: theme.textMuted, fontSize: '12px' }}>
+                                    <div style={{ fontSize: '24px', marginBottom: 8, opacity: 0.3 }}>📷</div>
+                                    No ERP photo found
+                                </div>
+                            </div>
                         </div>
-                    ) : (
-                        <>
-                            <Section group="embedding" />
-                            <Section group="backup" />
-                            <Section group="other" />
-                        </>
-                    )}
+                    </div>
 
                     {!loading && photos.length > 0 ? (
                         <div style={{

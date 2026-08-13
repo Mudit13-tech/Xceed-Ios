@@ -5,6 +5,8 @@ import { useDepartments } from './useDepartments';
 import getEnvironment from '../getenvironment';
 import * as XLSX from 'xlsx';
 import ERPSync from './ERPSync';
+import { AmsSubtab } from './SubtabNewTabButton';
+import { readSubtabFromSearch } from './subtabNavigation';
 
 const apiUrl   = getEnvironment();
 const EMB_BASE = `${apiUrl}/attendancemodule/embeddings`;
@@ -1384,7 +1386,7 @@ export default function EmbeddingGeneration({ fixedDepartment = '' }) {
     const { departments, deptLoading, deptError } = useDepartments();
     // Tab 3 = ERP Embedding Generation — the default entry point; manual
     // paste/xlsx generation (tab 1) is the fallback path.
-    const [activeTab, setActiveTab] = useState(3);
+    const [activeTab, setActiveTab] = useState(() => readSubtabFromSearch([3, 1, 2], 3));
     const [prefill,   setPrefill]   = useState(null);
 
     const handleUpdate = useCallback((data) => {
@@ -1409,9 +1411,9 @@ export default function EmbeddingGeneration({ fixedDepartment = '' }) {
             </div>
 
             <div className="ams-tabs">
-                <button className={`ams-tab${activeTab === 3 ? ' active' : ''}`} onClick={() => setActiveTab(3)}>ERP Embedding Generation</button>
-                <button className={`ams-tab${activeTab === 1 ? ' active' : ''}`} onClick={() => setActiveTab(1)}>Manual Generation</button>
-                <button className={`ams-tab${activeTab === 2 ? ' active' : ''}`} onClick={() => setActiveTab(2)}>View Embeddings</button>
+                <AmsSubtab value={3} label="ERP Embedding Generation" active={activeTab === 3} onSelect={setActiveTab} />
+                <AmsSubtab value={1} label="Manual Generation" active={activeTab === 1} onSelect={setActiveTab} />
+                <AmsSubtab value={2} label="View Embeddings" active={activeTab === 2} onSelect={setActiveTab} />
             </div>
 
             {activeTab === 1 && (

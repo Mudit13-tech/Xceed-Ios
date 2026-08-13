@@ -3,6 +3,8 @@ import { theme, cssReset } from './config';
 import getEnvironment from '../getenvironment';
 import DEV_CYCLE from './devCycleData';
 import ILeed from './BrandName';
+import SubtabNewTabButton from './SubtabNewTabButton';
+import { readSubtabFromSearch } from './subtabNavigation';
 
 const T = theme;
 
@@ -1030,7 +1032,10 @@ function TabDevCycle() {
 // ── main component ────────────────────────────────────────────────────────────
 
 export default function Manual({ standalone = false }) {
-    const [tab, setTab] = useState('overview');
+    const [tab, setTab] = useState(() => readSubtabFromSearch(
+        TABS.map(({ id }) => id),
+        'overview',
+    ));
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [showDevs, setShowDevs] = useState(false);
     const [showDevCycle, setShowDevCycle] = useState(false);
@@ -1182,6 +1187,21 @@ export default function Manual({ standalone = false }) {
                                     }}>
                                         {t.label}
                                     </div>
+                                    <SubtabNewTabButton
+                                        value={t.id}
+                                        label={t.label}
+                                        active={active}
+                                        style={{
+                                            width: 22,
+                                            minWidth: 22,
+                                            height: 22,
+                                            marginTop: 5,
+                                            border: `1px solid ${active ? `${T.accent}44` : T.border}`,
+                                            borderRadius: '50%',
+                                            background: active ? T.accentDim : T.surface,
+                                            fontSize: 14,
+                                        }}
+                                    />
                                 </div>
                                 {i < TABS.length - 1 && (
                                     <div style={{
