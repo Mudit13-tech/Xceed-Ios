@@ -45,21 +45,31 @@ export async function setupOtaUpdater() {
     // Get the native version from Google Play / APK
     const info = await CapacitorApp.getInfo();
     const nativeVersion = info.version; // e.g. "1.0.0"
-
-    let storedOtaVersion = localStorage.getItem('app_ota_version');
-
-    // If the Google Play Native Version is newer than the old OTA update, 
-    // it means they just updated via the Play Store. Reset our tracker.
-    if (storedOtaVersion && compareVersions(nativeVersion, storedOtaVersion) > 0) {
-      console.log(`[OTA] Google Play App (${nativeVersion}) is newer than old OTA (${storedOtaVersion}).`);
-      storedOtaVersion = nativeVersion;
-      localStorage.setItem('app_ota_version', nativeVersion);
+    
+    // Get currently running bundle version from Capgo
+    let activeVersion = nativeVersion;
+    try {
+      const currentBundle = await CapacitorUpdater.current();
+      if (currentBundle && currentBundle.bundle && currentBundle.bundle.version) {
+        activeVersion = currentBundle.bundle.version;
+      }
+    } catch (e) {
+      console.log('[OTA] No active bundle found or error getting current bundle, using native version', e);
     }
 
-    const currentVersion = storedOtaVersion || nativeVersion;
+    console.log(`[OTA] Native Version: ${nativeVersion}, Active Bundle Version: ${activeVersion}, Latest Available: ${latestVersion}`);
 
-    // Only download if the server version is strictly GREATER than our current version
-    if (compareVersions(latestVersion, currentVersion) > 0) {
+
+
+    // If the native app version is strictly greater than the latest OTA available,
+    // (e.g. they just downloaded a major update from Play Store), we don't need OTA.
+    if (compareVersions(nativeVersion, latestVersion) >= 0) {
+      console.log(`[OTA] Native app (${nativeVersion}) is up to date or newer than OTA (${latestVersion}).`);
+      return;
+    }
+
+    // Only download if the server version is strictly GREATER than our currently running version
+    if (compareVersions(latestVersion, activeVersion) > 0) {
       console.log(`[OTA] Found update ${latestVersion}! Downloading from: ${downloadUrl}`);
       
       // Notify updater to start downloading
@@ -68,22 +78,17 @@ export async function setupOtaUpdater() {
         version: latestVersion,
       });
 
-      console.log(`[OTA] Download complete! Update will apply when app is minimized.`);
+      console.log(`[OTA] Download complete! Applying update immediately...`);
       
-      // Store the new version in localStorage
-      localStorage.setItem('app_ota_version', latestVersion);
+      alert(`🎉 OTA Update ${latestVersion} Downloaded! Applying instantly...`);
       
-      // Wait for the user to minimize or close the app before restarting it
-      CapacitorApp.addListener('appStateChange', async ({ isActive }) => {
-        if (!isActive) {
-          console.log('[OTA] App is in background. Applying update now...');
-          await CapacitorUpdater.set({ id: versionData.id });
-        }
-      });
+      // Apply immediately so the app reloads and user sees the change right away
+      await CapacitorUpdater.set({ id: versionData.id });
     } else {
-      console.log(`[OTA] App is up to date (Version ${currentVersion}).`);
+      console.log(`[OTA] App is up to date (Running Version ${activeVersion}).`);
     }
   } catch (error) {
+    alert('OTA CRASHED: ' + (error.message || String(error)));
     console.error('[OTA] Update check failed', error);
   }
 }
