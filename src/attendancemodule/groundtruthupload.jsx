@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import getEnvironment from '../getenvironment';
 import { theme, styles, cssReset, DEGREES } from './config';
 import { useDepartments } from './useDepartments';
+import { AmsSubtab } from './SubtabNewTabButton';
+import { readSubtabFromSearch } from './subtabNavigation';
 
 const apiUrl      = getEnvironment();
 const UPLOAD_BASE = `${apiUrl}/attendancemodule/ground-truth-upload`;
@@ -308,7 +310,10 @@ export default function GroundTruthUpload({ fixedDepartment = '' }) {
     const batchName = (degree && department && batchYear) ? `${degree}_${department}_${batchYear}` : '';
 
     // ── Active tab ────────────────────────────────────────────────────
-    const [activeTab, setActiveTab] = useState('summary');
+    const [activeTab, setActiveTab] = useState(() => readSubtabFromSearch(
+        ['summary', 'upload', 'manage'],
+        'summary',
+    ));
 
     // ── Upload tab state ──────────────────────────────────────────────
     const [zipFile,       setZipFile]       = useState(null);
@@ -745,9 +750,13 @@ export default function GroundTruthUpload({ fixedDepartment = '' }) {
                     { id: 'upload',  label: 'Upload' },
                     { id: 'manage',  label: 'Manage Photos' },
                 ].map(t => (
-                    <button key={t.id} className={`ams-tab${activeTab === t.id ? ' active' : ''}`} onClick={() => setActiveTab(t.id)}>
-                        {t.label}
-                    </button>
+                    <AmsSubtab
+                        key={t.id}
+                        value={t.id}
+                        label={t.label}
+                        active={activeTab === t.id}
+                        onSelect={setActiveTab}
+                    />
                 ))}
             </div>
 

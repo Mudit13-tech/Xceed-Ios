@@ -41,6 +41,7 @@ const NAV_ITEMS = [
   { to: '/learning', label: 'Classes', icon: '🏫', end: true },
   { to: '/learning/todo', label: 'To-do', icon: '✅' },
   { to: '/learning/calendar', label: 'Calendar', icon: '📅' },
+  { to: '/learning/timetable', label: 'Timetable', icon: '⏰' },
   { to: '/learning/notifications', label: 'Notifications', icon: '🔔' },
   // Points and badges are a student's record. Staff earn none — they set the
   // work rather than doing it, and the leaderboard leaves them off entirely —

@@ -9,6 +9,8 @@ import { theme, styles, cssReset, formatSlotLabel } from './config';
 import BackButton from './BackButton';
 import { usePeriods } from './usePeriods';
 import getEnvironment from '../getenvironment';
+import SubtabNewTabButton from './SubtabNewTabButton';
+import { readSubtabFromSearch } from './subtabNavigation';
 
 const apiUrl = getEnvironment();
 export const AC_API = `${apiUrl}/attendancemodule/acquisitioncontrol`;
@@ -1152,7 +1154,10 @@ export default function SchedulerPage() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [cameraRooms, setCameraRooms] = useState([]);
-  const [tab, setTab] = useState('settings');
+  const [tab, setTab] = useState(() => readSubtabFromSearch(
+    ['settings', 'periods', 'rooms'],
+    'settings',
+  ));
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -1336,24 +1341,36 @@ export default function SchedulerPage() {
           ['periods', 'Period Timings'],
           ['rooms', 'Rooms'],
         ].map(([id, label]) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            style={{
-              padding: '10px 18px',
-              background: 'transparent',
-              border: 'none',
-              flexShrink: 0,
-              borderBottom: `2px solid ${tab === id ? theme.accent : 'transparent'}`,
-              color: tab === id ? theme.accent : theme.textMuted,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-              marginBottom: -1,
-            }}
-          >
-            {label}
-          </button>
+          <span key={id} style={{ display: 'inline-flex', alignItems: 'stretch', flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => setTab(id)}
+              style={{
+                padding: '10px 10px 10px 18px',
+                background: 'transparent',
+                border: 'none',
+                flexShrink: 0,
+                borderBottom: `2px solid ${tab === id ? theme.accent : 'transparent'}`,
+                color: tab === id ? theme.accent : theme.textMuted,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                marginBottom: -1,
+              }}
+            >
+              {label}
+            </button>
+            <SubtabNewTabButton
+              value={id}
+              label={label}
+              active={tab === id}
+              style={{
+                borderRadius: 0,
+                borderBottom: `2px solid ${tab === id ? theme.accent : 'transparent'}`,
+                marginBottom: -1,
+              }}
+            />
+          </span>
         ))}
       </div>
 

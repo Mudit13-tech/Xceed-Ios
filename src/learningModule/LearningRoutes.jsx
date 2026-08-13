@@ -42,6 +42,7 @@ import TutorialPlayer from './pages/TutorialPlayer';
 import TutorialResults from './pages/TutorialResults';
 import Todo from './pages/Todo';
 import Calendar from './pages/Calendar';
+import Timetable from './pages/Timetable';
 import Notifications from './pages/Notifications';
 import Profile from './pages/Profile';
 import BugReports from './pages/BugReports';
@@ -68,6 +69,7 @@ export default function LearningRoutes() {
         <Route index element={<Dashboard />} />
         <Route path="todo" element={<Todo />} />
         <Route path="calendar" element={<Calendar />} />
+        <Route path="timetable" element={<Timetable />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="profile" element={<Profile />} />
         <Route path="bugs" element={<BugReports />} />

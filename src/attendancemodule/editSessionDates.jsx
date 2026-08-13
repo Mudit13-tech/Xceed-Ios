@@ -7,6 +7,7 @@ import NotificationSettingsTab from './NotificationSettingsTab';
 import FrameCleanupSettingsTab from './FrameCleanupSettingsTab';
 import RejectedSamplesCleanupSettingsTab from './RejectedSamplesCleanupSettingsTab';
 import OtherControlsSettingsTab from './OtherControlsSettingsTab';
+import { AmsSubtab } from './SubtabNewTabButton';
 import { theme as T, cssReset } from './config';
 import BackButton from './BackButton';
 import DeptMenuConfig from './DeptMenuConfig';
@@ -861,51 +862,26 @@ export default function EditSessionDates() {
           <BackButton />
         </div>
 
-        {/* Tabs */}
-        <div className="ams-tabs">
-          <button
-            className={`ams-tab${activeTab === 'session' ? ' active' : ''}`}
-            onClick={() => setActiveTab('session')}
-          >
-            Session Dates
-          </button>
-          <button
-            className={`ams-tab${activeTab === 'batch' ? ' active' : ''}`}
-            onClick={() => setActiveTab('batch')}
-          >
-            Batch Management
-          </button>
-          <button
-            className={`ams-tab${activeTab === 'notifications' ? ' active' : ''}`}
-            onClick={() => setActiveTab('notifications')}
-          >
-            Email Notifications
-          </button>
-          <button
-            className={`ams-tab${activeTab === 'deptMenu' ? ' active' : ''}`}
-            onClick={() => setActiveTab('deptMenu')}
-          >
-            Dept Menu Config
-          </button>
-          <button
-            className={`ams-tab${activeTab === 'degree' ? ' active' : ''}`}
-            onClick={() => setActiveTab('degree')}
-          >
-            Degree Management
-          </button>
-          <button
-            className={`ams-tab${activeTab === 'erpControls' ? ' active' : ''}`}
-            onClick={() => setActiveTab('erpControls')}
-          >
-            ERP Controls
-          </button>
-          <button
-            className={`ams-tab${activeTab === 'otherControls' ? ' active' : ''}`}
-            onClick={() => setActiveTab('otherControls')}
-          >
-            Other Controls
-          </button>
-        </div>
+      {/* Tabs */}
+      <div className="ams-tabs">
+        {[
+          ['session', 'Session Dates'],
+          ['batch', 'Batch Management'],
+          ['notifications', 'Email Notifications'],
+          ['deptMenu', 'Dept Menu Config'],
+          ['degree', 'Degree Management'],
+          ['erpControls', 'ERP Controls'],
+          ['otherControls', 'Other Controls'],
+        ].map(([id, label]) => (
+          <AmsSubtab
+            key={id}
+            value={id}
+            label={label}
+            active={activeTab === id}
+            onSelect={setActiveTab}
+          />
+        ))}
+      </div>
 
         {/* ══ SESSION DATES TAB ══════════════════════════════════════════════ */}
         {activeTab === 'session' && (

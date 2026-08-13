@@ -253,6 +253,10 @@ const cssReset = `
     .ams-tab  { padding: 7px 20px; border: none; background: transparent; border-radius: 7px; font-size: 13px; font-weight: 600; color: #7b84ab; cursor: pointer; transition: background .15s, color .15s, box-shadow .15s; white-space: nowrap; font-family: inherit; line-height: 1.5; }
     .ams-tab:hover  { color: #1a1f3c; background: rgba(255,255,255,0.65); }
     .ams-tab.active { background: #ffffff; color: #6366f1; box-shadow: 0 1px 4px rgba(26,31,60,0.12); }
+    .ams-subtab-option.active { border-radius: 7px; box-shadow: 0 1px 4px rgba(26,31,60,0.12); }
+    .ams-subtab-option.active .ams-tab { box-shadow: none; }
+    .ams-subtab-newtab-btn { transition: background .15s, color .15s; }
+    .ams-subtab-newtab-btn:hover, .ams-subtab-newtab-btn:focus-visible { background: rgba(99,102,241,0.12) !important; color: #6366f1 !important; outline: none; }
 
     /* ── Unified table ── */
     .ams-table { width: 100%; border-collapse: collapse; font-size: 13px; border: none; }

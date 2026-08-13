@@ -13,6 +13,8 @@ import ExportReportsTab from './ExportReportsTab';
 import CumulativeAttendanceTab from './CumulativeAttendanceTab';
 import ProxyModal from './ProxyModal';
 import StudentGroundTruthModal from './StudentGroundTruthModal';
+import { AmsSubtab } from './SubtabNewTabButton';
+import { readSubtabFromSearch } from './subtabNavigation';
 
 const apiUrl = getEnvironment();
 const REPORT_API = `${apiUrl}/attendancemodule/reports`;
@@ -78,6 +80,18 @@ function timeStrToMin(hhmm, fallback) {
 // service by Node on every run. Matches the schema default in
 // server/src/models/acquisitionControl.js.
 const DEFAULT_CAMERA_SWITCH_SEC = 30;
+const REPORT_TAB_OPTIONS = [
+  ['run', 'Run Attendance (Developers Only)'],
+  ['history', 'Saved Reports'],
+  // Two distinct pipeline stages, named so they cannot be confused:
+  // 'unknown' = matched nothing in ground truth (matching stage),
+  // 'rejected' = never reached matching at all (detector stage).
+  ['unknown', 'Unknown Faces (No GT Match)'],
+  ['rejected', 'Detector Rejects'],
+  ['export', 'Export Reports'],
+  ['cumulative', 'Cumulative (XCEED vs ERP)'],
+  ['detail', 'Report Detail'],
+];
 // ── LT103 dual-camera preset (same as groundtruthgen_rtsp) ───────────────────
 //const LT103L_URL = 'rtsp://admin:Admin%401234%23@10.10.177.249:554/video/live?channel=1&subtype=0&rtsp_transport=tcp';
 //const LT103R_URL = 'rtsp://admin:Admin%401234%23@10.10.177.250:554/video/live?channel=1&subtype=0&rtsp_transport=tcp';
@@ -85,7 +99,10 @@ export default function AttendanceReport() {
   const { slotLabel, slotKeys } = usePeriods();
   const navigate = useNavigate();
   const location = useLocation();
-  const [tab, setTab] = useState('run');
+  const [tab, setTab] = useState(() => readSubtabFromSearch(
+    REPORT_TAB_OPTIONS.map(([id]) => id),
+    'run',
+  ));
 
   // ── Inputs ────────────────────────────────────────────────────
   const [room, setRoom] = useState('');
@@ -765,6 +782,11 @@ export default function AttendanceReport() {
 
   // ── Auto-open report when navigated from Live Report page ─────────────────
   useEffect(() => {
+    const linkedReportId = new URLSearchParams(location.search).get('reportId');
+    if (tab === 'detail' && linkedReportId) {
+      openDetail(linkedReportId);
+      return;
+    }
     const s = location.state;
     if (!s) return;
     if (s.reportId) {
@@ -870,28 +892,18 @@ export default function AttendanceReport() {
 
       {/* Tabs */}
       <div className="ams-tabs">
-        {[
-          ['run', 'Run Attendance (Developers Only)'],
-          ['history', 'Saved Reports'],
-          // Two distinct pipeline stages, named so they can't be confused:
-          // 'unknown' = matched nothing in ground truth (matching stage),
-          // 'rejected' = never reached matching at all (detector stage).
-          ['unknown', 'Unknown Faces (No GT Match)'],
-          ['rejected', 'Detector Rejects'],
-          ['export', 'Export Reports'],
-          ['cumulative', 'Cumulative (XCEED vs ERP)'],
-          ['detail', 'Report Detail'],
-        ].map(
+        {REPORT_TAB_OPTIONS.map(
           ([id, label]) =>
-            (id !== 'detail' || detailReport)  &&
+            (id !== 'detail' || detailReport) &&
             (id !== 'run' || !isDeptAdminOnly) && (
-              <button
+              <AmsSubtab
                 key={id}
-                className={`ams-tab${tab === id ? ' active' : ''}`}
-                onClick={() => setTab(id)}
-              >
-                {label}
-              </button>
+                value={id}
+                label={label}
+                active={tab === id}
+                onSelect={setTab}
+                extraParams={id === 'detail' ? { reportId: detailReport?._id } : {}}
+              />
             ),
         )}
       </div>
