@@ -136,9 +136,9 @@ const Messages = () => {
   return (
     <div>
       <VStack>
-        <Container maxW="5xl">
+        <Container maxW="5xl" px={{ base: 3, md: 6 }} w="100%" maxWidth="100%" overflowX="hidden">
           <Header title="Messages" />
-          <Heading textAlign="center" mt={10} mb={4}>
+          <Heading textAlign="center" mt={{ base: 6, md: 10 }} mb={4} size={{ base: "md", md: "lg" }}>
             Send Message to Dept. TT Coordinators
           </Heading>
           {(user?.role?.includes('ITTC')|| user?.role?.includes('admin')) ? (<form onSubmit={handleSendMessage}>
@@ -152,9 +152,12 @@ const Messages = () => {
 
               <Box
                 width="100%"
+                maxW="100%"
+                overflowX="hidden"
                 border="1px solid #CBD5E0"
                 borderRadius="md"
                 p={2}
+                sx={{ '.ql-toolbar': { flexWrap: 'wrap' }, '.ql-editor': { minHeight: '150px' } }}
               >
                 <ReactQuill
                   theme="snow"
@@ -194,23 +197,23 @@ const Messages = () => {
 
               
             </VStack>
-          </form>):(<Text fontSize="lg" color="red.500" mt={2}>
+          </form>):(<Text fontSize={{ base: "md", md: "lg" }} color="red.500" mt={2}>
             *Only ITTC can send messages to DTTI
           </Text>)}
           
           {user?.role?.includes('admin') && (
                 <VStack>
-                  <Heading textAlign="center" mt={10} mb={4}>
+                  <Heading textAlign="center" mt={{ base: 6, md: 10 }} mb={4} size={{ base: "md", md: "lg" }}>
                     Delete Messages
                   </Heading>
 
-                  <TableContainer>
-                    <Table variant="simple" size="md">
+                  <TableContainer w="100%" maxW="100%" overflowX="auto">
+                    <Table variant="simple" size={{ base: "sm", md: "md" }}>
                       <Thead>
                         <Tr>
-                          <Th>Message</Th>
-                          <Th>Time</Th>
-                          <Th>Delete message</Th>
+                          <Th fontSize={{ base: "2xs", md: "xs" }}>Message</Th>
+                          <Th fontSize={{ base: "2xs", md: "xs" }}>Time</Th>
+                          <Th fontSize={{ base: "2xs", md: "xs" }}>Delete message</Th>
                         </Tr>
                       </Thead>
                       <Tbody>
@@ -222,7 +225,7 @@ const Messages = () => {
                             <Td
                               whiteSpace="normal"
                               wordBreak="break-word"
-                              maxW="400px"
+                              maxW={{ base: "180px", md: "400px" }}
                             >
                               {message.title}
                             </Td>

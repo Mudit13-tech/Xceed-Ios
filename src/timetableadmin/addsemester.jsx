@@ -172,7 +172,7 @@ function AddSemComponent() {
         {/* Hero Header Section */}
         <Box 
           bgGradient="linear(to-r, orange.400, red.500, blue.500)"
-          pb={24}
+          pb={{ base: 16, md: 20, lg: 24 }}
           position="relative"
           overflow="hidden"
         >
@@ -195,16 +195,16 @@ function AddSemComponent() {
             <Header />
           </Box>
 
-          <Container maxW="7xl" position="relative" mt={8}>
-            <Flex justify="space-between" align="center" w="full" gap={4}>
-              <VStack spacing={4} align="start" flex="1">
-                <Badge colorScheme="whiteAlpha" fontSize="sm" px={3} py={1} borderRadius="full">
+          <Container maxW="7xl" position="relative" mt={{ base: 4, md: 8 }} px={{ base: 4, md: 6, lg: 8 }}>
+            <Flex justify="space-between" align={{ base: "start", md: "center" }} w="full" gap={{ base: 3, md: 4 }}>
+              <VStack spacing={{ base: 2, md: 4 }} align="start" flex="1" minW={0}>
+                <Badge colorScheme="whiteAlpha" fontSize={{ base: "xs", md: "sm" }} px={3} py={1} borderRadius="full">
                   Semester Management
                 </Badge>
-                <Heading size="2xl" color="white" fontWeight="bold" lineHeight="1.2">
+                <Heading size={{ base: "lg", md: "xl", lg: "2xl" }} color="white" fontWeight="bold" lineHeight="1.2">
                   Add Semester
                 </Heading>
-                <Text color="whiteAlpha.900" fontSize="lg" maxW="2xl">
+                <Text color="whiteAlpha.900" fontSize={{ base: "sm", md: "lg" }} maxW="2xl">
                   Create and manage semesters for your timetable.
                 </Text>
               </VStack>
@@ -214,10 +214,10 @@ function AddSemComponent() {
                 icon={<ArrowBackIcon />}
                 aria-label="Go back"
                 onClick={() => window.history.back()}
-                size="lg"
+                size={{ base: "md", md: "lg" }}
                 bg="rgba(255, 255, 255, 0.2)"
                 color="white"
-                fontSize="2xl"
+                fontSize={{ base: "lg", md: "2xl" }}
                 _hover={{ bg: 'rgba(255, 255, 255, 0.3)' }}
                 _active={{ bg: 'rgba(255, 255, 255, 0.4)' }}
                 borderRadius="full"
@@ -230,7 +230,7 @@ function AddSemComponent() {
           </Container>
         </Box>
 
-        <Container maxW="4xl" mt={-12} position="relative" zIndex={1} pb={16}>
+        <Container maxW="4xl" mt={-12} position="relative" zIndex={1} pb={{ base: 10, md: 16 }} px={{ base: 4, md: 6, lg: 8 }}>
           <VStack spacing={8} align="stretch">
             {/* Add Semester Form */}
             <Box 
@@ -242,7 +242,7 @@ function AddSemComponent() {
               borderColor={borderColor}
             >
               <FormControl>
-                <Text fontWeight="bold" fontSize="lg" mb={3}>
+                <Text fontWeight="bold" fontSize={{ base: "md", md: "lg" }} mb={3}>
                   Add New Semester
                 </Text>
                 <VStack spacing={4} align="stretch">
@@ -288,12 +288,12 @@ function AddSemComponent() {
               borderColor={borderColor}
             >
               <Box p={6} borderBottom="1px" borderColor={borderColor}>
-                <Text fontWeight="bold" fontSize="lg">
+                <Text fontWeight="bold" fontSize={{ base: "md", md: "lg" }}>
                   Semester Data (Total Entries: {sems.length})
                 </Text>
               </Box>
               <TableContainer>
-                <Table variant='simple' size='md'>
+                <Table variant='simple' size={{ base: "sm", md: "md" }}>
                   <Thead bg="teal.600">
                     <Tr>
                       <Th color="white" fontSize="md" textAlign="center">Semester</Th>

@@ -73,20 +73,20 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
   ];
 
   return (
-    <Box my={6}>
+    <Box my={{ base: 3, md: 6 }} w="100%" maxW="100%">
       {Object.keys(timetableData).length === 0 ? (
         <Card borderRadius="2xl" shadow="xl" border="1px" borderColor="gray.200">
-          <CardBody p={12}>
+          <CardBody p={{ base: 6, md: 12 }}>
             <VStack spacing={4}>
               <Spinner size="xl" thickness="4px" color="purple.500" speed="0.65s" />
-              <Text color="gray.600" fontSize="lg">Loading timetable...</Text>
+              <Text color="gray.600" fontSize={{ base: "md", md: "lg" }}>Loading timetable...</Text>
             </VStack>
           </CardBody>
         </Card>
       ) : (
-        <Box id="timetable-summary">
+        <Box id="timetable-summary" w="100%" maxW="100%">
           <Box mb={3} p={3} bg="blue.50" borderRadius="md" borderWidth="1px" borderColor="blue.200">
-            <Text fontSize="sm" color="blue.700" fontWeight="medium">
+            <Text fontSize={{ base: "xs", md: "sm" }} color="blue.700" fontWeight="medium">
               ℹ️ Scroll horizontally to view all periods →
             </Text>
           </Box>
@@ -115,20 +115,23 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
               },
             }}
           >
-            <Table variant="simple" size="md">
+            <Table variant="simple" size={{ base: "sm", md: "md" }}>
               <Thead>
                 <Tr>
                   <Th
                     bgGradient="linear(to-r, purple.600, purple.700)"
                     color="white"
                     fontWeight="bold"
-                    fontSize="sm"
+                    fontSize={{ base: "2xs", md: "sm" }}
                     textAlign="center"
-                    p={4}
+                    p={{ base: 2, md: 4 }}
                     borderRightWidth="2px"
                     borderColor="purple.800"
-                    minW="140px"
-                    w="140px"
+                    minW={{ base: "90px", md: "140px" }}
+                    w={{ base: "90px", md: "140px" }}
+                    position="sticky"
+                    left={0}
+                    zIndex={2}
                   >
                     Day / Period
                   </Th>
@@ -138,24 +141,24 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
                       bg={period === '12:30 PM - 1:30 PM' ? 'orange.500' : 'teal.600'}
                       color="white"
                       textAlign="center"
-                      fontSize="sm"
-                      p={3}
+                      fontSize={{ base: "2xs", md: "sm" }}
+                      p={{ base: 2, md: 3 }}
                       whiteSpace="nowrap"
                       fontWeight="bold"
                       borderRightWidth={index < periods.length - 1 ? "1px" : "0"}
                       borderColor="whiteAlpha.400"
-                      minW="180px"
-                      w="180px"
+                      minW={{ base: "120px", md: "180px" }}
+                      w={{ base: "120px", md: "180px" }}
                     >
                       {period === '12:30 PM - 1:30 PM' ? (
                         <VStack spacing={0.5}>
-                          <Text fontSize="sm" fontWeight="bold">LUNCH</Text>
-                          <Text fontSize="xs" opacity={0.9}>{period}</Text>
+                          <Text fontSize={{ base: "2xs", md: "sm" }} fontWeight="bold">LUNCH</Text>
+                          <Text fontSize={{ base: "3xs", md: "xs" }} opacity={0.9}>{period}</Text>
                         </VStack>
                       ) : (
                         <VStack spacing={0.5}>
-                          <Text fontSize="sm" fontWeight="bold">Period {index >= 4 ? index : index + 1}</Text>
-                          <Text fontSize="xs" opacity={0.9}>{period}</Text>
+                          <Text fontSize={{ base: "2xs", md: "sm" }} fontWeight="bold">Period {index >= 4 ? index : index + 1}</Text>
+                          <Text fontSize={{ base: "3xs", md: "xs" }} opacity={0.9}>{period}</Text>
                         </VStack>
                       )}
                     </Th>
@@ -174,12 +177,15 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
                       color="white"
                       textAlign="center"
                       fontWeight="bold"
-                      fontSize="md"
-                      p={4}
+                      fontSize={{ base: "2xs", md: "md" }}
+                      p={{ base: 2, md: 4 }}
                       borderRightWidth="2px"
                       borderColor="purple.800"
-                      minW="140px"
-                      w="140px"
+                      minW={{ base: "90px", md: "140px" }}
+                      w={{ base: "90px", md: "140px" }}
+                      position="sticky"
+                      left={0}
+                      zIndex={1}
                     >
                       {day}
                     </Td>
@@ -187,13 +193,13 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
                       <Td
                         key={period}
                         textAlign="center"
-                        p={period === 'Lunch' ? 3 : 4}
+                        p={{ base: 1.5, md: period === 'Lunch' ? 3 : 4 }}
                         bg={period === 'Lunch' ? 'orange.50' : 'white'}
                         borderRightWidth={periodIndex < 8 ? "1px" : "0"}
                         borderColor="gray.200"
                         verticalAlign="top"
-                        minW="180px"
-                        w="180px"
+                        minW={{ base: "120px", md: "180px" }}
+                        w={{ base: "120px", md: "180px" }}
                         _hover={{
                           bg: period === 'Lunch' ? 'orange.100' : 'purple.50',
                         }}
@@ -209,7 +215,7 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
                                     return (
                                       <Box
                                         key={cellIndex}
-                                        p={3}
+                                        p={{ base: 1.5, md: 3 }}
                                         borderRadius="md"
                                         bg={colors?.bg || 'orange.100'}
                                         borderWidth="1px"
@@ -221,7 +227,7 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
                                         <VStack spacing={1} align="center">
                                           {cell.subject && (
                                             <Text
-                                              fontSize="sm"
+                                              fontSize={{ base: "2xs", md: "sm" }}
                                               fontWeight="bold"
                                               color={colors?.text || 'orange.800'}
                                               noOfLines={2}
@@ -233,7 +239,7 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
                                           {cell.room && (
                                             <Badge
                                               colorScheme="blue"
-                                              fontSize="xs"
+                                              fontSize={{ base: "3xs", md: "xs" }}
                                               px={2}
                                               py={0.5}
                                             >
@@ -242,7 +248,7 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
                                           )}
                                           {cell.faculty && (
                                             <Text
-                                              fontSize="xs"
+                                              fontSize={{ base: "3xs", md: "xs" }}
                                               color="gray.600"
                                               noOfLines={2}
                                               title={cell.faculty}
@@ -258,7 +264,7 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
                               ))
                             ) : (
                               <VStack spacing={1}>
-                                <Text fontSize="md" fontWeight="bold" color="orange.700">
+                                <Text fontSize={{ base: "2xs", md: "md" }} fontWeight="bold" color="orange.700">
                                   Lunch Break
                                 </Text>
                               </VStack>
@@ -276,14 +282,14 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
                                     return (
                                       <Box
                                         key={cellIndex}
-                                        p={4}
+                                        p={{ base: 2, md: 4 }}
                                         borderRadius="md"
                                         bg="gray.50"
                                         borderWidth="1px"
                                         borderColor="gray.200"
                                         borderStyle="dashed"
                                       >
-                                        <Text fontSize="sm" color="gray.400" textAlign="center">
+                                        <Text fontSize={{ base: "2xs", md: "sm" }} color="gray.400" textAlign="center">
                                           Free
                                         </Text>
                                       </Box>
@@ -293,7 +299,7 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
                                   return (
                                     <Box
                                       key={cellIndex}
-                                      p={3}
+                                      p={{ base: 1.5, md: 3 }}
                                       borderRadius="md"
                                       bg={colors?.bg || 'gray.100'}
                                       borderWidth="1px"
@@ -306,7 +312,7 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
                                       <VStack spacing={1} align="center">
                                         {cell.subject && (
                                           <Text
-                                            fontSize="sm"
+                                            fontSize={{ base: "2xs", md: "sm" }}
                                             fontWeight="bold"
                                             color={colors?.text || 'gray.800'}
                                             noOfLines={2}
@@ -319,7 +325,7 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
                                         {cell.room && (
                                           <Badge
                                             colorScheme="blue"
-                                            fontSize="xs"
+                                            fontSize={{ base: "3xs", md: "xs" }}
                                             px={2}
                                             py={0.5}
                                           >
@@ -328,7 +334,7 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
                                         )}
                                         {cell.faculty && (
                                           <Text
-                                            fontSize="xs"
+                                            fontSize={{ base: "3xs", md: "xs" }}
                                             color="gray.600"
                                             noOfLines={2}
                                             title={cell.faculty}
@@ -354,8 +360,8 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
           </TableContainer>
 
           {/* Color Legend */}
-          <Box mt={4} p={4} bg="white" borderRadius="xl" border="1px" borderColor="gray.200" shadow="md">
-            <Text fontSize="md" fontWeight="bold" color="gray.700" mb={3}>
+          <Box mt={4} p={{ base: 3, md: 4 }} bg="white" borderRadius="xl" border="1px" borderColor="gray.200" shadow="md">
+            <Text fontSize={{ base: "sm", md: "md" }} fontWeight="bold" color="gray.700" mb={3}>
               📚 Subject Color Legend:
             </Text>
             <Flex flexWrap="wrap" gap={2}>
@@ -366,10 +372,10 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
                   color={colors.text}
                   borderWidth="1px"
                   borderColor={colors.border}
-                  px={3}
-                  py={1.5}
+                  px={{ base: 2, md: 3 }}
+                  py={{ base: 1, md: 1.5 }}
                   borderRadius="md"
-                  fontSize="sm"
+                  fontSize={{ base: "xs", md: "sm" }}
                   fontWeight="semibold"
                 >
                   {subject}

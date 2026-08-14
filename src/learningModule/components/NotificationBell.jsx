@@ -14,12 +14,24 @@ import {
   PopoverHeader,
   PopoverTrigger,
   Text,
+  useDisclosure,
 } from '@chakra-ui/react';
+import { keyframes } from '@emotion/react';
 import lmApi from '../api/lmApi';
 import { buttonTextStyles } from './common';
 import { relativeTime } from '../format';
 
 const POLL_MS = 60000;
+
+const ring = keyframes`
+  0% { transform: rotate(0); }
+  10% { transform: rotate(15deg); }
+  20% { transform: rotate(-10deg); }
+  30% { transform: rotate(5deg); }
+  40% { transform: rotate(-5deg); }
+  50% { transform: rotate(0); }
+  100% { transform: rotate(0); }
+`;
 
 const TYPE_ICONS = {
   announcement: '📣',
@@ -39,11 +51,16 @@ export default function NotificationBell() {
   const [items, setItems] = useState([]);
   const [unread, setUnread] = useState(0);
   const navigate = useNavigate();
+  const isOpenRef = React.useRef(false);
 
-  const load = useCallback(async () => {
+  const { isOpen, onOpen: onPopoverOpen, onClose: onPopoverClose } = useDisclosure();
+
+  const load = useCallback(async (forceUpdateItems = false) => {
     try {
       const data = await lmApi.notifications({ limit: 10 });
-      setItems(data.items);
+      if (!isOpenRef.current || forceUpdateItems === true) {
+        setItems(data.items);
+      }
       setUnread(data.unreadCount);
       return data;
     } catch {
@@ -54,32 +71,33 @@ export default function NotificationBell() {
 
   /**
    * Opening the panel counts as having seen what is in it.
-   *
-   * The badge is a count of things you have not seen, and it used to survive
-   * reading them — it only came down by clicking each notification through to
-   * its page, or by finding "Mark all read". So a bell that said 6 still said 6
-   * after you had read all six, and the number stopped meaning anything.
-   *
-   * Only the ones actually listed are marked. Marking *everything* would clear
-   * a backlog sitting below the ten shown here, which the reader has by
-   * definition not seen.
    */
   const onOpen = useCallback(async () => {
-    const data = await load();
+    isOpenRef.current = true;
+    onPopoverOpen();
+    const data = await load(true);
     const seen = (data?.items || []).filter((item) => !item.read).map((item) => item._id);
     if (!seen.length) return;
 
-    await lmApi.markNotificationsRead(seen).catch(() => {});
-    // The count drops; the rows keep their unread tint until the panel is
-    // reopened. Clearing both at once would leave the panel looking identical
-    // before and after, with nothing to show which ones were the new ones.
+    await lmApi.markNotificationsRead(seen, { silent: true }).catch(() => {});
     setUnread((count) => Math.max(0, count - seen.length));
-  }, [load]);
+    window.dispatchEvent(new Event('lmNotificationsCountUpdated'));
+  }, [load, onPopoverOpen]);
+
+  const onClose = useCallback(() => {
+    isOpenRef.current = false;
+    onPopoverClose();
+    load();
+  }, [load, onPopoverClose]);
 
   useEffect(() => {
     load();
     const timer = setInterval(load, POLL_MS);
-    return () => clearInterval(timer);
+    window.addEventListener('lmNotificationsUpdated', load);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('lmNotificationsUpdated', load);
+    };
   }, [load]);
 
   const open = async (notification) => {
@@ -87,19 +105,25 @@ export default function NotificationBell() {
     setUnread((count) => Math.max(0, count - (notification.read ? 0 : 1)));
     setItems((prev) => prev.map((n) => (n._id === notification._id ? { ...n, read: true } : n)));
     if (notification.link) navigate(notification.link);
+    onClose();
   };
 
   const markAll = async () => {
     await lmApi.markNotificationsRead().catch(() => {});
     setUnread(0);
     setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+    onClose();
   };
 
   return (
-    <Popover placement="bottom-end" onOpen={onOpen}>
+    <Popover placement="bottom-end" isOpen={isOpen} onOpen={onOpen} onClose={onClose}>
       <PopoverTrigger>
         <Box position="relative" display="inline-block">
-          <IconButton variant="ghost" aria-label="Notifications" icon={<span>🔔</span>} />
+          <IconButton 
+            variant="ghost" 
+            aria-label="Notifications" 
+            icon={<Box as="span" display="inline-block" animation={unread > 0 ? `${ring} 2s ease infinite` : 'none'}>🔔</Box>} 
+          />
           {unread > 0 && (
             <Badge
               position="absolute"

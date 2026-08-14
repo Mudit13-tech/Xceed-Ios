@@ -34,7 +34,7 @@ const pulseRing = keyframes`
 
 const AnimatedXceedLogo = () => {
   return (
-    <Box h="24px" w="auto" ml="auto" animation={`${pulseRing} 3s ease-in-out infinite`}>
+    <Box h={{ base: '14px', md: '24px' }} maxW="100%" ml="auto" animation={`${pulseRing} 3s ease-in-out infinite`} display="flex" justifyContent="flex-end" overflow="hidden">
       <Image src="/clublogo.png" h="100%" w="auto" objectFit="contain" />
     </Box>
   );
@@ -103,7 +103,7 @@ function DayChip({ to, bg, subject, label, title }) {
       borderRadius="sm"
       bg={bg}
       color="white"
-      fontSize="0.65rem"
+      fontSize={{ base: '0.55rem', md: '0.65rem' }}
       noOfLines={1}
       _hover={to ? { opacity: 0.85, textDecoration: 'none' } : undefined}
       title={title || label}
@@ -343,7 +343,7 @@ export default function Calendar() {
           <Button size="sm" variant="outline" onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))}>
             ←
           </Button>
-          <Text fontWeight="600" minW="160px" textAlign="center">
+          <Text fontWeight="600" minW={{ base: '120px', md: '160px' }} fontSize={{ base: 'sm', md: 'md' }} textAlign="center">
             {monthLabel}
           </Text>
           <Button size="sm" variant="outline" onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))}>
@@ -374,10 +374,10 @@ export default function Calendar() {
             ))}
           </Wrap>
 
-          <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={3} mb={5}>
-            <Grid templateColumns="repeat(7, 1fr)" gap={1}>
+          <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={{ base: 1, md: 3 }} mb={5}>
+            <Grid templateColumns="repeat(7, 1fr)" gap={{ base: 0.5, md: 1 }}>
               {WEEKDAYS.map((day) => (
-                <Text key={day} fontSize="xs" fontWeight="600" color="gray.500" textAlign="center" py={1}>
+                <Text key={day} fontSize={{ base: '0.55rem', md: 'xs' }} fontWeight="600" color="gray.500" textAlign="center" py={1}>
                   {day}
                 </Text>
               ))}
@@ -405,12 +405,14 @@ export default function Calendar() {
                 return (
                   <Box
                     key={date.toISOString()}
-                    minH="86px"
+                    minH={{ base: '70px', md: '86px' }}
+                    minW={0}
+                    overflow="hidden"
                     borderWidth="1px"
                     borderColor={borderColor}
                     bg={bg}
                     borderRadius="md"
-                    p={1.5}
+                    p={{ base: 1, md: 1.5 }}
                     // Any day with something on it opens the full list — the
                     // cell only ever has room for the first few chips.
                     {...(openable
@@ -431,9 +433,9 @@ export default function Calendar() {
                       : {})}
                   >
                     <Flex align="center" justify="space-between" gap={1}>
-                      <HStack gap={2} align="center">
+                      <HStack gap={1} align="center" wrap="wrap">
                         <Text
-                          fontSize="xs"
+                          fontSize={{ base: '0.6rem', md: 'xs' }}
                           fontWeight={isToday ? '700' : '500'}
                           color={isToday ? 'white' : holiday ? 'blue.600' : 'gray.600'}
                         >
@@ -441,7 +443,8 @@ export default function Calendar() {
                         </Text>
                         {holiday && (
                           <Badge 
-                            fontSize="0.55rem" 
+                            fontSize={{ base: '0.4rem', md: '0.55rem' }} 
+                            px={1}
                             colorScheme={isToday ? "whiteAlpha" : "blue"} 
                             variant={isToday ? "solid" : "subtle"}
                           >
@@ -452,7 +455,7 @@ export default function Calendar() {
                       {isToday && <AnimatedXceedLogo />}
                     </Flex>
                     {holiday && (
-                      <Text fontSize="0.6rem" color={isToday ? "white" : "blue.600"} noOfLines={1} title={holiday.remark}>
+                      <Text fontSize={{ base: '0.5rem', md: '0.6rem' }} color={isToday ? "white" : "blue.600"} noOfLines={1} title={holiday.remark}>
                         {holiday.remark}
                       </Text>
                     )}
@@ -468,7 +471,7 @@ export default function Calendar() {
                     ))}
                     {dayItems.length > CHIPS_PER_CELL && (
                       <Text
-                        fontSize="0.6rem"
+                        fontSize={{ base: '0.5rem', md: '0.6rem' }}
                         color={isToday ? 'white' : 'blue.600'}
                         fontWeight="600"
                         mt={0.5}

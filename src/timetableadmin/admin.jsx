@@ -22,6 +22,7 @@ import {
   SimpleGrid,
   Icon,
   HStack,
+  Stack,
   useToast,
   IconButton,
   Badge,
@@ -377,12 +378,24 @@ const AdminPage = () => {
     },
   ];
 
+  // Rendered in its own section below; kept out of navigationItems because that
+  // array is grouped by index slices.
+  const downloadItems = [
+    {
+      path: '/tt/admin/mergeddownload',
+      label: 'Institute-wide Merged PDF',
+      icon: FiFileText,
+      gradient: 'linear(to-br, purple.600, indigo.800)',
+      isNew: true,
+    },
+  ];
+
   return (
-    <Box bgGradient={bgGradient} minH="100vh" pb={16}>
+    <Box bgGradient={bgGradient} minH="100vh" pb={{ base: 10, md: 16 }} overflowX="hidden">
       <Box
         bgGradient="linear(to-r, purple.600, blue.600, teal.500)"
-        pt={8}
-        pb={20}
+        pt={{ base: 5, md: 8 }}
+        pb={{ base: 16, md: 20 }}
         position="relative"
         overflow="hidden"
       >
@@ -396,21 +409,21 @@ const AdminPage = () => {
           bgImage="radial-gradient(circle, white 1px, transparent 1px)"
           bgSize="30px 30px"
         />
-        <Container maxW="7xl" position="relative">
-          <VStack spacing={3} align="start">
+        <Container maxW="7xl" position="relative" px={{ base: 4, md: 6, lg: 8 }}>
+          <VStack spacing={{ base: 2, md: 3 }} align="start">
             <Badge
               colorScheme="whiteAlpha"
-              fontSize="sm"
+              fontSize={{ base: "xs", md: "sm" }}
               px={3}
               py={1}
               borderRadius="full"
             >
               Admin Dashboard
             </Badge>
-            <Heading size="2xl" color="white" fontWeight="bold">
+            <Heading size={{ base: "lg", md: "xl", lg: "2xl" }} color="white" fontWeight="bold">
               Timetable Management Center
             </Heading>
-            <Text color="whiteAlpha.900" fontSize="lg" maxW="2xl">
+            <Text color="whiteAlpha.900" fontSize={{ base: "sm", md: "lg" }} maxW="2xl">
               Manage academic sessions, configure timetables, and oversee all
               scheduling operations from one place.
             </Text>
@@ -418,20 +431,26 @@ const AdminPage = () => {
         </Container>
       </Box>
 
-      <Container maxW="7xl" mt={-12} position="relative" zIndex={1}>
+      <Container maxW="7xl" mt={-12} position="relative" zIndex={1} px={{ base: 4, md: 6, lg: 8 }}>
         <Box
           bg={cardBg}
           borderRadius="2xl"
           shadow="2xl"
-          p={8}
-          mb={8}
+          p={{ base: 4, md: 8 }}
+          mb={{ base: 5, md: 8 }}
           border="1px"
           borderColor={borderColor}
         >
-          <HStack justify="space-between" mb={6}>
+          <Stack
+            direction={{ base: "column", sm: "row" }}
+            justify="space-between"
+            align={{ base: "start", sm: "center" }}
+            spacing={3}
+            mb={6}
+          >
             <VStack align="start" spacing={1}>
               <Heading
-                size="lg"
+                size={{ base: "md", md: "lg" }}
                 bgGradient="linear(to-r, purple.600, blue.600)"
                 bgClip="text"
               >
@@ -450,7 +469,7 @@ const AdminPage = () => {
             >
               {navigationItems.length} Tools
             </Badge>
-          </HStack>
+          </Stack>
 
           <VStack align="stretch" spacing={6} mb={6}>
             <Heading size="md" color="gray.700">
@@ -487,7 +506,7 @@ const AdminPage = () => {
                       <Text
                         color="white"
                         fontWeight="bold"
-                        fontSize="md"
+                        fontSize={{ base: "xs", md: "md" }}
                         textAlign="center"
                         textShadow="0 2px 10px rgba(0,0,0,0.6)"
                       >
@@ -534,7 +553,7 @@ const AdminPage = () => {
                       <Text
                         color="white"
                         fontWeight="bold"
-                        fontSize="md"
+                        fontSize={{ base: "xs", md: "md" }}
                         textAlign="center"
                         textShadow="0 2px 10px rgba(0,0,0,0.6)"
                       >
@@ -580,7 +599,7 @@ const AdminPage = () => {
                       <Text
                         color="white"
                         fontWeight="bold"
-                        fontSize="md"
+                        fontSize={{ base: "xs", md: "md" }}
                         textAlign="center"
                         textShadow="0 2px 10px rgba(0,0,0,0.6)"
                       >
@@ -590,6 +609,68 @@ const AdminPage = () => {
                   </Box>
                 )
               )}
+            </SimpleGrid>
+          </VStack>
+
+          <VStack align="stretch" spacing={6} mb={6}>
+            <Heading size="md" color="gray.700">
+              Reports &amp; Downloads
+            </Heading>
+            <SimpleGrid columns={{ base: 2, md: 3 }} spacing={4}>
+              {downloadItems.map(({ path, label, icon, gradient, isNew }) => (
+                <Box
+                  key={path}
+                  as="a"
+                  href={path}
+                  bgGradient={gradient}
+                  p={6}
+                  borderRadius="xl"
+                  transition="all 0.3s"
+                  cursor="pointer"
+                  border="2px solid"
+                  borderColor="whiteAlpha.300"
+                  shadow="lg"
+                  position="relative"
+                  _hover={{ transform: 'translateY(-8px)', shadow: '2xl' }}
+                >
+                  {isNew && (
+                    <Badge
+                      position="absolute"
+                      top={2}
+                      right={2}
+                      colorScheme="yellow"
+                      fontSize="xs"
+                      px={2}
+                      py={0.5}
+                      borderRadius="full"
+                      fontWeight="bold"
+                      boxShadow="md"
+                    >
+                      NEW
+                    </Badge>
+                  )}
+                  <VStack spacing={3}>
+                    <Box
+                      bg="whiteAlpha.400"
+                      p={3}
+                      borderRadius="lg"
+                      border="2px solid"
+                      borderColor="whiteAlpha.500"
+                    >
+                      <Icon as={icon} boxSize={6} color="white" />
+                    </Box>
+                    <Text
+                      color="white"
+                      fontWeight="bold"
+                      fontSize="md"
+                      textAlign="center"
+                      textShadow="0 2px 10px rgba(0,0,0,0.6)"
+                    >
+                      {label}
+                    </Text>
+                  </VStack>
+                </Box>
+              ))}
             </SimpleGrid>
           </VStack>
 
@@ -647,7 +728,7 @@ const AdminPage = () => {
                       <Text
                         color="white"
                         fontWeight="bold"
-                        fontSize="md"
+                        fontSize={{ base: "xs", md: "md" }}
                         textAlign="center"
                         textShadow="0 2px 10px rgba(0,0,0,0.6)"
                       >
@@ -660,7 +741,7 @@ const AdminPage = () => {
           </VStack>
         </Box>
 
-        <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={8} mb={8}>
+        <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={{ base: 5, md: 8 }} mb={{ base: 5, md: 8 }}>
           <Box
             bg={cardBg}
             borderRadius="2xl"
@@ -669,22 +750,22 @@ const AdminPage = () => {
             border="1px"
             borderColor={borderColor}
           >
-            <Box bgGradient="linear(to-r, teal.400, green.400)" p={6}>
+            <Box bgGradient="linear(to-r, teal.400, green.400)" p={{ base: 4, md: 6 }}>
               <HStack spacing={3}>
                 <Box bg="whiteAlpha.300" p={2} borderRadius="lg">
                   <Icon as={FiCalendar} boxSize={6} color="white" />
                 </Box>
                 <VStack align="start" spacing={0}>
-                  <Heading size="md" color="white">
+                  <Heading size={{ base: "sm", md: "md" }} color="white">
                     Create Session
                   </Heading>
-                  <Text color="whiteAlpha.900" fontSize="sm">
+                  <Text color="whiteAlpha.900" fontSize={{ base: "xs", md: "sm" }}>
                     Add a new academic year
                   </Text>
                 </VStack>
               </HStack>
             </Box>
-            <Box p={6}>
+            <Box p={{ base: 4, md: 6 }}>
               <VStack spacing={4} align="stretch">
                 <InputGroup size="lg">
                   <InputLeftElement>
@@ -721,22 +802,22 @@ const AdminPage = () => {
             border="1px"
             borderColor={borderColor}
           >
-            <Box bgGradient="linear(to-r, blue.400, purple.500)" p={6}>
+            <Box bgGradient="linear(to-r, blue.400, purple.500)" p={{ base: 4, md: 6 }}>
               <HStack spacing={3}>
                 <Box bg="whiteAlpha.300" p={2} borderRadius="lg">
                   <Icon as={FiCheck} boxSize={6} color="white" />
                 </Box>
                 <VStack align="start" spacing={0}>
-                  <Heading size="md" color="white">
+                  <Heading size={{ base: "sm", md: "md" }} color="white">
                     Set Current Session
                   </Heading>
-                  <Text color="whiteAlpha.900" fontSize="sm">
+                  <Text color="whiteAlpha.900" fontSize={{ base: "xs", md: "sm" }}>
                     Mark the active academic year
                   </Text>
                 </VStack>
               </HStack>
             </Box>
-            <Box p={6}>
+            <Box p={{ base: 4, md: 6 }}>
               <VStack spacing={4} align="stretch">
                 {currentSessionName && (
                   <HStack
@@ -796,17 +877,17 @@ const AdminPage = () => {
           border="1px"
           borderColor={borderColor}
         >
-          <Box bgGradient="linear(to-r, gray.700, gray.800)" p={6}>
+          <Box bgGradient="linear(to-r, gray.700, gray.800)" p={{ base: 4, md: 6 }}>
             <HStack justify="space-between">
               <HStack spacing={3}>
                 <Box bg="whiteAlpha.200" p={2} borderRadius="lg">
                   <Icon as={FiSettings} boxSize={5} color="white" />
                 </Box>
                 <VStack align="start" spacing={0}>
-                  <Heading size="md" color="white">
+                  <Heading size={{ base: "sm", md: "md" }} color="white">
                     All Sessions
                   </Heading>
-                  <Text color="whiteAlpha.800" fontSize="sm">
+                  <Text color="whiteAlpha.800" fontSize={{ base: "xs", md: "sm" }}>
                     {sessions.length} total sessions
                   </Text>
                 </VStack>
@@ -814,12 +895,12 @@ const AdminPage = () => {
             </HStack>
           </Box>
 
-          <Box overflowX="auto">
-            <Table variant="simple">
+          <Box overflowX="auto" w="100%" maxW="100%">
+            <Table variant="simple" size={{ base: "sm", md: "md" }}>
               <Thead bg="gray.50">
                 <Tr>
-                  <Th>Session Details</Th>
-                  <Th textAlign="right">Actions</Th>
+                  <Th fontSize={{ base: "2xs", md: "xs" }}>Session Details</Th>
+                  <Th fontSize={{ base: "2xs", md: "xs" }} textAlign="right">Actions</Th>
                 </Tr>
               </Thead>
               <Tbody>
@@ -844,14 +925,14 @@ const AdminPage = () => {
                             autoFocus
                           />
                         ) : (
-                          <HStack spacing={4}>
+                          <HStack spacing={{ base: 2, md: 4 }}>
                             <Box
                               bg={
                                 session.trim() === currentSessionName.trim()
                                   ? 'green.100'
                                   : 'gray.100'
                               }
-                              p={3}
+                              p={{ base: 2, md: 3 }}
                               borderRadius="lg"
                             >
                               <Icon
@@ -870,7 +951,7 @@ const AdminPage = () => {
                             </Box>
                             <VStack align="start" spacing={1}>
                               <Text
-                                fontSize="lg"
+                                fontSize={{ base: "sm", md: "lg" }}
                                 fontWeight={
                                   session.trim() === currentSessionName.trim()
                                     ? 'bold'
@@ -898,7 +979,7 @@ const AdminPage = () => {
                         )}
                       </Td>
                       <Td py={5}>
-                        <HStack spacing={2} justify="flex-end">
+                        <HStack spacing={2} justify="flex-end" flexWrap="wrap">
                           {editingSessionId === session ? (
                             <>
                               <Button

@@ -774,10 +774,10 @@ function MasterView({ autofill = false }) {
                 >
                   Timetable Search
                 </Badge>
-                <Heading size="2xl" color="white" fontWeight="bold" lineHeight="1.2">
+                <Heading size={{ base: "lg", md: "xl", lg: "2xl" }} color="white" fontWeight="bold" lineHeight="1.2">
                   View Timetables
                 </Heading>
-                <Text color="whiteAlpha.900" fontSize="lg" maxW="2xl">
+                <Text color="whiteAlpha.900" fontSize={{ base: "sm", md: "lg" }} maxW="2xl">
                   Search and view timetables by semester, faculty, or room.
                 </Text>
               </VStack>
@@ -786,10 +786,10 @@ function MasterView({ autofill = false }) {
                 icon={<ArrowBackIcon />}
                 aria-label="Go back"
                 onClick={() => window.history.back()}
-                size="lg"
+                size={{ base: "md", md: "lg" }}
                 bg="rgba(255, 255, 255, 0.2)"
                 color="white"
-                fontSize="2xl"
+                fontSize={{ base: "lg", md: "2xl" }}
                 _hover={{ bg: 'rgba(255, 255, 255, 0.3)' }}
                 _active={{ bg: 'rgba(255, 255, 255, 0.4)' }}
                 borderRadius="full"
@@ -947,10 +947,10 @@ function MasterView({ autofill = false }) {
               borderColor="gray.300"
               overflow="hidden"
             >
-              <CardHeader bg="cyan.600" color="white" p={4}>
-                <Heading size="md">Select Session & Department</Heading>
+              <CardHeader bg="cyan.600" color="white" p={{ base: 3, md: 4 }}>
+                <Heading size={{ base: "sm", md: "md" }}>Select Session & Department</Heading>
               </CardHeader>
-              <CardBody p={6}>
+              <CardBody p={{ base: 4, md: 6 }}>
                 <VStack spacing={4} align="stretch">
                   <FormControl>
                     <FormLabel fontWeight="semibold" color="gray.700">
@@ -1031,10 +1031,10 @@ function MasterView({ autofill = false }) {
                   borderColor="gray.300"
                   overflow="hidden"
                 >
-                  <CardHeader bg="purple.600" color="white" p={4}>
-                    <Heading size="md">Semester Timetable</Heading>
+                  <CardHeader bg="purple.600" color="white" p={{ base: 3, md: 4 }}>
+                    <Heading size={{ base: "sm", md: "md" }}>Semester Timetable</Heading>
                   </CardHeader>
-                  <CardBody p={6}>
+                  <CardBody p={{ base: 4, md: 6 }}>
                     <FormControl mb={4}>
                       <FormLabel fontWeight="semibold" color="gray.700">
                         Select Semester
@@ -1126,10 +1126,10 @@ function MasterView({ autofill = false }) {
                   borderColor="gray.300"
                   overflow="hidden"
                 >
-                  <CardHeader bg="teal.600" color="white" p={4}>
-                    <Heading size="md">Faculty Timetable</Heading>
+                  <CardHeader bg="teal.600" color="white" p={{ base: 3, md: 4 }}>
+                    <Heading size={{ base: "sm", md: "md" }}>Faculty Timetable</Heading>
                   </CardHeader>
-                  <CardBody p={6}>
+                  <CardBody p={{ base: 4, md: 6 }}>
                     <FormControl mb={4}>
                       <FormLabel fontWeight="semibold" color="gray.700">
                         Select Faculty
@@ -1222,10 +1222,10 @@ function MasterView({ autofill = false }) {
                   borderColor="gray.300"
                   overflow="hidden"
                 >
-                  <CardHeader bg="green.600" color="white" p={4}>
-                    <Heading size="md">Room Timetable</Heading>
+                  <CardHeader bg="green.600" color="white" p={{ base: 3, md: 4 }}>
+                    <Heading size={{ base: "sm", md: "md" }}>Room Timetable</Heading>
                   </CardHeader>
-                  <CardBody p={6}>
+                  <CardBody p={{ base: 4, md: 6 }}>
                     <FormControl mb={4}>
                       <FormLabel fontWeight="semibold" color="gray.700">
                         Select Room

@@ -587,9 +587,9 @@ useEffect(() => {
           {/* Filters */}
           <Card shadow="xl" borderRadius="2xl" overflow="hidden">
             <CardHeader bg="teal.600" color="white" p={5}>
-              <Heading size="md">Filters</Heading>
+              <Heading size={{ base: "sm", md: "md" }}>Filters</Heading>
             </CardHeader>
-            <CardBody p={6}>
+            <CardBody p={{ base: 4, md: 6 }}>
               <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6}>
                 <Select
                   value={selectedSession}
@@ -627,7 +627,7 @@ useEffect(() => {
           <Card shadow="2xl" borderRadius="2xl" overflow="hidden">
             <CardHeader bg="teal.600" color="white" p={5}>
               <Flex justify="space-between" align="center" flexWrap="wrap" gap={4}>
-                <Heading size="md">
+                <Heading size={{ base: "sm", md: "md" }}>
                   {selectedDepartment || 'Select Department'} Load Distribution
                 </Heading>
                 <HStack spacing={3}>
@@ -780,7 +780,7 @@ useEffect(() => {
                 { label: 'Theory + Lab', type: 'theory_lab' },
               ].map(item => (
                 <VStack key={item.type} spacing={3}>
-                  <Text fontWeight="bold" fontSize="lg">{item.label}</Text>
+                  <Text fontWeight="bold" fontSize={{ base: "md", md: "lg" }}>{item.label}</Text>
                   <VStack spacing={3}>
                     <Button
                       leftIcon={<DownloadIcon />}

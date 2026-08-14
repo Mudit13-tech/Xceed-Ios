@@ -292,10 +292,10 @@ function TimetableMasterView() {
               borderColor="gray.300"
               overflow="hidden"
             >
-              <CardHeader bg="purple.600" color="white" p={4}>
-                <Heading size="md">Select Session</Heading>
+              <CardHeader bg="purple.600" color="white" p={{ base: 3, md: 4 }}>
+                <Heading size={{ base: "sm", md: "md" }}>Select Session</Heading>
               </CardHeader>
-              <CardBody p={6}>
+              <CardBody p={{ base: 4, md: 6 }}>
                 <FormControl>
                   <FormLabel fontWeight="semibold" color="gray.700" fontSize="sm">
                     Academic Session
@@ -331,10 +331,10 @@ function TimetableMasterView() {
                 borderColor="gray.300"
                 overflow="hidden"
               >
-                <CardHeader bg="teal.600" color="white" p={4}>
+                <CardHeader bg="teal.600" color="white" p={{ base: 3, md: 4 }}>
                   <Flex justify="space-between" align="center" flexWrap="wrap" gap={2}>
                     <VStack align="start" spacing={0}>
-                      <Heading size="md">Department Timetables</Heading>
+                      <Heading size={{ base: "sm", md: "md" }}>Department Timetables</Heading>
                       <Text fontSize="xs" color="whiteAlpha.800" mt={1}>
                         Session: {selectedSession}
                       </Text>

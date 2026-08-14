@@ -186,7 +186,7 @@ const TimetableSummary = ({ timetableData, code, type, time, headTitle, subjectD
   return (
     <Box my={6}>
       <Card bg="white" borderRadius="2xl" shadow="2xl" border="1px" borderColor="gray.300" overflow="hidden">
-        <CardHeader bg="cyan.600" color="white" p={4}>
+        <CardHeader bg="cyan.600" color="white" p={{ base: 3, md: 4 }}>
           <Flex 
             direction={{ base: "column", md: "row" }} 
             justify={{ base: "flex-start", md: "space-between" }} 

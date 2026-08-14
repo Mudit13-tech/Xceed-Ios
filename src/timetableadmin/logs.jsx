@@ -79,7 +79,7 @@ const TimetableLockLog = ({ facultyChanges }) => {
   return (
     <Box>
       {/* Summary View (Short Form) */}
-      <HStack wrap="wrap" spacing={2} mb={isOpen ? 4 : 0}>
+      <HStack wrap="wrap" spacing={2} mb={isOpen ? 4 : 0} maxW="100%">
         {totalAdded > 0 && (
           <Tag size="sm" colorScheme="green" variant="subtle">
             <TagLabel>+{totalAdded} Added</TagLabel>
@@ -379,11 +379,11 @@ const Logs = () => {
   };
 
   return (
-    <Box bgGradient={bgGradient} minH="100vh" pb={16}>
+    <Box bgGradient={bgGradient} minH="100vh" pb={{ base: 10, md: 16 }} overflowX="hidden">
       <Box
         bgGradient="linear(to-r, purple.600, blue.600, teal.500)"
-        pt={8}
-        pb={20}
+        pt={{ base: 5, md: 8 }}
+        pb={{ base: 16, md: 20 }}
         position="relative"
         overflow="hidden"
       >
@@ -397,28 +397,28 @@ const Logs = () => {
           bgImage="radial-gradient(circle, white 1px, transparent 1px)"
           bgSize="30px 30px"
         />
-        <Container maxW="7xl" position="relative">
-          <VStack spacing={3} align="start">
+        <Container maxW="7xl" position="relative" px={{ base: 4, md: 6, lg: 8 }}>
+          <VStack spacing={{ base: 2, md: 3 }} align="start">
             <Badge
               colorScheme="whiteAlpha"
-              fontSize="sm"
+              fontSize={{ base: "xs", md: "sm" }}
               px={3}
               py={1}
               borderRadius="full"
             >
               Logs
             </Badge>
-            <Heading size="2xl" color="white" fontWeight="bold">
+            <Heading size={{ base: "lg", md: "xl", lg: "2xl" }} color="white" fontWeight="bold">
               Timetable Change Logs
             </Heading>
-            <Text color="whiteAlpha.900" fontSize="lg" maxW="2xl">
+            <Text color="whiteAlpha.900" fontSize={{ base: "sm", md: "lg" }} maxW="2xl">
               View all changes made to the timetable system.
             </Text>
           </VStack>
         </Container>
       </Box>
 
-      <Container maxW="7xl" mt={-12} position="relative" zIndex={1}>
+      <Container maxW="7xl" mt={-12} position="relative" zIndex={1} px={{ base: 4, md: 6, lg: 8 }}>
         <Box
           bg={cardBg}
           borderRadius="2xl"
@@ -427,23 +427,23 @@ const Logs = () => {
           border="1px"
           borderColor={borderColor}
         >
-          <Box bgGradient="linear(to-r, gray.700, gray.800)" p={6}>
-            <HStack justify="space-between" align="center">
-              <HStack spacing={3} align="center">
+          <Box bgGradient="linear(to-r, gray.700, gray.800)" p={{ base: 4, md: 6 }}>
+            <HStack justify="space-between" align="center" spacing={2}>
+              <HStack spacing={3} align="center" minW={0}>
                 <Box bg="whiteAlpha.200" p={2} borderRadius="lg">
                   <Icon as={FiList} boxSize={5} color="white" />
                 </Box>
                 <VStack align="start" spacing={0}>
-                  <Heading size="md" color="white">
+                  <Heading size={{ base: "sm", md: "md" }} color="white">
                     Change Logs
                   </Heading>
-                  <Text color="whiteAlpha.800" fontSize="sm">
+                  <Text color="whiteAlpha.800" fontSize={{ base: "xs", md: "sm" }}>
                     {totalLogs} total logs
                   </Text>
                 </VStack>
               </HStack>
 
-              <HStack spacing={3}>
+              <HStack spacing={{ base: 1, md: 3 }} flexShrink={0}>
                 <Menu>
                   <MenuButton
                     as={IconButton}
@@ -545,14 +545,14 @@ const Logs = () => {
             </HStack>
           </Box>
 
-          <Box overflowX="auto">
-            <Table variant="simple">
+          <Box overflowX="auto" w="100%" maxW="100%">
+            <Table variant="simple" size={{ base: "sm", md: "md" }}>
               <Thead bg="gray.50">
                 <Tr>
-                  <Th>Time</Th>
-                  <Th>User</Th>
-                  <Th>Department & Session</Th>
-                  <Th>Changes</Th>
+                  <Th fontSize={{ base: "2xs", md: "xs" }}>Time</Th>
+                  <Th fontSize={{ base: "2xs", md: "xs" }}>User</Th>
+                  <Th fontSize={{ base: "2xs", md: "xs" }}>Department & Session</Th>
+                  <Th fontSize={{ base: "2xs", md: "xs" }}>Changes</Th>
                 </Tr>
               </Thead>
               <Tbody>
@@ -565,22 +565,22 @@ const Logs = () => {
                 ) : (
                   logs.map((log, i) => (
                     <Tr key={i} _hover={{ bg: 'gray.50' }}>
-                      <Td py={5}>
-                        <Text fontSize="sm" color="gray.600">
+                      <Td py={{ base: 3, md: 5 }}>
+                        <Text fontSize={{ base: "xs", md: "sm" }} color="gray.600">
                           {formatTime(log.time)}
                         </Text>
                       </Td>
-                      <Td py={5}>
-                        <Text fontSize="sm" color="gray.800">
+                      <Td py={{ base: 3, md: 5 }}>
+                        <Text fontSize={{ base: "xs", md: "sm" }} color="gray.800" wordBreak="break-word">
                           {log.userEmail}
                         </Text>
                       </Td>
-                      <Td py={5}>
-                        <Badge colorScheme="blue" variant="subtle">
+                      <Td py={{ base: 3, md: 5 }}>
+                        <Badge colorScheme="blue" variant="subtle" whiteSpace="normal">
                           {log.dept} - {log.session}
                         </Badge>
                       </Td>
-                      <Td py={5}>
+                      <Td py={{ base: 3, md: 5 }} minW={{ base: "240px", md: "auto" }}>
                         <TimetableLockLog
                           facultyChanges={(() => {
                             try {
@@ -598,10 +598,15 @@ const Logs = () => {
             </Table>
           </Box>
 
-          <Box p={6} bg="gray.50" borderTop="1px" borderColor={borderColor}>
-            <Flex align="center" justify="space-between">
+          <Box p={{ base: 4, md: 6 }} bg="gray.50" borderTop="1px" borderColor={borderColor}>
+            <Flex
+              align={{ base: "stretch", md: "center" }}
+              justify="space-between"
+              direction={{ base: "column", md: "row" }}
+              gap={{ base: 3, md: 0 }}
+            >
               <HStack spacing={4}>
-                <Text fontSize="sm" color="gray.600">
+                <Text fontSize={{ base: "xs", md: "sm" }} color="gray.600">
                   Show per page:
                 </Text>
                 <Select
@@ -617,7 +622,7 @@ const Logs = () => {
                 </Select>
               </HStack>
 
-              <HStack spacing={2}>
+              <HStack spacing={2} justify={{ base: "center", md: "flex-end" }}>
                 <Button
                   size="sm"
                   variant="outline"
@@ -628,9 +633,9 @@ const Logs = () => {
                   Previous
                 </Button>
                 <Text
-                  fontSize="sm"
+                  fontSize={{ base: "xs", md: "sm" }}
                   color="gray.600"
-                  minW="100px"
+                  minW={{ base: "80px", md: "100px" }}
                   textAlign="center"
                 >
                   Page {currentPage} of{' '}

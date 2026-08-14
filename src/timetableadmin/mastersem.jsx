@@ -196,7 +196,7 @@ function MasterSemester() {
   };
 
   return (
-    <Container maxW="6xl">
+    <Container maxW="6xl" px={{ base: 3, md: 6 }} w="100%" maxWidth="100%" overflowX="hidden">
       {/* <h1>Manage Master Semesters</h1> */}
       <Header title="Manage Master Semesters"></Header>
       <Text as="b">Batch Upload</Text>
@@ -209,7 +209,7 @@ function MasterSemester() {
         onChange={handleFileChange}
         name="XlsxFile"
       />
-      <Box display="flex" justifyContent="space-between">
+      <Box display="flex" justifyContent="space-between" flexWrap="wrap" gap="2">
         <Box>
           <CustomBlueButton ml="0" mt="4" onClick={handleUpload}>
             Upload Xlsx
@@ -282,7 +282,7 @@ function MasterSemester() {
                 }
               />
             </Box>
-            <Box display="flex" justifyContent="space-between">
+            <Box display="flex" justifyContent="space-between" flexWrap="wrap" gap="2">
               <CustomBlueButton ml="0" onClick={handleSaveNewSemester}>
                 Save New Semester
               </CustomBlueButton>
@@ -298,27 +298,28 @@ function MasterSemester() {
         )}
       </Box>
 
-<TableContainer>
-        <Text as='b' >Master Semesters Data (Total Entries: {masterSems.length}):</Text>
+<TableContainer w="100%" maxW="100%" overflowX="auto">
+        <Text as='b' fontSize={{ base: "sm", md: "md" }}>Master Semesters Data (Total Entries: {masterSems.length}):</Text>
         <Table 
         mt='2'
         variant='striped'
+        size={{ base: "sm", md: "md" }}
         >
           <Thead>
             <Tr>
-              <Th><Center>Semester</Center></Th>
-              <Th><Center>Type</Center></Th>
-              <Th><Center>Department</Center></Th>
-              <Th><Center>Degree</Center></Th>
-              <Th><Center>Year</Center></Th>
+              <Th fontSize={{ base: "2xs", md: "xs" }}><Center>Semester</Center></Th>
+              <Th fontSize={{ base: "2xs", md: "xs" }}><Center>Type</Center></Th>
+              <Th fontSize={{ base: "2xs", md: "xs" }}><Center>Department</Center></Th>
+              <Th fontSize={{ base: "2xs", md: "xs" }}><Center>Degree</Center></Th>
+              <Th fontSize={{ base: "2xs", md: "xs" }}><Center>Year</Center></Th>
 
-              <Th><Center>Action</Center></Th>
+              <Th fontSize={{ base: "2xs", md: "xs" }}><Center>Action</Center></Th>
             </Tr>
           </Thead>
           <Tbody>
             {masterSems.map((semester) => (
               <Tr key={semester._id}>
-                <Td><Center>
+                <Td fontSize={{ base: "xs", md: "sm" }}><Center>
                   {editSemesterId === semester._id ? (
                     <input
                       type="text"
@@ -334,7 +335,7 @@ function MasterSemester() {
                     semester.sem
                   )}</Center>
                 </Td>
-                <Td><Center>
+                <Td fontSize={{ base: "xs", md: "sm" }}><Center>
                     {editSemesterId === semester._id ? (
                       <input
                         type="text"
@@ -351,7 +352,7 @@ function MasterSemester() {
                     )}
                 </Center>
                 </Td>
-                <Td><Center>
+                <Td fontSize={{ base: "xs", md: "sm" }}><Center>
                   
                     {editSemesterId === semester._id ? (
                       <input
@@ -369,7 +370,7 @@ function MasterSemester() {
                     )}
                 </Center>
                 </Td>
-                <Td><Center>
+                <Td fontSize={{ base: "xs", md: "sm" }}><Center>
                   
                     {editSemesterId === semester._id ? (
                       <input
@@ -387,7 +388,7 @@ function MasterSemester() {
                     )}
                 </Center>
                 </Td>
-                <Td><Center>
+                <Td fontSize={{ base: "xs", md: "sm" }}><Center>
                   
                     {editSemesterId === semester._id ? (
                       <input
@@ -405,7 +406,7 @@ function MasterSemester() {
                     )}
                 </Center>
                 </Td>
-                <Td><Center>
+                <Td fontSize={{ base: "xs", md: "sm" }}><Center>
                   
                     {editSemesterId === semester._id ? (
                       <CustomBlueButton onClick={handleSaveEdit}>

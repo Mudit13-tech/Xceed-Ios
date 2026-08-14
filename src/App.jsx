@@ -66,6 +66,7 @@ import Departmentloadallocation from './timetableadmin/departmentloadallocation.
 import FacultyHourLoad from './timetableadmin/facultyhourload.jsx';
 import FacultyLoadCOE from './timetableadmin/facultyloadcoe.jsx';
 import AdminClash from './timetableadmin/AdminClashes.jsx';
+import InstituteMergedDownload from './timetableadmin/instituteMergedDownload.jsx';
 
 import Home from './pages/Home';
 import GuidePage from './pages/GuidePage';
@@ -374,6 +375,10 @@ function App() {
         <Route path="/tt/masterdata" element={<MasterLoadDataTable />} />
 
         <Route path="/tt/admin/clashes" element={<AdminClash />} />
+        <Route
+          path="/tt/admin/mergeddownload"
+          element={<InstituteMergedDownload />}
+        />
         {/* <Route
           path="/tt/:generatedLink/generatepdf/mergepdf"
           element={<MergePDFComponent />}

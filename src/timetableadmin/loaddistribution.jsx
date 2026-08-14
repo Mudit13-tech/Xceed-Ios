@@ -212,11 +212,12 @@ const hoursCalculation = calculateOccupiedSlots(viewFacultyData)
 console.log(hoursCalculation)
 
   return (
-    <div>
+    <Box w="100%" maxW="100%" px={{ base: 3, md: 6 }} py={{ base: 2, md: 4 }} overflowX="hidden">
       <Header title="Load distribution Summary"></Header>
       {/* <Button onClick={handleDownloadClick}>Download Timetable</Button> */}
-      <h2>Semester timetable (locked)</h2>
+      <Heading as="h2" size={{ base: 'sm', md: 'md' }} my={{ base: 2, md: 3 }}>Semester timetable (locked)</Heading>
       <select
+        style={{ maxWidth: '100%' }}
         value={selectedSemester}
         onChange={(e) => setSelectedSemester(e.target.value)}
       >
@@ -227,10 +228,10 @@ console.log(hoursCalculation)
           </option>
         ))}
       </select>
-      <div>
+      <Box w="100%" maxW="100%" overflowX="auto">
   {selectedSemester ? (
     <div>
-      <Text fontSize="xl" color="blue" id="saveTime">
+      <Text fontSize={{ base: 'md', md: 'xl' }} color="blue" id="saveTime">
          Last saved on: {lockedTime ? lockedTime: 'Not saved yet'}
         </Text>
       <ViewTimetable timetableData={viewData} />     
@@ -242,10 +243,11 @@ console.log(hoursCalculation)
   ) : (
     <p>Please select a Semester from the dropdown.</p>
   )}
-</div>
+</Box>
       {/* Faculty Dropdown */}
-      <h2>Faculty timetable (locked)</h2>
+      <Heading as="h2" size={{ base: 'sm', md: 'md' }} my={{ base: 2, md: 3 }}>Faculty timetable (locked)</Heading>
       <select
+        style={{ maxWidth: '100%' }}
         value={selectedFaculty}
         onChange={(e) => setSelectedFaculty(e.target.value)}
       >
@@ -256,9 +258,9 @@ console.log(hoursCalculation)
           </option>
         ))}
       </select>
-      <div>
+      <Box w="100%" maxW="100%" overflowX="auto">
   {selectedFaculty ? (<div>
-    <Text fontSize="xl" color="blue" id="saveTime">
+    <Text fontSize={{ base: 'md', md: 'xl' }} color="blue" id="saveTime">
          Last saved on: {facultyLockedTime ? facultyLockedTime: 'Not saved yet'}
         </Text>
 
@@ -271,10 +273,11 @@ console.log(hoursCalculation)
     ) : (
     <p>Please select a faculty from the dropdown.</p>
   )}
-</div> 
-      <h2>Room timetable (locked)</h2>
+</Box>
+      <Heading as="h2" size={{ base: 'sm', md: 'md' }} my={{ base: 2, md: 3 }}>Room timetable (locked)</Heading>
       {/* Room Dropdown */}
       <select
+        style={{ maxWidth: '100%' }}
         value={selectedRoom}
         onChange={(e) => setSelectedRoom(e.target.value)}
       >
@@ -285,10 +288,10 @@ console.log(hoursCalculation)
           </option>
         ))}
       </select>
-      <div>
+      <Box w="100%" maxW="100%" overflowX="auto">
   {selectedRoom ? (
     <div>
-            <Text fontSize="xl" color="blue" id="saveTime">
+            <Text fontSize={{ base: 'md', md: 'xl' }} color="blue" id="saveTime">
          Last saved on: {roomlockedTime ? roomlockedTime: 'Not saved yet'}
         </Text>
 
@@ -301,9 +304,9 @@ console.log(hoursCalculation)
   ) : (
     <p>Please select a Room from the dropdown.</p>
   )}
-</div>
+</Box>
 
-</div>
+</Box>
   );
 }
 

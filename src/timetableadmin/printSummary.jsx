@@ -37,6 +37,7 @@ import downloadPDF from '../filedownload/downloadpdf';
 import downloadMergedPDF from '../filedownload/downloadmergedpdf';
 import mergePdfs from '../filedownload/mergepdf';
 import generateSummaryTablePDF from '../filedownload/downloadsummary';
+import { generateInitialTimetableData, generateSummary } from './timetableDataHelpers';
 
 const PrintSummary = () => {
   const [TTData, setTTData] = useState([]);
@@ -198,91 +199,6 @@ const PrintSummary = () => {
     return { initialData, updateTime, notes };
   };
 
-  const generateInitialTimetableData = (fetchedData, type) => {
-    const initialData = {};
-    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-    const periods = [1, 2, 3, 4, 5, 6, 7, 8, 'lunch'];
-
-    for (const day of days) {
-      initialData[day] = {};
-      for (const period of periods) {
-        if (period == 'lunch') {
-          initialData[day]['lunch'] = [];
-          if (fetchedData[day] && fetchedData[day]['lunch']) {
-            const slotData = fetchedData[day]['lunch'];
-            for (const slot of slotData) {
-              const slotSubjects = [];
-              let faculty = "";
-              let room = "";
-              for (const slotItem of slot) {
-                const subj = slotItem.subject || "";
-                if (type == "room") {
-                  room = slotItem.sem || "";
-                } else {
-                  room = slotItem.room || "";
-                }
-                if (type == "faculty") {
-                  faculty = slotItem.sem || "";
-                } else {
-                  faculty = slotItem.faculty || "";
-                }
-                if (subj || room || faculty) {
-                  slotSubjects.push({
-                    subject: subj,
-                    room: room,
-                    faculty: faculty,
-                  });
-                }
-              }
-              initialData[day]['lunch'].push(slotSubjects);
-            }
-          }
-        } else {
-          initialData[day][`period${period}`] = [];
-          if (fetchedData[day] && fetchedData[day][`period${period}`]) {
-            const slotData = fetchedData[day][`period${period}`];
-            for (const slot of slotData) {
-              const slotSubjects = [];
-              let faculty = "";
-              let room = "";
-              for (const slotItem of slot) {
-                const subj = slotItem.subject || "";
-                if (type == "room") {
-                  room = slotItem.sem || "";
-                } else {
-                  room = slotItem.room || "";
-                }
-                if (type == "faculty") {
-                  faculty = slotItem.sem || "";
-                } else {
-                  faculty = slotItem.faculty || "";
-                }
-                if (subj || room || faculty) {
-                  slotSubjects.push({
-                    subject: subj,
-                    room: room,
-                    faculty: faculty,
-                  });
-                }
-              }
-              if (slotSubjects.length === 0) {
-                slotSubjects.push({
-                  subject: "",
-                  room: "",
-                  faculty: "",
-                });
-              }
-              initialData[day][`period${period}`].push(slotSubjects);
-            }
-          } else {
-            initialData[day][`period${period}`].push([]);
-          }
-        }
-      }
-    }
-    return initialData;
-  };
-
   const fetchSubjectData = async (currentCode) => {
     try {
       const response = await fetch(`${apiUrl}/timetablemodule/subject/subjectdetails/${currentCode}`);
@@ -343,140 +259,6 @@ const PrintSummary = () => {
     }
   };
 
-  function generateSummary(timetableData, subjectData, type, headTitle, commonLoad) {
-    const summaryData = {};
-    for (const day in timetableData) {
-      for (let period = 1; period <= 9; period++) {
-        let slots = '';
-        if (period == 9) {
-          slots = timetableData[day]['lunch'];
-        } else {
-          slots = timetableData[day][`period${period}`];
-        }
-        if (slots) {
-          slots.forEach((slot) => {
-            slot.forEach((cell) => {
-              // Lunch duty counts as 1 hr of load for the assigned faculty.
-              if (type == 'faculty' && period == 9) {
-                if (cell.subject || cell.room || cell.faculty) {
-                  const key = 'Lunch';
-                  if (!summaryData[key]) {
-                    summaryData[key] = {
-                      subCode: 'LUNCH',
-                      count: 1,
-                      faculties: [],
-                      subType: 'lunch',
-                      rooms: [],
-                      subjectFullName: 'Lunch Duty',
-                      subSem: '',
-                    };
-                  } else {
-                    summaryData[key].count++;
-                  }
-                }
-                return;
-              }
-
-              if (cell.subject) {
-                const { subject, faculty, room } = cell;
-                let foundSubject = '';
-                if (type == 'faculty') {
-                  foundSubject = subjectData.find(item => item.subName === subject && item.sem === faculty);
-                } else if (type == 'room') {
-                  foundSubject = subjectData.find(item => item.subName === subject && item.sem === room);
-                } else if (type == 'sem') {
-                  foundSubject = subjectData.find(item => item.subName === subject && item.sem === headTitle);
-                }
-                if (foundSubject) {
-                  if (!summaryData[subject]) {
-                    summaryData[subject] = {
-                      subCode: foundSubject.subCode,
-                      count: 1,
-                      faculties: [faculty],
-                      subType: foundSubject.type,
-                      rooms: [room],
-                      subjectFullName: foundSubject.subjectFullName,
-                      subSem: foundSubject.sem,
-                    };
-                  } else {
-                    summaryData[subject].count++;
-                    if (!summaryData[subject].faculties.includes(faculty)) {
-                      summaryData[subject].faculties.push(faculty);
-                    }
-                    if (!summaryData[subject].rooms.includes(room)) {
-                      summaryData[subject].rooms.push(room);
-                    }
-                  }
-                }
-              }
-            });
-          });
-        }
-      }
-    }
-
-    const mergedSummaryData = {};
-    for (const key in summaryData) {
-      const entry = summaryData[key];
-      let isMerged = false;
-      for (const existingKey in mergedSummaryData) {
-        const existingEntry = mergedSummaryData[existingKey];
-        if (
-          entry.faculties.every(faculty => existingEntry.faculties.includes(faculty)) &&
-          entry.subType === existingEntry.subType &&
-          entry.subjectFullName === existingEntry.subjectFullName &&
-          entry.rooms.every(room => existingEntry.rooms.includes(room))
-        ) {
-          existingEntry.count += entry.count;
-          existingEntry.faculties = [...new Set([...existingEntry.faculties, ...entry.faculties])];
-          existingEntry.originalKeys.push(key);
-          isMerged = true;
-          break;
-        }
-      }
-      if (!isMerged) {
-        mergedSummaryData[key] = { ...entry, originalKeys: [key] };
-      }
-    }
-
-    const sortedSummary = Object.values(mergedSummaryData).sort((a, b) => {
-      const subCodeComparison = a.subCode.localeCompare(b.subCode);
-      if (subCodeComparison !== 0) {
-        return subCodeComparison;
-      }
-      const subtypePriority = (subtype) => {
-        switch (subtype.toLowerCase()) {
-          case 'theory': return 0;
-          case 'tutorial': return 1;
-          case 'laboratory': return 2;
-          default: return 3;
-        }
-      };
-      return subtypePriority(a.subType) - subtypePriority(b.subType);
-    });
-
-    let sortedSummaryEntries = { ...sortedSummary };
-    if (commonLoad) {
-      commonLoad.forEach((commonLoadItem) => {
-        sortedSummaryEntries = {
-          ...sortedSummaryEntries,
-          [commonLoadItem.subCode]: {
-            ...sortedSummaryEntries[commonLoadItem.subCode],
-            count: commonLoadItem.hrs,
-            faculties: [],
-            originalKeys: [commonLoadItem.subName],
-            rooms: [],
-            subCode: commonLoadItem.subCode,
-            subjectFullName: commonLoadItem.subFullName,
-            subType: commonLoadItem.subType,
-            subSem: commonLoadItem.sem,
-          },
-        };
-      });
-    }
-    return sortedSummaryEntries;
-  }
-
   const fetchAndStoreTimetableDataForAllSemesters = async () => {
     setIsLoading(true);
     const subjectData = await fetchSubjectData(currentCode);
@@ -504,11 +286,12 @@ const PrintSummary = () => {
 
   const fetchAndStoreTimetableDataForAllSemestersMerged = async () => {
     setIsLoading(true);
+    try {
     const subjectData = await fetchSubjectData(currentCode);
     setDownloadStatus("fetchingHeadersFooters");
     const fetchedttdetails = await fetchTTData(currentCode);
     let allSemMerged = [];
-    
+
     for (const semester of availableSems) {
       const { initialData, notes } = await fetchTimetableData(semester);
       const fetchedttdata = initialData;
@@ -516,7 +299,7 @@ const PrintSummary = () => {
       const summaryData = generateSummary(fetchedttdata, subjectData, 'sem', semester);
       const lockTime = await fetchTime();
       setPrepareStatus("preparingDownload");
-      downloadMergedPDF(fetchedttdata, summaryData, 'sem', fetchedttdetails, lockTime, semester, semNotes, allSemMerged);
+      await downloadMergedPDF(fetchedttdata, summaryData, 'sem', fetchedttdetails, lockTime, semester, semNotes, allSemMerged);
       setStartStatus("downloadStarted");
       setTimetableData(fetchedttdata);
       setSummaryData(summaryData);
@@ -524,19 +307,25 @@ const PrintSummary = () => {
       setUpdatedTime(lockTime);
       setHeadTitle(semester);
     }
-    mergePdfs(allSemMerged, "allSem.pdf");
+    await mergePdfs(allSemMerged, "allSem.pdf");
     setCompleteStatus("downloadCompleted");
-    setIsLoading(false);
+    } catch (error) {
+      console.error('Error downloading merged semester timetables:', error);
+      setCompleteStatus("downloadFailed");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const fetchAndStoreTimetableDataForAllFacultyMerged = async () => {
     setIsLoading(true);
+    try {
     const subjectData = await fetchSubjectData(currentCode);
     setDownloadStatus("fetchingHeadersFootersMerged");
     const allFacultySummaries = [];
     const fetchedttdetails = await fetchTTData(currentCode);
     let allFacultyPdfBlob = [];
-    
+
     for (const faculty of availableFaculties) {
       const { initialData, updateTime, notes } = await fetchFacultyData(currentCode, faculty);
       const fetchedttdata = initialData;
@@ -549,7 +338,7 @@ const PrintSummary = () => {
       setNoteStatus("fetchingNotesMerged");
       setDownloadStatus("preparingDownloadMerged");
       setPrepareStatus("preparingDownloadMerged");
-      downloadMergedPDF(fetchedttdata, summaryData, 'faculty', fetchedttdetails, lockTime, faculty, facultyNotes, allFacultyPdfBlob);
+      await downloadMergedPDF(fetchedttdata, summaryData, 'faculty', fetchedttdetails, lockTime, faculty, facultyNotes, allFacultyPdfBlob);
       setDownloadStatus("downloadStartedMerged");
       setStartStatus("downloadStartedMerged");
       setTimetableData(fetchedttdata);
@@ -558,9 +347,14 @@ const PrintSummary = () => {
       setUpdatedTime(lockTime);
       setHeadTitle(faculty);
     }
-    mergePdfs(allFacultyPdfBlob, "allFaculty.pdf");
+    await mergePdfs(allFacultyPdfBlob, "allFaculty.pdf");
     setCompleteStatus("downloadCompletedMerged");
-    setIsLoading(false);
+    } catch (error) {
+      console.error('Error downloading merged faculty timetables:', error);
+      setCompleteStatus("downloadFailed");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const fetchAndStoreTimetableDataForAllFaculty = async () => {
@@ -626,11 +420,12 @@ const PrintSummary = () => {
 
   const fetchAndStoreTimetableDataForAllRoomMerged = async () => {
     setIsLoading(true);
+    try {
     const subjectData = await fetchSubjectData(currentCode);
     setDownloadStatus("fetchingHeadersFooters");
     const fetchedttdetails = await fetchTTData(currentCode);
     let allRoomMerged = [];
-    
+
     for (const room of availableRooms) {
       const { initialData, updateTime, notes } = await fetchRoomData(currentCode, room);
       const fetchedttdata = initialData;
@@ -641,7 +436,7 @@ const PrintSummary = () => {
       setNoteStatus("fetchingNotes");
       setDownloadStatus("preparingDownload");
       setPrepareStatus("preparingDownload");
-      downloadMergedPDF(fetchedttdata, summaryData, 'room', fetchedttdetails, lockTime, room, roomNotes, allRoomMerged);
+      await downloadMergedPDF(fetchedttdata, summaryData, 'room', fetchedttdetails, lockTime, room, roomNotes, allRoomMerged);
       setDownloadStatus("downloadStarted");
       setStartStatus("downloadStarted");
       setTimetableData(fetchedttdata);
@@ -650,9 +445,14 @@ const PrintSummary = () => {
       setUpdatedTime(lockTime);
       setHeadTitle(room);
     }
-    mergePdfs(allRoomMerged, "allRoom.pdf");
+    await mergePdfs(allRoomMerged, "allRoom.pdf");
     setCompleteStatus("downloadCompleted");
-    setIsLoading(false);
+    } catch (error) {
+      console.error('Error downloading merged room timetables:', error);
+      setCompleteStatus("downloadFailed");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const fetchDeptLoadAllocation = async () => {
@@ -883,7 +683,7 @@ const PrintSummary = () => {
               borderColor="gray.300"
               overflow="hidden"
             >
-              <CardHeader bg="blue.600" color="white" p={4}>
+              <CardHeader bg="blue.600" color="white" p={{ base: 3, md: 4 }}>
                 <Heading size={{ base: "sm", md: "md" }}>Available Resources</Heading>
               </CardHeader>
               <CardBody p={{ base: 4, md: 6 }}>
@@ -954,7 +754,7 @@ const PrintSummary = () => {
               borderColor="gray.300"
               overflow="hidden"
             >
-              <CardHeader bg="teal.600" color="white" p={4}>
+              <CardHeader bg="teal.600" color="white" p={{ base: 3, md: 4 }}>
                 <HStack spacing={2}>
                   <Icon as={FaChalkboard} boxSize={{ base: 4, md: 5 }} />
                   <Heading size={{ base: "sm", md: "md" }}>Semester Timetables</Heading>
@@ -1014,6 +814,7 @@ const PrintSummary = () => {
                     <StatusMessage type="semMerged" status={prepareStatus === 'preparingDownload'} message="Preparing download..." />
                     <StatusMessage type="semMerged" status={startStatus === 'downloadStarted'} message="Download in progress...S" />
                     <StatusMessage type="semMerged" status={completeStatus === 'downloadCompleted'} message="Download Completed." color="green" />
+                    <StatusMessage type="semMerged" status={completeStatus === 'downloadFailed'} message="Download failed. Please try again." color="red" />
                   </Box>
                 </VStack>
               </CardBody>
@@ -1028,7 +829,7 @@ const PrintSummary = () => {
               borderColor="gray.300"
               overflow="hidden"
             >
-              <CardHeader bg="purple.600" color="white" p={4}>
+              <CardHeader bg="purple.600" color="white" p={{ base: 3, md: 4 }}>
                 <HStack spacing={2}>
                   <Icon as={FaUsers} boxSize={{ base: 4, md: 5 }} />
                   <Heading size={{ base: "sm", md: "md" }}>Faculty Timetables</Heading>
@@ -1088,6 +889,7 @@ const PrintSummary = () => {
                     <StatusMessage type="facultyMerged" status={prepareStatus === 'preparingDownloadMerged'} message="Preparing download..." />
                     <StatusMessage type="facultyMerged" status={startStatus === 'downloadStartedMerged'} message="Download in progress..." />
                     <StatusMessage type="facultyMerged" status={completeStatus === 'downloadCompletedMerged'} message="Download Completed." color="green" />
+                    <StatusMessage type="facultyMerged" status={completeStatus === 'downloadFailed'} message="Download failed. Please try again." color="red" />
                   </Box>
                 </VStack>
               </CardBody>
@@ -1102,7 +904,7 @@ const PrintSummary = () => {
               borderColor="gray.300"
               overflow="hidden"
             >
-              <CardHeader bg="cyan.600" color="white" p={4}>
+              <CardHeader bg="cyan.600" color="white" p={{ base: 3, md: 4 }}>
                 <HStack spacing={2}>
                   <Icon as={FaDoorOpen} boxSize={{ base: 4, md: 5 }} />
                   <Heading size={{ base: "sm", md: "md" }}>Room Timetables</Heading>
@@ -1162,6 +964,7 @@ const PrintSummary = () => {
                     <StatusMessage type="roomMerged" status={prepareStatus === 'preparingDownload'} message="Preparing download..." />
                     <StatusMessage type="roomMerged" status={startStatus === 'downloadStarted'} message="Download in progress..." />
                     <StatusMessage type="roomMerged" status={completeStatus === 'downloadCompleted'} message="Download Completed." color="green" />
+                    <StatusMessage type="roomMerged" status={completeStatus === 'downloadFailed'} message="Download failed. Please try again." color="red" />
                   </Box>
                 </VStack>
               </CardBody>
@@ -1176,7 +979,7 @@ const PrintSummary = () => {
               borderColor="gray.300"
               overflow="hidden"
             >
-              <CardHeader bg="orange.600" color="white" p={4}>
+              <CardHeader bg="orange.600" color="white" p={{ base: 3, md: 4 }}>
                 <HStack spacing={2}>
                   <Icon as={FaClipboardList} boxSize={{ base: 4, md: 5 }} />
                   <Heading size={{ base: "sm", md: "md" }}>Department Load Allocation</Heading>

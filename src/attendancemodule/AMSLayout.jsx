@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { theme } from './config';
 import getEnvironment from '../getenvironment';
 import { HealthProvider } from './HealthContext';
@@ -10,6 +11,42 @@ import useShellOffset from './useShellOffset';
 
 const T = theme;
 const apiUrl = getEnvironment();
+
+// Shared look for the mobile header's two square action buttons (Xceed home,
+// logout) so they read as one pair regardless of tag.
+const SQUARE_BTN = {
+  width: 32,
+  height: 32,
+  flexShrink: 0,
+  background: 'transparent',
+  border: `1px solid ${theme.border}`,
+  borderRadius: 8,
+  cursor: 'pointer',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 0,
+  textDecoration: 'none',
+};
+
+// Power glyph for the mobile header's logout button.
+function PowerIcon({ size = 18 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 2v10" />
+      <path d="M18.4 6.6a9 9 0 1 1-12.8 0" />
+    </svg>
+  );
+}
 
 // Small home glyph for the iLEED Home nav item (expanded + collapsed states).
 function HomeIcon({ size = 14 }) {
@@ -128,6 +165,25 @@ export default function AMSLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accessChecked, setAccessChecked] = useState(false);
   const [shellRef, shellTop] = useShellOffset();
+  const queryClient = useQueryClient();
+
+  // The platform navbar (and its Logout link) is hidden on mobile here, so this
+  // header has to carry the action itself. Same call and same cache teardown as
+  // Navbar's handleLogout, so either route out leaves the app in one state.
+  async function handleLogout() {
+    try {
+      const response = await fetch(`${apiUrl}/user/getuser/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      queryClient.clear();
+      localStorage.removeItem('token');
+      if (!response.ok) throw new Error('Failed to logout');
+      navigate('/login');
+    } catch (error) {
+      console.error('Error during logout:', error.message);
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -458,8 +514,32 @@ export default function AMSLayout() {
                   <ILeed style={{ lineHeight: 1, display: 'inline-block', fontSize: 16 }} />
                 </a>
               </div>
-              <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>
-                Attendance System
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>
+                  Attendance
+                </span>
+                {/* Way back to the platform, which the hidden Xceed navbar used
+                    to provide. A real <a>, so it can be opened in a new tab. */}
+                <a
+                  href="/"
+                  title="Xceed home"
+                  aria-label="Xceed home"
+                  style={{ ...SQUARE_BTN, color: T.text }}
+                >
+                  <img
+                    src="/clublogo.png"
+                    alt=""
+                    style={{ width: 20, height: 20, objectFit: 'contain' }}
+                  />
+                </a>
+                <button
+                  onClick={handleLogout}
+                  title="Logout"
+                  aria-label="Logout"
+                  style={{ ...SQUARE_BTN, color: '#ef4444' }}
+                >
+                  <PowerIcon />
+                </button>
               </div>
             </header>
           )}

@@ -450,7 +450,7 @@ function FirstYearLoad() {
         <Box 
           bgGradient="linear(to-r, cyan.400, teal.500, green.500)"
           pt={0}
-          pb={24}
+          pb={{ base: 16, md: 20, lg: 24 }}
           position="relative"
           overflow="hidden"
         >
@@ -473,16 +473,16 @@ function FirstYearLoad() {
             <Header />
           </Box>
 
-          <Container maxW="7xl" position="relative" mt={8}>
-            <Flex justify="space-between" align="center" w="full" gap={4}>
-              <VStack spacing={4} align="start" flex="1">
-                <Badge colorScheme="whiteAlpha" fontSize="sm" px={3} py={1} borderRadius="full">
+          <Container maxW="7xl" position="relative" mt={{ base: 4, md: 8 }} px={{ base: 4, md: 6, lg: 8 }}>
+            <Flex justify="space-between" align={{ base: "start", md: "center" }} w="full" gap={{ base: 3, md: 4 }}>
+              <VStack spacing={{ base: 2, md: 4 }} align="start" flex="1" minW={0}>
+                <Badge colorScheme="whiteAlpha" fontSize={{ base: "xs", md: "sm" }} px={3} py={1} borderRadius="full">
                   First Year Timetable
                 </Badge>
-                <Heading size="2xl" color="white" fontWeight="bold" lineHeight="1.2">
+                <Heading size={{ base: "lg", md: "xl", lg: "2xl" }} color="white" fontWeight="bold" lineHeight="1.2">
                   First Year Faculty Allotment
                 </Heading>
-                <Text color="whiteAlpha.900" fontSize="lg" maxW="2xl">
+                <Text color="whiteAlpha.900" fontSize={{ base: "sm", md: "lg" }} maxW="2xl">
                   Manage and allocate faculty for first year timetable across all departments.
                 </Text>
               </VStack>
@@ -492,10 +492,10 @@ function FirstYearLoad() {
                 icon={<ArrowBackIcon />}
                 aria-label="Go back"
                 onClick={() => window.history.back()}
-                size="lg"
+                size={{ base: "md", md: "lg" }}
                 bg="rgba(255, 255, 255, 0.2)"
                 color="white"
-                fontSize="2xl"
+                fontSize={{ base: "lg", md: "2xl" }}
                 _hover={{ bg: 'rgba(255, 255, 255, 0.3)' }}
                 _active={{ bg: 'rgba(255, 255, 255, 0.4)' }}
                 borderRadius="full"
@@ -508,7 +508,7 @@ function FirstYearLoad() {
           </Container>
         </Box>
 
-        <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={16}>
+        <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={{ base: 10, md: 16 }} px={{ base: 4, md: 6, lg: 8 }}>
           <Box 
             bg="white"
             borderRadius="2xl"
@@ -603,7 +603,7 @@ function FirstYearLoad() {
                 color="white"
                 textAlign="center"
                 fontWeight="bold"
-                fontSize="1.5rem"
+                fontSize={{ base: "1rem", md: "1.5rem" }}
                 position="fixed"
                 top="30%"
                 left="50%"
@@ -617,14 +617,21 @@ function FirstYearLoad() {
               </Box>
             </Portal>
 
-            <Box display="flex" mb={4} alignItems="center">
-              <Text fontWeight="bold" mr={3}>
+            <Box
+              display="flex"
+              flexDirection={{ base: "column", sm: "row" }}
+              alignItems={{ base: "stretch", sm: "center" }}
+              gap={2}
+              mb={4}
+            >
+              <Text fontWeight="bold" mr={3} flexShrink={0} fontSize={{ base: "sm", md: "md" }}>
                 Select Semester:
               </Text>
               <Select
+                size={{ base: "sm", md: "md" }}
                 value={selectedSemester}
                 onChange={(e) => setSelectedSemester(e.target.value)}
-                maxW="200px"
+                maxW={{ base: "100%", sm: "200px" }}
               >
                 {semesters.map((semester, index) => (
                   <option key={index} value={semester}>

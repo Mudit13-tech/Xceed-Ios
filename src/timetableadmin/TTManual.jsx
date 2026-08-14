@@ -12,6 +12,23 @@ const cssReset = `
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: ${T.bg}; }
     code { font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: #eef0fb; padding: 1px 5px; border-radius: 4px; }
+    .ttm-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .ttm-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .ttm-page { padding: 24px 28px; max-width: 900px; margin: 0 auto; }
+    .ttm-card { padding: 28px 32px; }
+    .ttm-topbar { padding: 10px 28px; }
+    .ttm-title { font-size: 20px; }
+    .ttm-subtitle { font-size: 13px; }
+    @media (max-width: 640px) {
+        .ttm-grid-2, .ttm-grid-3 { grid-template-columns: 1fr; }
+        .ttm-page { padding: 16px 12px; }
+        .ttm-card { padding: 16px 14px; }
+        .ttm-topbar { padding: 10px 12px; }
+        .ttm-title { font-size: 16px; }
+        .ttm-subtitle { font-size: 11px; }
+        .ttm-header { flex-wrap: wrap; }
+        code { word-break: break-word; }
+    }
 `;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -88,7 +105,7 @@ function TabOverview({ setTab }) {
             </Note>
 
             <SectionTitle>What This Module Does</SectionTitle>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
+            <div className="ttm-grid-2" style={{ marginBottom: 24 }}>
                 {[
                     { icon: '🏛️', title: 'Centralised Room Control', desc: 'Centrally allotted rooms are managed by ITTC. Departments see real-time slot availability for all shared rooms and faculty.' },
                     { icon: '📄', title: 'Auto PDF Generation', desc: 'After locking the timetable, generate semester, faculty, and room PDFs in one click — all in a uniform institute-wide format.' },
@@ -393,7 +410,7 @@ function TabLock() {
             </Note>
 
             <SectionTitle>Status Cards on the Dashboard</SectionTitle>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+            <div className="ttm-grid-2" style={{ marginBottom: 20 }}>
                 {[
                     { color: '#3b82f6', label: 'Last Saved Time', desc: 'Shows when the current semester data was last saved. If this is more recent than Last Locked, the live version does not reflect your latest changes.' },
                     { color: '#f97316', label: 'Last Locked Time', desc: 'Shows when the timetable was last locked. The locked version is what appears in Master View and the PDFs.' },
@@ -482,7 +499,7 @@ function TabLock() {
             </Note>
 
             <SectionTitle>PDF Output</SectionTitle>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <div className="ttm-grid-3" style={{ marginBottom: 16 }}>
                 {[
                     { title: 'Semester Timetable', desc: 'All slots for a semester — subject, room, and faculty per slot. One page per semester.', icon: '📘' },
                     { title: 'Faculty Timetable', desc: 'Full weekly schedule for a single faculty member across all subjects and semesters.', icon: '👤' },
@@ -873,9 +890,9 @@ export default function TTManual({ standalone = false }) {
                 <div style={{
                     position: 'sticky', top: 0, zIndex: 100,
                     background: '#1e1b4b', borderBottom: '1px solid #312e81',
-                    padding: '10px 28px', display: 'flex', alignItems: 'center',
+                    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
                     justifyContent: 'space-between',
-                }}>
+                }} className="ttm-topbar">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{
                             width: 30, height: 30, borderRadius: 8,
@@ -901,12 +918,9 @@ export default function TTManual({ standalone = false }) {
                     )}
                 </div>
             )}
-            <div style={{
-                padding: '24px 28px', maxWidth: 900, margin: '0 auto',
-                fontFamily: T.fontBody,
-            }}>
+            <div className="ttm-page" style={{ fontFamily: T.fontBody }}>
                 {/* Header */}
-                <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div className="ttm-header" style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 14 }}>
                     <div style={{
                         width: 42, height: 42, borderRadius: 10,
                         background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
@@ -914,8 +928,8 @@ export default function TTManual({ standalone = false }) {
                         fontSize: 20,
                     }}>📖</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: T.text }}>Timetable Module — User Manual</div>
-                        <div style={{ fontSize: 13, color: T.textMuted, marginTop: 2 }}>
+                        <div className="ttm-title" style={{ fontWeight: 800, color: T.text }}>Timetable Module — User Manual</div>
+                        <div className="ttm-subtitle" style={{ color: T.textMuted, marginTop: 2 }}>
                             Step-by-step guide · XCEED, NIT Jallandhar
                         </div>
                     </div>
@@ -936,10 +950,9 @@ export default function TTManual({ standalone = false }) {
                 </div>
 
                 {showDevs ? (
-                    <div style={{
+                    <div className="ttm-card" style={{
                         background: '#fff', borderRadius: 12,
                         border: '1px solid #e4e8f5',
-                        padding: '28px 32px',
                         boxShadow: '0 1px 6px rgba(26,31,60,0.05)',
                     }}>
                         <TabDevelopers />
@@ -992,11 +1005,11 @@ export default function TTManual({ standalone = false }) {
                 </div>
 
                 {/* Content */}
-                <div style={{
+                <div className="ttm-card" style={{
                     background: '#fff', borderRadius: 12,
                     border: '1px solid #e4e8f5',
-                    padding: '28px 32px',
                     boxShadow: '0 1px 6px rgba(26,31,60,0.05)',
+                    overflowX: 'auto',
                 }}>
                     {TAB_CONTENT[tab]}
                 </div>

@@ -761,63 +761,65 @@ const Timetable = () => {
 }, [message]);
 
   return (
-    <Container maxW="8xl">
-      <Heading as="h1" size="xl" mt="6" mb="6">
+    <Container maxW="8xl" px={{ base: 3, md: 6 }} w="100%" maxWidth="100%" overflowX="hidden">
+      <Heading as="h1" size={{ base: "md", md: "lg", lg: "xl" }} mt="6" mb="6">
         TIME TABLE ALLOTMENT
       </Heading>
 
-      <Box display="left">
-        <Button mx="auto" colorScheme="red" onClick={handleFirstYear}>
+      <Box display="flex" flexWrap="wrap" gap={1}>
+        <Button size={{ base: "sm", md: "md" }} mx="auto" colorScheme="red" onClick={handleFirstYear}>
           First Year Faculty Allotment
         </Button>
-        <Button m="1 auto" colorScheme="blue" onClick={handleViewRoom}>
+        <Button size={{ base: "sm", md: "md" }} m="1 auto" colorScheme="blue" onClick={handleViewRoom}>
           View Centrally Alloted Rooms
         </Button>
-        <Button m="1 auto" colorScheme="blue" onClick={handleMasterView}>
+        <Button size={{ base: "sm", md: "md" }} m="1 auto" colorScheme="blue" onClick={handleMasterView}>
           Master View of Time Table (any sem/dept)
         </Button>
-        <Button m="1 auto" colorScheme="blue" onClick={handleEditFaculty}>
+        <Button size={{ base: "sm", md: "md" }} m="1 auto" colorScheme="blue" onClick={handleEditFaculty}>
           Edit Faculty Details
         </Button>
-        <Button m="1 auto" colorScheme="yellow" onClick={handleImportData}>
+        <Button size={{ base: "sm", md: "md" }} m="1 auto" colorScheme="yellow" onClick={handleImportData}>
           Import Data
         </Button>
       </Box>
 
       <Box display="flex" justifyContent="space-between" flexWrap="wrap" mb={4}>
-        <Box ml="-1.5" display="flex" flexWrap="wrap">
-          <Button m={1} colorScheme="teal" onClick={handleAddSem}>
+        <Box ml={{ base: 0, md: "-1.5" }} display="flex" flexWrap="wrap" w={{ base: "100%", md: "auto" }}>
+          <Button size={{ base: "sm", md: "md" }} m={1} colorScheme="teal" onClick={handleAddSem}>
             Add Semester
           </Button>
-          <Button m={1} colorScheme="teal" onClick={handleAddSubject}>
+          <Button size={{ base: "sm", md: "md" }} m={1} colorScheme="teal" onClick={handleAddSubject}>
             Add Subject
           </Button>
-          <Button m={1} colorScheme="teal" onClick={handleAddRoom}>
+          <Button size={{ base: "sm", md: "md" }} m={1} colorScheme="teal" onClick={handleAddRoom}>
             Add Room
           </Button>
-          <Button m={1} colorScheme="teal" onClick={handleAddFaculty}>
+          <Button size={{ base: "sm", md: "md" }} m={1} colorScheme="teal" onClick={handleAddFaculty}>
             Add Faculty
           </Button>
-          <Button m={1} colorScheme="teal" onClick={handleAddNote}>
+          <Button size={{ base: "sm", md: "md" }} m={1} colorScheme="teal" onClick={handleAddNote}>
             Add Note
           </Button>
-          <Button m={1} colorScheme="teal" onClick={handleAddCommonLoad}>
+          <Button size={{ base: "sm", md: "md" }} m={1} colorScheme="teal" onClick={handleAddCommonLoad}>
             Add Common Load
           </Button>
-          <Button m={1} colorScheme="teal" onClick={handleAddLunchSlot}>
+          <Button size={{ base: "sm", md: "md" }} m={1} colorScheme="teal" onClick={handleAddLunchSlot}>
             Add Lunch slots
           </Button>
         </Box>
 
         <Box
-          mr="-3.5"
+          mr={{ base: 0, md: "-3.5" }}
           display="flex"
-          justifyContent="flex-end"
+          justifyContent={{ base: "flex-start", md: "flex-end" }}
           flexWrap="wrap"
           alignItems="center"
           mt={{ base: 2, md: 0 }}
+          w={{ base: "100%", md: "auto" }}
         >
           <Button
+            size={{ base: "sm", md: "md" }}
             m={1}
             colorScheme="orange"
             onClick={handleLockTT}
@@ -826,10 +828,10 @@ const Timetable = () => {
           >
             Lock TT
           </Button>
-          <Button m={1} colorScheme="orange" onClick={handleViewSummary}>
+          <Button size={{ base: "sm", md: "md" }} m={1} colorScheme="orange" onClick={handleViewSummary}>
             View Locked TT
           </Button>
-          <Button m={1} colorScheme="orange" onClick={handleDownloadClick}>
+          <Button size={{ base: "sm", md: "md" }} m={1} colorScheme="orange" onClick={handleDownloadClick}>
             Download
           </Button>
         </Box>
@@ -840,13 +842,13 @@ const Timetable = () => {
           {clashFlag == true
             ? (
               clash.length == 0
-                ? <div className="tw-bg-green-100 tw-text-green-700 tw-font-semibold tw-px-4 tw-py-2 tw-rounded-md tw-shadow-sm tw-w-64">
+                ? <div className="tw-bg-green-100 tw-text-green-700 tw-font-semibold tw-px-4 tw-py-2 tw-rounded-md tw-shadow-sm tw-w-full sm:tw-w-64">
                   No Clashes Found
                 </div>
                 : clash.map((elem, index) => (
                   <li
                     key={index}
-                    className="tw-bg-red-100 tw-border tw-border-red-300 tw-text-red-700 tw-font-medium tw-p-3 tw-m-2 tw-rounded-lg tw-shadow-sm tw-w-1/3"
+                    className="tw-bg-red-100 tw-border tw-border-red-300 tw-text-red-700 tw-font-medium tw-p-3 tw-m-2 tw-rounded-lg tw-shadow-sm tw-w-full sm:tw-w-1/2 lg:tw-w-1/3"
                   >
                     Check {elem["name"]}'s slot on {elem["day"]} at {elem["period"]}
                   </li>
@@ -859,11 +861,17 @@ const Timetable = () => {
         </ul>
       </Box>
 
-      <Box display="flex" justifyContent="space-between" mb="4">
-        <Text fontSize="xl" color="red" id="saveTime">
+      <Box
+        display="flex"
+        flexDirection={{ base: "column", md: "row" }}
+        justifyContent="space-between"
+        gap={{ base: 1, md: 0 }}
+        mb="4"
+      >
+        <Text fontSize={{ base: "sm", md: "xl" }} color="red" id="saveTime">
           Last saved on: {savedTime ? savedTime : 'Not saved yet'}
         </Text>
-        <Text fontSize="xl" color="red" id="lockTime">
+        <Text fontSize={{ base: "sm", md: "xl" }} color="red" id="lockTime">
           Last locked on: {lockedTime ? lockedTime : 'Not Locked yet'}
         </Text>
       </Box>
@@ -874,7 +882,7 @@ const Timetable = () => {
           color="white"
           textAlign="center"
           fontWeight="bold"
-          fontSize="1.5rem"
+          fontSize={{ base: "1rem", md: "1.5rem" }}
           position="fixed"
           top="30%"
           left="50%"
@@ -882,17 +890,25 @@ const Timetable = () => {
           zIndex="999"
           borderRadius="20px"
           p="10px"
+          maxW="90vw"
           opacity={showMessage ? 1 : 0}
         >
           <Text>{message}</Text>
         </Box>
       </Portal>
 
-      <Box display="flex" mb="2.5">
-        <Text fontWeight="bold" mb="1.5">
+      <Box
+        display="flex"
+        flexDirection={{ base: "column", sm: "row" }}
+        alignItems={{ base: "stretch", sm: "center" }}
+        gap={2}
+        mb="2.5"
+      >
+        <Text fontWeight="bold" mb="1.5" flexShrink={0} fontSize={{ base: "sm", md: "md" }}>
           Select Semester:
         </Text>
         <Select
+          size={{ base: "sm", md: "md" }}
           value={selectedSemester}
           onChange={(e) => setSelectedSemester(e.target.value)}
         >
@@ -907,14 +923,21 @@ const Timetable = () => {
       {Object.keys(timetableData).length === 0 ? (
         <Box>Loading...</Box>
       ) : (
-        <TableContainer>
-          <Table variant="striped">
+        <TableContainer w="100%" maxW="100%" overflowX="auto">
+          <Table variant="striped" size={{ base: "sm", md: "md" }}>
             <Tr fontWeight="bold">
-              <Td>
+              <Td
+                position="sticky"
+                left={0}
+                bg="white"
+                zIndex={1}
+                minW={{ base: "80px", md: "auto" }}
+                fontSize={{ base: "xs", md: "sm" }}
+              >
                 <Text>Day/Period</Text>
               </Td>
               {[1, 2, 3, 4, 5, 6, 7, 8].map((period) => (
-                <Td key={period}>
+                <Td key={period} minW={{ base: "150px", md: "auto" }} fontSize={{ base: "xs", md: "sm" }}>
                   <Text>
                     <Center>{period}</Center>
                   </Text>
@@ -923,19 +946,27 @@ const Timetable = () => {
             </Tr>
             {days.map((day) => (
               <Tr key={day} fontWeight="bold">
-                <Td>
+                <Td
+                  position="sticky"
+                  left={0}
+                  bg="inherit"
+                  zIndex={1}
+                  minW={{ base: "80px", md: "auto" }}
+                  fontSize={{ base: "xs", md: "sm" }}
+                >
                   <Text>
                     <Center>{day}</Center>
                   </Text>
                 </Td>
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((period) => (
-                  <Td key={period}>
+                  <Td key={period} minW={{ base: "150px", md: "auto" }} px={{ base: 1, md: 4 }}>
                     {timetableData[day][`period${period}`].map(
                       (slot, slotIndex) => (
                         <Box key={slotIndex}>
                           {slot.map((cell, cellIndex) => (
                             <Box key={cellIndex} mb="2">
                               <Select
+                                size={{ base: "xs", md: "md" }}
                                 value={cell.subject}
                                 onChange={(event) =>
                                   handleCellChange(
@@ -960,6 +991,7 @@ const Timetable = () => {
                               </Select>
 
                               <Select
+                                size={{ base: "xs", md: "md" }}
                                 value={cell.room}
                                 onChange={(event) =>
                                   handleCellChange(
@@ -981,6 +1013,7 @@ const Timetable = () => {
                               </Select>
 
                               <Select
+                                size={{ base: "xs", md: "md" }}
                                 value={cell.faculty}
                                 onChange={(event) =>
                                   handleCellChange(
@@ -1040,18 +1073,25 @@ const Timetable = () => {
         </TableContainer>
       )}
 
-      <Button colorScheme="teal" mb="3" mt="5" ml="0" onClick={handleSubmit}>
+      <Button colorScheme="teal" size={{ base: "sm", md: "md" }} mb="3" mt="5" ml="0" onClick={handleSubmit}>
         Save Timetable
       </Button>
 
       <Box>
-        <Heading as="h1" size="xl" mt="6" mb="6">
+        <Heading as="h1" size={{ base: "md", md: "lg", lg: "xl" }} mt="6" mb="6">
           View Semester Timetable
         </Heading>
 
-        <Box display="flex" mb="2.5">
-          <Text fontWeight="bold">Select Semester:</Text>
+        <Box
+          display="flex"
+          flexDirection={{ base: "column", sm: "row" }}
+          alignItems={{ base: "stretch", sm: "center" }}
+          gap={2}
+          mb="2.5"
+        >
+          <Text fontWeight="bold" flexShrink={0} fontSize={{ base: "sm", md: "md" }}>Select Semester:</Text>
           <Select
+            size={{ base: "sm", md: "md" }}
             value={viewselectedSemester}
             onChange={(e) => setViewSelectedSemester(e.target.value)}
           >
@@ -1089,12 +1129,19 @@ const Timetable = () => {
 
       <Box>
         <Box>
-          <Heading as="h1" size="xl" mt="6" mb="6">
+          <Heading as="h1" size={{ base: "md", md: "lg", lg: "xl" }} mt="6" mb="6">
             View Faculty Timetable
           </Heading>
-          <Box display="flex" mb="2.5">
-            <Text fontWeight="bold">Select Faculty:</Text>
+          <Box
+            display="flex"
+            flexDirection={{ base: "column", sm: "row" }}
+            alignItems={{ base: "stretch", sm: "center" }}
+            gap={2}
+            mb="2.5"
+          >
+            <Text fontWeight="bold" flexShrink={0} fontSize={{ base: "sm", md: "md" }}>Select Faculty:</Text>
             <Select
+              size={{ base: "sm", md: "md" }}
               value={viewFaculty}
               onChange={(e) => setViewFaculty(e.target.value)}
             >
@@ -1132,12 +1179,19 @@ const Timetable = () => {
       </Box>
 
       <Box>
-        <Heading as="h1" size="xl" mt="6" mb="6">
+        <Heading as="h1" size={{ base: "md", md: "lg", lg: "xl" }} mt="6" mb="6">
           View Room Timetable
         </Heading>
-        <Box display="flex" mb="2.5">
-          <Text fontWeight="bold">Select Room:</Text>
+        <Box
+          display="flex"
+          flexDirection={{ base: "column", sm: "row" }}
+          alignItems={{ base: "stretch", sm: "center" }}
+          gap={2}
+          mb="2.5"
+        >
+          <Text fontWeight="bold" flexShrink={0} fontSize={{ base: "sm", md: "md" }}>Select Room:</Text>
           <Select
+            size={{ base: "sm", md: "md" }}
             value={viewRoom}
             onChange={(e) => setViewRoom(e.target.value)}
           >

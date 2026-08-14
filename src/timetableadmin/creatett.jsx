@@ -416,7 +416,7 @@ function CreateTimetable() {
         </Container>
       </Box>
 
-      <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={16}>
+      <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={{ base: 10, md: 16 }} px={{ base: 4, md: 6, lg: 8 }}>
         {/* Create Timetable Modal */}
         <Modal isOpen={isOpen} onClose={onClose} size="xl" isCentered>
           <ModalOverlay />
@@ -547,10 +547,10 @@ function CreateTimetable() {
             borderColor="gray.300"
             overflow="hidden"
           >
-            <CardHeader bg="teal.600" color="white" p={4}>
+            <CardHeader bg="teal.600" color="white" p={{ base: 3, md: 4 }}>
               <Flex justify="space-between" align="center">
                 <VStack align="start" spacing={0}>
-                  <Heading size="md">Existing Timetables</Heading>
+                  <Heading size={{ base: "sm", md: "md" }}>Existing Timetables</Heading>
                   <Text fontSize="xs" color="whiteAlpha.800" mt={1}>
                     Sorted by latest first
                   </Text>
@@ -590,7 +590,7 @@ function CreateTimetable() {
                     },
                   }}
                 >
-                  <Table variant="simple" size="md">
+                  <Table variant="simple" size={{ base: "sm", md: "md" }}>
                     <Thead bg="teal.50">
                       <Tr>
                         <Th

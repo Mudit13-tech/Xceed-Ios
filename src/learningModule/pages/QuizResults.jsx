@@ -1032,8 +1032,10 @@ function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto
 }
 
 export default function QuizResults() {
-  const { classId } = useOutletContext();
-  const { quizId } = useParams();
+  const outlet = useOutletContext();
+  const params = useParams();
+  const classId = outlet?.classId || params?.classId;
+  const quizId = params?.quizId;
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1127,16 +1129,13 @@ export default function QuizResults() {
     }
   }, [classId, quizId, load, toast]);
 
-  if (loading) return <Loading />;
-  if (error) return <ErrorState error={error} onRetry={load} />;
-  if (!data) return null;
-
-  const { quiz, attempts, summary, perQuestion, perSection, distribution, resultsVisible } = data;
-  const notStartedStudents = data.notStartedStudents || [];
-  // `results` is absent on a response cached from before this shipped; falling
-  // back to the old boolean keeps the page rendering rather than blanking.
-  const results = data.results || { released: resultsVisible };
-  const maxBand = Math.max(1, ...distribution.map((band) => band.count));
+  const attempts = data?.attempts;
+  const quiz = data?.quiz;
+  const summary = data?.summary;
+  const perQuestion = data?.perQuestion;
+  const perSection = data?.perSection || [];
+  const results = data?.results || { released: data?.resultsVisible };
+  const distribution = data?.distribution || [];
 
   const filteredAttempts = useMemo(() => {
     if (!attempts) return [];
@@ -1174,16 +1173,17 @@ export default function QuizResults() {
   }, [perQuestion]);
 
   const isConducted = useMemo(() => {
+    if (!results) return false;
     if (typeof results.isConducted === 'boolean') return results.isConducted;
 
     if (!quiz?.published) return false;
-    const now = data.serverTime ? new Date(data.serverTime) : new Date();
+    const now = data?.serverTime ? new Date(data.serverTime) : new Date();
     if (quiz.publishAt && now < new Date(quiz.publishAt)) return false;
     if (quiz.settings?.availableFrom && now < new Date(quiz.settings.availableFrom)) return false;
 
-    const inProgress = summary.inProgress || 0;
-    const submitted = summary.submitted || 0;
-    const enrolled = summary.enrolled || 0;
+    const inProgress = summary?.inProgress || 0;
+    const submitted = summary?.submitted || 0;
+    const enrolled = summary?.enrolled || 0;
 
     if (inProgress > 0) return false;
     if (quiz.settings?.availableTo && now >= new Date(quiz.settings.availableTo)) return true;
@@ -1191,7 +1191,14 @@ export default function QuizResults() {
     if (submitted > 0) return true;
 
     return false;
-  }, [results, quiz, summary, data.serverTime]);
+  }, [results, quiz, summary, data?.serverTime]);
+
+  if (loading) return <Loading />;
+  if (error) return <ErrorState error={error} onRetry={load} />;
+  if (!data) return null;
+
+  const notStartedStudents = data.notStartedStudents || [];
+  const maxBand = Math.max(1, ...distribution.map((band) => band.count));
 
   return (
     <Box>
@@ -1241,7 +1248,13 @@ export default function QuizResults() {
           <Button size="sm" variant="outline" colorScheme="purple" onClick={() => setRegrading(true)}>
             Re-evaluate all
           </Button>
-          <Button as="a" href={lmApi.quizResultsCsvUrl(classId, quizId)} size="sm" variant="outline">
+          <Button
+            as={attempts && attempts.length > 0 ? 'a' : undefined}
+            href={attempts && attempts.length > 0 ? lmApi.quizResultsCsvUrl(classId, quizId) : undefined}
+            size="sm"
+            variant="outline"
+            isDisabled={!attempts || attempts.length === 0}
+          >
             Export CSV
           </Button>
         </HStack>

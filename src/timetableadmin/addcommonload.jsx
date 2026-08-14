@@ -355,7 +355,7 @@ function CommonLoadComponent() {
       <Box
         bgGradient="linear(to-r, cyan.400, teal.500, green.500)"
         pt={0}
-        pb={24}
+        pb={{ base: 16, md: 20, lg: 24 }}
         position="relative"
         overflow="hidden"
       >
@@ -378,16 +378,16 @@ function CommonLoadComponent() {
           <Header />
         </Box>
 
-        <Container maxW="7xl" position="relative" mt={8}>
-          <Flex justify="space-between" align="center" w="full" gap={4}>
-            <VStack spacing={4} align="start" flex="1">
-              <Badge colorScheme="whiteAlpha" fontSize="sm" px={3} py={1} borderRadius="full">
+        <Container maxW="7xl" position="relative" mt={{ base: 4, md: 8 }} px={{ base: 4, md: 6, lg: 8 }}>
+          <Flex justify="space-between" align={{ base: "start", md: "center" }} w="full" gap={{ base: 3, md: 4 }}>
+            <VStack spacing={{ base: 2, md: 4 }} align="start" flex="1" minW={0}>
+              <Badge colorScheme="whiteAlpha" fontSize={{ base: "xs", md: "sm" }} px={3} py={1} borderRadius="full">
                 Load Management
               </Badge>
-              <Heading size="2xl" color="white" fontWeight="bold" lineHeight="1.2">
+              <Heading size={{ base: "lg", md: "xl", lg: "2xl" }} color="white" fontWeight="bold" lineHeight="1.2">
                 Common Load Allocation
               </Heading>
-              <Text color="whiteAlpha.900" fontSize="lg" maxW="2xl">
+              <Text color="whiteAlpha.900" fontSize={{ base: "sm", md: "lg" }} maxW="2xl">
                 Allocate major projects and common loads to faculty members. The load will appear directly in summary data.
               </Text>
             </VStack>
@@ -397,10 +397,10 @@ function CommonLoadComponent() {
               icon={<ArrowBackIcon />}
               aria-label="Go back"
               onClick={() => window.history.back()}
-              size="lg"
+              size={{ base: "md", md: "lg" }}
               bg="rgba(255, 255, 255, 0.2)"
               color="white"
-              fontSize="2xl"
+              fontSize={{ base: "lg", md: "2xl" }}
               _hover={{ bg: 'rgba(255, 255, 255, 0.3)' }}
               _active={{ bg: 'rgba(255, 255, 255, 0.4)' }}
               borderRadius="full"
@@ -413,7 +413,7 @@ function CommonLoadComponent() {
         </Container>
       </Box>
 
-      <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={16}>
+      <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={{ base: 10, md: 16 }} px={{ base: 4, md: 6, lg: 8 }}>
         <VStack spacing={6} align="stretch">
           {/* Form Card */}
           <Card
@@ -424,12 +424,12 @@ function CommonLoadComponent() {
             borderColor="gray.300"
             overflow="hidden"
           >
-            <CardHeader bg="purple.600" color="white" p={4}>
-              <Heading size="md">
+            <CardHeader bg="purple.600" color="white" p={{ base: 3, md: 4 }}>
+              <Heading size={{ base: "sm", md: "md" }}>
                 {selectedCommonLoad ? "Edit Common Load" : "Add Common Load"}
               </Heading>
             </CardHeader>
-            <CardBody p={6}>
+            <CardBody p={{ base: 4, md: 6 }}>
               {selectedCommonLoad && (
                 <Alert status="info" mb={4} borderRadius="md">
                   <AlertIcon />
@@ -632,9 +632,9 @@ function CommonLoadComponent() {
             borderColor="gray.300"
             overflow="hidden"
           >
-            <CardHeader bg="teal.600" color="white" p={4}>
+            <CardHeader bg="teal.600" color="white" p={{ base: 3, md: 4 }}>
               <Flex justify="space-between" align="center">
-                <Heading size="md">Common Load Data</Heading>
+                <Heading size={{ base: "sm", md: "md" }}>Common Load Data</Heading>
                 <Badge colorScheme="orange" fontSize="md" px={3} py={1}>
                   {commonLoadData.length} Entries
                 </Badge>
@@ -660,7 +660,7 @@ function CommonLoadComponent() {
                   },
                 }}
               >
-                <Table variant="simple" size="md">
+                <Table variant="simple" size={{ base: "sm", md: "md" }}>
                   <Thead bg="teal.50">
                     <Tr>
                       <Th

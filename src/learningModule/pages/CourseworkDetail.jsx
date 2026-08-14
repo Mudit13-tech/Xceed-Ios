@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link as RouterLink, useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   AlertIcon,
@@ -173,32 +174,30 @@ function YourWork({ classId, coursework, submission, onChanged }) {
 export default function CourseworkDetail() {
   const { classId, klass, isTeacher, reloadClass } = useOutletContext();
   const { courseworkId } = useParams();
-  const [item, setItem] = useState(null);
-  const [me, setMe] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
   const navigate = useNavigate();
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const [detail, profile] = await Promise.all([
-        lmApi.getCoursework(classId, courseworkId),
-        lmApi.me(),
-      ]);
-      setItem(detail);
-      setMe(profile);
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [classId, courseworkId]);
+  // Keyed by the id in the URL. Moving between two /work/:id posts reuses this
+  // one component instance, so hand-rolled state survived the navigation: the page
+  // kept showing the previous item's title, body and attachment links until the
+  // new fetch landed, and a slow response for the item just left could resolve
+  // last and overwrite the one actually being viewed — students saw the first
+  // post's material links on the second post.
+  const {
+    data: item,
+    isLoading: loading,
+    error,
+    refetch: load,
+  } = useQuery({
+    queryKey: ['learning', 'coursework', classId, courseworkId],
+    queryFn: () => lmApi.getCoursework(classId, courseworkId),
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { data: me } = useQuery({
+    queryKey: ['learning', 'me'],
+    queryFn: () => lmApi.me(),
+    staleTime: 5 * 60 * 1000,
+  });
 
   if (loading) return <Loading />;
   if (error) return <ErrorState error={error} onRetry={load} />;

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
     Table, Thead, Tbody, Tr, Th, Td,
-    Select, Spinner, Box, Heading, Flex
+    Select, Spinner, Box, Heading, Flex, TableContainer
 } from "@chakra-ui/react";
 import getEnvironment from "../getenvironment";
 
@@ -128,11 +128,16 @@ const FacultyHourLoad = () => {
     }, [selectedDept, selectedSession]);
 
     return (
-        <Box p={6}>
-            <Heading mb={4}>Faculty Hour Load</Heading>
+        <Box p={{ base: 3, md: 6 }} w="100%" maxW="100%" overflowX="hidden">
+            <Heading mb={4} size={{ base: "md", md: "lg" }}>Faculty Hour Load</Heading>
 
-            <Flex gap={4} mb={4}>
+            <Flex
+                gap={{ base: 3, md: 4 }}
+                mb={4}
+                direction={{ base: "column", md: "row" }}
+            >
                 <Select
+                    size={{ base: "sm", md: "md" }}
                     placeholder="Select Department"
                     value={selectedDept}
                     onChange={(e) => setSelectedDept(e.target.value)}
@@ -143,6 +148,7 @@ const FacultyHourLoad = () => {
                 </Select>
 
                 <Select
+                    size={{ base: "sm", md: "md" }}
                     placeholder="Select Session"
                     value={selectedSession}
                     onChange={(e) => setSelectedSession(e.target.value)}
@@ -158,26 +164,28 @@ const FacultyHourLoad = () => {
             {loading ? (
                 <Spinner />
             ) : (
-                <Table variant="striped">
-                    <Thead>
-                        <Tr>
-                            <Th>Faculty</Th>
-                            <Th>First Hour Load</Th>
-                            <Th>Second Hour Load</Th>
-                            <Th>Total</Th>
-                        </Tr>
-                    </Thead>
-                    <Tbody>
-                        {table.map((row, idx) => (
-                            <Tr key={idx}>
-                                <Td>{row.faculty}</Td>
-                                <Td>{row.firstHour}</Td>
-                                <Td>{row.secondHour}</Td>
-                                <Td>{row.total}</Td>
+                <TableContainer w="100%" maxW="100%" overflowX="auto">
+                    <Table variant="striped" size={{ base: "sm", md: "md" }}>
+                        <Thead>
+                            <Tr>
+                                <Th fontSize={{ base: "2xs", md: "xs" }}>Faculty</Th>
+                                <Th fontSize={{ base: "2xs", md: "xs" }}>First Hour Load</Th>
+                                <Th fontSize={{ base: "2xs", md: "xs" }}>Second Hour Load</Th>
+                                <Th fontSize={{ base: "2xs", md: "xs" }}>Total</Th>
                             </Tr>
-                        ))}
-                    </Tbody>
-                </Table>
+                        </Thead>
+                        <Tbody>
+                            {table.map((row, idx) => (
+                                <Tr key={idx}>
+                                    <Td fontSize={{ base: "xs", md: "sm" }} whiteSpace="normal">{row.faculty}</Td>
+                                    <Td fontSize={{ base: "xs", md: "sm" }}>{row.firstHour}</Td>
+                                    <Td fontSize={{ base: "xs", md: "sm" }}>{row.secondHour}</Td>
+                                    <Td fontSize={{ base: "xs", md: "sm" }}>{row.total}</Td>
+                                </Tr>
+                            ))}
+                        </Tbody>
+                    </Table>
+                </TableContainer>
             )}
         </Box>
     );

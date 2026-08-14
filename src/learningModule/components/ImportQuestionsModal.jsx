@@ -38,7 +38,7 @@ import { EmptyState, ErrorState, Loading } from './common';
  * has variables and formulas) that converting one to another would quietly drop
  * whatever had nowhere to go.
  *
- * @param {string} type    quiz | short | tutorial | notebook
+ * @param {string} type    quiz | short | tutorial | assignment | notebook
  * @param {string} targetId  the item open in the editor — where copies land
  * @param {string} partLabel  what to call the questions, in this type's words
  */

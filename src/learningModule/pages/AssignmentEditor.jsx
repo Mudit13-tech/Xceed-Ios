@@ -62,7 +62,7 @@ function useFormulaCheck(classId, formula, variableNames) {
     let cancelled = false;
     const timer = setTimeout(async () => {
       try {
-        const result = await lmApi.validateFormula(classId, formula, variableNames);
+        const result = await lmApi.validateAssignmentFormula(classId, formula, variableNames);
         if (!cancelled) setState(result);
       } catch {
         if (!cancelled) setState({ ok: true, error: null });
@@ -528,7 +528,7 @@ function QuestionCard({ classId, question, index, onChange, onRemove }) {
   );
 }
 
-function PreviewPanel({ classId, tutorialId, dirty }) {
+function PreviewPanel({ classId, assignmentId, dirty }) {
   const [samples, setSamples] = useState(null);
   const [warnings, setWarnings] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -537,7 +537,7 @@ function PreviewPanel({ classId, tutorialId, dirty }) {
   const run = async () => {
     setBusy(true);
     try {
-      const result = await lmApi.previewTutorial(classId, tutorialId, 3);
+      const result = await lmApi.previewAssignment(classId, assignmentId, 3);
       setSamples(result.samples);
       setWarnings(result.warnings);
     } catch (error) {
@@ -613,13 +613,13 @@ function PreviewPanel({ classId, tutorialId, dirty }) {
   );
 }
 
-export default function TutorialEditor() {
+export default function AssignmentEditor() {
   const { classId, klass } = useOutletContext();
-  const { tutorialId } = useParams();
+  const { assignmentId } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
 
-  const [tutorial, setTutorial] = useState(null);
+  const [assignment, setAssignment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -631,10 +631,10 @@ export default function TutorialEditor() {
     setError(null);
     try {
       const [data, ref] = await Promise.all([
-        lmApi.getTutorial(classId, tutorialId),
-        lmApi.formulaReference(classId).catch(() => null),
+        lmApi.getAssignment(classId, assignmentId),
+        lmApi.assignmentFormulaReference(classId).catch(() => null),
       ]);
-      setTutorial(data);
+      setAssignment(data);
       setReference(ref);
       setDirty(false);
     } catch (err) {
@@ -642,28 +642,28 @@ export default function TutorialEditor() {
     } finally {
       setLoading(false);
     }
-  }, [classId, tutorialId]);
+  }, [classId, assignmentId]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   const update = (changes) => {
-    setTutorial((prev) => ({ ...prev, ...changes }));
+    setAssignment((prev) => ({ ...prev, ...changes }));
     setDirty(true);
   };
 
   const save = async () => {
     setSaving(true);
     try {
-      await lmApi.updateTutorial(classId, tutorialId, {
-        title: tutorial.title,
-        description: tutorial.description,
-        topicId: tutorial.topicId,
-        questions: tutorial.questions,
-        settings: tutorial.settings,
+      await lmApi.updateAssignment(classId, assignmentId, {
+        title: assignment.title,
+        description: assignment.description,
+        topicId: assignment.topicId,
+        questions: assignment.questions,
+        settings: assignment.settings,
       });
-      toast({ status: 'success', title: 'Tutorial saved' });
+      toast({ status: 'success', title: 'Assignment saved' });
       await load();
       return true;
     } catch (err) {
@@ -682,9 +682,9 @@ export default function TutorialEditor() {
   const publish = async () => {
     if (!(await save())) return;
     try {
-      await lmApi.publishTutorial(classId, tutorialId, { publish: true });
+      await lmApi.publishAssignment(classId, assignmentId, { publish: true });
       toast({ status: 'success', title: 'Published to the class' });
-      navigate(`/learning/class/${classId}/tutorials`);
+      navigate(`/learning/class/${classId}/assignments`);
     } catch (err) {
       toast({
         status: 'error',
@@ -697,12 +697,12 @@ export default function TutorialEditor() {
 
   if (loading) return <Loading />;
   if (error) return <ErrorState error={error} onRetry={load} />;
-  if (!tutorial) return null;
+  if (!assignment) return null;
 
   const setSetting = (key, value) =>
-    update({ settings: { ...tutorial.settings, [key]: value } });
+    update({ settings: { ...assignment.settings, [key]: value } });
 
-  const totalMarks = (tutorial.questions || []).reduce(
+  const totalMarks = (assignment.questions || []).reduce(
     (sum, question) => sum + (question.answers || []).reduce((inner, a) => inner + (Number(a.marks) || 0), 0),
     0,
   );
@@ -711,11 +711,11 @@ export default function TutorialEditor() {
     <Box>
       <Flex justify="space-between" align="center" mb={4} gap={3} wrap="wrap">
         <Box>
-          <Button size="sm" variant="ghost" onClick={() => navigate(`/learning/class/${classId}/tutorials`)}>
-            ← Back to tutorials
+          <Button size="sm" variant="ghost" onClick={() => navigate(`/learning/class/${classId}/assignments`)}>
+            ← Back to assignments
           </Button>
           <Text fontSize="sm" color="gray.500" mt={1}>
-            {tutorial.questions.length} questions · {totalMarks} marks
+            {assignment.questions.length} questions · {totalMarks} marks
             {dirty ? ' · unsaved changes' : ''}
           </Text>
         </Box>
@@ -723,26 +723,26 @@ export default function TutorialEditor() {
           <Button size="sm" variant="outline" onClick={save} isLoading={saving}>
             Save
           </Button>
-          <Button size="sm" colorScheme="green" onClick={publish} isDisabled={!tutorial.questions.length}>
+          <Button size="sm" colorScheme="green" onClick={publish} isDisabled={!assignment.questions.length}>
             Save &amp; publish
           </Button>
         </HStack>
       </Flex>
 
-      <SectionCard title="Tutorial details" mb={4}>
+      <SectionCard title="Assignment details" mb={4}>
         <FormControl mb={3}>
           <FormLabel fontSize="sm">Title</FormLabel>
-          <Input value={tutorial.title} onChange={(e) => update({ title: e.target.value })} />
+          <Input value={assignment.title} onChange={(e) => update({ title: e.target.value })} />
         </FormControl>
         <FormControl mb={4}>
           <FormLabel fontSize="sm">Description</FormLabel>
-          <Textarea rows={2} value={tutorial.description} onChange={(e) => update({ description: e.target.value })} />
+          <Textarea rows={2} value={assignment.description} onChange={(e) => update({ description: e.target.value })} />
         </FormControl>
 
         <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4}>
           <FormControl>
             <FormLabel fontSize="xs">Topic</FormLabel>
-            <Select size="sm" value={tutorial.topicId || ''} onChange={(e) => update({ topicId: e.target.value || null })}>
+            <Select size="sm" value={assignment.topicId || ''} onChange={(e) => update({ topicId: e.target.value || null })}>
               <option value="">No topic</option>
               {(klass.topics || []).map((topic) => (
                 <option key={topic._id} value={topic._id}>
@@ -757,7 +757,7 @@ export default function TutorialEditor() {
               size="sm"
               type="number"
               min={1}
-              value={tutorial.settings.attemptsAllowed}
+              value={assignment.settings.attemptsAllowed}
               onChange={(e) => setSetting('attemptsAllowed', Number(e.target.value) || 1)}
             />
           </FormControl>
@@ -766,7 +766,7 @@ export default function TutorialEditor() {
             <Input
               size="sm"
               type="number"
-              value={tutorial.settings.passPercent}
+              value={assignment.settings.passPercent}
               onChange={(e) => setSetting('passPercent', Number(e.target.value) || 0)}
             />
           </FormControl>
@@ -775,7 +775,7 @@ export default function TutorialEditor() {
             <Input
               size="sm"
               type="datetime-local"
-              value={tutorial.settings.dueDate ? new Date(tutorial.settings.dueDate).toISOString().slice(0, 16) : ''}
+              value={assignment.settings.dueDate ? new Date(assignment.settings.dueDate).toISOString().slice(0, 16) : ''}
               onChange={(e) => setSetting('dueDate', e.target.value || null)}
             />
           </FormControl>
@@ -784,21 +784,21 @@ export default function TutorialEditor() {
         <HStack mt={4} spacing={5} wrap="wrap">
           <Checkbox
             size="sm"
-            isChecked={tutorial.settings.newValuesOnRetry}
+            isChecked={assignment.settings.newValuesOnRetry}
             onChange={(e) => setSetting('newValuesOnRetry', e.target.checked)}
           >
             Fresh numbers on each retry
           </Checkbox>
           <Checkbox
             size="sm"
-            isChecked={tutorial.settings.showSolutionAfterSubmit}
+            isChecked={assignment.settings.showSolutionAfterSubmit}
             onChange={(e) => setSetting('showSolutionAfterSubmit', e.target.checked)}
           >
             Show the worked solution after submitting
           </Checkbox>
           <Checkbox
             size="sm"
-            isChecked={tutorial.settings.showHints}
+            isChecked={assignment.settings.showHints}
             onChange={(e) => setSetting('showHints', e.target.checked)}
           >
             Show hints
@@ -808,11 +808,11 @@ export default function TutorialEditor() {
         {/* Off by default, and the warning is the point: with instant feedback a
             numeric answer can be brute-forced by typing values until it goes
             green. Good for practice, wrong for anything carrying marks — so the
-            teacher decides per tutorial rather than the platform deciding. */}
+            teacher decides per assignment rather than the platform deciding. */}
         <Divider my={3} />
         <Checkbox
           size="sm"
-          isChecked={Boolean(tutorial.settings.instantFeedback)}
+          isChecked={Boolean(assignment.settings.instantFeedback)}
           onChange={(e) => setSetting('instantFeedback', e.target.checked)}
         >
           Tick each answer as the student types it
@@ -820,17 +820,17 @@ export default function TutorialEditor() {
         <Text fontSize="xs" color="gray.600" mt={1}>
           Students see a ✓ beside an answer as soon as it is right, before submitting. Useful for
           practice, but a numeric answer can be guessed at until it goes green — leave this off for
-          a tutorial that counts. The number of tries each answer took is recorded either way, so
+          a assignment that counts. The number of tries each answer took is recorded either way, so
           you can see who worked and who searched.
         </Text>
-        {tutorial.settings.instantFeedback && (
+        {assignment.settings.instantFeedback && (
           <FormControl mt={2} maxW="240px">
             <FormLabel fontSize="xs">Checks allowed per answer</FormLabel>
             <Input
               size="sm"
               type="number"
               min={1}
-              value={tutorial.settings.checksPerAnswer ?? 3}
+              value={assignment.settings.checksPerAnswer ?? 3}
               onChange={(e) => setSetting('checksPerAnswer', Number(e.target.value))}
             />
             <FormHelperText fontSize="xs">
@@ -857,27 +857,27 @@ export default function TutorialEditor() {
         </SectionCard>
       )}
 
-      {tutorial.questions.map((question, index) => (
+      {assignment.questions.map((question, index) => (
         <QuestionCard
           key={question._id || index}
           classId={classId}
           question={question}
           index={index}
           onChange={(updated) =>
-            update({ questions: tutorial.questions.map((q, i) => (i === index ? updated : q)) })
+            update({ questions: assignment.questions.map((q, i) => (i === index ? updated : q)) })
           }
-          onRemove={() => update({ questions: tutorial.questions.filter((_, i) => i !== index) })}
+          onRemove={() => update({ questions: assignment.questions.filter((_, i) => i !== index) })}
         />
       ))}
 
       <Flex gap={2} mb={5} wrap="wrap">
         <Button
           variant="outline"
-          onClick={() => update({ questions: [...tutorial.questions, JSON.parse(JSON.stringify(BLANK_QUESTION))] })}
+          onClick={() => update({ questions: [...assignment.questions, JSON.parse(JSON.stringify(BLANK_QUESTION))] })}
         >
           + Add question
         </Button>
-        {/* Save first: the import appends to the stored tutorial and this page
+        {/* Save first: the import appends to the stored assignment and this page
             reloads it afterwards, so unsaved edits would go with the reload. */}
         <Button
           variant="outline"
@@ -895,13 +895,13 @@ export default function TutorialEditor() {
         isOpen={importing}
         onClose={() => setImporting(false)}
         classId={classId}
-        type="tutorial"
-        targetId={tutorialId}
+        type="assignment"
+        targetId={assignmentId}
         partLabel="questions"
         onImported={load}
       />
 
-      <PreviewPanel classId={classId} tutorialId={tutorialId} dirty={dirty} />
+      <PreviewPanel classId={classId} assignmentId={assignmentId} dirty={dirty} />
     </Box>
   );
 }
