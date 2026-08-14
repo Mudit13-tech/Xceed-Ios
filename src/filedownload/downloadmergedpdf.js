@@ -213,8 +213,14 @@ function downloadPDF(timetableData, summaryData, type, ttdata, updatedTime, head
 
   summaryTableData.push(summarySignRow);
 
+  // The PDF is built inside image onload callbacks, so the buffer is only
+  // available asynchronously. Return a promise so callers can await it before
+  // merging, otherwise the merge runs against an empty array.
+  return new Promise((resolve, reject) => {
   const headerImage = new Image();
   headerImage.src = header;
+
+  headerImage.onerror = () => reject(new Error('Failed to load header image'));
 
   headerImage.onload = () => {
     const canvas = document.createElement('canvas');
@@ -226,6 +232,8 @@ function downloadPDF(timetableData, summaryData, type, ttdata, updatedTime, head
 
     const footerImage = new Image();
     footerImage.src = footer;
+
+    footerImage.onerror = () => reject(new Error('Failed to load footer image'));
 
     footerImage.onload = () => {
       const footerCanvas = document.createElement('canvas');
@@ -320,10 +328,14 @@ function downloadPDF(timetableData, summaryData, type, ttdata, updatedTime, head
       };
 
       pdfMake.createPdf(documentDefinition).getBuffer((blob) => {
-        array.push(blob)
+        if (array) {
+          array.push(blob);
+        }
+        resolve(blob);
       });
     };
   };
+  });
 }
 
 export default downloadPDF;

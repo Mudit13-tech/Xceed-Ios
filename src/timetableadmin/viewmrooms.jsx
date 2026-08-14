@@ -210,10 +210,10 @@ function MasterRoomTable() {
             overflow="hidden"
             mb={6}
           >
-            <CardHeader bg="teal.600" color="white" p={4}>
-              <Heading size="md">Search Classrooms</Heading>
+            <CardHeader bg="teal.600" color="white" p={{ base: 3, md: 4 }}>
+              <Heading size={{ base: "sm", md: "md" }}>Search Classrooms</Heading>
             </CardHeader>
-            <CardBody p={6}>
+            <CardBody p={{ base: 4, md: 6 }}>
               <InputGroup size="lg">
                 <InputLeftElement pointerEvents="none">
                   <SearchIcon color="teal.400" />
@@ -247,10 +247,10 @@ function MasterRoomTable() {
             overflow="hidden"
             w="100%"
           >
-            <CardHeader bg="teal.600" color="white" p={4}>
+            <CardHeader bg="teal.600" color="white" p={{ base: 3, md: 4 }}>
               <Flex justify="space-between" align="center" flexWrap="wrap" gap={2}>
                 <VStack align="start" spacing={0}>
-                  <Heading size="md">Classroom Directory</Heading>
+                  <Heading size={{ base: "sm", md: "md" }}>Classroom Directory</Heading>
                   <Text fontSize="xs" color="whiteAlpha.800" mt={1}>
                     Click on column headers to sort
                   </Text>

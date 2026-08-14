@@ -12,6 +12,9 @@ import lmApi from '../../learningModule/api/lmApi';
 
 export default function Navbar() {
   const [navbarOpen, setNavbarOpen] = useState(false);
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 768
+  );
 
   const apiUrl = getEnvironment();
 
@@ -60,6 +63,13 @@ export default function Navbar() {
       });
     }
   }, [isAuthenticated, queryClient]);
+
+  useEffect(() => {
+    const check = () => setIsNarrow(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   useEffect(() => {
     if (isError && error?.message === 'Unauthorized') {
@@ -140,6 +150,14 @@ export default function Navbar() {
 
   // We only hide the Navbar on explicitly excluded routes
   if (isExcluded) {
+    return null;
+  }
+
+  // The attendance (iLEED) module renders its own header below 768px, carrying
+  // the drawer toggle, the wordmark and a logout button — stacking this bar on
+  // top of it costs a third of a phone screen for links that duplicate what the
+  // module already offers. Same breakpoint AMSLayout uses to switch to that header.
+  if (isNarrow && location.pathname.startsWith('/attendance')) {
     return null;
   }
 

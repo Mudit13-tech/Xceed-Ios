@@ -41,6 +41,10 @@ export default function Notifications() {
 
   useEffect(() => {
     load();
+    window.addEventListener('lmNotificationsUpdated', load);
+    return () => {
+      window.removeEventListener('lmNotificationsUpdated', load);
+    };
   }, [load]);
 
   const open = async (notification) => {

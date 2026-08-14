@@ -393,7 +393,7 @@ function LockedSummary() {
 
 
   return (
-    <Container maxW="6xl">
+    <Container maxW="6xl" px={{ base: 3, md: 6 }} w="100%" maxWidth="100%" overflowX="hidden">
       <Header title="Locked TimeTable Summary"></Header>
      
       {/* <Box mb='6' display='flex' justifyContent='right' onClick={handleDownloadClick}>
@@ -402,9 +402,10 @@ function LockedSummary() {
         </Button>
       </Box> */}
       <FormControl>
-          <FormLabel fontWeight="bold">Semester timetable (locked)
+          <FormLabel fontWeight="bold" fontSize={{ base: "sm", md: "md" }}>Semester timetable (locked)
           </FormLabel>
           <Select
+            size={{ base: "sm", md: "md" }}
             value={selectedSemester}
             onChange={(e) => setSelectedSemester(e.target.value)}
           >
@@ -415,7 +416,7 @@ function LockedSummary() {
               </option>
             ))}
           </Select>
-      <Box mb='5'>
+      <Box mb="5" w="100%" maxW="100%" overflowX="auto">
         {selectedSemester ? (
           <Box>
             <Text color="black" id="saveTime" mb="2.5" mt="2.5">
@@ -435,7 +436,7 @@ function LockedSummary() {
       <Box>
   {semNotes.length > 0 ? (
     <div>
-      <Text fontSize="xl" fontWeight="bold">
+      <Text fontSize={{ base: "md", md: "xl" }} fontWeight="bold">
         Notes:
       </Text>
       {semNotes.map((noteArray, index) => (
@@ -461,8 +462,9 @@ function LockedSummary() {
       </Box>
       {/* Faculty Dropdown */}
       <FormControl>
-        <FormLabel fontWeight='bold'>Faculty timetable (locked)</FormLabel>
+        <FormLabel fontWeight="bold" fontSize={{ base: "sm", md: "md" }}>Faculty timetable (locked)</FormLabel>
         <Select
+          size={{ base: "sm", md: "md" }}
           value={selectedFaculty}
           onChange={(e) => setSelectedFaculty(e.target.value)}
           >
@@ -474,7 +476,7 @@ function LockedSummary() {
           ))}
         </Select>
       </FormControl>
-      <Box mb='5'>
+      <Box mb="5" w="100%" maxW="100%" overflowX="auto">
         {selectedFaculty ? (
           <Box>
             <Text color="black" id="saveTime" mb='2.5' mt='2.5'>
@@ -501,7 +503,7 @@ function LockedSummary() {
             <Box>
   {facultyNotes.length>0 ? (
     <div>
-      <Text fontSize="xl" fontWeight="bold">
+      <Text fontSize={{ base: "md", md: "xl" }} fontWeight="bold">
         Notes:
       </Text>
       {facultyNotes.map((noteArray, index) => (
@@ -524,9 +526,10 @@ function LockedSummary() {
           )}
       </Box>
     <FormControl>
-     <FormLabel fontWeight='bold' >Room timetable (locked)</FormLabel>
+     <FormLabel fontWeight="bold" fontSize={{ base: "sm", md: "md" }}>Room timetable (locked)</FormLabel>
       {/* Room Dropdown */}
       <Select
+        size={{ base: "sm", md: "md" }}
         value={selectedRoom}
         onChange={(e) => setSelectedRoom(e.target.value)}
         >
@@ -538,7 +541,7 @@ function LockedSummary() {
         ))}
       </Select>
       </FormControl>
-      <Box mb='5'>
+      <Box mb="5" w="100%" maxW="100%" overflowX="auto">
         {selectedRoom ? (
           <Box>
             <Text color="black" id="saveTime" mb='2.5' mt='2.5'>
@@ -562,7 +565,7 @@ function LockedSummary() {
 <Box>
   {roomNotes.length>0 ? (
     <div>
-      <Text fontSize="xl" fontWeight="bold">
+      <Text fontSize={{ base: "md", md: "xl" }} fontWeight="bold">
         Notes:
       </Text>
       {roomNotes.map((noteArray, index) => (

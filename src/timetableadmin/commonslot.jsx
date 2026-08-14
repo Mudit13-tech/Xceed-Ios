@@ -466,7 +466,7 @@ function CommonSlot() {
                     </Container>
                 </Box>
 
-                <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={16}>
+                <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={{ base: 10, md: 16 }} px={{ base: 4, md: 6, lg: 8 }}>
                     <VStack spacing={6} align="stretch">
                         {/* Add Faculty Card */}
                         <Card
@@ -477,10 +477,10 @@ function CommonSlot() {
                             borderColor="gray.300"
                             overflow="hidden"
                         >
-                            <CardHeader bg="teal.600" color="white" p={4}>
+                            <CardHeader bg="teal.600" color="white" p={{ base: 3, md: 4 }}>
                                 <Flex justify="space-between" align="center">
                                     <VStack align="start" spacing={0}>
-                                        <Heading size="md">Add Faculty</Heading>
+                                        <Heading size={{ base: "sm", md: "md" }}>Add Faculty</Heading>
                                         <Text fontSize="xs" color="whiteAlpha.800" mt={1}>
                                             Select department and faculty to view slots
                                         </Text>
@@ -490,7 +490,7 @@ function CommonSlot() {
                                     </Badge>
                                 </Flex>
                             </CardHeader>
-                            <CardBody p={6}>
+                            <CardBody p={{ base: 4, md: 6 }}>
                                 <Box
                                     overflowX="auto"
                                     sx={{
@@ -510,7 +510,7 @@ function CommonSlot() {
                                         },
                                     }}
                                 >
-                                    <Table variant="simple" size="md">
+                                    <Table variant="simple" size={{ base: "sm", md: "md" }}>
                                         <Thead bg="teal.50">
                                             <Tr>
                                                 <Th
@@ -639,10 +639,10 @@ function CommonSlot() {
                                 borderColor="gray.300"
                                 overflow="hidden"
                             >
-                                <CardHeader bg="cyan.600" color="white" p={4}>
-                                    <Heading size="md">Faculty Meeting Slots</Heading>
+                                <CardHeader bg="cyan.600" color="white" p={{ base: 3, md: 4 }}>
+                                    <Heading size={{ base: "sm", md: "md" }}>Faculty Meeting Slots</Heading>
                                 </CardHeader>
-                                <CardBody p={6}>
+                                <CardBody p={{ base: 4, md: 6 }}>
                                     <ViewTimetable timetableData={mergedData} />
                                 </CardBody>
                             </Card>

@@ -396,6 +396,16 @@ function CourseworkStreamCard({ item, classId }) {
 
 export default function Stream() {
   const { classId, klass, isTeacher, me } = useOutletContext();
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const {
     data,
@@ -403,11 +413,12 @@ export default function Stream() {
     error,
     refetch: load,
   } = useQuery({
-    queryKey: ['learning', 'stream', classId],
-    queryFn: () => lmApi.getStream(classId),
+    queryKey: ['learning', 'stream', classId, debouncedSearch],
+    queryFn: () => debouncedSearch ? lmApi.searchClass(classId, debouncedSearch) : lmApi.getStream(classId),
+    placeholderData: (previousData) => previousData,
   });
 
-  if (loading) return <Loading label="Loading the stream…" />;
+  if (loading && !data) return <Loading label="Loading the stream…" />;
 
   return (
     <Flex gap={{ base: 4, lg: 6 }} align="flex-start" direction={{ base: 'column', lg: 'row' }} w="100%">
@@ -441,10 +452,61 @@ export default function Stream() {
       </Box>
 
       <Box flex="1" minW={0} w="100%">
+        <Box mb={4}>
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search this class..."
+            bg="white"
+          />
+        </Box>
         <ErrorState error={error} onRetry={load} />
         {data?.canPost && <Composer classId={classId} onPosted={load} />}
 
-        {!data?.items?.length ? (
+        {debouncedSearch ? (
+          !data?.results?.length ? (
+            <EmptyState
+              icon="🔎"
+              title="No results found"
+              description={`No class content matched "${debouncedSearch}".`}
+            />
+          ) : (
+            data.results.map((result) => (
+              <Box
+                key={`${result.type}-${result.id}`}
+                as={RouterLink}
+                to={result.link}
+                display="block"
+                bg="white"
+                borderWidth="1px"
+                borderColor="gray.200"
+                borderRadius="lg"
+                p={{ base: 3, sm: 5 }}
+                mb={4}
+                _hover={{ boxShadow: 'sm', borderColor: 'blue.300', textDecoration: 'none' }}
+              >
+                <Flex align="center" gap={3}>
+                  <Badge colorScheme="blue" textTransform="capitalize">
+                    {result.type}
+                  </Badge>
+                  <Heading size="sm" color="gray.800" noOfLines={1}>
+                    {result.title}
+                  </Heading>
+                </Flex>
+                {result.topicName && (
+                  <Badge mt={2} colorScheme="gray">
+                    {result.topicName}
+                  </Badge>
+                )}
+                {result.snippet && (
+                  <Text mt={2} fontSize="sm" color="gray.600" noOfLines={2}>
+                    {result.snippet}
+                  </Text>
+                )}
+              </Box>
+            ))
+          )
+        ) : !data?.items?.length ? (
           <EmptyState
             icon="📭"
             title="Nothing here yet"

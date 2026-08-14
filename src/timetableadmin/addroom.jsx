@@ -229,7 +229,7 @@ function AddRoomComponent() {
         <Box 
           bgGradient="linear(to-r, pink.500, purple.500, blue.400)"
           pt={0}
-          pb={24}
+          pb={{ base: 16, md: 20, lg: 24 }}
           position="relative"
           overflow="hidden"
         >
@@ -252,16 +252,16 @@ function AddRoomComponent() {
             <Header />
           </Box>
 
-          <Container maxW="7xl" position="relative" mt={8}>
-            <Flex justify="space-between" align="center" w="full" gap={4}>
-              <VStack spacing={4} align="start" flex="1">
-                <Badge colorScheme="whiteAlpha" fontSize="sm" px={3} py={1} borderRadius="full">
+          <Container maxW="7xl" position="relative" mt={{ base: 4, md: 8 }} px={{ base: 4, md: 6, lg: 8 }}>
+            <Flex justify="space-between" align={{ base: "start", md: "center" }} w="full" gap={{ base: 3, md: 4 }}>
+              <VStack spacing={{ base: 2, md: 4 }} align="start" flex="1" minW={0}>
+                <Badge colorScheme="whiteAlpha" fontSize={{ base: "xs", md: "sm" }} px={3} py={1} borderRadius="full">
                   Room Management
                 </Badge>
-                <Heading size="2xl" color="white" fontWeight="bold" lineHeight="1.2">
+                <Heading size={{ base: "lg", md: "xl", lg: "2xl" }} color="white" fontWeight="bold" lineHeight="1.2">
                   Add Rooms
                 </Heading>
-                <Text color="whiteAlpha.900" fontSize="lg" maxW="2xl">
+                <Text color="whiteAlpha.900" fontSize={{ base: "sm", md: "lg" }} maxW="2xl">
                   Add and manage rooms for your timetable.
                 </Text>
               </VStack>
@@ -271,10 +271,10 @@ function AddRoomComponent() {
                 icon={<ArrowBackIcon />}
                 aria-label="Go back"
                 onClick={() => window.history.back()}
-                size="lg"
+                size={{ base: "md", md: "lg" }}
                 bg="rgba(255, 255, 255, 0.2)"
                 color="white"
-                fontSize="2xl"
+                fontSize={{ base: "lg", md: "2xl" }}
                 _hover={{ bg: 'rgba(255, 255, 255, 0.3)' }}
                 _active={{ bg: 'rgba(255, 255, 255, 0.4)' }}
                 borderRadius="full"
@@ -287,7 +287,7 @@ function AddRoomComponent() {
           </Container>
         </Box>
 
-        <Container maxW="5xl" mt={-12} position="relative" zIndex={1} pb={16}>
+        <Container maxW="5xl" mt={-12} position="relative" zIndex={1} pb={{ base: 10, md: 16 }} px={{ base: 4, md: 6, lg: 8 }}>
           <VStack spacing={8} align="stretch">
             {/* Add Room Form */}
             <Box 
@@ -298,7 +298,7 @@ function AddRoomComponent() {
               border="1px"
               borderColor="gray.300"
             >
-              <Text fontWeight="bold" fontSize="lg" mb={4}>
+              <Text fontWeight="bold" fontSize={{ base: "md", md: "lg" }} mb={4}>
                 Add New Room
               </Text>
               <VStack spacing={4} align="stretch">
@@ -379,7 +379,7 @@ function AddRoomComponent() {
 
             {/* Rooms Table */}
             <Box>
-              <Flex justify="space-between" align="center" mb={4}>
+              <Flex justify="space-between" align={{ base: "stretch", sm: "center" }} direction={{ base: "column", sm: "row" }} gap={{ base: 2, sm: 0 }} mb={4}>
                 <Text fontWeight="bold" fontSize="xl">
                   Room Data
                 </Text>

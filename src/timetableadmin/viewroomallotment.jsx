@@ -85,7 +85,7 @@ const ViewAllotmentPage = () => {
       <Box 
         bgGradient="linear(to-r, cyan.400, teal.500, green.500)"
         pt={0}
-        pb={24}
+        pb={{ base: 16, md: 20, lg: 24 }}
         position="relative"
         overflow="hidden"
       >
@@ -108,16 +108,21 @@ const ViewAllotmentPage = () => {
           <Header />
         </Box>
 
-        <Container maxW="7xl" position="relative" mt={8}>
-          <Flex justify="space-between" align="center" w="full" gap={4}>
-            <VStack spacing={4} align="start" flex="1">
-              <Badge colorScheme="whiteAlpha" fontSize="sm" px={3} py={1} borderRadius="full">
+        <Container maxW="7xl" position="relative" mt={{ base: 4, md: 8 }} px={{ base: 4, md: 6, lg: 8 }}>
+          <Flex
+            justify="space-between"
+            align={{ base: "start", md: "center" }}
+            w="full"
+            gap={{ base: 3, md: 4 }}
+          >
+            <VStack spacing={{ base: 2, md: 4 }} align="start" flex="1" minW={0}>
+              <Badge colorScheme="whiteAlpha" fontSize={{ base: "xs", md: "sm" }} px={3} py={1} borderRadius="full">
                 Room Allotment
               </Badge>
-              <Heading size="2xl" color="white" fontWeight="bold" lineHeight="1.2">
+              <Heading size={{ base: "lg", md: "xl", lg: "2xl" }} color="white" fontWeight="bold" lineHeight="1.2">
                 Allotted Rooms for Session {formData.session}
               </Heading>
-              <Text color="whiteAlpha.900" fontSize="lg" maxW="2xl">
+              <Text color="whiteAlpha.900" fontSize={{ base: "sm", md: "lg" }} maxW="2xl">
                 View centralized and open elective room allotments across all departments.
               </Text>
             </VStack>
@@ -127,10 +132,10 @@ const ViewAllotmentPage = () => {
               icon={<ArrowBackIcon />}
               aria-label="Go back"
               onClick={() => window.history.back()}
-              size="lg"
+              size={{ base: "md", md: "lg" }}
               bg="rgba(255, 255, 255, 0.2)"
               color="white"
-              fontSize="2xl"
+              fontSize={{ base: "lg", md: "2xl" }}
               _hover={{ bg: 'rgba(255, 255, 255, 0.3)' }}
               _active={{ bg: 'rgba(255, 255, 255, 0.4)' }}
               borderRadius="full"
@@ -143,8 +148,8 @@ const ViewAllotmentPage = () => {
         </Container>
       </Box>
 
-      <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={16}>
-        <VStack spacing={6} align="stretch">
+      <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={{ base: 10, md: 16 }} px={{ base: 4, md: 6, lg: 8 }}>
+        <VStack spacing={{ base: 4, md: 6 }} align="stretch">
           {/* Centralised Room Allotment Card */}
           <Card
             bg="white"
@@ -154,10 +159,15 @@ const ViewAllotmentPage = () => {
             borderColor="gray.300"
             overflow="hidden"
           >
-            <CardHeader bg="purple.600" color="white" p={4}>
-              <Flex justify="space-between" align="center">
-                <Heading size="md">Centralised Room Allotment</Heading>
-                <Badge colorScheme="green" fontSize="md" px={3} py={1}>
+            <CardHeader bg="purple.600" color="white" p={{ base: 3, md: 4 }}>
+              <Flex
+                justify="space-between"
+                align={{ base: "start", sm: "center" }}
+                direction={{ base: "column", sm: "row" }}
+                gap={2}
+              >
+                <Heading size={{ base: "sm", md: "md" }}>Centralised Room Allotment</Heading>
+                <Badge colorScheme="green" fontSize={{ base: "xs", md: "md" }} px={3} py={1}>
                   {formData.centralisedAllotments.length} Departments
                 </Badge>
               </Flex>
@@ -182,12 +192,12 @@ const ViewAllotmentPage = () => {
                   },
                 }}
               >
-                <Table variant="simple" size="md">
+                <Table variant="simple" size={{ base: "sm", md: "md" }}>
                   <Thead bg="purple.50">
                     <Tr>
                       <Th 
                         color="purple.700" 
-                        fontSize="sm" 
+                        fontSize={{ base: "2xs", md: "sm" }} 
                         fontWeight="bold"
                         borderBottom="2px"
                         borderColor="purple.200"
@@ -200,7 +210,7 @@ const ViewAllotmentPage = () => {
                       </Th>
                       <Th 
                         color="purple.700" 
-                        fontSize="sm" 
+                        fontSize={{ base: "2xs", md: "sm" }} 
                         fontWeight="bold"
                         borderBottom="2px"
                         borderColor="purple.200"
@@ -209,7 +219,7 @@ const ViewAllotmentPage = () => {
                       </Th>
                       <Th 
                         color="purple.700" 
-                        fontSize="sm" 
+                        fontSize={{ base: "2xs", md: "sm" }} 
                         fontWeight="bold"
                         borderBottom="2px"
                         borderColor="purple.200"
@@ -218,7 +228,7 @@ const ViewAllotmentPage = () => {
                       </Th>
                       <Th 
                         color="purple.700" 
-                        fontSize="sm" 
+                        fontSize={{ base: "2xs", md: "sm" }} 
                         fontWeight="bold"
                         borderBottom="2px"
                         borderColor="purple.200"
@@ -243,6 +253,9 @@ const ViewAllotmentPage = () => {
                           _hover={{ bg: 'purple.50' }}
                           borderRight="1px"
                           borderColor="gray.200"
+                          fontSize={{ base: "xs", md: "sm" }}
+                          minW={{ base: "90px", md: "140px" }}
+                          whiteSpace="normal"
                         >
                           {dept.dept}
                         </Td>
@@ -258,7 +271,7 @@ const ViewAllotmentPage = () => {
                                 borderColor="blue.400"
                                 w="full"
                               >
-                                <Text fontSize="sm" fontWeight="semibold" color="blue.700">
+                                <Text fontSize={{ base: "xs", md: "sm" }} fontWeight="semibold" color="blue.700">
                                   {room.room}
                                 </Text>
                               </Box>
@@ -300,10 +313,15 @@ const ViewAllotmentPage = () => {
             borderColor="gray.300"
             overflow="hidden"
           >
-            <CardHeader bg="teal.600" color="white" p={4}>
-              <Flex justify="space-between" align="center">
-                <Heading size="md">Open Elective Room Allotment</Heading>
-                <Badge colorScheme="orange" fontSize="md" px={3} py={1}>
+            <CardHeader bg="teal.600" color="white" p={{ base: 3, md: 4 }}>
+              <Flex
+                justify="space-between"
+                align={{ base: "start", sm: "center" }}
+                direction={{ base: "column", sm: "row" }}
+                gap={2}
+              >
+                <Heading size={{ base: "sm", md: "md" }}>Open Elective Room Allotment</Heading>
+                <Badge colorScheme="orange" fontSize={{ base: "xs", md: "md" }} px={3} py={1}>
                   {formData.openElectiveAllotments.length} Departments
                 </Badge>
               </Flex>
@@ -328,12 +346,12 @@ const ViewAllotmentPage = () => {
                   },
                 }}
               >
-                <Table variant="simple" size="md">
+                <Table variant="simple" size={{ base: "sm", md: "md" }}>
                   <Thead bg="teal.50">
                     <Tr>
                       <Th 
                         color="teal.700" 
-                        fontSize="sm" 
+                        fontSize={{ base: "2xs", md: "sm" }} 
                         fontWeight="bold"
                         borderBottom="2px"
                         borderColor="teal.200"
@@ -346,7 +364,7 @@ const ViewAllotmentPage = () => {
                       </Th>
                       <Th 
                         color="teal.700" 
-                        fontSize="sm" 
+                        fontSize={{ base: "2xs", md: "sm" }} 
                         fontWeight="bold"
                         borderBottom="2px"
                         borderColor="teal.200"
@@ -371,6 +389,9 @@ const ViewAllotmentPage = () => {
                           _hover={{ bg: 'teal.50' }}
                           borderRight="1px"
                           borderColor="gray.200"
+                          fontSize={{ base: "xs", md: "sm" }}
+                          minW={{ base: "90px", md: "140px" }}
+                          whiteSpace="normal"
                         >
                           {dept.dept}
                         </Td>
@@ -386,7 +407,7 @@ const ViewAllotmentPage = () => {
                                 borderColor="orange.400"
                                 w="full"
                               >
-                                <Text fontSize="sm" fontWeight="semibold" color="orange.700">
+                                <Text fontSize={{ base: "xs", md: "sm" }} fontWeight="semibold" color="orange.700">
                                   {room.room}
                                 </Text>
                               </Box>

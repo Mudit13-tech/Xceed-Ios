@@ -11,6 +11,7 @@ import {
   Heading,
   VStack,
   HStack,
+  Stack,
   Button,
   Card,
   CardHeader,
@@ -783,16 +784,26 @@ const PrintSummary = () => {
           <Header />
         </Box>
 
-        <Container maxW="7xl" position="relative" mt={4}>
-          <Flex justify="space-between" align="center" w="full" gap={4}>
-            <HStack spacing={3}>
+        <Container maxW="7xl" position="relative" mt={4} px={{ base: 4, md: 6, lg: 8 }}>
+          <Flex
+            justify="space-between"
+            align={{ base: "start", md: "center" }}
+            w="full"
+            gap={{ base: 3, md: 4 }}
+          >
+            <Stack
+              direction={{ base: "column", sm: "row" }}
+              spacing={{ base: 2, md: 3 }}
+              align={{ base: "start", sm: "center" }}
+              minW={0}
+            >
               <Badge colorScheme="whiteAlpha" fontSize="xs" px={2} py={1} borderRadius="full">
                 Bulk Downloads
               </Badge>
-              <Heading size="lg" color="white" fontWeight="bold">
+              <Heading size={{ base: "md", md: "lg" }} color="white" fontWeight="bold">
                 XCEED Express Download
               </Heading>
-            </HStack>
+            </Stack>
 
             <IconButton
               icon={<ArrowBackIcon />}
@@ -813,8 +824,8 @@ const PrintSummary = () => {
         </Container>
       </Box>
 
-      <Container maxW="7xl" mt={-2} position="relative" zIndex={1} pb={16}>
-        <VStack spacing={6} align="stretch">
+      <Container maxW="7xl" mt={-2} position="relative" zIndex={1} pb={{ base: 10, md: 16 }} px={{ base: 4, md: 6, lg: 8 }}>
+        <VStack spacing={{ base: 4, md: 6 }} align="stretch">
           {/* Info Alert */}
           <Alert status="info" borderRadius="xl" variant="left-accent">
             <AlertIcon />
@@ -822,7 +833,7 @@ const PrintSummary = () => {
               <Text fontWeight="bold" mb={1}>
                 Bulk Download Timetables
               </Text>
-              <Text fontSize="sm">
+              <Text fontSize={{ base: "xs", md: "sm" }}>
                 Download all semester, faculty, or room timetables in one click. The process may take several minutes depending on the number of items.
               </Text>
             </Box>
@@ -830,26 +841,29 @@ const PrintSummary = () => {
 
           {/* Semesters Download Card */}
           <Card bg="white" borderRadius="2xl" shadow="2xl" border="1px" borderColor="gray.300">
-            <CardHeader bg="purple.600" color="white" p={4}>
-              <Flex justify="space-between" align="center">
-                <Heading size="md">All Semesters</Heading>
+            <CardHeader bg="purple.600" color="white" p={{ base: 3, md: 4 }}>
+              <Flex justify="space-between" align={{ base: "start", sm: "center" }} direction={{ base: "column", sm: "row" }} gap={2}>
+                <Heading size={{ base: "sm", md: "md" }}>All Semesters</Heading>
                 {downloadStatus === 'fetchingSemesters' && availableSems.length > 0 && (
-                  <Badge colorScheme="orange" fontSize="md" px={3} py={1}>
+                  <Badge colorScheme="orange" fontSize={{ base: "xs", md: "md" }} px={3} py={1}>
                     {availableSems.length} Semesters
                   </Badge>
                 )}
               </Flex>
             </CardHeader>
-            <CardBody p={6}>
+            <CardBody p={{ base: 4, md: 6 }}>
               <VStack align="stretch" spacing={3}>
-                <Text color="gray.600" fontSize="sm">
+                <Text color="gray.600" fontSize={{ base: "xs", md: "sm" }}>
                   Download PDF timetables for all available semesters in the current session.
                 </Text>
                 <Button
                   onClick={handleDownloadAllSemesters}
                   colorScheme="purple"
-                  size="lg"
+                  size={{ base: "md", md: "lg" }}
                   leftIcon={<DownloadIcon />}
+                  whiteSpace="normal"
+                  height="auto"
+                  py={{ base: 3, md: 2 }}
                   isDisabled={downloadType && downloadType !== 'sem' && completeStatus !== 'downloadCompleted'}
                 >
                   Download All Semesters
@@ -861,26 +875,29 @@ const PrintSummary = () => {
 
           {/* Faculty Download Card */}
           <Card bg="white" borderRadius="2xl" shadow="2xl" border="1px" borderColor="gray.300">
-            <CardHeader bg="teal.600" color="white" p={4}>
-              <Flex justify="space-between" align="center">
-                <Heading size="md">All Faculty</Heading>
+            <CardHeader bg="teal.600" color="white" p={{ base: 3, md: 4 }}>
+              <Flex justify="space-between" align={{ base: "start", sm: "center" }} direction={{ base: "column", sm: "row" }} gap={2}>
+                <Heading size={{ base: "sm", md: "md" }}>All Faculty</Heading>
                 {downloadStatus === 'fetchingSemesters' && availableFaculties.length > 0 && (
-                  <Badge colorScheme="orange" fontSize="md" px={3} py={1}>
+                  <Badge colorScheme="orange" fontSize={{ base: "xs", md: "md" }} px={3} py={1}>
                     {availableFaculties.length} Faculty
                   </Badge>
                 )}
               </Flex>
             </CardHeader>
-            <CardBody p={6}>
+            <CardBody p={{ base: 4, md: 6 }}>
               <VStack align="stretch" spacing={3}>
-                <Text color="gray.600" fontSize="sm">
+                <Text color="gray.600" fontSize={{ base: "xs", md: "sm" }}>
                   Download PDF timetables for all faculty members in the current session.
                 </Text>
                 <Button
                   onClick={handleDownloadAllFaculty}
                   colorScheme="teal"
-                  size="lg"
+                  size={{ base: "md", md: "lg" }}
                   leftIcon={<DownloadIcon />}
+                  whiteSpace="normal"
+                  height="auto"
+                  py={{ base: 3, md: 2 }}
                   isDisabled={downloadType && downloadType !== 'faculty' && completeStatus !== 'downloadCompleted'}
                 >
                   Download All Faculty Timetables
@@ -892,26 +909,29 @@ const PrintSummary = () => {
 
           {/* Rooms Download Card */}
           <Card bg="white" borderRadius="2xl" shadow="2xl" border="1px" borderColor="gray.300">
-            <CardHeader bg="green.600" color="white" p={4}>
-              <Flex justify="space-between" align="center">
-                <Heading size="md">All Rooms</Heading>
+            <CardHeader bg="green.600" color="white" p={{ base: 3, md: 4 }}>
+              <Flex justify="space-between" align={{ base: "start", sm: "center" }} direction={{ base: "column", sm: "row" }} gap={2}>
+                <Heading size={{ base: "sm", md: "md" }}>All Rooms</Heading>
                 {downloadStatus === 'fetchingSemesters' && availableRooms.length > 0 && (
-                  <Badge colorScheme="orange" fontSize="md" px={3} py={1}>
+                  <Badge colorScheme="orange" fontSize={{ base: "xs", md: "md" }} px={3} py={1}>
                     {availableRooms.length} Rooms
                   </Badge>
                 )}
               </Flex>
             </CardHeader>
-            <CardBody p={6}>
+            <CardBody p={{ base: 4, md: 6 }}>
               <VStack align="stretch" spacing={3}>
-                <Text color="gray.600" fontSize="sm">
+                <Text color="gray.600" fontSize={{ base: "xs", md: "sm" }}>
                   Download PDF timetables for all rooms in the current session.
                 </Text>
                 <Button
                   onClick={handleDownloadAllRoom}
                   colorScheme="green"
-                  size="lg"
+                  size={{ base: "md", md: "lg" }}
                   leftIcon={<DownloadIcon />}
+                  whiteSpace="normal"
+                  height="auto"
+                  py={{ base: 3, md: 2 }}
                   isDisabled={downloadType && downloadType !== 'room' && completeStatus !== 'downloadCompleted'}
                 >
                   Download All Room Timetables
@@ -923,19 +943,22 @@ const PrintSummary = () => {
 
           {/* Load Allocation Card */}
           <Card bg="white" borderRadius="2xl" shadow="2xl" border="1px" borderColor="gray.300">
-            <CardHeader bg="orange.600" color="white" p={4}>
-              <Heading size="md">Department Load Allocation</Heading>
+            <CardHeader bg="orange.600" color="white" p={{ base: 3, md: 4 }}>
+              <Heading size={{ base: "sm", md: "md" }}>Department Load Allocation</Heading>
             </CardHeader>
-            <CardBody p={6}>
+            <CardBody p={{ base: 4, md: 6 }}>
               <VStack align="stretch" spacing={3}>
-                <Text color="gray.600" fontSize="sm">
+                <Text color="gray.600" fontSize={{ base: "xs", md: "sm" }}>
                   Generate and download department-wise load allocation summary for all faculty.
                 </Text>
                 <Button
                   onClick={handleDownloadDeptLoadDistribution}
                   colorScheme="orange"
-                  size="lg"
+                  size={{ base: "md", md: "lg" }}
                   leftIcon={<DownloadIcon />}
+                  whiteSpace="normal"
+                  height="auto"
+                  py={{ base: 3, md: 2 }}
                   isDisabled={downloadType && downloadType !== 'load' && completeStatus !== 'downloadCompleted'}
                 >
                   Download Department Load Allocation
@@ -949,13 +972,18 @@ const PrintSummary = () => {
 
           {/* Merge PDF Navigation */}
           <Card bg="white" borderRadius="2xl" shadow="2xl" border="1px" borderColor="blue.300">
-            <CardBody p={6}>
-              <Flex justify="space-between" align="center">
+            <CardBody p={{ base: 4, md: 6 }}>
+              <Flex
+                justify="space-between"
+                align={{ base: "stretch", md: "center" }}
+                direction={{ base: "column", md: "row" }}
+                gap={{ base: 3, md: 4 }}
+              >
                 <VStack align="start" spacing={1}>
-                  <Heading size="md" color="blue.700">
+                  <Heading size={{ base: "sm", md: "md" }} color="blue.700">
                     Merge Multiple PDFs
                   </Heading>
-                  <Text color="gray.600" fontSize="sm">
+                  <Text color="gray.600" fontSize={{ base: "xs", md: "sm" }}>
                     Combine multiple downloaded PDFs into a single document
                   </Text>
                 </VStack>
@@ -963,8 +991,10 @@ const PrintSummary = () => {
                   as={Link}
                   to={`${currentPath}/mergepdf`}
                   colorScheme="blue"
-                  size="lg"
+                  size={{ base: "md", md: "lg" }}
                   rightIcon={<InfoIcon />}
+                  w={{ base: "full", md: "auto" }}
+                  flexShrink={0}
                 >
                   Go to Merge PDF
                 </Button>

@@ -137,4 +137,41 @@ button[type="submit"] {
     background-color: #66ccff;
   }
 
+/* Responsive: keep wide timetable grids/tables scrollable instead of
+   forcing the page itself to scroll sideways on small screens. */
+.timetable {
+  overflow-x: auto;
+}
+
+.timetable-grid,
+.timetable-row {
+  min-width: 700px;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 12px;
+  }
+
+  .timetable {
+    margin: 8px 0;
+    padding: 8px;
+  }
+
+  .container th,
+  .container td,
+  .timetable th,
+  .timetable td {
+    padding: 6px;
+    font-size: 0.85rem;
+  }
+
+  .container button,
+  .timetable button {
+    padding: 8px 14px;
+    margin: 3px;
+    font-size: 0.85rem;
+  }
+}
+
   

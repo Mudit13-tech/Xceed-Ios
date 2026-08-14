@@ -12,6 +12,7 @@ const ResultSummary = () => {
   const [studentDetails, setStudentDetails] = useState({}); // Initialize as an empty object
   const [studentSummary, setStudentSummary] = useState([]);
   const [consolidatedData, setConsolidatedData] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const apiurl = getEnvironment();
   
@@ -199,18 +200,15 @@ useEffect(() => {
       }
     } catch (error) {
       console.error('Error fetching question details:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   fetchQuestionDetails();
 },  []);
 
-console.log(quizDetails);
-        console.log(studentDetails);
-        console.log('questiondetails',questionDetails);
-        console.log('consolidated',consolidatedData);
-// // Conditional rendering when studentDetails or quizDetails are not available yet
-  if (Object.keys(studentDetails).length === 0 || quizDetails.length === 0) {
+  if (loading) {
     return <div>Loading...</div>;
   }
 // summary tab result download
@@ -318,7 +316,7 @@ console.log(quizDetails);
             </tbody>
           </table>
 
-          <button onClick={() => handleCSVDownload(quizDetails)}>Download Summary Result</button>
+          <button onClick={() => handleCSVDownload(quizDetails)} disabled={!quizDetails || quizDetails.length === 0}>Download Summary Result</button>
           {/* <button onClick={() => handleCSVDownload(Object.values(quizDetails), 'Summart_results.csv')}>Download Tab 2 CSV</button> */}
 
         </TabPanel>
@@ -389,7 +387,7 @@ console.log(quizDetails);
           })}
         </tbody>
       </table>
-      <button onClick={handleCSVDownloadTab2}>Download Detailed result</button>
+      <button onClick={handleCSVDownloadTab2} disabled={!quizDetails || quizDetails.length === 0}>Download Detailed result</button>
 
       
     </TabPanel>

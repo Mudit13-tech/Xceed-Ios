@@ -62,9 +62,9 @@ const ViewTimetable = ({ timetableData}) => {
       {Object.keys(timetableData).length === 0 ? (
         <div></div>
       ) : (
-        <div id='timetable-summary'>
-          <TableContainer>
-            <Table variant={'striped'} colorScheme='blackAlpha'>
+        <div id='timetable-summary' style={{ width: '100%', maxWidth: '100%' }}>
+          <TableContainer w="100%" maxW="100%" overflowX="auto">
+            <Table variant={'striped'} colorScheme='blackAlpha' size={{ base: 'sm', md: 'md' }}>
               <Thead>
                 <Tr>
                   <Th style={{ backgroundColor: '#24304c', fontWeight: '900', fontSize: 'small', color: 'white' }}>Day/Period </Th>
@@ -78,7 +78,7 @@ const ViewTimetable = ({ timetableData}) => {
                     '3:30 PM - 4:25 PM',
                     '4:30 PM - 5:25 PM',
                   ].map((period) => (
-                    <Th key={period} style={{ textWrap: 'nowrap', backgroundColor: '#24304c', color: "white", textAlign: "center" }} height="50">
+                    <Th key={period} fontSize={{ base: '2xs', md: 'xs' }} style={{ textWrap: 'nowrap', backgroundColor: '#24304c', color: "white", textAlign: "center" }} height="50">
                       <b>{period === '12:30 PM - 1:30 PM' ? '12:30 PM - 1:30 PM' : period}</b>
                     </Th>
                   ))}
@@ -87,11 +87,11 @@ const ViewTimetable = ({ timetableData}) => {
               <Tbody>
                 {days.map((day) => (
                   <Tr key={day}>
-                    <Td style={{ backgroundColor: '#24304c', color: "white" }} align="center" height="50">
+                    <Td fontSize={{ base: 'xs', md: 'sm' }} style={{ backgroundColor: '#24304c', color: "white" }} align="center" height="50">
                       <b>{day}</b>
                     </Td>
                     {[1, 2, 3, 4, 'Lunch', 5, 6, 7, 8].map((period) => (
-                      <Td key={period} align="center" height="50" style={{
+                      <Td key={period} fontSize={{ base: 'xs', md: 'sm' }} align="center" height="50" style={{
                         backgroundColor: period == 'Lunch' ? '#DECA57cc' : timetableData[day][`period${period}`].length==0?"green":"",
                         color: period == 'Lunch' ? 'rgba(0,0,0,0.7)' : ''
                       }}>

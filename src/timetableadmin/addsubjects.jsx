@@ -656,7 +656,7 @@ function Subject() {
         <Box 
           bgGradient="linear(to-r, red.700, pink.500, green.300)"
           pt={4}
-          pb={24}
+          pb={{ base: 16, md: 20, lg: 24 }}
           position="relative"
           overflow="hidden"
         >
@@ -681,14 +681,14 @@ function Subject() {
 
           <Container maxW="7xl" position="relative" mt={-7}>
             <Flex justify="space-between" align="center" w="full" gap={1}>
-              <VStack spacing={4} align="start" flex="1">
-                <Badge colorScheme="whiteAlpha" fontSize="sm" px={3} py={1} borderRadius="full">
+              <VStack spacing={{ base: 2, md: 4 }} align="start" flex="1" minW={0}>
+                <Badge colorScheme="whiteAlpha" fontSize={{ base: "xs", md: "sm" }} px={3} py={1} borderRadius="full">
                   Subject Management
                 </Badge>
-                <Heading size="2xl" color="white" fontWeight="bold" lineHeight="1.2">
+                <Heading size={{ base: "lg", md: "xl", lg: "2xl" }} color="white" fontWeight="bold" lineHeight="1.2">
                   Add & Manage Subjects
                 </Heading>
-                <Text color="whiteAlpha.900" fontSize="lg" maxW="2xl">
+                <Text color="whiteAlpha.900" fontSize={{ base: "sm", md: "lg" }} maxW="2xl">
                   Create, edit, and organize subjects across all semesters.
                 </Text>
               </VStack>
@@ -698,10 +698,10 @@ function Subject() {
                 icon={<ArrowBackIcon />}
                 aria-label="Go back"
                 onClick={() => window.history.back()}
-                size="lg"
+                size={{ base: "md", md: "lg" }}
                 bg="rgba(255, 255, 255, 0.2)"
                 color="white"
-                fontSize="2xl"
+                fontSize={{ base: "lg", md: "2xl" }}
                 _hover={{ bg: 'rgba(255, 255, 255, 0.3)' }}
                 _active={{ bg: 'rgba(255, 255, 255, 0.4)' }}
                 borderRadius="full"
@@ -727,7 +727,7 @@ function Subject() {
               border="1px"
               borderColor={borderColor}
             >
-              <Text fontWeight="bold" fontSize="lg" mb={3}>Batch Upload</Text>
+              <Text fontWeight="bold" fontSize={{ base: "md", md: "lg" }} mb={3}>Batch Upload</Text>
               <VStack spacing={3} align="stretch">
                 <HStack spacing={2} flexDirection={{ base: "column", md: "row" }}>
                   <Input
@@ -1031,7 +1031,7 @@ function Subject() {
             ) : (
               /* Semester-wise Subject Cards */
               <Box>
-                <Flex justify="space-between" align="center" mb={4}>
+                <Flex justify="space-between" align={{ base: "stretch", sm: "center" }} direction={{ base: "column", sm: "row" }} gap={{ base: 2, sm: 0 }} mb={4}>
                   <Text fontWeight="bold" fontSize="xl">
                     Subjects by Semester
                   </Text>

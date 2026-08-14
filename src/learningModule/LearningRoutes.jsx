@@ -36,6 +36,11 @@ import ShortReport from './pages/ShortReport';
 import ShortJoin from './pages/ShortJoin';
 import ShortPlay from './pages/ShortPlay';
 import Tutorials from './pages/Tutorials';
+import Assignments from './pages/Assignments';
+import AssignmentImport from './pages/AssignmentImport';
+import AssignmentEditor from './pages/AssignmentEditor';
+import AssignmentPlayer from './pages/AssignmentPlayer';
+import AssignmentResults from './pages/AssignmentResults';
 import TutorialImport from './pages/TutorialImport';
 import TutorialEditor from './pages/TutorialEditor';
 import TutorialPlayer from './pages/TutorialPlayer';
@@ -100,6 +105,8 @@ export default function LearningRoutes() {
           <Route path="notebook/:notebookId" element={<NotebookPlayer />} />
           <Route path="shorts" element={<Shorts />} />
           <Route path="tutorials" element={<Tutorials />} />
+          {/* Assignments: the assessed sibling of tutorials, on its own routes. */}
+          <Route path="assignments" element={<Assignments />} />
 
           {/* Staff screens. The server guards the data; this keeps a student
               who typed the URL from meeting a bare 403 where a page should be. */}
@@ -121,9 +128,14 @@ export default function LearningRoutes() {
                 and then published. */}
             <Route path="tutorial-import/:draftId" element={<TutorialImport />} />
             <Route path="tutorial/:tutorialId/results" element={<TutorialResults />} />
+            <Route path="assignment/:assignmentId/edit" element={<AssignmentEditor />} />
+            <Route path="assignment/:assignmentId/results" element={<AssignmentResults />} />
+            {/* Reviewing an assignment read off an uploaded paper. */}
+            <Route path="assignment-import/:draftId" element={<AssignmentImport />} />
           </Route>
 
           <Route path="tutorial/:tutorialId" element={<TutorialPlayer />} />
+          <Route path="assignment/:assignmentId" element={<AssignmentPlayer />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/learning" replace />} />

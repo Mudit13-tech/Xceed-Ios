@@ -436,7 +436,7 @@ function Subject() {
       <Box
         bgGradient="linear(to-r, purple.400, pink.500, orange.500)"
         pt={0}
-        pb={24}
+        pb={{ base: 16, md: 20, lg: 24 }}
         position="relative"
         overflow="hidden"
       >
@@ -462,9 +462,9 @@ function Subject() {
           <Header />
         </Box>
 
-        <Container maxW="7xl" position="relative" mt={8}>
-          <Flex justify="space-between" align="center" w="full" gap={4}>
-            <VStack spacing={4} align="start" flex="1">
+        <Container maxW="7xl" position="relative" mt={{ base: 4, md: 8 }} px={{ base: 4, md: 6, lg: 8 }}>
+          <Flex justify="space-between" align={{ base: "start", md: "center" }} w="full" gap={{ base: 3, md: 4 }}>
+            <VStack spacing={{ base: 2, md: 4 }} align="start" flex="1" minW={0}>
               <Badge
                 colorScheme="whiteAlpha"
                 fontSize="sm"
@@ -474,10 +474,10 @@ function Subject() {
               >
                 Master Faculty
               </Badge>
-              <Heading size="2xl" color="white" fontWeight="bold" lineHeight="1.2">
+              <Heading size={{ base: "lg", md: "xl", lg: "2xl" }} color="white" fontWeight="bold" lineHeight="1.2">
                 Faculty Management
               </Heading>
-              <Text color="whiteAlpha.900" fontSize="lg" maxW="2xl">
+              <Text color="whiteAlpha.900" fontSize={{ base: "sm", md: "lg" }} maxW="2xl">
                 Manage faculty information including departments, designations, and contact details.
               </Text>
             </VStack>
@@ -486,10 +486,10 @@ function Subject() {
               icon={<ArrowBackIcon />}
               aria-label="Go back"
               onClick={() => window.history.back()}
-              size="lg"
+              size={{ base: "md", md: "lg" }}
               bg="rgba(255, 255, 255, 0.2)"
               color="white"
-              fontSize="2xl"
+              fontSize={{ base: "lg", md: "2xl" }}
               _hover={{ bg: 'rgba(255, 255, 255, 0.3)' }}
               _active={{ bg: 'rgba(255, 255, 255, 0.4)' }}
               borderRadius="full"
@@ -502,7 +502,7 @@ function Subject() {
         </Container>
       </Box>
 
-      <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={16}>
+      <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={{ base: 10, md: 16 }} px={{ base: 4, md: 6, lg: 8 }}>
         <VStack spacing={6} align="stretch">
           {/* Batch Upload Card */}
           <Card
@@ -513,10 +513,10 @@ function Subject() {
             borderColor="gray.300"
             overflow="hidden"
           >
-            <CardHeader bgGradient="linear(to-r, blue.400, cyan.400)" color="white" p={4}>
-              <Heading size="md">Batch Upload</Heading>
+            <CardHeader bgGradient="linear(to-r, blue.400, cyan.400)" color="white" p={{ base: 3, md: 4 }}>
+              <Heading size={{ base: "sm", md: "md" }}>Batch Upload</Heading>
             </CardHeader>
-            <CardBody p={6}>
+            <CardBody p={{ base: 4, md: 6 }}>
               <VStack spacing={4} align="stretch">
                 <FormControl>
                   <FormLabel fontWeight="semibold" color="gray.700">
@@ -562,12 +562,12 @@ function Subject() {
             borderColor="gray.300"
             overflow="hidden"
           >
-            <CardHeader bgGradient="linear(to-r, purple.400, pink.400)" color="white" p={4}>
-              <Heading size="md">
+            <CardHeader bgGradient="linear(to-r, purple.400, pink.400)" color="white" p={{ base: 3, md: 4 }}>
+              <Heading size={{ base: "sm", md: "md" }}>
                 {isAddFacultyFormVisible ? 'Add New Faculty' : 'Quick Actions'}
               </Heading>
             </CardHeader>
-            <CardBody p={6}>
+            <CardBody p={{ base: 4, md: 6 }}>
               {isAddFacultyFormVisible ? (
                 <VStack spacing={4} align="stretch">
                   <Alert status="info" borderRadius="md">
@@ -704,9 +704,9 @@ function Subject() {
             borderColor="gray.300"
             overflow="hidden"
           >
-            <CardHeader bgGradient="linear(to-r, orange.400, red.400)" color="white" p={4}>
+            <CardHeader bgGradient="linear(to-r, orange.400, red.400)" color="white" p={{ base: 3, md: 4 }}>
               <HStack justify="space-between">
-                <Heading size="md">
+                <Heading size={{ base: "sm", md: "md" }}>
                   Faculty Data (Total: {tableData.length} Entries)
                 </Heading>
                 <Button
@@ -732,7 +732,7 @@ function Subject() {
                 </Box>
               ) : (
                 <TableContainer>
-                  <Table variant="striped" colorScheme="orange" size="md">
+                  <Table variant="striped" colorScheme="orange" size={{ base: "sm", md: "md" }}>
                     <Thead bgGradient="linear(to-r, orange.300, pink.300)">
                       <Tr>
                         <Th textAlign="center" color="white">Faculty ID</Th>

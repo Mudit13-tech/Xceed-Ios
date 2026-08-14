@@ -139,7 +139,13 @@ export default function Notebooks() {
       ) : (
         <VStack align="stretch" spacing={3}>
           {notebooks.map((notebook) => {
-            const [scheme, label] = STATUS_META[notebook.myStatus] || [];
+            let [scheme, label] = STATUS_META[notebook.myStatus] || [];
+            if (!isTeacher && notebook.myStatus === 'submitted' && notebook.mySubmittedAt && notebook.dueDate) {
+              if (new Date(notebook.mySubmittedAt) > new Date(notebook.dueDate)) {
+                scheme = 'orange';
+                label = 'submitted late';
+              }
+            }
             return (
               <SectionCard key={notebook._id}>
                 <Flex gap={4} wrap="wrap" align="flex-start">
@@ -157,7 +163,9 @@ export default function Notebooks() {
                       {/* Up here with the title rather than in the metadata
                           line below: the deadline is the one thing on this card
                           that changes while you are looking at it. */}
-                      <DeadlineCountdown dueDate={notebook.dueDate} size="xs" />
+                      {notebook.myStatus !== 'submitted' && !notebook.myGraded && (
+                        <DeadlineCountdown dueDate={notebook.dueDate} size="xs" />
+                      )}
                     </HStack>
 
                     {notebook.description ? (

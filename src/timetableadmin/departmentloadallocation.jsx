@@ -933,11 +933,11 @@ const Departmentloadallocation = () => {
             borderColor="gray.300"
             overflow="hidden"
           >
-            <CardHeader bg="purple.600" color="white" p={4}>
+            <CardHeader bg="purple.600" color="white" p={{ base: 3, md: 4 }}>
               <Flex justify="space-between" align="center" flexWrap="wrap" gap={2}>
                 <HStack spacing={2}>
                   <FaFilter />
-                  <Heading size="md">Filters</Heading>
+                  <Heading size={{ base: "sm", md: "md" }}>Filters</Heading>
                 </HStack>
                 <Button
                   leftIcon={<RepeatIcon />}
@@ -954,7 +954,7 @@ const Departmentloadallocation = () => {
                 </Button>
               </Flex>
             </CardHeader>
-            <CardBody p={6}>
+            <CardBody p={{ base: 4, md: 6 }}>
               <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4}>
                 <FormControl>
                   <FormLabel fontWeight="semibold" color="gray.700" fontSize="sm">
@@ -1052,9 +1052,9 @@ const Departmentloadallocation = () => {
             borderColor="gray.300"
             overflow="hidden"
           >
-            <CardHeader bg="teal.600" color="white" p={4}>
+            <CardHeader bg="teal.600" color="white" p={{ base: 3, md: 4 }}>
               <Flex justify="space-between" align="center" flexWrap="wrap" gap={2}>
-                <Heading size="md">Faculty Load Distribution</Heading>
+                <Heading size={{ base: "sm", md: "md" }}>Faculty Load Distribution</Heading>
                 <Badge colorScheme="orange" fontSize="md" px={3} py={1}>
                   {table.length} Faculty
                 </Badge>

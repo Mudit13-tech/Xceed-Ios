@@ -105,7 +105,7 @@ const MessagesPage = () => {
       <Box
         bgGradient="linear(to-r, cyan.400, teal.500, green.500)"
         pt={0}
-        pb={24}
+        pb={{ base: 16, md: 20, lg: 24 }}
         position="relative"
         overflow="hidden"
       >
@@ -132,22 +132,22 @@ const MessagesPage = () => {
           <Header />
         </Box>
 
-        <Container maxW="7xl" position="relative" mt={8}>
-          <Flex justify="space-between" align="center" w="full" gap={4}>
-            <VStack spacing={4} align="start" flex="1">
+        <Container maxW="7xl" position="relative" mt={{ base: 4, md: 8 }} px={{ base: 4, md: 6, lg: 8 }}>
+          <Flex justify="space-between" align={{ base: "start", md: "center" }} w="full" gap={{ base: 3, md: 4 }}>
+            <VStack spacing={{ base: 2, md: 4 }} align="start" flex="1" minW={0}>
               <Badge
                 colorScheme="whiteAlpha"
-                fontSize="sm"
+                fontSize={{ base: "xs", md: "sm" }}
                 px={3}
                 py={1}
                 borderRadius="full"
               >
                 Message Center
               </Badge>
-              <Heading size="2xl" color="white" fontWeight="bold" lineHeight="1.2">
+              <Heading size={{ base: "lg", md: "xl", lg: "2xl" }} color="white" fontWeight="bold" lineHeight="1.2">
                 Messages from Institute Coordinator
               </Heading>
-              <Text color="whiteAlpha.900" fontSize="lg" maxW="2xl">
+              <Text color="whiteAlpha.900" fontSize={{ base: "sm", md: "lg" }} maxW="2xl">
                 View all notifications and messages from the timetable coordinator.
               </Text>
             </VStack>
@@ -157,10 +157,10 @@ const MessagesPage = () => {
               icon={<ArrowBackIcon />}
               aria-label="Go back"
               onClick={() => window.history.back()}
-              size="lg"
+              size={{ base: "md", md: "lg" }}
               bg="rgba(255, 255, 255, 0.2)"
               color="white"
-              fontSize="2xl"
+              fontSize={{ base: "lg", md: "2xl" }}
               _hover={{ bg: "rgba(255, 255, 255, 0.3)" }}
               _active={{ bg: "rgba(255, 255, 255, 0.4)" }}
               borderRadius="full"
@@ -173,7 +173,7 @@ const MessagesPage = () => {
         </Container>
       </Box>
 
-      <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={16}>
+      <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={{ base: 10, md: 16 }} px={{ base: 4, md: 6, lg: 8 }}>
         {/* Messages Card */}
         <Card
           bg="white"
@@ -183,22 +183,22 @@ const MessagesPage = () => {
           borderColor="gray.300"
           overflow="hidden"
         >
-          <CardHeader bg="purple.600" color="white" p={4}>
-            <Flex justify="space-between" align="center">
-              <Heading size="md">All Messages</Heading>
-              <Flex gap={2}>
+          <CardHeader bg="purple.600" color="white" p={{ base: 3, md: 4 }}>
+            <Flex justify="space-between" align={{ base: "start", sm: "center" }} direction={{ base: "column", sm: "row" }} gap={2}>
+              <Heading size={{ base: "sm", md: "md" }}>All Messages</Heading>
+              <Flex gap={2} flexWrap="wrap">
                 {unreadCount > 0 && (
-                  <Badge colorScheme="red" fontSize="md" px={3} py={1}>
+                  <Badge colorScheme="red" fontSize={{ base: "xs", md: "md" }} px={3} py={1}>
                     {unreadCount} Unread
                   </Badge>
                 )}
-                <Badge colorScheme="orange" fontSize="md" px={3} py={1}>
+                <Badge colorScheme="orange" fontSize={{ base: "xs", md: "md" }} px={3} py={1}>
                   {messages.length} Total
                 </Badge>
               </Flex>
             </Flex>
           </CardHeader>
-          <CardBody p={6}>
+          <CardBody p={{ base: 3, md: 6 }}>
             {loading ? (
               <Flex justify="center" align="center" minH="300px">
                 <VStack spacing={4}>
@@ -229,7 +229,7 @@ const MessagesPage = () => {
                       borderRadius="lg"
                       borderColor={isRead ? "gray.200" : "purple.400"}
                       bg={isRead ? "white" : "purple.50"}
-                      p={4}
+                      p={{ base: 3, md: 4 }}
                       cursor="pointer"
                       onClick={() => handleMessageClick(index)}
                       _hover={{
@@ -240,13 +240,18 @@ const MessagesPage = () => {
                       transition="all 0.2s"
                       position="relative"
                     >
-                      <Flex justify="space-between" align="start" gap={4}>
-                        <Flex gap={3} align="start" flex="1">
+                      <Flex
+                        justify="space-between"
+                        align="start"
+                        gap={{ base: 2, md: 4 }}
+                        direction={{ base: "column", sm: "row" }}
+                      >
+                        <Flex gap={{ base: 2, md: 3 }} align="start" flex="1" minW={0}>
                           {/* Unread indicator icon */}
                           <Box
                             mt={1}
                             color={isRead ? "gray.400" : "purple.500"}
-                            fontSize="xl"
+                            fontSize={{ base: "md", md: "xl" }}
                           >
                             <EmailIcon />
                           </Box>
@@ -254,7 +259,7 @@ const MessagesPage = () => {
                           <VStack align="start" spacing={1} flex="1">
                             <Flex align="center" gap={2} flexWrap="wrap">
                               <Text
-                                fontSize="lg"
+                                fontSize={{ base: "sm", md: "lg" }}
                                 fontWeight={isRead ? "medium" : "bold"}
                                 color={isRead ? "gray.700" : "purple.700"}
                                 noOfLines={2}
@@ -270,7 +275,7 @@ const MessagesPage = () => {
 
                             {/* Message preview */}
                             <Text
-                              fontSize="sm"
+                              fontSize={{ base: "xs", md: "sm" }}
                               color="gray.600"
                               noOfLines={2}
                               dangerouslySetInnerHTML={{
@@ -304,9 +309,9 @@ const MessagesPage = () => {
       </Container>
 
       {/* Message Detail Modal */}
-      <Modal isOpen={isOpen} onClose={onClose} isCentered size="xl">
+      <Modal isOpen={isOpen} onClose={onClose} isCentered size={{ base: "full", md: "xl" }}>
         <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(10px)" />
-        <ModalContent maxH="70vh" maxW="900px">
+        <ModalContent maxH={{ base: "100vh", md: "70vh" }} maxW={{ base: "100%", md: "900px" }} mx={{ base: 0, md: 4 }}>
           <ModalHeader
             bg="purple.600"
             color="white"
@@ -319,11 +324,19 @@ const MessagesPage = () => {
           <ModalBody p={2} overflowY="auto">
             <VStack align="stretch" spacing={4}>
               {/* Message metadata */}
-              <Flex justify="space-between" align="center" pb={3} borderBottom="1px" borderColor="gray.200">
-                <Badge colorScheme="purple" fontSize="sm" px={3} py={1}>
+              <Flex
+                justify="space-between"
+                align={{ base: "start", sm: "center" }}
+                direction={{ base: "column", sm: "row" }}
+                gap={2}
+                pb={3}
+                borderBottom="1px"
+                borderColor="gray.200"
+              >
+                <Badge colorScheme="purple" fontSize={{ base: "xs", md: "sm" }} px={3} py={1}>
                   Official Message
                 </Badge>
-                <Text fontSize="sm" color="gray.600">
+                <Text fontSize={{ base: "xs", md: "sm" }} color="gray.600">
                   {selectedMessage?.createdAt &&
                     new Date(selectedMessage.createdAt).toLocaleString('en-IN', {
                       year: 'numeric',
@@ -338,7 +351,10 @@ const MessagesPage = () => {
               {/* Message content */}
               <Box
                 dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedMessage?.content || "") }}
+                overflowX="auto"
+                fontSize={{ base: "sm", md: "md" }}
                 sx={{
+                  '& img, & table': { maxWidth: '100%', height: 'auto' },
                   '& p': { mb: 3 },
                   '& ul, & ol': { ml: 6, mb: 3 },
                   '& li': { mb: 1 },

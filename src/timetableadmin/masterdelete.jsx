@@ -147,7 +147,7 @@ function Del() {
       <Box
         bgGradient="linear(to-r, cyan.400, teal.500, green.500)"
         pt={0}
-        pb={24}
+        pb={{ base: 16, md: 20, lg: 24 }}
         position="relative"
         overflow="hidden"
       >
@@ -173,9 +173,9 @@ function Del() {
           <Header />
         </Box>
 
-        <Container maxW="7xl" position="relative" mt={8}>
-          <Flex justify="space-between" align="center" w="full" gap={4}>
-            <VStack spacing={4} align="start" flex="1">
+        <Container maxW="7xl" position="relative" mt={{ base: 4, md: 8 }} px={{ base: 4, md: 6, lg: 8 }}>
+          <Flex justify="space-between" align={{ base: "start", md: "center" }} w="full" gap={{ base: 3, md: 4 }}>
+            <VStack spacing={{ base: 2, md: 4 }} align="start" flex="1" minW={0}>
               <Badge
                 colorScheme="whiteAlpha"
                 fontSize="sm"
@@ -185,10 +185,10 @@ function Del() {
               >
                 Delete Entries
               </Badge>
-              <Heading size="2xl" color="white" fontWeight="bold" lineHeight="1.2">
+              <Heading size={{ base: "lg", md: "xl", lg: "2xl" }} color="white" fontWeight="bold" lineHeight="1.2">
                 Delete Data by Code
               </Heading>
-              <Text color="whiteAlpha.900" fontSize="lg" maxW="2xl">
+              <Text color="whiteAlpha.900" fontSize={{ base: "sm", md: "lg" }} maxW="2xl">
                 Remove specific entries from the database using their unique code identifier.
               </Text>
             </VStack>
@@ -197,10 +197,10 @@ function Del() {
               icon={<ArrowBackIcon />}
               aria-label="Go back"
               onClick={() => window.history.back()}
-              size="lg"
+              size={{ base: "md", md: "lg" }}
               bg="rgba(255, 255, 255, 0.2)"
               color="white"
-              fontSize="2xl"
+              fontSize={{ base: "lg", md: "2xl" }}
               _hover={{ bg: 'rgba(255, 255, 255, 0.3)' }}
               _active={{ bg: 'rgba(255, 255, 255, 0.4)' }}
               borderRadius="full"
@@ -213,7 +213,7 @@ function Del() {
         </Container>
       </Box>
 
-      <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={16}>
+      <Container maxW="7xl" mt={-12} position="relative" zIndex={1} pb={{ base: 10, md: 16 }} px={{ base: 4, md: 6, lg: 8 }}>
         <VStack spacing={6} align="stretch">
           {/* Important Information Alert */}
           <Alert status="error" borderRadius="lg" variant="left-accent">
@@ -236,10 +236,10 @@ function Del() {
             borderColor="gray.300"
             overflow="hidden"
           >
-            <CardHeader bg="red.600" color="white" p={4}>
-              <Heading size="md">Enter Code</Heading>
+            <CardHeader bg="red.600" color="white" p={{ base: 3, md: 4 }}>
+              <Heading size={{ base: "sm", md: "md" }}>Enter Code</Heading>
             </CardHeader>
-            <CardBody p={6}>
+            <CardBody p={{ base: 4, md: 6 }}>
               <FormControl isRequired>
                 <FormLabel fontWeight="semibold" color="gray.700">
                   Code *
@@ -275,10 +275,10 @@ function Del() {
             borderColor="gray.300"
             overflow="hidden"
           >
-            <CardHeader bg="purple.600" color="white" p={4}>
-              <Heading size="md">Select Data to Delete</Heading>
+            <CardHeader bg="purple.600" color="white" p={{ base: 3, md: 4 }}>
+              <Heading size={{ base: "sm", md: "md" }}>Select Data to Delete</Heading>
             </CardHeader>
-            <CardBody p={6}>
+            <CardBody p={{ base: 4, md: 6 }}>
               <VStack spacing={4} align="stretch">
                 <Alert status="info" borderRadius="md">
                   <AlertIcon />
@@ -287,26 +287,27 @@ function Del() {
                   </Box>
                 </Alert>
 
-                <Table variant="simple">
+                <Box w="100%" maxW="100%" overflowX="auto">
+                <Table variant="simple" size={{ base: "sm", md: "md" }}>
                   <Tbody>
                     {deleteOptions.map((option, index) => (
                       <Tr key={index} _hover={{ bg: 'gray.50' }}>
-                        <Td borderColor="gray.200">
+                        <Td borderColor="gray.200" px={{ base: 2, md: 6 }} whiteSpace="normal">
                           <VStack align="start" spacing={0}>
-                            <Text fontWeight="semibold" color="gray.700">
+                            <Text fontWeight="semibold" color="gray.700" fontSize={{ base: "xs", md: "md" }}>
                               Delete {option.label}
                             </Text>
-                            <Text fontSize="xs" color="gray.500">
+                            <Text fontSize={{ base: "3xs", md: "xs" }} color="gray.500">
                               {option.description}
                             </Text>
                           </VStack>
                         </Td>
-                        <Td borderColor="gray.200" textAlign="right">
+                        <Td borderColor="gray.200" textAlign="right" px={{ base: 2, md: 6 }}>
                           <Button
                             leftIcon={<DeleteIcon />}
                             colorScheme="red"
                             variant="solid"
-                            size="md"
+                            size={{ base: "xs", md: "md" }}
                             onClick={() => handleDeleteClick(option.table, option.label)}
                             isDisabled={!isInputValid}
                             _disabled={{
@@ -321,6 +322,7 @@ function Del() {
                     ))}
                   </Tbody>
                 </Table>
+                </Box>
 
                 <Divider />
 

@@ -276,10 +276,10 @@ const filteredData = useMemo(() => {
               borderColor="gray.300"
               overflow="hidden"
             >
-              <CardHeader bg="teal.600" color="white" p={4}>
+              <CardHeader bg="teal.600" color="white" p={{ base: 3, md: 4 }}>
                 <Heading size={{ base: "sm", md: "md" }}>Select Session</Heading>
               </CardHeader>
-              <CardBody p={6}>
+              <CardBody p={{ base: 4, md: 6 }}>
                 <FormControl>
                   <FormLabel fontWeight="semibold" color="gray.700" fontSize="sm">
                     Academic Session
@@ -315,7 +315,7 @@ const filteredData = useMemo(() => {
                 borderColor="gray.300"
                 overflow="hidden"
               >
-                <CardHeader bg="purple.600" color="white" p={4}>
+                <CardHeader bg="purple.600" color="white" p={{ base: 3, md: 4 }}>
                   <Flex justify="space-between" align="center" flexWrap="wrap" gap={2}>
                     <Heading size={{ base: "sm", md: "md" }}>Actions</Heading>
                     <Badge colorScheme="orange" fontSize={{ base: "sm", md: "md" }} px={3} py={1}>
@@ -323,7 +323,7 @@ const filteredData = useMemo(() => {
                     </Badge>
                   </Flex>
                 </CardHeader>
-                <CardBody p={6}>
+                <CardBody p={{ base: 4, md: 6 }}>
                   <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} spacing={4}>
                     <Button
                       leftIcon={<RepeatIcon />}
@@ -399,7 +399,7 @@ const filteredData = useMemo(() => {
                 borderColor="gray.300"
                 overflow="hidden"
               >
-                <CardHeader bg="teal.600" color="white" p={4}>
+                <CardHeader bg="teal.600" color="white" p={{ base: 3, md: 4 }}>
                   <Flex justify="space-between" align="center" flexWrap="wrap" gap={2}>
                     <VStack align="start" spacing={0}>
                       <Heading size={{ base: "sm", md: "md" }}>Search Results</Heading>

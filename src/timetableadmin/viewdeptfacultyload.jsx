@@ -1400,7 +1400,7 @@ const MasterLoadDataTable = () => {
               </Card>
             ) : error ? (
               <Card bg="white" borderRadius={{ base: "xl", md: "2xl" }} shadow="xl" border="1px" borderColor="gray.200">
-                <CardBody p={6}>
+                <CardBody p={{ base: 4, md: 6 }}>
                   <Alert status="error" borderRadius="md">
                     <AlertIcon />
                     <AlertDescription>{error.message}</AlertDescription>
@@ -1409,7 +1409,7 @@ const MasterLoadDataTable = () => {
               </Card>
             ) : currentLoadData.length === 0 ? (
               <Card bg="white" borderRadius={{ base: "xl", md: "2xl" }} shadow="xl" border="1px" borderColor="gray.200">
-                <CardBody p={6}>
+                <CardBody p={{ base: 4, md: 6 }}>
                   <Alert status="info" borderRadius="md">
                     <AlertIcon />
                     <AlertDescription>No faculty load data found for {selectedDepartment} in {selectedSession}</AlertDescription>

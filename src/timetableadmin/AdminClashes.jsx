@@ -269,7 +269,7 @@ const AdminClashes = () => {
         {/* Hero Header Section with integrated navbar */}
         <Box 
           bgGradient="linear(to-r, orange.500, red.700, pink.600)"
-          pb={24}
+          pb={{ base: 16, md: 20, lg: 24 }}
           position="relative"
           overflow="hidden"
         >
@@ -292,16 +292,16 @@ const AdminClashes = () => {
             <Header />
           </Box>
 
-          <Container maxW="7xl" position="relative" >
-            <Flex justify="space-between" align="center" w="full" gap={4}>
-              <VStack spacing={4} align="start" flex="1">
-                <Badge colorScheme="whiteAlpha" fontSize="sm" px={3} py={1} borderRadius="full">
+          <Container maxW="7xl" position="relative" px={{ base: 4, md: 6, lg: 8 }}>
+            <Flex justify="space-between" align={{ base: "start", md: "center" }} w="full" gap={{ base: 3, md: 4 }}>
+              <VStack spacing={{ base: 2, md: 4 }} align="start" flex="1" minW={0}>
+                <Badge colorScheme="whiteAlpha" fontSize={{ base: "xs", md: "sm" }} px={3} py={1} borderRadius="full">
                   Admin Dashboard
                 </Badge>
-                <Heading size="2xl" color="white" fontWeight="bold" lineHeight="1.2">
+                <Heading size={{ base: "lg", md: "xl", lg: "2xl" }} color="white" fontWeight="bold" lineHeight="1.2">
                   Timetable Clash Detection
                 </Heading>
-                <Text color="whiteAlpha.900" fontSize="lg" maxW="2xl">
+                <Text color="whiteAlpha.900" fontSize={{ base: "sm", md: "lg" }} maxW="2xl">
                   Monitor and resolve timetable conflicts across all departments in real-time.
                 </Text>
               </VStack>
@@ -311,10 +311,10 @@ const AdminClashes = () => {
                 icon={<ArrowBackIcon />}
                 aria-label="Go back"
                 onClick={() => window.history.back()}
-                size="lg"
+                size={{ base: "md", md: "lg" }}
                 bg="rgba(255, 255, 255, 0.2)"
                 color="white"
-                fontSize="2xl"
+                fontSize={{ base: "lg", md: "2xl" }}
                 _hover={{ bg: 'rgba(255, 255, 255, 0.3)' }}
                 _active={{ bg: 'rgba(255, 255, 255, 0.4)' }}
                 borderRadius="full"
@@ -327,19 +327,19 @@ const AdminClashes = () => {
           </Container>
         </Box>
 
-        <Container maxW="7xl" mt={-12} position="relative" zIndex={1}>
-          <VStack spacing={8} align="stretch">
+        <Container maxW="7xl" mt={-12} position="relative" zIndex={1} px={{ base: 4, md: 6, lg: 8 }}>
+          <VStack spacing={{ base: 5, md: 8 }} align="stretch">
             {/* Controls */}
             <Box 
               bg={cardBg}
               borderRadius="2xl"
               shadow="2xl"
-              p={8}
+              p={{ base: 4, md: 8 }}
               border="1px"
               borderColor={borderColor}
             >
-              <Flex gap={4} wrap="wrap" align="center">
-                <Box flex="1" minW="200px">
+              <Flex gap={{ base: 3, md: 4 }} wrap="wrap" align="center">
+                <Box flex="1" minW={{ base: "100%", sm: "200px" }}>
                   <Text mb={2} fontWeight="semibold" color="gray.700">
                     Select Session:
                   </Text>
@@ -360,7 +360,7 @@ const AdminClashes = () => {
                   </Select>
                 </Box>
 
-                <Box flex="1" minW="200px">
+                <Box flex="1" minW={{ base: "100%", sm: "200px" }}>
                   <Text mb={2} fontWeight="semibold" color="gray.700">
                     Filter by Type:
                   </Text>
@@ -590,7 +590,9 @@ const AdminClashes = () => {
                 >
                   {/* Department Header */}
                   <Flex
-                    p={5}
+                    p={{ base: 4, md: 5 }}
+                    direction={{ base: "column", sm: "row" }}
+                    gap={{ base: 3, sm: 0 }}
                     bgGradient="linear(to-r, yellow.400, orange.500)"
                     color="white"
                     align="center"
@@ -603,19 +605,19 @@ const AdminClashes = () => {
                     <VStack align="start" spacing={1}>
                       <HStack>
                         <InfoIcon />
-                        <Heading size="lg">{departmentName}</Heading>
+                        <Heading size={{ base: "md", md: "lg" }}>{departmentName}</Heading>
                       </HStack>
-                      <Text fontSize="sm" opacity={0.9}>
+                      <Text fontSize={{ base: "xs", md: "sm" }} opacity={0.9}>
                         Code: {code} • Incomplete Assignments
                       </Text>
                     </VStack>
 
-                    <HStack spacing={4}>
+                    <HStack spacing={4} w={{ base: "100%", sm: "auto" }} justify={{ base: "space-between", sm: "flex-end" }}>
                       <VStack align="end" spacing={0}>
-                        <Text fontSize="3xl" fontWeight="bold">
+                        <Text fontSize={{ base: "2xl", md: "3xl" }} fontWeight="bold">
                           {deptData.incompleteSlots?.length || 0}
                         </Text>
-                        <Text fontSize="sm" opacity={0.9}>
+                        <Text fontSize={{ base: "xs", md: "sm" }} opacity={0.9}>
                           Slot{deptData.incompleteSlots?.length !== 1 ? 's' : ''} Need{deptData.incompleteSlots?.length === 1 ? 's' : ''} Attention
                         </Text>
                       </VStack>
@@ -794,7 +796,9 @@ const AdminClashes = () => {
                 >
                   {/* Department Header */}
                   <Flex
-                    p={5}
+                    p={{ base: 4, md: 5 }}
+                    direction={{ base: "column", sm: "row" }}
+                    gap={{ base: 3, sm: 0 }}
                     bgGradient="linear(to-r, red.500, red.700)"
                     color="white"
                     align="center"
@@ -811,9 +815,9 @@ const AdminClashes = () => {
                       </Text>
                     </VStack>
 
-                    <HStack spacing={4}>
+                    <HStack spacing={4} w={{ base: "100%", sm: "auto" }} justify={{ base: "space-between", sm: "flex-end" }}>
                       <VStack align="end" spacing={0}>
-                        <Text fontSize="3xl" fontWeight="bold">
+                        <Text fontSize={{ base: "2xl", md: "3xl" }} fontWeight="bold">
                           {filteredClashes.length}
                         </Text>
                         <Text fontSize="sm" opacity={0.9}>
@@ -919,7 +923,7 @@ const AdminClashes = () => {
                                         Multiple Assignments in Same Slot:
                                       </Text>
                                     </HStack>
-                                    <TableContainer>
+                                    <TableContainer w="100%" maxW="100%" overflowX="auto">
                                       <Table size="sm" variant="simple">
                                         <Thead>
                                           <Tr bg="red.100">
@@ -968,7 +972,7 @@ const AdminClashes = () => {
                                         Conflicts with:
                                       </Text>
                                     </HStack>
-                                    <TableContainer>
+                                    <TableContainer w="100%" maxW="100%" overflowX="auto">
                                       <Table size="sm" variant="simple">
                                         <Thead>
                                           <Tr bg="red.100">

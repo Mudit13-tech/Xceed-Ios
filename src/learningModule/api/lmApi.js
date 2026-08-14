@@ -160,9 +160,21 @@ const lmApi = {
   claimInvites: () => request('/claim-invites', { method: 'POST', body: {} }),
 
   notifications: (params) => request(`/notifications${qs(params)}`),
-  markNotificationsRead: (ids) => request('/notifications/read', { method: 'POST', body: { ids } }),
-  clearReadNotifications: () => request('/notifications/read', { method: 'DELETE' }),
-  deleteNotification: (id) => request(`/notifications/${id}`, { method: 'DELETE' }),
+  markNotificationsRead: async (ids, options = {}) => {
+    const res = await request('/notifications/read', { method: 'POST', body: { ids } });
+    if (!options.silent) window.dispatchEvent(new Event('lmNotificationsUpdated'));
+    return res;
+  },
+  clearReadNotifications: async () => {
+    const res = await request('/notifications/read', { method: 'DELETE' });
+    window.dispatchEvent(new Event('lmNotificationsUpdated'));
+    return res;
+  },
+  deleteNotification: async (id) => {
+    const res = await request(`/notifications/${id}`, { method: 'DELETE' });
+    window.dispatchEvent(new Event('lmNotificationsUpdated'));
+    return res;
+  },
 
   /* timetable-sourced pickers (create class) */
   ttBranches: () => request('/timetable/branches'),
@@ -215,6 +227,7 @@ const lmApi = {
 
   /* stream */
   getStream: (classId, params) => request(`/classes/${classId}/stream${qs(params)}`),
+  searchClass: (classId, query) => request(`/classes/${classId}/search${qs({ q: query })}`),
   createAnnouncement: (classId, body) => request(`/classes/${classId}/announcements`, { method: 'POST', body }),
   updateAnnouncement: (classId, id, body) =>
     request(`/classes/${classId}/announcements/${id}`, { method: 'PATCH', body }),
@@ -418,6 +431,13 @@ const lmApi = {
       method: 'POST',
       body: { responses },
     }),
+  // "Is this one right?" for a single answer, while the student is still
+  // working. Returns a boolean only — never the expected value.
+  checkTutorialAnswer: (classId, tutorialId, attemptId, body) =>
+    request(`/classes/${classId}/tutorials/${tutorialId}/attempts/${attemptId}/check`, {
+      method: 'POST',
+      body,
+    }),
   submitTutorialAttempt: (classId, attemptId, responses) =>
     request(`/classes/${classId}/tutorial-attempts/${attemptId}/submit`, {
       method: 'POST',
@@ -428,6 +448,83 @@ const lmApi = {
       method: 'POST',
       body: { adjustment, feedback },
     }),
+
+  /* parameterised assignments — the assessed sibling of tutorials, on its own
+     routes so neither has to know about the other */
+  listAssignments: (classId) => request(`/classes/${classId}/assignments`),
+  createAssignment: (classId, body) => request(`/classes/${classId}/assignments`, { method: 'POST', body }),
+  getAssignment: (classId, assignmentId) => request(`/classes/${classId}/assignments/${assignmentId}`),
+  updateAssignment: (classId, assignmentId, body) =>
+    request(`/classes/${classId}/assignments/${assignmentId}`, { method: 'PATCH', body }),
+  deleteAssignment: (classId, assignmentId) =>
+    request(`/classes/${classId}/assignments/${assignmentId}`, { method: 'DELETE' }),
+  previewAssignment: (classId, assignmentId, count) =>
+    request(`/classes/${classId}/assignments/${assignmentId}/preview`, { method: 'POST', body: { count } }),
+  publishAssignment: (classId, assignmentId, body) =>
+    request(`/classes/${classId}/assignments/${assignmentId}/publish`, { method: 'POST', body: body || {} }),
+  assignmentResults: (classId, assignmentId) =>
+    request(`/classes/${classId}/assignments/${assignmentId}/results`),
+  // Its own formula endpoints, so a future divergence in either does not silently
+  // change validation for the other.
+  validateAssignmentFormula: (classId, formula, variables) =>
+    request(`/classes/${classId}/assignments/validate-formula`, {
+      method: 'POST',
+      body: { formula, variables },
+    }),
+  assignmentFormulaReference: (classId) => request(`/classes/${classId}/assignments/formula-reference`),
+  myAssignmentAttempt: (classId, assignmentId) =>
+    request(`/classes/${classId}/assignments/${assignmentId}/attempt`),
+  saveAssignmentAttempt: (classId, attemptId, responses) =>
+    request(`/classes/${classId}/assignment-attempts/${attemptId}/save`, {
+      method: 'POST',
+      body: { responses },
+    }),
+  checkAssignmentAnswer: (classId, assignmentId, attemptId, body) =>
+    request(`/classes/${classId}/assignments/${assignmentId}/attempts/${attemptId}/check`, {
+      method: 'POST',
+      body,
+    }),
+  submitAssignmentAttempt: (classId, attemptId, responses) =>
+    request(`/classes/${classId}/assignment-attempts/${attemptId}/submit`, {
+      method: 'POST',
+      body: { responses },
+    }),
+  adjustAssignmentAttempt: (classId, attemptId, adjustment, feedback) =>
+    request(`/classes/${classId}/assignment-attempts/${attemptId}/adjust`, {
+      method: 'POST',
+      body: { adjustment, feedback },
+    }),
+
+  /* ---- building an assignment from an uploaded question paper ---- */
+  listAssignmentImports: (classId) => request(`/classes/${classId}/assignment-imports`),
+  getAssignmentImport: (classId, draftId) =>
+    request(`/classes/${classId}/assignment-imports/${draftId}`),
+  startAssignmentImport: (classId, body) =>
+    request(`/classes/${classId}/assignment-imports`, { method: 'POST', body }),
+  deleteAssignmentImport: (classId, draftId) =>
+    request(`/classes/${classId}/assignment-imports/${draftId}`, { method: 'DELETE' }),
+  suggestAssignmentImportVariables: (classId, draftId, questionId) =>
+    request(`/classes/${classId}/assignment-imports/${draftId}/questions/${questionId}/suggest-variables`, {
+      method: 'POST',
+      body: {},
+    }),
+  updateAssignmentImportQuestion: (classId, draftId, questionId, body) =>
+    request(`/classes/${classId}/assignment-imports/${draftId}/questions/${questionId}`, {
+      method: 'PATCH',
+      body,
+    }),
+  deriveAssignmentImportAnswers: (classId, draftId, questionId) =>
+    request(`/classes/${classId}/assignment-imports/${draftId}/questions/${questionId}/derive`, {
+      method: 'POST',
+      body: {},
+    }),
+  previewAssignmentImport: (classId, draftId, body) =>
+    request(`/classes/${classId}/assignment-imports/${draftId}/preview`, {
+      method: 'POST',
+      body: body || {},
+    }),
+  mergeAssignmentImport: (classId, draftId, body) =>
+    request(`/classes/${classId}/assignment-imports/${draftId}/merge`, { method: 'POST', body }),
 
   /* AI studio */
   studioStatus: (classId) => request(`/classes/${classId}/studio/status`),

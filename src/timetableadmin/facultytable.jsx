@@ -34,12 +34,13 @@ function FacultyTable() {
   }, []);
   
   return (
-    <Box>
+    <Box px={{ base: 3, md: 6 }} w="100%" maxW="100%" overflowX="hidden">
       <h1>Faculty Timetable</h1>
       {/* <Header title='Faculty Timetable'></Header> */}
       {loading ? (
         <p>Loading...</p>
       ) : (
+        <Box w="100%" maxW="100%" overflowX="auto">
         <table>
           <thead>
             <tr>
@@ -64,6 +65,7 @@ function FacultyTable() {
             ))}
           </tbody>
         </table>
+        </Box>
       )}
     </Box>
   );

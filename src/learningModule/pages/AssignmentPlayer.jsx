@@ -32,7 +32,7 @@ const answerId = (questionId, key) => `${questionId}:${key}`;
  *
  * Deliberately says nothing about *how* wrong a wrong answer is. No difference,
  * no "you are close" — each of those narrows the search on the next try, and the
- * whole reason instant feedback is a per-tutorial setting is that a numeric
+ * whole reason instant feedback is a per-assignment setting is that a numeric
  * answer with feedback is brute-forceable. Orange rather than red, because
  * before submission this is a nudge and not a mark.
  */
@@ -105,17 +105,17 @@ function answerGroups(question) {
 }
 
 /**
- * The student's sitting of a parameterised tutorial. Their variable values
+ * The student's sitting of a parameterised assignment. Their variable values
  * come from the server and are fixed for this attempt, so the paper is stable
  * across reloads.
  */
-export default function TutorialPlayer() {
+export default function AssignmentPlayer() {
   const { classId } = useOutletContext();
-  const { tutorialId } = useParams();
+  const { assignmentId } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
 
-  const [tutorial, setTutorial] = useState(null);
+  const [assignment, setAssignment] = useState(null);
   const [attempt, setAttempt] = useState(null);
   const [meta, setMeta] = useState({ attemptsUsed: 0, attemptsAllowed: 1, exhausted: false });
   const [inputs, setInputs] = useState({});
@@ -123,7 +123,7 @@ export default function TutorialPlayer() {
    * Per-answer verdicts from the server, keyed the same way as `inputs`.
    *
    * Only ever populated when the teacher turned instant feedback on for this
-   * tutorial. The verdict is a boolean and a remaining-tries count — the server
+   * assignment. The verdict is a boolean and a remaining-tries count — the server
    * deliberately never sends the expected value, because one request that leaked
    * it would be the answer key.
    */
@@ -139,10 +139,10 @@ export default function TutorialPlayer() {
     setError(null);
     try {
       const [detail, sitting] = await Promise.all([
-        lmApi.getTutorial(classId, tutorialId),
-        lmApi.myTutorialAttempt(classId, tutorialId),
+        lmApi.getAssignment(classId, assignmentId),
+        lmApi.myAssignmentAttempt(classId, assignmentId),
       ]);
-      setTutorial(detail);
+      setAssignment(detail);
       setAttempt(sitting.attempt);
       setMeta({
         attemptsUsed: sitting.attemptsUsed,
@@ -162,7 +162,7 @@ export default function TutorialPlayer() {
     } finally {
       setLoading(false);
     }
-  }, [classId, tutorialId]);
+  }, [classId, assignmentId]);
 
   useEffect(() => {
     load();
@@ -192,7 +192,7 @@ export default function TutorialPlayer() {
     if (!attempt || attempt.status !== 'in_progress') return;
     setBusy('save');
     try {
-      const result = await lmApi.saveTutorialAttempt(classId, attempt._id, responses);
+      const result = await lmApi.saveAssignmentAttempt(classId, attempt._id, responses);
       setSavedAt(result.savedAt);
       toast({ status: 'success', title: 'Progress saved', duration: 1500 });
     } catch (err) {
@@ -240,7 +240,7 @@ export default function TutorialPlayer() {
 
       try {
 
-        const result = await lmApi.checkTutorialAnswer(classId, tutorialId, attempt._id, {
+        const result = await lmApi.checkAssignmentAnswer(classId, assignmentId, attempt._id, {
 
           questionId: question.questionId,
 
@@ -266,7 +266,7 @@ export default function TutorialPlayer() {
 
     },
 
-    [attempt, classId, tutorialId, inputs, verdicts, submitted],
+    [attempt, classId, assignmentId, inputs, verdicts, submitted],
 
   );
 
@@ -274,12 +274,12 @@ export default function TutorialPlayer() {
   const submit = async () => {
     if (submittedRef.current) return;
     // eslint-disable-next-line no-alert
-    if (!window.confirm('Submit this tutorial? Your answers will be marked immediately.')) return;
+    if (!window.confirm('Submit this assignment? Your answers will be marked immediately.')) return;
 
     submittedRef.current = true;
     setBusy('submit');
     try {
-      const result = await lmApi.submitTutorialAttempt(classId, attempt._id, responses);
+      const result = await lmApi.submitAssignmentAttempt(classId, attempt._id, responses);
       setAttempt(result.attempt);
       toast({
         status: result.attempt.passed ? 'success' : 'info',
@@ -295,17 +295,17 @@ export default function TutorialPlayer() {
 
   if (loading) return <Loading label="Preparing your questions…" />;
   if (error) return <ErrorState error={error} onRetry={load} />;
-  if (!tutorial) return null;
+  if (!assignment) return null;
 
   if (!attempt) {
     return (
-      <SectionCard title={tutorial.title}>
+      <SectionCard title={assignment.title}>
         <Alert status="info" borderRadius="md">
           <AlertIcon />
-          This tutorial is not open for you right now.
+          This assignment is not open for you right now.
         </Alert>
-        <Button mt={4} size="sm" onClick={() => navigate(`/learning/class/${classId}/tutorials`)}>
-          Back to tutorials
+        <Button mt={4} size="sm" onClick={() => navigate(`/learning/class/${classId}/assignments`)}>
+          Back to assignments
         </Button>
       </SectionCard>
     );
@@ -317,23 +317,23 @@ export default function TutorialPlayer() {
 
   return (
     <Box>
-      <Button size="sm" variant="ghost" mb={2} onClick={() => navigate(`/learning/class/${classId}/tutorials`)}>
-        ← Back to tutorials
+      <Button size="sm" variant="ghost" mb={2} onClick={() => navigate(`/learning/class/${classId}/assignments`)}>
+        ← Back to assignments
       </Button>
 
       <Flex justify="space-between" align="flex-start" gap={3} mb={4} wrap="wrap">
         <Box>
-          <Heading size="md">{tutorial.title}</Heading>
-          {tutorial.description && (
+          <Heading size="md">{assignment.title}</Heading>
+          {assignment.description && (
             <Text fontSize="sm" color="gray.600">
-              {tutorial.description}
+              {assignment.description}
             </Text>
           )}
           <HStack fontSize="xs" color="gray.500" mt={1} wrap="wrap">
             <Text>
               Attempt {attempt.attemptNumber} of {meta.attemptsAllowed}
             </Text>
-            {tutorial.settings?.dueDate && <Text>Due {formatDateTime(tutorial.settings.dueDate)}</Text>}
+            {assignment.settings?.dueDate && <Text>Due {formatDateTime(assignment.settings.dueDate)}</Text>}
             {attempt.late && <Badge colorScheme="red">Late</Badge>}
           </HStack>
         </Box>
@@ -507,7 +507,7 @@ export default function TutorialPlayer() {
                   </InputGroup>
 
                   {/* The tick. Only ever present when the teacher switched instant
-                      feedback on for this tutorial. */}
+                      feedback on for this assignment. */}
                   {!submitted && attempt.instantFeedback && (
                     <LiveVerdict verdict={verdicts[id]} busy={checking === id} />
                   )}
@@ -555,7 +555,7 @@ export default function TutorialPlayer() {
             </Text>
           )}
           <Button colorScheme="teal" size="lg" w="100%" onClick={submit} isLoading={busy === 'submit'}>
-            Submit tutorial ({answeredCount}/{totalSlots} answered)
+            Submit assignment ({answeredCount}/{totalSlots} answered)
           </Button>
         </>
       )}
