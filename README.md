@@ -1,105 +1,300 @@
-# 📚 Learning Module App
+# 📚 XCEED – Learning Module App
 
-Welcome to the **Learning Module App** repository! 
-
-This guide is designed to help you set up, run, and understand the project from scratch. **Even if you are completely new to this, just follow these steps one by one.**
+> A full-featured academic platform for NITJ, built with **React + Vite** and deployed as a native Android app via **Capacitor**.  
+> This guide walks you through **everything** — from cloning the repo to pushing live OTA updates to users' phones.
 
 ---
 
-## 🛠️ 1. Initial Setup (Getting Started)
+## 📋 Table of Contents
 
-Before doing anything, you need to set up the code on your local computer. We recommend using **Yarn** to install packages (as it avoids some common issues), but we will use **npm/npx** for running scripts.
+1. [Prerequisites](#-1-prerequisites)
+2. [Clone & Install](#-2-clone--install)
+3. [Environment Setup (.env)](#-3-environment-setup-env)
+4. [Running the Web App Locally](#-4-running-the-web-app-locally)
+5. [Android App Setup (Capacitor)](#-5-android-app-setup-capacitor)
+6. [Building & Running on Android Studio](#-6-building--running-on-android-studio)
+7. [Publishing OTA Updates](#-7-publishing-ota-updates-over-the-air)
+8. [Pulling Updates from AMS (Safe Sync)](#-8-pulling-updates-from-ams-safe-sync)
+9. [Project Scripts Reference](#-9-project-scripts-reference)
+10. [How OTA Updates Work (Under the Hood)](#-10-how-ota-updates-work-under-the-hood)
+11. [Troubleshooting](#-11-troubleshooting)
 
-### Step 1: Install Requirements
-- Make sure you have [Node.js](https://nodejs.org/) installed on your computer.
-- Install [Yarn](https://yarnpkg.com/getting-started/install) if you haven't already.
+---
 
-### Step 2: Install Project Dependencies
-Open your terminal (Command Prompt, PowerShell, or Mac Terminal) in this project's folder and run:
+## ⚙️ 1. Prerequisites
+
+Install these tools **before** doing anything else.
+
+| Tool | Version | Why it's needed |
+|---|---|---|
+| [Node.js](https://nodejs.org/) | **v22** (LTS) | Runtime for all JavaScript tooling |
+| [Yarn](https://yarnpkg.com/getting-started/install) | Latest | Package manager (preferred over npm here) |
+| [Git](https://git-scm.com/downloads) | Latest | To clone and manage the repository |
+| [Android Studio](https://developer.android.com/studio) | Latest stable | To build and run the Android app |
+
+> **Node version matters!**  
+> This project requires **Node 22** (defined in `.nvmrc`). If you use [nvm](https://github.com/nvm-sh/nvm) (Mac/Linux) or [nvm-windows](https://github.com/coreybutler/nvm-windows), run `nvm use` inside the project folder and it will auto-switch.
+
+---
+
+## 📥 2. Clone & Install
+
+### Step 1 — Clone the repository
+```bash
+git clone <your-repo-url>
+cd learning-module-app
+```
+
+### Step 2 — Install all dependencies
 ```bash
 yarn install
 ```
-*This downloads all the necessary code libraries required for the project to work.*
+> This downloads every library the project needs into `node_modules/`. It may take a few minutes on the first run.
 
-### Step 3: Start the Development Server
-To run the web application locally on your browser:
+---
+
+## 🔐 3. Environment Setup (.env)
+
+The `.env` file is **not committed to Git** (it's in `.gitignore`). You must create it yourself.
+
+### Step 1 — Create the file
+In the **root** of the project folder (same level as `package.json`), create a file named exactly `.env`.
+
+### Step 2 — Add the required variables
+
+```env
+# The URL of the backend server that serves and receives OTA updates
+OTA_SERVER_URL=https://xceed.nitj.ac.in
+
+# The secret key for authenticating OTA uploads.
+# THIS MUST MATCH the OTA_SECRET_KEY set in the backend server's .env file.
+OTA_SECRET_KEY=your_secret_key_here
+```
+
+> **How to get the secret key?**  
+> Ask the project maintainer (whoever runs the backend server). The key in your `.env` must be **identical** to what is set on the server — otherwise OTA uploads will be rejected with a 401 Unauthorized error.
+
+---
+
+## 🌐 4. Running the Web App Locally
+
+Start the development server:
 ```bash
 yarn run dev
 ```
-*Now, open your web browser and go to `http://localhost:5173`. You should see the app running!*
+
+Open your browser at **`http://localhost:5173`** — you should see the app.
+
+> The dev server automatically proxies all `/api` requests to `http://localhost:8010` (the backend). If you're running without a local backend, the app will still load but API calls will fail — this is expected.
 
 ---
 
-## 📱 2. Android App Setup (Capacitor)
+## 📱 5. Android App Setup (Capacitor)
 
-This project uses a tool called **Capacitor**, which takes our web app code and turns it into a real native Android app (in the `android` folder).
+This project uses **Capacitor** to wrap the web app into a native Android app.
 
-### Step 1: Requirements for Android
-- Download and install [Android Studio](https://developer.android.com/studio).
-- Open Android Studio and install the necessary Android SDKs (it will usually prompt you to do this automatically on first launch).
+### Step 1 — Set up Android Studio
+1. Download and install [Android Studio](https://developer.android.com/studio).
+2. On first launch, let it download the **Android SDK** — it will prompt you automatically.
+3. Via **Android Studio → SDK Manager**, make sure these are installed:
+   - Android SDK Platform (API 35 or latest)
+   - Android SDK Build-Tools
+   - Android Emulator (if you don't have a physical device)
 
-### Step 2: Syncing Your Code to Android
-Whenever you make a change to the web code and want to see it in the Android app, you must follow these two commands:
+### Step 2 — Set `JAVA_HOME` (if needed)
+Android Studio ships with its own JDK. Point your terminal to it:
 
-1. **Build the Web Code:** This packages your web app for production.
-   ```bash
-   npm run build
-   ```
-2. **Sync with Android:** This copies the packaged web code into the Android folder.
-   ```bash
-   npx cap sync android
-   ```
+**Windows (PowerShell):**
+```powershell
+[System.Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\Program Files\Android\Android Studio\jbr", "User")
+```
+> If `npx cap sync android` fails with a Java error, this is the fix.
 
-### Step 3: Run the Android App
-To actually open the project in Android Studio (where you can run it on a phone emulator, or connect your real phone via USB to test it):
+---
+
+## 🚀 6. Building & Running on Android Studio
+
+Every time you change the web code and want to see it in the Android app, follow these **3 steps in order**:
+
+### Step 1 — Build the web code
+```bash
+npm run build
+```
+Compiles your React app into the `dist/` folder (plain HTML, JS, CSS).
+
+### Step 2 — Sync to Android
+```bash
+npx cap sync android
+```
+Copies `dist/` into the Android project and updates all Capacitor plugins.
+
+### Step 3 — Open in Android Studio
 ```bash
 npx cap open android
 ```
-*Once Android Studio opens, wait for the background indexing to finish, then click the green "Play" ▶️ button at the top to run the app.*
+Once Android Studio opens:
+1. Wait for the **Gradle sync** to finish (progress bar at the bottom).
+2. Pick your target — a **connected phone** (USB, with USB Debugging enabled) or an **emulator** (create one via Device Manager).
+3. Click the green **▶ Run** button.
 
-### ❓ Missing Folders in Android? (For Beginners)
-If you browse the `android` folder, you might notice that some files and folders (like `.gradle`, `build`, `local.properties`, or `capacitor-cordova-android-plugins`) are missing when you first clone the project. **Don't worry, this is intentional!**
-
-These files are ignored by Git because they are specific to your computer. They will be **automatically generated** for you when you follow the steps above:
-- Running `npx cap sync android` generates the Capacitor plugin folders.
-- Opening the project in **Android Studio** automatically creates the `local.properties` file (which tells the app where your Android SDK is) and builds the `.gradle` and `build` folders. Just let Android Studio finish its initial loading!
-
----
-
-## 🔄 3. Pulling Data from AMS (Safe Sync)
-
-There is an external repository called `AMS-with-TimeTable`. We have a special script (`safe-pull-from-ams.ps1`) to safely bring in code updates from that project into this one, without breaking your custom changes.
-
-### Prerequisites
-- You must use **PowerShell** (Windows default terminal).
-- You must have the AMS repository cloned exactly at `../IAMS/AMS-with-TimeTable` (meaning it's in the same parent folder as this project, inside a folder named `IAMS`).
-- Your code must be **clean** (make sure you commit or stash any files you are currently working on).
-
-### How to Sync
-Run this in your PowerShell terminal:
-```powershell
-.\safe-pull-from-ams.ps1
-```
-*This will automatically pull the code, merge it safely, and preserve your work.*
+### ❓ Missing folders? (First-time only)
+When you first clone, the `android/` directory will be missing `.gradle/`, `build/`, `local.properties`, and `capacitor-cordova-android-plugins/`. **This is normal.** They are generated automatically:
+- `npx cap sync android` creates the Capacitor plugin folders.
+- Opening in Android Studio creates `local.properties` and builds the Gradle cache.
 
 ---
 
-## 🚀 4. Publishing OTA (Over-The-Air) Updates
+## 📡 7. Publishing OTA Updates (Over-the-Air)
 
-An OTA update allows you to send new updates directly to users' phones without waiting for App Store/Play Store approvals. 
+OTA updates push new code **directly to users' installed apps** without going through the Play Store. The app checks for updates on every launch and applies them instantly.
 
 ### Prerequisites
-- In your project's `.env` file (create one if it doesn't exist), you must add your secret key like this: `OTA_SECRET_KEY=your_secret_key_here`.
+- `.env` must have `OTA_SECRET_KEY` set (see [Section 3](#-3-environment-setup-env)).
+- `.env` must have `OTA_SERVER_URL` set to the correct server.
+- You need internet access to reach the server.
 
-### How to Publish an Update
-When you are ready to send your latest code to users, just run:
+### How to publish an update
+
 ```bash
 npm run deploy:ota
 ```
-**What this does behind the scenes:**
-1. It builds your latest code (`npm run build`).
-2. It increases the app's version number in `package.json`.
-3. It packages everything into a `.zip` file.
-4. It securely uploads it to the production server.
 
-*(If you are testing the server locally, you can use: `npm run deploy:ota -- --dev`)*
+**What happens automatically, in order:**
+1. 📦 **Builds** the latest web code (`npm run build`)
+2. 📈 **Bumps the patch version** in `package.json` (e.g., `2.1.2` → `2.1.3`)
+3. 🗜️ **Zips** the entire `dist/` folder into `update.zip`
+4. 📤 **Uploads** the zip to the server's OTA endpoint with your secret key
+5. 🎉 **Reports** the live URL of the update on success
+
+### Testing against a local backend
+```bash
+npm run deploy:ota -- --dev
+```
+Targets `http://localhost:8010` instead of production.
+
+### What users experience
+Next time a user opens the installed Android app:
+- The app silently checks `https://xceed.nitj.ac.in/api/v1/ota/version.json`
+- If a newer version exists, it downloads and applies it immediately
+- The user sees: *"🎉 OTA Update X.X.X Downloaded! Applying instantly..."*
+
+> **Important:** OTA updates only update the **JavaScript/web layer**. If you change native Android code (add a Capacitor plugin, modify `capacitor.config.json`, or edit anything in `android/`), you must rebuild and re-release the APK through the Play Store. OTA cannot cover native changes.
+
+---
+
+## 🔄 8. Pulling Updates from AMS (Safe Sync)
+
+There is a companion repository called `AMS-with-TimeTable`. When it gets updated, use the safe sync script to bring those changes into this project without losing your custom work.
+
+### Required folder layout
+Your workspace must look like this:
+```
+YourFolder/
+├── learning-module-app/       ← this repo
+└── IAMS/
+    └── AMS-with-TimeTable/    ← the AMS repo (must be cloned here)
+```
+
+Clone the AMS repo if you haven't already:
+```bash
+cd ..
+mkdir IAMS
+cd IAMS
+git clone <ams-repo-url> AMS-with-TimeTable
+cd ../learning-module-app
+```
+
+### Running the sync
+
+> ⚠️ **Commit or stash any work-in-progress first.** The script will abort if your working directory is dirty.
+
+Open **PowerShell** (not CMD or Git Bash) in the `learning-module-app` folder and run:
+```powershell
+.\safe-pull-from-ams.ps1
+```
+
+**What the script does:**
+1. Checks that your working directory is clean
+2. Switches to the `ams-update` branch
+3. Exports the latest client code from AMS and extracts it here
+4. Commits the imported changes on `ams-update`
+5. Merges `ams-update` back into `main`, preserving all your custom changes
+
+---
+
+## 📖 9. Project Scripts Reference
+
+| Command | What it does |
+|---|---|
+| `yarn run dev` | Starts the local dev server at `localhost:5173` |
+| `npm run build` | Builds the production web bundle into `dist/` |
+| `npx cap sync android` | Copies `dist/` into Android project & syncs plugins |
+| `npx cap open android` | Opens the Android project in Android Studio |
+| `npm run deploy:ota` | Builds, bumps version, zips, and uploads an OTA update |
+| `npm run deploy:ota -- --dev` | Same but targets `localhost:8010` |
+| `npm run test` | Runs the test suite once |
+| `npm run lint` | Checks code for style issues |
+
+---
+
+## 🔬 10. How OTA Updates Work (Under the Hood)
+
+The system uses [`@capgo/capacitor-updater`](https://capgo.app/) as the update engine:
+
+```
+App Launch
+    │
+    ▼
+setupOtaUpdater() runs in main.jsx
+    │
+    ├─► notifyAppReady()                    ← confirms current bundle booted OK (prevents rollback)
+    │
+    ├─► GET /api/v1/ota/version.json        ← fetches { version, url } from the server
+    │
+    ├─► Compares versions:
+    │       nativeVersion   (from Play Store APK)
+    │       activeVersion   (currently running Capgo bundle)
+    │       latestVersion   (from server)
+    │
+    ├─► nativeVersion >= latestVersion  → skip (native is already current)
+    │
+    ├─► latestVersion > activeVersion   → download & apply
+    │       CapacitorUpdater.download({ url, version })
+    │       CapacitorUpdater.set({ id })    ← app reloads with new bundle
+    │
+    └─► Otherwise → "App is up to date"
+```
+
+**Version numbering:**  
+`npm run deploy:ota` auto-increments the **patch** segment on every deploy (`2.1.2` → `2.1.3` → `2.1.4`).
+
+---
+
+## 🛠️ 11. Troubleshooting
+
+### `yarn install` fails
+- Check your Node version: `node -v` — must be **22**.
+- With nvm: `nvm install 22 && nvm use 22`
+
+### Android Studio shows "SDK not found"
+- Open **SDK Manager** in Android Studio and install the Android SDK.
+- Simply opening the project in Android Studio will auto-create `android/local.properties`.
+
+### `npx cap sync android` fails with a Java error
+- Set `JAVA_HOME` to point to Android Studio's bundled JDK (see Section 5, Step 2).
+
+### OTA upload returns 401 Unauthorized
+- Your `OTA_SECRET_KEY` in `.env` does not match the server's key. Ask the maintainer.
+
+### OTA update not showing on device
+- The check is async — wait a few seconds after the app opens.
+- Make sure the device has internet access.
+- The version in `package.json` must be **greater than** what's running on the device.
+- In Android Studio's **Logcat**, filter by tag `OTA` to see debug output.
+
+### App still shows old content after OTA update
+- OTA only updates the JS bundle. If you changed native code, you need a full APK release via the Play Store.
+
+### `safe-pull-from-ams.ps1` aborts — "working directory not clean"
+- Run `git status` to see modified files.
+- Either `git commit` or `git stash` your changes, then re-run the script.
