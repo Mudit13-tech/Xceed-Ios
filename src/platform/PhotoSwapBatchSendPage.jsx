@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import getEnvironment from '../getenvironment';
 import { theme as T, styles, cssReset } from '../attendancemodule/config';
 import { useDepartments } from '../attendancemodule/useDepartments';
+import { AmsSubtab } from '../attendancemodule/SubtabNewTabButton';
+import { readSubtabFromSearch } from '../attendancemodule/subtabNavigation';
 
 const apiUrl = getEnvironment();
 const SWAP_BASE = `${apiUrl}/attendancemodule/photo-swap`;
@@ -176,7 +178,10 @@ function BatchSelector({
 export default function PhotoSwapBatchSendPage() {
   const { departments, deptLoading, deptError } = useDepartments();
 
-  const [activeTab, setActiveTab] = useState('batch');
+  const [activeTab, setActiveTab] = useState(() => readSubtabFromSearch(
+    ['batch', 'search'],
+    'batch',
+  ));
 
   // ── Batch selection ────────────────────────────────────────────────
   const [degree, setDegree] = useState('');
@@ -392,13 +397,13 @@ export default function PhotoSwapBatchSendPage() {
           { id: 'batch', label: 'Batch Send' },
           { id: 'search', label: 'Find a Student' },
         ].map((t) => (
-          <button
+          <AmsSubtab
             key={t.id}
-            className={`ams-tab${activeTab === t.id ? ' active' : ''}`}
-            onClick={() => setActiveTab(t.id)}
-          >
-            {t.label}
-          </button>
+            value={t.id}
+            label={t.label}
+            active={activeTab === t.id}
+            onSelect={setActiveTab}
+          />
         ))}
       </div>
 

@@ -564,11 +564,6 @@ async function handleSchedulerSubmit() {
                             label={id}
                             active={mainTab === id}
                             compact
-                            style={{
-                                borderRadius: 0,
-                                borderBottom: mainTab === id ? `2px solid ${T.accent}` : '2px solid transparent',
-                                marginBottom: -2,
-                            }}
                         />
                     </span>
                 ))}
@@ -754,11 +749,6 @@ async function handleSchedulerSubmit() {
                     queryKey="recordTab"
                     active={activeTab === tab}
                     compact
-                    style={{
-                        borderRadius: 0,
-                        borderBottom: activeTab === tab ? `2px solid ${T.accent}` : '2px solid transparent',
-                        marginBottom: -1,
-                    }}
                 />
             </span>
         ))}

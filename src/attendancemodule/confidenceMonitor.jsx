@@ -6,6 +6,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import getEnvironment from '../getenvironment';
 import { theme, styles, cssReset, DEGREES } from './config';
 import { usePeriods } from './usePeriods';
+import SubtabNewTabButton from './SubtabNewTabButton';
+import { readSubtabFromSearch } from './subtabNavigation';
 
 const apiUrl = getEnvironment();
 const REPORTS_API = `${apiUrl}/attendancemodule/reports`;
@@ -509,7 +511,10 @@ export default function ConfidenceMonitor({ fixedDepartment = '' }) {
   const [search, setSearch] = useState('');
   // Review audit leads — it is the actionable list; the per-day confidence
   // grid behind it is the deep dive.
-  const [tab, setTab] = useState('review'); // 'review' | 'trend'
+  const [tab, setTab] = useState(() => readSubtabFromSearch(
+    ['review', 'trend'],
+    'review',
+  )); // 'review' | 'trend'
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
 
@@ -777,8 +782,13 @@ export default function ConfidenceMonitor({ fixedDepartment = '' }) {
                     margin-bottom: 18px;
                     border-bottom: 1px solid ${theme.border};
                 }
+                .cm-tab-option {
+                    display: inline-flex;
+                    align-items: stretch;
+                    flex-shrink: 0;
+                }
                 .cm-tab {
-                    padding: 10px 18px;
+                    padding: 10px 4px 10px 18px;
                     font-size: 13px;
                     font-weight: 700;
                     color: ${theme.textMuted};
@@ -838,18 +848,26 @@ export default function ConfidenceMonitor({ fixedDepartment = '' }) {
       </div>
 
       <div className="cm-tabs">
-        <button
-          className={`cm-tab ${tab === 'review' ? 'active' : ''}`}
-          onClick={() => setTab('review')}
-        >
-          Review Audit
-        </button>
-        <button
-          className={`cm-tab ${tab === 'trend' ? 'active' : ''}`}
-          onClick={() => setTab('trend')}
-        >
-          Confidence Trend
-        </button>
+        {[
+          { value: 'review', label: 'Review Audit' },
+          { value: 'trend', label: 'Confidence Trend' },
+        ].map(({ value, label }) => (
+          <span className="cm-tab-option" key={value}>
+            <button
+              type="button"
+              className={`cm-tab ${tab === value ? 'active' : ''}`}
+              onClick={() => setTab(value)}
+            >
+              {label}
+            </button>
+            <SubtabNewTabButton
+              value={value}
+              label={label}
+              active={tab === value}
+              compact
+            />
+          </span>
+        ))}
       </div>
 
       {tab === 'review' && (
