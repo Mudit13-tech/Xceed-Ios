@@ -163,16 +163,24 @@ export default function QuizAttempt() {
   /* ------------------------------ loading ------------------------------ */
 
   const loadSequential = useCallback(async () => {
-    const data = await lmApi.getCurrentQuestion(classId, attemptId);
-    if (data.done) {
-      setCurrent(null);
-      return true;
+    try {
+      const data = await lmApi.getCurrentQuestion(classId, attemptId);
+      if (data.done) {
+        setCurrent(null);
+        return true;
+      }
+      setCurrent(data);
+      setAnswers(
+        data.saved ? { [data.question._id]: { selected: data.saved.selected || [], text: data.saved.text || '' } } : {},
+      );
+      return false;
+    } catch (err) {
+      if (err.code === 'FINISHED' || err.message?.includes('finished')) {
+        setCurrent(null);
+        return true;
+      }
+      throw err;
     }
-    setCurrent(data);
-    setAnswers(
-      data.saved ? { [data.question._id]: { selected: data.saved.selected || [], text: data.saved.text || '' } } : {},
-    );
-    return false;
   }, [classId, attemptId]);
 
   const load = useCallback(async () => {

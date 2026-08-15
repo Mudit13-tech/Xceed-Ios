@@ -9,10 +9,16 @@ import {
   Flex,
   HStack,
   Heading,
+  IconButton,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
   Text,
   VStack,
   useToast,
 } from '@chakra-ui/react';
+import { FiChevronDown } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
@@ -86,10 +92,26 @@ export default function Shorts() {
     }
   };
 
-  const present = async (short) => {
+  /**
+   * `email` left undefined presents the deck the way it is configured
+   * (Edit → "Email the class when I start it"); passing it overrides that
+   * setting for this run only.
+   */
+  const present = async (short, { email } = {}) => {
     setBusy(short._id);
     try {
-      const { session } = await lmApi.presentShort(classId, short._id);
+      const { session, resumed, emailed } = await lmApi.presentShort(classId, short._id, { email });
+      // Resuming does not notify anyone a second time, so only a fresh session
+      // has anything to report — and mail is worth confirming either way, since
+      // it is the half of the launch the teacher cannot see happen.
+      if (!resumed) {
+        toast({
+          status: 'success',
+          title: emailed ? 'Live — the class has been emailed' : 'Live — no email sent',
+          description: emailed ? undefined : 'The class still gets the in-app notification.',
+          duration: 3000,
+        });
+      }
       navigate(`/learning/class/${classId}/short/${short._id}/present/${session.sessionId}`);
     } catch (err) {
       // The deck-level validation errors are the useful ones — show the first,
@@ -193,6 +215,11 @@ export default function Shorts() {
                     )}
                     {short.settings?.graded && <Badge colorScheme="purple">graded</Badge>}
                     {short.settings?.anonymous && <Badge>anonymous</Badge>}
+                    {/* Only the off state is worth a badge — mail on start is
+                        the default, and every deck saying so is just noise. */}
+                    {isTeacher && short.settings?.emailOnStart === false && (
+                      <Badge colorScheme="orange">no launch email</Badge>
+                    )}
                   </HStack>
 
                   {short.description ? (
@@ -220,14 +247,44 @@ export default function Shorts() {
 
                 {isTeacher ? (
                   <HStack spacing={2} wrap="wrap">
-                    <Button
-                      size="sm"
-                      colorScheme={short.liveSession ? 'red' : 'purple'}
-                      onClick={() => present(short)}
-                      isLoading={busy === short._id}
-                    >
-                      {short.liveSession ? 'Back to presenting' : 'Present'}
-                    </Button>
+                    {/* Split button: the main half presents the way the deck is
+                        set up, the caret is for the run that needs the other
+                        answer. Rejoining a live session notifies nobody, so it
+                        stays a plain button. */}
+                    <HStack spacing={0}>
+                      <Button
+                        size="sm"
+                        colorScheme={short.liveSession ? 'red' : 'purple'}
+                        onClick={() => present(short)}
+                        isLoading={busy === short._id}
+                        borderRightRadius={short.liveSession ? undefined : 0}
+                      >
+                        {short.liveSession ? 'Back to presenting' : 'Present'}
+                      </Button>
+                      {!short.liveSession && (
+                        <Menu placement="bottom-end">
+                          <MenuButton
+                            as={IconButton}
+                            aria-label="Presenting options"
+                            icon={<FiChevronDown />}
+                            size="sm"
+                            colorScheme="purple"
+                            borderLeftRadius={0}
+                            borderLeftWidth="1px"
+                            borderLeftColor="whiteAlpha.400"
+                            isDisabled={busy === short._id}
+                          />
+                          <MenuList>
+                            <MenuItem onClick={() => present(short, { email: true })}>
+                              Present and email the class
+                            </MenuItem>
+                            <MenuItem onClick={() => present(short, { email: false })}>
+                              Present without emailing
+                            </MenuItem>
+                          </MenuList>
+                        </Menu>
+                      )}
+                    </HStack>
                     <Button
                       size="sm"
                       variant="outline"

@@ -13,12 +13,16 @@ import {
   Th,
   Thead,
   Tr,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
 import { relativeTime } from '../format';
 
 export default function Insights() {
+  const mutedText = useColorModeValue('gray.500', 'gray.300');
+  const secondaryText = useColorModeValue('gray.600', 'gray.300');
+
   const { classId } = useOutletContext();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -113,7 +117,7 @@ export default function Insights() {
                         <Text fontSize="sm" noOfLines={1}>
                           {item.title}
                         </Text>
-                        <Text fontSize="xs" color="gray.500">
+                        <Text fontSize="xs" color={mutedText}>
                           {item.workType}
                         </Text>
                       </Td>
@@ -165,13 +169,13 @@ export default function Insights() {
                       {student.turnedIn}/{student.assigned}
                     </Td>
                     <Td isNumeric>
-                      <Text color={student.missing > 0 ? 'red.600' : 'gray.600'} fontWeight={student.missing > 0 ? '600' : '400'}>
+                      <Text color={student.missing > 0 ? 'red.600' : secondaryText} fontWeight={student.missing > 0 ? '600' : '400'}>
                         {student.missing}
                       </Text>
                     </Td>
                     <Td isNumeric>{student.late}</Td>
                     <Td isNumeric>{student.percent === null ? '—' : `${student.percent}%`}</Td>
-                    <Td fontSize="xs" color="gray.500">
+                    <Td fontSize="xs" color={mutedText}>
                       {student.lastSeenAt ? relativeTime(student.lastSeenAt) : 'never'}
                     </Td>
                   </Tr>

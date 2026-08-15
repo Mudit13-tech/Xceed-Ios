@@ -13,12 +13,16 @@ import {
   TabPanels,
   Tabs,
   Text,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { DueBadge, EmptyState, ErrorState, Loading, StateBadge } from '../components/common';
 import { courseworkMeta } from '../format';
 
 function WorkRow({ entry, showStudent }) {
+  const rowBg = useColorModeValue('white', 'gray.700');
+  const rowBorder = useColorModeValue('gray.200', 'gray.600');
+
   const meta = courseworkMeta(entry);
   const link = entry.class
     ? entry.notebookId
@@ -30,9 +34,9 @@ function WorkRow({ entry, showStudent }) {
     <Flex
       as={RouterLink}
       to={link}
-      bg="white"
+      bg={rowBg}
       borderWidth="1px"
-      borderColor="gray.200"
+      borderColor={rowBorder}
       borderRadius="lg"
       p={4}
       mb={3}

@@ -45,6 +45,7 @@ const TYPE_ICONS = {
   quiz_result: '🎯',
   material: '📚',
   feedback: '🕊️',
+  dev_team: '🚀',
 };
 
 export default function NotificationBell() {

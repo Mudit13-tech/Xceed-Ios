@@ -83,11 +83,19 @@ export default function ShortJoin() {
   }, [codeParam, join]);
 
   const cardBg = useColorModeValue('white', 'gray.800');
-  const pageBg = useColorModeValue('gray.50', 'gray.900');
+  // A scanned QR lands here cold, so the page carries the colour rather than
+  // reading as a plain form: a lit background, a banded card, one bright
+  // target to press.
+  const pageBg = useColorModeValue(
+    'linear(to-br, purple.50, pink.50 45%, blue.50)',
+    'linear(to-br, purple.900, gray.900 55%, blue.900)',
+  );
+  const inputBg = useColorModeValue('purple.50', 'whiteAlpha.100');
+  const cardShadow = useColorModeValue('xl', 'dark-lg');
   const submit = () => join(code, name.trim());
 
   return (
-    <Box minH="100vh" bg={pageBg}>
+    <Box minH="100vh" bgGradient={pageBg}>
       {/* The same bar the quiz and the short itself carry. This is the first
           screen a scanned QR reaches, often for someone with no account, and it
           had nothing on it saying whose platform they had just landed on. */}
@@ -99,12 +107,21 @@ export default function ShortJoin() {
         bg={cardBg}
         borderRadius="xl"
         borderWidth="1px"
-        p={8}
+        boxShadow={cardShadow}
+        overflow="hidden"
+        p={0}
       >
-        <VStack align="stretch" spacing={5}>
+        <Box h="6px" bgGradient="linear(to-r, purple.500, pink.500, orange.400)" />
+        <VStack align="stretch" spacing={5} p={8}>
           <Box textAlign="center">
             <Text fontSize="3xl">⚡</Text>
-            <Heading size="lg">Join a short</Heading>
+            <Heading
+              size="lg"
+              bgGradient="linear(to-r, purple.500, pink.500)"
+              bgClip="text"
+            >
+              Join a short
+            </Heading>
             <Text fontSize="sm" opacity={0.7} mt={1}>
               {needsName ? 'One more thing — what should the room call you?' : 'Type the code on the projector.'}
             </Text>
@@ -129,6 +146,13 @@ export default function ShortJoin() {
             fontWeight="800"
             letterSpacing="0.3em"
             h="72px"
+            bg={inputBg}
+            borderWidth="2px"
+            borderColor="purple.200"
+            color="purple.600"
+            _dark={{ color: 'purple.200', borderColor: 'purple.500' }}
+            _hover={{ borderColor: 'purple.400' }}
+            _focusVisible={{ borderColor: 'pink.400', boxShadow: '0 0 0 1px var(--chakra-colors-pink-400)' }}
             // Brings up the numeric keypad on a phone without rejecting paste.
             inputMode="numeric"
             autoComplete="off"
@@ -156,11 +180,18 @@ export default function ShortJoin() {
             onClick={submit}
             isLoading={busy}
             isDisabled={needsName && !name.trim()}
+            bgGradient="linear(to-r, purple.500, pink.500)"
+            color="white"
+            _hover={{ bgGradient: 'linear(to-r, purple.600, pink.600)' }}
+            _active={{ bgGradient: 'linear(to-r, purple.700, pink.700)' }}
+            // The gradient would otherwise stay bright on a button that does
+            // nothing until a name is typed.
+            _disabled={{ bgGradient: 'none', bg: 'gray.300', color: 'gray.500', cursor: 'not-allowed' }}
           >
             Join
           </Button>
 
-          <Button variant="ghost" size="sm" onClick={() => navigate('/learning')}>
+          <Button variant="ghost" size="sm" colorScheme="purple" onClick={() => navigate('/learning')}>
             Back to my classes
           </Button>
         </VStack>

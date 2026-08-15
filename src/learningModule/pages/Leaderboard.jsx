@@ -28,7 +28,7 @@ import {
 } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, buttonTextStyles } from '../components/common';
 import { formatDate } from '../format';
 
 /**
@@ -48,6 +48,7 @@ const MEDALS = ['🥇', '🥈', '🥉'];
 function Row({ row, highlight, onOpen }) {
   const bg = useColorModeValue('purple.50', 'purple.900');
   const hoverBg = useColorModeValue('gray.50', 'whiteAlpha.100');
+  const mutedText = useColorModeValue('gray.500', 'gray.400');
   return (
     <Flex
       align="center"
@@ -74,14 +75,14 @@ function Row({ row, highlight, onOpen }) {
     >
       <Box minW="34px" fontSize="lg" textAlign="center">
         {MEDALS[row.rank - 1] || (
-          <Text fontSize="sm" color="gray.500" fontVariantNumeric="tabular-nums">
+          <Text fontSize="sm" color={mutedText} fontVariantNumeric="tabular-nums">
             {row.rank}
           </Text>
         )}
       </Box>
       <Avatar size="xs" name={row.studentName} />
       <Box flex="1" minW={0}>
-        <Text fontSize="sm" fontWeight={highlight ? '700' : '500'} noOfLines={1}>
+        <Text fontSize="sm" fontWeight={highlight ? '700' : '500'} noOfLines={1} color={useColorModeValue('gray.800', 'gray.100')}>
           {row.studentName}
           {highlight && (
             <Text as="span" fontSize="xs" color="purple.500" ml={2}>
@@ -90,7 +91,7 @@ function Row({ row, highlight, onOpen }) {
           )}
         </Text>
         {row.badges > 0 && (
-          <Text fontSize="xs" color="gray.500">
+          <Text fontSize="xs" color={mutedText}>
             {row.badges} badge{row.badges === 1 ? '' : 's'}
           </Text>
         )}
@@ -128,7 +129,7 @@ function Board({ data, onOpenStudent }) {
           a board that simply omits you is one you stop opening. */}
       {data.me && !data.rows.some((row) => row.isMe) && data.me.points > 0 && (
         <>
-          <Text fontSize="xs" color="gray.400" textAlign="center" py={1}>
+          <Text fontSize="xs" color={mutedText} textAlign="center" py={1}>
             ⋯
           </Text>
           <Row
@@ -180,6 +181,7 @@ const KIND_LABELS = {
  */
 function StudentPoints({ classId, student, onClose }) {
   const studentId = student?.studentId;
+  const mutedText = useColorModeValue('gray.500', 'gray.400');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['learning', 'studentPoints', classId, studentId],
@@ -203,9 +205,9 @@ function StudentPoints({ classId, student, onClose }) {
           <HStack spacing={3}>
             <Avatar size="sm" name={data?.studentName || student?.studentName} />
             <Box minW={0}>
-              <Text noOfLines={1}>{data?.studentName || student?.studentName}</Text>
+              <Text noOfLines={1} color={useColorModeValue('gray.800', 'gray.100')}>{data?.studentName || student?.studentName}</Text>
               {student?.rank && (
-                <Text fontSize="xs" color="gray.500" fontWeight="400">
+                <Text fontSize="xs" color={mutedText} fontWeight="400">
                   #{student.rank} on this table
                 </Text>
               )}
@@ -225,7 +227,7 @@ function StudentPoints({ classId, student, onClose }) {
                   <Text fontSize="2xl" fontWeight="700">
                     {data.points}
                   </Text>
-                  <Text fontSize="xs" color="gray.500">
+                  <Text fontSize="xs" color={mutedText}>
                     points all time
                   </Text>
                 </Box>
@@ -233,7 +235,7 @@ function StudentPoints({ classId, student, onClose }) {
                   <Text fontSize="2xl" fontWeight="700" color="green.500">
                     {data.weeklyPoints}
                   </Text>
-                  <Text fontSize="xs" color="gray.500">
+                  <Text fontSize="xs" color={mutedText}>
                     this week
                   </Text>
                 </Box>
@@ -241,7 +243,7 @@ function StudentPoints({ classId, student, onClose }) {
                   <Text fontSize="2xl" fontWeight="700" color="purple.500">
                     {data.badges.length}
                   </Text>
-                  <Text fontSize="xs" color="gray.500">
+                  <Text fontSize="xs" color={mutedText}>
                     of {data.catalogue.length} badges
                   </Text>
                 </Box>
@@ -253,7 +255,7 @@ function StudentPoints({ classId, student, onClose }) {
                     Where the points came from
                   </Heading>
                   {byKind.length === 0 ? (
-                    <Text fontSize="sm" color="gray.500">
+                    <Text fontSize="sm" color={mutedText}>
                       Nothing earned in this class yet.
                     </Text>
                   ) : (
@@ -262,7 +264,7 @@ function StudentPoints({ classId, student, onClose }) {
                         <Box key={row.kind}>
                           <Flex justify="space-between" fontSize="sm" mb={1}>
                             <Text>{KIND_LABELS[row.kind] || row.kind}</Text>
-                            <Text color="gray.500">
+                            <Text color={mutedText}>
                               {row.points} pts · {row.awards} time{row.awards === 1 ? '' : 's'}
                             </Text>
                           </Flex>
@@ -287,7 +289,7 @@ function StudentPoints({ classId, student, onClose }) {
                   Badges earned
                 </Heading>
                 {data.badges.length === 0 ? (
-                  <Text fontSize="sm" color="gray.500">
+                  <Text fontSize="sm" color={mutedText}>
                     None yet.
                   </Text>
                 ) : (
@@ -308,11 +310,11 @@ function StudentPoints({ classId, student, onClose }) {
                           </HStack>
                           {/* What it was actually for — "#1 of the all-time
                               table" says more than the badge name repeated. */}
-                          <Text fontSize="xs" color="gray.600">
+                          <Text fontSize="xs" color={useColorModeValue('gray.600', 'gray.300')}>
                             {badge.detail || badge.hint}
                           </Text>
                         </Box>
-                        <Text fontSize="xs" color="gray.400" whiteSpace="nowrap">
+                        <Text fontSize="xs" color={mutedText} whiteSpace="nowrap">
                           {formatDate(badge.earnedAt)}
                         </Text>
                       </Flex>
@@ -322,7 +324,7 @@ function StudentPoints({ classId, student, onClose }) {
 
                 {unearned.length > 0 && (
                   <>
-                    <Text fontSize="xs" color="gray.500" mt={3} mb={1}>
+                    <Text fontSize="xs" color={mutedText} mt={3} mb={1}>
                       Still to get
                     </Text>
                     <Flex gap={1.5} wrap="wrap">
@@ -341,7 +343,7 @@ function StudentPoints({ classId, student, onClose }) {
               {/* Said out loud, so an empty-looking panel does not read as a
                   student who has done nothing. */}
               {data.scope !== 'full' && (
-                <Text fontSize="xs" color="gray.500">
+                <Text fontSize="xs" color={mutedText}>
                   Badges are for the class to see. Where somebody earned their points is between
                   them and the teacher.
                 </Text>
@@ -368,7 +370,7 @@ function StudentPoints({ classId, student, onClose }) {
                             <Text fontSize="sm" noOfLines={1}>
                               {row.reason}
                             </Text>
-                            <Text fontSize="xs" color="gray.500">
+                            <Text fontSize="xs" color={mutedText}>
                               {KIND_LABELS[row.kind] || row.kind} · {formatDate(row.created_at)}
                             </Text>
                           </Box>
@@ -399,6 +401,7 @@ function StudentPoints({ classId, student, onClose }) {
  * as much room as the top of it.
  */
 function TeacherView({ week, all, classId }) {
+  const mutedText = useColorModeValue('gray.500', 'gray.400');
   const [opened, setOpened] = useState(null);
   const summary = week?.summary;
   if (!summary) return <ErrorState error={{ message: 'No summary available.' }} />;
@@ -413,7 +416,7 @@ function TeacherView({ week, all, classId }) {
             <Text fontSize="2xl" fontWeight="700">
               {summary.totalPoints}
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color={mutedText}>
               points earned, all time
             </Text>
           </Box>
@@ -421,7 +424,7 @@ function TeacherView({ week, all, classId }) {
             <Text fontSize="2xl" fontWeight="700" color="green.500">
               {summary.weeklyPoints}
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color={mutedText}>
               this week
             </Text>
           </Box>
@@ -429,7 +432,7 @@ function TeacherView({ week, all, classId }) {
             <Text fontSize="2xl" fontWeight="700" color="purple.500">
               {summary.weeklyActiveStudents}
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color={mutedText}>
               students active this week
             </Text>
           </Box>
@@ -437,7 +440,7 @@ function TeacherView({ week, all, classId }) {
             <Text fontSize="2xl" fontWeight="700">
               {summary.earningStudents}
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color={mutedText}>
               have ever earned anything
             </Text>
           </Box>
@@ -458,7 +461,7 @@ function TeacherView({ week, all, classId }) {
                 <Box key={row.kind}>
                   <Flex justify="space-between" fontSize="sm" mb={1}>
                     <Text>{KIND_LABELS[row.kind] || row.kind}</Text>
-                    <Text color="gray.500">
+                    <Text color={mutedText}>
                       {row.points} pts · {row.awards} award{row.awards === 1 ? '' : 's'}
                     </Text>
                   </Flex>
@@ -493,8 +496,10 @@ function TeacherView({ week, all, classId }) {
                   py={1.5}
                   borderRadius="md"
                   _hover={{ bg: 'blackAlpha.50' }}
+                  {...buttonTextStyles}
+                  color={useColorModeValue('gray.800', 'gray.100')}
                 >
-                  <Text fontSize="sm">{row.studentName}</Text>
+                  <Text fontSize="sm" color={useColorModeValue('gray.800', 'gray.100')}>{row.studentName}</Text>
                   <Badge colorScheme="gray" borderRadius="full">
                     {row.points}
                   </Badge>
@@ -550,6 +555,7 @@ function TeacherView({ week, all, classId }) {
 export default function Leaderboard() {
   const { classId } = useOutletContext();
   const [opened, setOpened] = useState(null);
+  const mutedText = useColorModeValue('gray.500', 'gray.400');
 
   const { data: week, isLoading: loadingWeek, error: weekError, refetch: loadWeek } = useQuery({
     queryKey: ['learning', 'leaderboard', classId, 'week'],
@@ -586,7 +592,7 @@ export default function Leaderboard() {
             <Text fontSize="2xl" fontWeight="700">
               {me?.points ?? 0}
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color={mutedText}>
               points all time
             </Text>
           </Box>
@@ -594,7 +600,7 @@ export default function Leaderboard() {
             <Text fontSize="2xl" fontWeight="700" color="green.500">
               {me?.weeklyPoints ?? 0}
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color={mutedText}>
               this week
             </Text>
           </Box>
@@ -602,7 +608,7 @@ export default function Leaderboard() {
             <Text fontSize="2xl" fontWeight="700" color="purple.500">
               {me?.badges?.length ?? 0}
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color={mutedText}>
               badges
             </Text>
           </Box>
@@ -664,7 +670,7 @@ export default function Leaderboard() {
             <Tab>
               This week
               {week?.weekStart && (
-                <Text as="span" fontSize="xs" color="gray.500" ml={2}>
+                <Text as="span" fontSize="xs" color={mutedText} ml={2}>
                   from {formatDate(week.weekStart)}
                 </Text>
               )}
@@ -673,7 +679,7 @@ export default function Leaderboard() {
           </TabList>
           <TabPanels>
             <TabPanel px={0}>
-              <HStack fontSize="xs" color="gray.500" mb={2}>
+              <HStack fontSize="xs" color={mutedText} mb={2}>
                 <Text>Resets every Monday, so a slow week is never the end of it.</Text>
               </HStack>
               <Board data={week} onOpenStudent={setOpened} />
@@ -687,7 +693,7 @@ export default function Leaderboard() {
 
       <StudentPoints classId={classId} student={opened} onClose={() => setOpened(null)} />
 
-      <Heading size="xs" color="gray.500" fontWeight="500">
+      <Heading size="xs" color={mutedText} fontWeight="500">
         Points come from turning work in, sitting quizzes, working through coding exercises and joining
         in — not from marks. Your grades are separate and always will be.
       </Heading>

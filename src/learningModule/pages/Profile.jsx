@@ -8,6 +8,7 @@ import {
   SimpleGrid,
   Text,
   Tooltip,
+  useColorModeValue,
   VStack,
 } from '@chakra-ui/react';
 
@@ -60,6 +61,13 @@ function classWise(entry) {
 }
 
 export default function Profile() {
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const hoverBg = useColorModeValue('gray.50', 'gray.700');
+  const mutedText = useColorModeValue('gray.500', 'gray.400');
+  const badgeBg = useColorModeValue('white', 'gray.700');
+  const badgeSectionBg = useColorModeValue('gray.50', 'gray.700');
+
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -100,7 +108,7 @@ export default function Profile() {
             <Text fontSize="3xl" fontWeight="700">
               {profile.totalPoints}
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color={mutedText}>
               points, all time
             </Text>
           </Box>
@@ -108,7 +116,7 @@ export default function Profile() {
             <Text fontSize="3xl" fontWeight="700" color="purple.500">
               {profile.totalBadges}
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color={mutedText}>
               badges
             </Text>
           </Box>
@@ -116,7 +124,7 @@ export default function Profile() {
             <Text fontSize="3xl" fontWeight="700" color="blue.500">
               {profile.sessions.filter((entry) => entry.session).length}
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color={mutedText}>
               sessions
             </Text>
           </Box>
@@ -139,7 +147,8 @@ export default function Profile() {
               <Box
                 key={String(klass.classId || 'none')}
                 borderWidth="1px"
-                borderColor="gray.200"
+                borderColor={borderColor}
+                bg={cardBg}
                 borderRadius="md"
                 overflow="hidden"
               >
@@ -148,7 +157,7 @@ export default function Profile() {
                   gap={3}
                   as={klass.classId ? RouterLink : undefined}
                   to={klass.classId ? `/learning/class/${klass.classId}/leaderboard` : undefined}
-                  _hover={klass.classId ? { bg: 'gray.50', textDecoration: 'none' } : undefined}
+                  _hover={klass.classId ? { bg: hoverBg, textDecoration: 'none' } : undefined}
                   px={3}
                   py={2.5}
                 >
@@ -157,7 +166,7 @@ export default function Profile() {
                     <Text fontSize="sm" fontWeight="600" noOfLines={1}>
                       {klass.name}
                     </Text>
-                    <Text fontSize="xs" color="gray.500">
+                    <Text fontSize="xs" color={mutedText}>
                       {klass.awards} award{klass.awards === 1 ? '' : 's'}
                       {klass.lastAt ? ` · last on ${formatDate(klass.lastAt)}` : ''}
                     </Text>
@@ -177,8 +186,8 @@ export default function Profile() {
                     px={3}
                     py={2}
                     borderTopWidth="1px"
-                    borderColor="gray.100"
-                    bg="gray.50"
+                    borderColor={borderColor}
+                    bg={badgeSectionBg}
                   >
                     {klass.badges.map((badge) => (
                       <Tooltip
@@ -188,8 +197,8 @@ export default function Profile() {
                         <HStack
                           spacing={1.5}
                           borderWidth="1px"
-                          borderColor={badge.rare ? 'orange.200' : 'purple.200'}
-                          bg={badge.rare ? 'orange.50' : 'white'}
+                          borderColor={badge.rare ? 'orange.300' : 'purple.300'}
+                          bg={badge.rare ? 'orange.50' : badgeBg}
                           borderRadius="full"
                           px={2.5}
                           py={1}

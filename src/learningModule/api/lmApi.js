@@ -610,6 +610,17 @@ const lmApi = {
   allBugReports: ({ status, kind } = {}) => request(`/bugs${qs({ status, kind })}`),
   reviewBug: (reportId, body) => request(`/bugs/${reportId}`, { method: 'PATCH', body }),
 
+  /* ---- joining the development team ---- */
+  applyToDevTeam: (body) => request('/dev-team/apply', { method: 'POST', body }),
+  // Carries this semester's application (if any) alongside the history, so the
+  // page knows whether to show the form before anything has been typed.
+  myDevApplication: () => request('/dev-team/mine'),
+  // 403s for anyone who is not a platform admin; the page uses that to decide
+  // whether to show the queue at all.
+  allDevApplications: ({ status } = {}) => request(`/dev-team${qs({ status })}`),
+  reviewDevApplication: (applicationId, body) =>
+    request(`/dev-team/${applicationId}`, { method: 'PATCH', body }),
+
   /* lm-admin dashboard — platform-wide stats, 403 for anyone else */
   adminSummary: () => request('/admin/summary'),
 
@@ -656,8 +667,13 @@ const lmApi = {
     request(`/classes/${classId}/shorts/${shortId}`, { method: 'PATCH', body }),
   deleteShort: (classId, shortId) =>
     request(`/classes/${classId}/shorts/${shortId}`, { method: 'DELETE' }),
-  presentShort: (classId, shortId) =>
-    request(`/classes/${classId}/shorts/${shortId}/present`, { method: 'POST', body: {} }),
+  /* `email` overrides the deck's own emailOnStart setting for this one run;
+     omit it to present the way the deck is configured. */
+  presentShort: (classId, shortId, { email } = {}) =>
+    request(`/classes/${classId}/shorts/${shortId}/present`, {
+      method: 'POST',
+      body: typeof email === 'boolean' ? { email } : {},
+    }),
   listShortSessions: (classId, shortId) => request(`/classes/${classId}/shorts/${shortId}/sessions`),
   shortPresenterState: (classId, sessionId) =>
     request(`/classes/${classId}/short-sessions/${sessionId}/state`),

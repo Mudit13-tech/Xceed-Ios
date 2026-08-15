@@ -21,6 +21,7 @@ import {
   FiZap,
   FiArrowRight,
   FiAlertCircle,
+  FiUserPlus,
 } from 'react-icons/fi';
 
 const MODULES = [
@@ -72,6 +73,13 @@ const MODULES = [
     to: '/superadmin/bugs',
     icon: FiAlertCircle,
     accent: 'red',
+  },
+  {
+    title: 'Development Team Applications',
+    description: 'Students asking to help build XCEED. Read their work, then accept or reject with a message.',
+    to: '/superadmin/dev-team',
+    icon: FiUserPlus,
+    accent: 'teal',
   },
   {
     title: 'Logs',

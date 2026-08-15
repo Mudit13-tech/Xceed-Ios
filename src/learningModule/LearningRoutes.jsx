@@ -55,6 +55,7 @@ import Timetable from './pages/Timetable';
 import Notifications from './pages/Notifications';
 import Profile from './pages/Profile';
 import BugReports from './pages/BugReports';
+import DevTeam from './pages/DevTeam';
 import LmAdmin from './pages/LmAdmin';
 
 /**
@@ -82,6 +83,7 @@ export default function LearningRoutes() {
         <Route path="notifications" element={<Notifications />} />
         <Route path="profile" element={<Profile />} />
         <Route path="bugs" element={<BugReports />} />
+        <Route path="dev-team" element={<DevTeam />} />
         <Route path="lm-admin" element={<LmAdmin />} />
 
         <Route path="class/:classId" element={<ClassLayout />}>
