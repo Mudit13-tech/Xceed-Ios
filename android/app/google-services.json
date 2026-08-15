@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "894754252434",
+    "project_id": "xceed-app",
+    "storage_bucket": "xceed-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:894754252434:android:66f516a95787627b45684b",
+        "android_client_info": {
+          "package_name": "in.ac.nitj.xceed.learning.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAek374ZlRetXJsVfn0yDHGUvIJB0yQi-Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

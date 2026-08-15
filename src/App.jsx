@@ -213,6 +213,7 @@ import ConfidenceMonitor from './attendancemodule/confidenceMonitor';
 import { MLDataFolder } from './attendancemodule/MLDataFolder.jsx';
 import MLFineTuning from './attendancemodule/MLFineTuning';
 import { setupOtaUpdater } from './utils/otaUpdater';
+import { initializePushNotifications } from './utils/pushNotifications';
 import { useEffect } from 'react';
 
 const HardwareBackButton = () => {
@@ -237,6 +238,9 @@ const HardwareBackButton = () => {
     };
 
     registerListener();
+
+    // Initialize Push Notifications since we have access to navigate here
+    initializePushNotifications(navigate);
 
     return () => {
       if (listener) {
