@@ -550,7 +550,7 @@ async function handleSchedulerSubmit() {
                             type="button"
                             onClick={() => setMainTab(id)}
                             style={{
-                                padding: '12px 20px 12px 32px', fontSize: 14, fontWeight: 700,
+                                padding: '12px 4px 12px 32px', fontSize: 14, fontWeight: 700,
                                 background: 'transparent', border: 'none', cursor: 'pointer',
                                 color: mainTab === id ? T.accent : T.textMuted,
                                 borderBottom: mainTab === id ? `2px solid ${T.accent}` : '2px solid transparent',
@@ -563,6 +563,7 @@ async function handleSchedulerSubmit() {
                             value={id}
                             label={id}
                             active={mainTab === id}
+                            compact
                             style={{
                                 borderRadius: 0,
                                 borderBottom: mainTab === id ? `2px solid ${T.accent}` : '2px solid transparent',
@@ -738,7 +739,7 @@ async function handleSchedulerSubmit() {
                     type="button"
                     onClick={() => setActiveTab(tab)}
                     style={{
-                        padding: '10px 12px 10px 20px', fontSize: 14, fontWeight: 600,
+                        padding: '10px 4px 10px 20px', fontSize: 14, fontWeight: 600,
                         background: 'transparent', border: 'none', cursor: 'pointer',
                         color: activeTab === tab ? T.accent : T.textMuted,
                         borderBottom: activeTab === tab ? `2px solid ${T.accent}` : '2px solid transparent',
@@ -752,6 +753,7 @@ async function handleSchedulerSubmit() {
                     label={tab}
                     queryKey="recordTab"
                     active={activeTab === tab}
+                    compact
                     style={{
                         borderRadius: 0,
                         borderBottom: activeTab === tab ? `2px solid ${T.accent}` : '2px solid transparent',

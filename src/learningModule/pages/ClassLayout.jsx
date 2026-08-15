@@ -27,6 +27,7 @@ const TABS = [
   { path: 'quizzes', label: 'Quizzes' },
   { path: 'tutorials', label: 'Tutorials' },
   { path: 'assignments', label: 'Assignments' },
+  { path: 'labs', label: 'Virtual Lab' },
   { path: 'shorts', label: 'Shorts' },
   { path: 'discussions', label: 'Forum' },
   { path: 'notebooks', label: 'Coding' },

@@ -37,6 +37,10 @@ import ShortJoin from './pages/ShortJoin';
 import ShortPlay from './pages/ShortPlay';
 import Tutorials from './pages/Tutorials';
 import Assignments from './pages/Assignments';
+import Labs from './pages/Labs';
+import LabBench from './pages/LabBench';
+import LabEditor from './pages/LabEditor';
+import LabResults from './pages/LabResults';
 import AssignmentImport from './pages/AssignmentImport';
 import AssignmentEditor from './pages/AssignmentEditor';
 import AssignmentPlayer from './pages/AssignmentPlayer';
@@ -107,6 +111,12 @@ export default function LearningRoutes() {
           <Route path="tutorials" element={<Tutorials />} />
           {/* Assignments: the assessed sibling of tutorials, on its own routes. */}
           <Route path="assignments" element={<Assignments />} />
+          {/* The virtual lab. The bench is not behind RequireTeacher because it
+              is the same screen for both: a teacher opens it to check the
+              experiment runs, a student opens it to do it, and the server
+              decides what gets recorded. */}
+          <Route path="labs" element={<Labs />} />
+          <Route path="lab/:labId" element={<LabBench />} />
 
           {/* Staff screens. The server guards the data; this keeps a student
               who typed the URL from meeting a bare 403 where a page should be. */}
@@ -128,6 +138,8 @@ export default function LearningRoutes() {
                 and then published. */}
             <Route path="tutorial-import/:draftId" element={<TutorialImport />} />
             <Route path="tutorial/:tutorialId/results" element={<TutorialResults />} />
+            <Route path="lab/:labId/edit" element={<LabEditor />} />
+            <Route path="lab/:labId/results" element={<LabResults />} />
             <Route path="assignment/:assignmentId/edit" element={<AssignmentEditor />} />
             <Route path="assignment/:assignmentId/results" element={<AssignmentResults />} />
             {/* Reviewing an assignment read off an uploaded paper. */}
