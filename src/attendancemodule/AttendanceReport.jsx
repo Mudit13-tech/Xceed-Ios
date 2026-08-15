@@ -212,7 +212,7 @@ export default function AttendanceReport() {
   const [histLoading, setHistLoading] = useState(false);
   const [filterDept, setFilterDept] = useState('');
   const [filterSem, setFilterSem] = useState('');
-  const [filterDate, setFilterDate] = useState('');
+  const [filterDate, setFilterDate] = useState(new Date().toISOString().split("T")[0]); // Get Todays Date by Default
   const [availableSems, setAvailableSems] = useState([]);
   const [semsLoading, setSemsLoading] = useState(false);
   const [canDeleteReports, setCanDeleteReports] = useState(false);

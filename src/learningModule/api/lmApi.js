@@ -526,6 +526,34 @@ const lmApi = {
   mergeAssignmentImport: (classId, draftId, body) =>
     request(`/classes/${classId}/assignment-imports/${draftId}/merge`, { method: 'POST', body }),
 
+  /* Virtual lab — a bench the student wires up, solved on the server */
+  // The palette and the domain dropdown come from the server rather than being
+  // duplicated here, so a component added to the solver appears on the canvas
+  // without a second edit in a second language.
+  labCatalogue: (classId) => request(`/classes/${classId}/labs/catalogue`),
+  listLabs: (classId) => request(`/classes/${classId}/labs`),
+  createLab: (classId, body) => request(`/classes/${classId}/labs`, { method: 'POST', body }),
+  getLab: (classId, labId) => request(`/classes/${classId}/labs/${labId}`),
+  updateLab: (classId, labId, body) =>
+    request(`/classes/${classId}/labs/${labId}`, { method: 'PATCH', body }),
+  deleteLab: (classId, labId) =>
+    request(`/classes/${classId}/labs/${labId}`, { method: 'DELETE' }),
+  publishLab: (classId, labId, body) =>
+    request(`/classes/${classId}/labs/${labId}/publish`, { method: 'POST', body }),
+  // One request per Run. A run is a deliberate act after wiring something, not a
+  // keystroke, so the round trip is the right cost for having one solver.
+  runLab: (classId, labId, body) =>
+    request(`/classes/${classId}/labs/${labId}/run`, { method: 'POST', body }),
+  myLabAttempt: (classId, labId) => request(`/classes/${classId}/labs/${labId}/attempt`),
+  saveLabCircuit: (classId, labId, body) =>
+    request(`/classes/${classId}/labs/${labId}/attempt/save`, { method: 'POST', body }),
+  submitLabAttempt: (classId, labId, body) =>
+    request(`/classes/${classId}/labs/${labId}/attempt/submit`, { method: 'POST', body }),
+  listLabAttempts: (classId, labId) => request(`/classes/${classId}/labs/${labId}/attempts`),
+  getLabAttempt: (classId, attemptId) => request(`/classes/${classId}/lab-attempts/${attemptId}`),
+  markLabAttempt: (classId, attemptId, body) =>
+    request(`/classes/${classId}/lab-attempts/${attemptId}/mark`, { method: 'POST', body }),
+
   /* AI studio */
   studioStatus: (classId) => request(`/classes/${classId}/studio/status`),
   studioRecordings: (classId) => request(`/classes/${classId}/studio/recordings`),

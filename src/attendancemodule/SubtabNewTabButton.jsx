@@ -7,12 +7,13 @@ export default function SubtabNewTabButton({
   queryKey = 'tab',
   extraParams = {},
   active = false,
+  compact = false,
   style,
 }) {
   return (
     <button
       type="button"
-      className="ams-subtab-newtab-btn"
+      className={`ams-subtab-newtab-btn${compact ? ' compact' : ''}`}
       aria-label={`Open ${label} in new tab`}
       title={`Open ${label} in new tab`}
       onClick={(event) => {
@@ -37,6 +38,17 @@ export default function SubtabNewTabButton({
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
+        ...(compact ? {
+          width: 24,
+          minWidth: 24,
+          height: 24,
+          padding: 0,
+          borderLeftWidth: 0,
+          borderRadius: 6,
+          background: 'transparent',
+          justifyContent: 'center',
+          alignSelf: 'center',
+        } : {}),
         ...style,
       }}
     >
@@ -51,6 +63,7 @@ SubtabNewTabButton.propTypes = {
   queryKey: PropTypes.string,
   extraParams: PropTypes.object,
   active: PropTypes.bool,
+  compact: PropTypes.bool,
   style: PropTypes.object,
 };
 
@@ -58,13 +71,26 @@ export function AmsSubtab({ value, label, active, onSelect, queryKey = 'tab', ex
   return (
     <span
       className={`ams-subtab-option${active ? ' active' : ''}`}
-      style={{ display: 'inline-flex', alignItems: 'stretch', flexShrink: 0 }}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'stretch',
+        flexShrink: 0,
+        gap: 0,
+        background: active ? '#ffffff' : 'transparent',
+        borderRadius: 7,
+      }}
     >
       <button
         type="button"
         className={`ams-tab${active ? ' active' : ''}`}
         onClick={() => onSelect(value)}
-        style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+        style={{
+          borderTopRightRadius: 0,
+          borderBottomRightRadius: 0,
+          paddingRight: 0,
+          background: 'transparent',
+          boxShadow: 'none',
+        }}
       >
         {label}
       </button>
@@ -74,6 +100,7 @@ export function AmsSubtab({ value, label, active, onSelect, queryKey = 'tab', ex
         queryKey={queryKey}
         extraParams={extraParams}
         active={active}
+        compact
       />
     </span>
   );

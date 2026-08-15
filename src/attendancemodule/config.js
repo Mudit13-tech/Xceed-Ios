@@ -257,6 +257,7 @@ const cssReset = `
     .ams-subtab-option.active .ams-tab { box-shadow: none; }
     .ams-subtab-newtab-btn { transition: background .15s, color .15s; }
     .ams-subtab-newtab-btn:hover, .ams-subtab-newtab-btn:focus-visible { background: rgba(99,102,241,0.12) !important; color: #6366f1 !important; outline: none; }
+    .ams-subtab-newtab-btn.compact:hover, .ams-subtab-newtab-btn.compact:focus-visible { background: rgba(99,102,241,0.12) !important; }
 
     /* ── Unified table ── */
     .ams-table { width: 100%; border-collapse: collapse; font-size: 13px; border: none; }

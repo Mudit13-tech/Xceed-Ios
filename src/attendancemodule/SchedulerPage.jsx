@@ -1346,7 +1346,7 @@ export default function SchedulerPage() {
               type="button"
               onClick={() => setTab(id)}
               style={{
-                padding: '10px 10px 10px 18px',
+                padding: '10px 4px 10px 18px',
                 background: 'transparent',
                 border: 'none',
                 flexShrink: 0,
@@ -1364,6 +1364,7 @@ export default function SchedulerPage() {
               value={id}
               label={label}
               active={tab === id}
+              compact
               style={{
                 borderRadius: 0,
                 borderBottom: `2px solid ${tab === id ? theme.accent : 'transparent'}`,
