@@ -250,7 +250,15 @@ export default function ShortPresent() {
         {state.slide ? (
           <>
             <Flex gap={4} align="flex-start" wrap="wrap">
-              <Box flex="1" minW="260px" fontSize={{ base: 'xl', md: '3xl' }} fontWeight="700">
+              {/* Full screen means a projector at the back of a hall, so the
+                  question steps up a size band rather than just filling more
+                  of the same page. */}
+              <Box
+                flex="1"
+                minW="260px"
+                fontSize={fullscreen ? { base: '3xl', md: '5xl' } : { base: 'xl', md: '3xl' }}
+                fontWeight="700"
+              >
                 <RichText>{state.slide.question}</RichText>
               </Box>
               <Countdown deadline={state.slideState === 'open' ? state.slideDeadline : null} big />

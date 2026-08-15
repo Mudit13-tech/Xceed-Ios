@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Badge, Box, Button, Flex, HStack, Heading, IconButton, Text } from '@chakra-ui/react';
+import { Badge, Box, Button, Flex, HStack, Heading, IconButton,useColorModeValue, Text } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { buttonTextStyles, EmptyState, ErrorState, Loading } from '../components/common';
 import { relativeTime } from '../format';
@@ -17,6 +17,7 @@ const TYPE_ICONS = {
   quiz_result: '🎯',
   material: '📚',
   feedback: '🕊️',
+  dev_team: '🚀',
 };
 
 export default function Notifications() {
@@ -25,6 +26,13 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+
+  const readBg = useColorModeValue('white', 'gray.700');
+  const readBorder = useColorModeValue('gray.200', 'gray.600');
+  const unreadBg = useColorModeValue('blue.50', 'blue.900');
+  const unreadBorder = useColorModeValue('blue.200', 'blue.700');
+  const notificationTextColor = useColorModeValue('gray.800', 'gray.100');
+  const notificationBodyColor = useColorModeValue('gray.600', 'gray.300');
 
   const load = useCallback(async () => {
     setError(null);
@@ -97,9 +105,9 @@ export default function Notifications() {
         items.map((notification) => (
           <Flex
             key={notification._id}
-            bg={notification.read ? 'white' : 'blue.50'}
+            bg={notification.read ? readBg : unreadBg}
             borderWidth="1px"
-            borderColor={notification.read ? 'gray.200' : 'blue.200'}
+            borderColor={notification.read ? readBorder : unreadBorder}
             borderRadius="lg"
             p={4}
             mb={2}
@@ -114,12 +122,13 @@ export default function Notifications() {
               textAlign="left"
               onClick={() => open(notification)}
               {...buttonTextStyles}
+              color={notificationTextColor}
             >
               <Text fontSize="sm" fontWeight={notification.read ? '500' : '700'}>
                 {notification.title}
               </Text>
               {notification.body && (
-                <Text fontSize="sm" color="gray.600" noOfLines={2}>
+                <Text fontSize="sm" color={notificationBodyColor} noOfLines={2}>
                   {notification.body}
                 </Text>
               )}

@@ -14,6 +14,7 @@ import {
   Thead,
   Tr,
   useToast,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading } from '../components/common';
@@ -25,6 +26,13 @@ function GradebookGrid({ classId, isTeacher }) {
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   const toast = useToast();
+
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const headerBg = useColorModeValue('gray.50', 'gray.700');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const hoverBg = useColorModeValue('gray.50', 'gray.700');
+  const mutedText = useColorModeValue('gray.500', 'gray.400');
+  const textColor = useColorModeValue('gray.700', 'gray.200');
 
   const load = useCallback(async () => {
     setError(null);
@@ -66,7 +74,7 @@ function GradebookGrid({ classId, isTeacher }) {
   return (
     <Box>
       <Flex justify="space-between" align="center" mb={3} gap={2} wrap="wrap">
-        <Text fontSize="sm" color="gray.500">
+        <Text fontSize="sm" color={mutedText}>
           {isTeacher
             ? 'Type marks straight into the grid. Grades appear to students only once you return their work.'
             : 'Only work your teacher has returned is shown.'}
@@ -85,11 +93,11 @@ function GradebookGrid({ classId, isTeacher }) {
         </HStack>
       </Flex>
 
-      <Box overflowX="auto" bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg">
+      <Box overflowX="auto" bg={cardBg} borderWidth="1px" borderColor={borderColor} borderRadius="lg">
         <Table size="sm">
-          <Thead bg="gray.50">
+          <Thead bg={headerBg}>
             <Tr>
-              <Th position="sticky" left={0} bg="gray.50" zIndex={1} minW="200px">
+              <Th position="sticky" left={0} bg={headerBg} zIndex={1} minW="200px">
                 Student
               </Th>
               {data.coursework.map((item, index) => (
@@ -103,7 +111,7 @@ function GradebookGrid({ classId, isTeacher }) {
                   >
                     {item.title}
                   </Text>
-                  <Text fontSize="0.65rem" color="gray.500" fontWeight="400">
+                  <Text fontSize="0.65rem" color={mutedText} fontWeight="400">
                     /{item.points}
                     {data.classAverages?.[index]?.average !== null &&
                       ` · avg ${data.classAverages[index].average}`}
@@ -117,11 +125,11 @@ function GradebookGrid({ classId, isTeacher }) {
           </Thead>
           <Tbody>
             {data.rows.map((row) => (
-              <Tr key={row.student.userId} _hover={{ bg: 'gray.50' }}>
-                <Td position="sticky" left={0} bg="white" zIndex={1} fontWeight="500">
+              <Tr key={row.student.userId} _hover={{ bg: hoverBg }}>
+                <Td position="sticky" left={0} bg={cardBg} zIndex={1} fontWeight="500">
                   {row.student.name || row.student.email}
                   {row.student.rollNumber && (
-                    <Text as="span" fontSize="xs" color="gray.500" ml={2}>
+                    <Text as="span" fontSize="xs" color={mutedText} ml={2}>
                       {row.student.rollNumber}
                     </Text>
                   )}
@@ -159,7 +167,7 @@ function GradebookGrid({ classId, isTeacher }) {
                           {cell.state === 'turned_in' ? 'to grade' : '—'}
                         </Text>
                       ) : (
-                        <Text fontWeight="600" color={cell.late ? 'red.600' : 'gray.700'}>
+                        <Text fontWeight="600" color={cell.late ? 'red.600' : textColor}>
                           {cell.grade}
                         </Text>
                       )}
@@ -170,7 +178,7 @@ function GradebookGrid({ classId, isTeacher }) {
                   <Text fontWeight="700">
                     {row.total.percent === null ? '—' : `${row.total.percent}%`}
                   </Text>
-                  <Text fontSize="xs" color="gray.500">
+                  <Text fontSize="xs" color={mutedText}>
                     {row.total.earned}/{row.total.possible}
                   </Text>
                 </Td>

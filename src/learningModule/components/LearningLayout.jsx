@@ -57,6 +57,55 @@ const NAV_ITEMS = [
 ];
 
 /**
+ * The one coloured thing in the rail, sitting under the class list.
+ *
+ * Not in NAV_ITEMS because it is not navigation: it is an invitation, and it
+ * belongs at the very bottom — after the classes, where the eye lands last —
+ * rather than in the middle of a list of places to go. Teal rather than the
+ * rail's blue, so it reads as a different kind of thing and not as the
+ * selected item.
+ *
+ * Everyone sees it, staff included: the queue is read by admins, and a teacher
+ * who wants in should not have to be told the link exists.
+ */
+function DevTeamCta({ onNavigate }) {
+  const bg = useColorModeValue('teal.50', 'teal.900');
+  const color = useColorModeValue('teal.800', 'teal.100');
+  const borderColor = useColorModeValue('teal.200', 'teal.600');
+  const hoverBg = useColorModeValue('teal.100', 'teal.800');
+  const subColor = useColorModeValue('teal.700', 'teal.200');
+
+  return (
+    <Box
+      as={NavLink}
+      to="/learning/dev-team"
+      onClick={onNavigate}
+      display="block"
+      mt={4}
+      px={4}
+      py={3}
+      borderRadius="lg"
+      borderWidth="1px"
+      borderColor={borderColor}
+      bg={bg}
+      color={color}
+      _hover={{ bg: hoverBg, textDecoration: 'none' }}
+      sx={{ '&.active': { bg: hoverBg, borderColor: 'teal.500' } }}
+    >
+      <Flex align="center" gap={2}>
+        <Text as="span">🚀</Text>
+        <Text fontSize="sm" fontWeight="700">
+          Join our dev team
+        </Text>
+      </Flex>
+      <Text fontSize="xs" color={subColor} mt={0.5}>
+        XCEED is built by students — help build it.
+      </Text>
+    </Box>
+  );
+}
+
+/**
  * Class tabs that exist under every class and need no further id in the path.
  *
  * Switching class from inside one of these keeps you on the same tab — the
@@ -407,6 +456,7 @@ export default function LearningLayout() {
               activeClassId={activeClassId}
               carriedTab={carriedTab}
             />
+            <DevTeamCta />
           </Box>
 
           <Box flex="1" minW={0} w="100%">
@@ -431,6 +481,7 @@ export default function LearningLayout() {
               carriedTab={carriedTab}
               onNavigate={onClose}
             />
+            <DevTeamCta onNavigate={onClose} />
           </DrawerBody>
         </DrawerContent>
       </Drawer>

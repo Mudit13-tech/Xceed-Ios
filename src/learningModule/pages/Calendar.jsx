@@ -17,6 +17,7 @@ import {
   ModalHeader,
   ModalOverlay,
   Text,
+  useColorModeValue,
   Wrap,
   WrapItem,
   Image,
@@ -123,6 +124,9 @@ function DayChip({ to, bg, subject, label, title }) {
 
 /** Everything happening on one day, for when a cell has more than it can show. */
 function DayDetailModal({ date, items, holiday, onClose }) {
+  const subtleBorderColor = useColorModeValue('gray.100', 'gray.600');
+  const hoverBg = useColorModeValue('gray.50', 'gray.600');
+
   return (
     <Modal isOpen={!!date} onClose={onClose} size="lg" scrollBehavior="inside" isCentered>
       <ModalOverlay />
@@ -136,7 +140,7 @@ function DayDetailModal({ date, items, holiday, onClose }) {
         <ModalCloseButton />
         <ModalBody pb={4}>
           {holiday && (
-            <Flex align="center" gap={3} py={2.5} borderBottomWidth="1px" borderColor="gray.100">
+            <Flex align="center" gap={3} py={2.5} borderBottomWidth="1px" borderColor={subtleBorderColor}>
               <Text>🏖️</Text>
               <Box flex="1" minW={0}>
                 <Text fontSize="sm" fontWeight="500">
@@ -160,8 +164,8 @@ function DayDetailModal({ date, items, holiday, onClose }) {
                 gap={3}
                 py={2.5}
                 borderBottomWidth="1px"
-                borderColor="gray.100"
-                _hover={item.to ? { bg: 'gray.50', textDecoration: 'none' } : undefined}
+                borderColor={subtleBorderColor}
+                _hover={item.to ? { bg: hoverBg, textDecoration: 'none' } : undefined}
               >
                 <Text>{item.icon}</Text>
                 <Box flex="1" minW={0}>
@@ -200,6 +204,12 @@ export default function Calendar() {
   const { me } = useOutletContext();
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
   const [selectedDay, setSelectedDay] = useState(null);
+
+  const cardBg = useColorModeValue('white', 'gray.700');
+  const calenderBorderColor = useColorModeValue('gray.200', 'gray.600');
+  const subtleBorderColor = useColorModeValue('gray.100', 'gray.600');
+  const hoverBg = useColorModeValue('gray.50', 'gray.600');
+  const dayBorderColor = useColorModeValue('gray.100', 'gray.600');
 
   const { data = EMPTY, isLoading: loading, error, refetch: load } = useQuery({
     queryKey: ['learning', 'calendar', startOfMonth(cursor).toISOString(), endOfMonth(cursor).toISOString()],
@@ -374,8 +384,8 @@ export default function Calendar() {
             ))}
           </Wrap>
 
-          <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={{ base: 1, md: 3 }} mb={5}>
-            <Grid templateColumns="repeat(7, 1fr)" gap={{ base: 0.5, md: 1 }}>
+          <Box bg={cardBg} borderWidth="1px" borderColor={calenderBorderColor} borderRadius="lg" p={3} mb={5} overflowX="auto">
+            <Grid templateColumns="repeat(7, minmax(90px, 1fr))" gap={1} minW="640px">
               {WEEKDAYS.map((day) => (
                 <Text key={day} fontSize={{ base: '0.55rem', md: 'xs' }} fontWeight="600" color="gray.500" textAlign="center" py={1}>
                   {day}
@@ -388,15 +398,15 @@ export default function Calendar() {
                 const holiday = holidayByDay.get(key);
                 const isToday = sameDay(date, today);
 
-                let borderColor = 'gray.100';
-                let bg = 'white';
+                let cellBorderColor = dayBorderColor;
+                let bg = cardBg;
                 if (holiday) {
-                  borderColor = 'blue.200';
-                  bg = 'blue.50';
+                  cellBorderColor = 'red.200';
+                  bg = 'red.50';
                 }
                 if (isToday) {
-                  borderColor = 'blue.800';
-                  bg = '#2c5f99';
+                  cellBorderColor = 'blue.400';
+                  bg = holiday ? 'red.50' : 'blue.50';
                 }
 
                 const openable = dayItems.length > 0 || !!holiday;
@@ -409,7 +419,7 @@ export default function Calendar() {
                     minW={0}
                     overflow="hidden"
                     borderWidth="1px"
-                    borderColor={borderColor}
+                    borderColor={cellBorderColor}
                     bg={bg}
                     borderRadius="md"
                     p={{ base: 1, md: 1.5 }}
@@ -501,8 +511,8 @@ export default function Calendar() {
                     gap={3}
                     py={2.5}
                     borderBottomWidth="1px"
-                    borderColor="gray.100"
-                    _hover={{ bg: 'gray.50', textDecoration: 'none' }}
+                    borderColor={subtleBorderColor}
+                    _hover={{ bg: hoverBg, textDecoration: 'none' }}
                   >
                     <Text>{meta.icon}</Text>
                     <Box flex="1" minW={0}>
@@ -546,8 +556,8 @@ export default function Calendar() {
                     gap={3}
                     py={2.5}
                     borderBottomWidth="1px"
-                    borderColor="gray.100"
-                    _hover={{ bg: 'gray.50', textDecoration: 'none' }}
+                    borderColor={subtleBorderColor}
+                    _hover={{ bg: hoverBg, textDecoration: 'none' }}
                   >
                     <Text>🧠</Text>
                     <Box flex="1" minW={0}>
@@ -596,8 +606,8 @@ export default function Calendar() {
                       gap={3}
                       py={2.5}
                       borderBottomWidth="1px"
-                      borderColor="gray.100"
-                      _hover={reportPath ? { bg: 'gray.50', textDecoration: 'none' } : undefined}
+                      borderColor={subtleBorderColor}
+                      _hover={reportPath ? { bg: hoverBg, textDecoration: 'none' } : undefined}
                     >
                       <Text>⚡</Text>
                       <Box flex="1" minW={0}>
@@ -635,7 +645,7 @@ export default function Calendar() {
                 <EmptyState icon="🏖️" title="No holidays configured for this month" />
               ) : (
                 data.nonWorkingDays.map((day) => (
-                  <Flex key={day.date} align="center" gap={3} py={2.5} borderBottomWidth="1px" borderColor="gray.100">
+                  <Flex key={day.date} align="center" gap={3} py={2.5} borderBottomWidth="1px" borderColor={subtleBorderColor}>
                     <Text>🏖️</Text>
                     <Box flex="1" minW={0}>
                       <Text fontSize="sm" fontWeight="500" noOfLines={1}>

@@ -407,7 +407,7 @@ export default function ShortPlay() {
           <TitleCard state={state} cardBg={cardBg} />
         ) : slide && !slide.pending ? (
           <Box bg={cardBg} borderWidth="1px" borderRadius="xl" p={5}>
-            <Box fontSize="lg" fontWeight="700" mb={4}>
+            <Box fontSize={{ base: 'xl', md: '2xl' }} fontWeight="700" mb={4}>
               <RichText>{slide.question}</RichText>
             </Box>
 

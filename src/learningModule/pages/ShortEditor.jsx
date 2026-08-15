@@ -723,6 +723,12 @@ export default function ShortEditor() {
               ['allowChangeAnswer', 'Allow changing an answer', 'While the slide is still open.'],
               ['allowLateJoin', 'Allow joining mid-deck', 'Off means only slide 1 accepts new joiners.'],
               ['autoRevealOnClose', 'Reveal the answer when I close a slide', ''],
+              [
+                'emailOnStart',
+                'Email the class when I start it',
+                'The join code goes out by mail as well as in-app. Turn it off for a rehearsal, or when the room is already in front of you.',
+                true,
+              ],
               ['graded', 'Send scores to the gradebook', 'Creates classwork when the session ends.'],
             ].map(([key, label, hint, defaultOn]) => (
               <FormControl key={key} display="flex" alignItems="flex-start" gap={3}>

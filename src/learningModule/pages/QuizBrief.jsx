@@ -475,15 +475,29 @@ export default function QuizBrief() {
         )}
 
         <Flex gap={3} align="center" wrap="wrap">
-          <Button
-            size="lg"
-            colorScheme="purple"
-            onClick={start}
-            isLoading={starting}
-            isDisabled={!canStart}
-          >
-            {brief.hasInProgress ? 'Continue attempt' : 'Start test'}
-          </Button>
+          {!attemptUsed ? (
+            <Button
+              size="lg"
+              colorScheme="purple"
+              onClick={start}
+              isLoading={starting}
+              isDisabled={!canStart}
+            >
+              {brief.hasInProgress ? 'Continue attempt' : 'Start test'}
+            </Button>
+          ) : brief.lastAttemptId && (brief.resultsReleased || !brief.resultsPending) ? (
+            <Button
+              size="lg"
+              colorScheme="purple"
+              onClick={() => navigate(`/learning/class/${classId}/quiz/${quizId}/attempt/${brief.lastAttemptId}`)}
+            >
+              Review submission
+            </Button>
+          ) : (
+            <Button size="lg" colorScheme="orange" variant="outline" isDisabled>
+              🔒 Results pending
+            </Button>
+          )}
           {isTeacher && <Badge colorScheme="blue">Enrolled students only</Badge>}
           {!canStart && !isTeacher && !mobileBlocked && attemptUsed && !brief.hasInProgress && (
             <Badge colorScheme="red">Already attempted — this test cannot be retaken</Badge>

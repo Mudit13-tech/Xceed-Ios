@@ -675,7 +675,11 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
             ) : (
               <Button
                 as={RouterLink}
-                to={`/learning/class/${classId}/quiz/${quiz._id}`}
+                to={
+                  quiz.attemptsUsed > 0 && quiz.lastAttemptId
+                    ? `/learning/class/${classId}/quiz/${quiz._id}/attempt/${quiz.lastAttemptId}`
+                    : `/learning/class/${classId}/quiz/${quiz._id}`
+                }
                 size="sm"
                 colorScheme={
                   isLive || start.can
@@ -692,7 +696,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
                 }
               >
                 {quiz.attemptsUsed > 0
-                  ? 'Completed'
+                  ? 'Review answers'
                   : quiz.inProgress
                     ? 'Resume test'
                     : start.can

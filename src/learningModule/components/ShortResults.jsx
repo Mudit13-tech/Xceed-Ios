@@ -377,7 +377,7 @@ export default function ShortResults({ results, size = 'md', showQuestion = fals
   return (
     <VStack align="stretch" spacing={big ? 6 : 4}>
       {showQuestion && results.question ? (
-        <Box fontSize={big ? '3xl' : 'md'} fontWeight="700">
+        <Box fontSize={big ? '3xl' : 'lg'} fontWeight="700">
           <RichText>{results.question}</RichText>
         </Box>
       ) : null}

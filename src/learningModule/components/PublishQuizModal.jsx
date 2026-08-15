@@ -145,25 +145,30 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
   // it while they are still looking at the fields.
   const cutOff = limitEntry ? startDeadline : '';
   const releaseAt = resultsMode === 'scheduled' ? resultReleaseAt : '';
+  const effectivePublishTime = publishAt ? new Date(publishAt) : new Date();
+  const publishInPast = Boolean(publishAt && new Date(publishAt) < new Date());
   const startsBeforePublished = Boolean(
-    publishAt && availableFrom && new Date(availableFrom) < new Date(publishAt),
+    availableFrom && new Date(availableFrom) < effectivePublishTime,
   );
   const closesTooEarly = Boolean(
     cutOff &&
       ((availableFrom && new Date(cutOff) < new Date(availableFrom)) ||
-        (publishAt && new Date(cutOff) < new Date(publishAt))),
+        new Date(cutOff) < effectivePublishTime),
+  );
+  const testClosesTooEarly = Boolean(
+    availableTo &&
+      ((availableFrom && new Date(availableTo) < new Date(availableFrom)) ||
+        (cutOff && new Date(availableTo) < new Date(cutOff)) ||
+        new Date(availableTo) < effectivePublishTime),
   );
   const missingCutOff = limitEntry && !startDeadline;
   const resultsBeforeClose = Boolean(
     releaseAt && availableTo && new Date(releaseAt) < new Date(availableTo),
   );
   const missingRelease = resultsMode === 'scheduled' && !resultReleaseAt;
-  // Publishing is the moment a cohort is committed to a result policy, and a
-  // default chosen by the dialog is not the teacher's answer. So the question
-  // has no pre-selected option and the button stays shut until it is answered.
-  // Saving the quiz elsewhere is unaffected — only publishing needs the answer.
   const unanswered = !resultsMode;
   const outOfOrder =
+    publishInPast ||
     startsBeforePublished ||
     closesTooEarly ||
     missingCutOff ||
@@ -246,6 +251,7 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
                 step="1"
                 title="Link goes live"
                 subtitle="When the quiz appears in the class and the link starts answering. Nothing starts yet."
+                isInvalid={publishInPast}
                 action={
                   publishAt ? (
                     <Button size="xs" variant="outline" onClick={() => setPublishAt('')}>
@@ -325,6 +331,7 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
                 step="4"
                 title="Test closes (paper ends for everyone)"
                 subtitle="After this nobody can open the paper, and any sitting still running is submitted. It is also the due date on the class stream."
+                isInvalid={testClosesTooEarly}
               >
                 <Input
                   type="datetime-local"
@@ -394,11 +401,18 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
                 )}
               </ClockRow>
 
+              {publishInPast && (
+                <Alert status="error" borderRadius="md" mt={4} fontSize="sm">
+                  <AlertIcon />
+                  Publish date cannot be in the past.
+                </Alert>
+              )}
               {startsBeforePublished && (
                 <Alert status="error" borderRadius="md" mt={4} fontSize="sm">
                   <AlertIcon />
-                  The quiz would start before it is published. Move the start time later, or publish
-                  earlier.
+                  {publishAt
+                    ? 'The quiz cannot start before it is published. Move the start time later, or publish earlier.'
+                    : 'Starting time cannot be earlier than publish time.'}
                 </Alert>
               )}
               {closesTooEarly && (
@@ -406,6 +420,12 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
                   <AlertIcon />
                   Entry would close before the quiz opens, so nobody could ever begin. Move the
                   cut-off later.
+                </Alert>
+              )}
+              {testClosesTooEarly && (
+                <Alert status="error" borderRadius="md" mt={4} fontSize="sm">
+                  <AlertIcon />
+                  Test closing time cannot be earlier than the start time or entry cut-off time.
                 </Alert>
               )}
               {missingCutOff && (

@@ -132,18 +132,30 @@ export function EmptyState({ icon = '📭', title, description, action }) {
 }
 
 export function SectionCard({ title, subtitle, action, children, ...rest }) {
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const headingColor = useColorModeValue('gray.800', 'white');
+  const secondaryTextColor = useColorModeValue('gray.500', 'gray.300');
+
   return (
-    <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={5} {...rest}>
+    <Box
+      bg={cardBg}
+      borderWidth="1px"
+      borderColor={borderColor}
+      borderRadius="lg"
+      p={5}
+      {...rest}
+    >
       {(title || action) && (
         <Flex justify="space-between" align="flex-start" mb={subtitle ? 1 : 4} gap={3}>
           <Box>
             {title && (
-              <Heading size="sm" color="gray.800">
+              <Heading size="sm" color={headingColor}>
                 {title}
               </Heading>
             )}
             {subtitle && (
-              <Text fontSize="xs" color="gray.500" mt={1}>
+              <Text fontSize="xs" color={secondaryTextColor} mt={1}>
                 {subtitle}
               </Text>
             )}

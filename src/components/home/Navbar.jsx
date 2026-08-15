@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import getEnvironment from '../../getenvironment';
 import { Text, Button, Flex } from '@chakra-ui/react';
-import { isStudentOnly } from '../../learningModule/roles';
 import { loginPathFor } from '../../authRedirect';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import lmApi from '../../learningModule/api/lmApi';
@@ -164,7 +163,7 @@ export default function Navbar() {
   // A student's whole surface is the learning module, whose own header carries
   // their name and the logout action. The platform bar links to modules they
   // cannot use, so they never see it — on any route, not just /learning.
-  if (isStudentOnly(userDetails?.user?.role)) {
+  if (location.pathname.startsWith('/learning')) {
     return null;
   }
 
