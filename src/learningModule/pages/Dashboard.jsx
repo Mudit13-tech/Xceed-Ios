@@ -524,12 +524,22 @@ export default function Dashboard() {
     queryFn: () => lmApi.listClasses('archived'),
   });
 
-  const loading = loadingClasses || loadingArchived;
-  const error = activeError || archivedError;
+  const {
+    data: achieved = [],
+    isLoading: loadingAchieved,
+    error: achievedError,
+    refetch: refetchAchieved,
+  } = useQuery({
+    queryKey: ['learning', 'classes', 'achieved'],
+    queryFn: () => lmApi.listClasses('achieved'),
+  });
+
+  const loading = loadingClasses || loadingArchived || loadingAchieved;
+  const error = activeError || archivedError || achievedError;
 
   const load = useCallback(async () => {
-    await Promise.all([refetchActive(), refetchArchived()]);
-  }, [refetchActive, refetchArchived]);
+    await Promise.all([refetchActive(), refetchArchived(), refetchAchieved()]);
+  }, [refetchActive, refetchArchived, refetchAchieved]);
 
   useEffect(() => {
     reloadOverview?.();
@@ -590,6 +600,7 @@ export default function Dashboard() {
         <Tabs colorScheme="blue" variant="soft-rounded">
           <TabList mb={4}>
             <Tab fontSize="sm">Active ({classes.length})</Tab>
+            <Tab fontSize="sm">Achieved ({achieved.length})</Tab>
             <Tab fontSize="sm">Archived ({archived.length})</Tab>
           </TabList>
           <TabPanels>
@@ -612,6 +623,39 @@ export default function Dashboard() {
               ) : (
                 <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5}>
                   {classes.map((klass) => (
+                    <ClassCard key={klass._id} klass={klass} onOpen={openClass} />
+                  ))}
+                </SimpleGrid>
+              )}
+            </TabPanel>
+            <TabPanel px={0}>
+              {achieved.length === 0 ? (
+                <EmptyState icon="🏆" title="Nothing achieved yet" description="Classes marked as achieved will show up here." />
+              ) : (
+                <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5}>
+                  {achieved.map((klass) => (
+                    <ClassCard key={klass._id} klass={klass} onOpen={openClass} />
+                  ))}
+                </SimpleGrid>
+              )}
+            </TabPanel>
+            <TabPanel px={0}>
+              {achieved.length === 0 ? (
+                <EmptyState icon="🏆" title="Nothing achieved yet" description="Classes marked as achieved will show up here." />
+              ) : (
+                <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5}>
+                  {achieved.map((klass) => (
+                    <ClassCard key={klass._id} klass={klass} onOpen={openClass} />
+                  ))}
+                </SimpleGrid>
+              )}
+            </TabPanel>
+            <TabPanel px={0}>
+              {achieved.length === 0 ? (
+                <EmptyState icon="🏆" title="Nothing achieved yet" description="Classes marked as achieved will show up here." />
+              ) : (
+                <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5}>
+                  {achieved.map((klass) => (
                     <ClassCard key={klass._id} klass={klass} onOpen={openClass} />
                   ))}
                 </SimpleGrid>
