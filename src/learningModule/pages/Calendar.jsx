@@ -17,7 +17,6 @@ import {
   ModalHeader,
   ModalOverlay,
   Text,
-  useColorModeValue,
   Wrap,
   WrapItem,
   Image,
@@ -67,12 +66,7 @@ const EMPTY = { coursework: [], quizzes: [], shorts: [], nonWorkingDays: [] };
 
 const isTeacher = (role) => role === 'teacher' || role === 'co-teacher';
 
-const LEGEND = [
-  { color: 'gray.500', label: 'Coursework' },
-  { color: 'purple.500', label: 'Quiz' },
-  { color: 'teal.500', label: 'Short' },
-  { color: 'red.200', label: 'Non-working day' },
-];
+// The legend is now dynamically generated inside the component based on the active classes.
 
 /** How many chips a day cell shows before it collapses the rest into "+N more". */
 const CHIPS_PER_CELL = 3;
@@ -124,9 +118,6 @@ function DayChip({ to, bg, subject, label, title }) {
 
 /** Everything happening on one day, for when a cell has more than it can show. */
 function DayDetailModal({ date, items, holiday, onClose }) {
-  const subtleBorderColor = useColorModeValue('gray.100', 'gray.600');
-  const hoverBg = useColorModeValue('gray.50', 'gray.600');
-
   return (
     <Modal isOpen={!!date} onClose={onClose} size="lg" scrollBehavior="inside" isCentered>
       <ModalOverlay />
@@ -140,7 +131,7 @@ function DayDetailModal({ date, items, holiday, onClose }) {
         <ModalCloseButton />
         <ModalBody pb={4}>
           {holiday && (
-            <Flex align="center" gap={3} py={2.5} borderBottomWidth="1px" borderColor={subtleBorderColor}>
+            <Flex align="center" gap={3} py={2.5} borderBottomWidth="1px" borderColor="gray.100">
               <Text>🏖️</Text>
               <Box flex="1" minW={0}>
                 <Text fontSize="sm" fontWeight="500">
@@ -164,8 +155,8 @@ function DayDetailModal({ date, items, holiday, onClose }) {
                 gap={3}
                 py={2.5}
                 borderBottomWidth="1px"
-                borderColor={subtleBorderColor}
-                _hover={item.to ? { bg: hoverBg, textDecoration: 'none' } : undefined}
+                borderColor="gray.100"
+                _hover={item.to ? { bg: 'gray.50', textDecoration: 'none' } : undefined}
               >
                 <Text>{item.icon}</Text>
                 <Box flex="1" minW={0}>
@@ -204,12 +195,6 @@ export default function Calendar() {
   const { me } = useOutletContext();
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
   const [selectedDay, setSelectedDay] = useState(null);
-
-  const cardBg = useColorModeValue('white', 'gray.700');
-  const calenderBorderColor = useColorModeValue('gray.200', 'gray.600');
-  const subtleBorderColor = useColorModeValue('gray.100', 'gray.600');
-  const hoverBg = useColorModeValue('gray.50', 'gray.600');
-  const dayBorderColor = useColorModeValue('gray.100', 'gray.600');
 
   const { data = EMPTY, isLoading: loading, error, refetch: load } = useQuery({
     queryKey: ['learning', 'calendar', startOfMonth(cursor).toISOString(), endOfMonth(cursor).toISOString()],
@@ -336,6 +321,31 @@ export default function Calendar() {
     [data.nonWorkingDays],
   );
 
+  const dynamicLegend = useMemo(() => {
+    const classMap = new Map();
+    data.coursework.forEach((item) => {
+      const subject = subjectShort(item.class);
+      if (subject) {
+        classMap.set(subject, item.class?.coverColor || 'gray.500');
+      }
+    });
+
+    const classEntries = Array.from(classMap.entries()).map(([label, color]) => ({
+      label,
+      color,
+    }));
+
+    // Sort alphabetically for consistency
+    classEntries.sort((a, b) => a.label.localeCompare(b.label));
+
+    return [
+      ...classEntries,
+      { color: 'purple.500', label: 'Quiz' },
+      { color: 'teal.500', label: 'Short' },
+      { color: 'blue.200', label: 'Non-working day' },
+    ];
+  }, [data.coursework]);
+
   const today = new Date();
   const monthLabel = cursor.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 
@@ -359,9 +369,6 @@ export default function Calendar() {
           <Button size="sm" variant="outline" onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))}>
             →
           </Button>
-          <Button size="sm" onClick={() => setCursor(startOfMonth(new Date()))}>
-            Today
-          </Button>
         </HStack>
       </Flex>
 
@@ -372,7 +379,7 @@ export default function Calendar() {
       ) : (
         <>
           <Wrap spacing={4} mb={3}>
-            {LEGEND.map((entry) => (
+            {dynamicLegend.map((entry) => (
               <WrapItem key={entry.label}>
                 <HStack spacing={2}>
                   <Box w="10px" h="10px" borderRadius="sm" bg={entry.color} />
@@ -384,7 +391,7 @@ export default function Calendar() {
             ))}
           </Wrap>
 
-          <Box bg={cardBg} borderWidth="1px" borderColor={calenderBorderColor} borderRadius="lg" p={3} mb={5} overflowX="auto">
+          <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={3} mb={5} overflowX="auto">
             <Grid templateColumns="repeat(7, minmax(90px, 1fr))" gap={1} minW="640px">
               {WEEKDAYS.map((day) => (
                 <Text key={day} fontSize={{ base: '0.55rem', md: 'xs' }} fontWeight="600" color="gray.500" textAlign="center" py={1}>
@@ -398,19 +405,18 @@ export default function Calendar() {
                 const holiday = holidayByDay.get(key);
                 const isToday = sameDay(date, today);
 
-                let cellBorderColor = dayBorderColor;
-                let bg = cardBg;
+                let borderColor = 'gray.100';
+                let bg = 'white';
                 if (holiday) {
-                  cellBorderColor = 'red.200';
+                  borderColor = 'red.200';
                   bg = 'red.50';
                 }
                 if (isToday) {
-                  cellBorderColor = 'blue.400';
+                  borderColor = 'blue.400';
                   bg = holiday ? 'red.50' : 'blue.50';
                 }
 
-                const openable = dayItems.length > 0 || !!holiday;
-                const open = () => openable && setSelectedDay(date);
+                const open = () => setSelectedDay(date);
 
                 return (
                   <Box
@@ -419,28 +425,22 @@ export default function Calendar() {
                     minW={0}
                     overflow="hidden"
                     borderWidth="1px"
-                    borderColor={cellBorderColor}
+                    borderColor={borderColor}
                     bg={bg}
                     borderRadius="md"
                     p={{ base: 1, md: 1.5 }}
-                    // Any day with something on it opens the full list — the
-                    // cell only ever has room for the first few chips.
-                    {...(openable
-                      ? {
-                          role: 'button',
-                          tabIndex: 0,
-                          cursor: 'pointer',
-                          onClick: open,
-                          onKeyDown: (event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault();
-                              open();
-                            }
-                          },
-                          'aria-label': `${formatDate(date)} — ${dayItems.length} activities`,
-                          _hover: isToday ? { borderColor: 'blue.500', bg: 'blue.700' } : { borderColor: 'blue.300' },
-                        }
-                      : {})}
+                    role="button"
+                    tabIndex={0}
+                    cursor="pointer"
+                    onClick={open}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        open();
+                      }
+                    }}
+                    aria-label={`${formatDate(date)} — ${dayItems.length} activities`}
+                    _hover={isToday ? { borderColor: 'blue.500', bg: 'blue.700' } : { borderColor: 'blue.300' }}
                   >
                     <Flex align="center" justify="space-between" gap={1}>
                       <HStack gap={1} align="center" wrap="wrap">
@@ -472,7 +472,6 @@ export default function Calendar() {
                     {dayItems.slice(0, CHIPS_PER_CELL).map((chip) => (
                       <DayChip
                         key={chip.key}
-                        to={chip.to}
                         bg={chip.bg}
                         subject={chip.subject}
                         label={chip.label}
@@ -511,8 +510,8 @@ export default function Calendar() {
                     gap={3}
                     py={2.5}
                     borderBottomWidth="1px"
-                    borderColor={subtleBorderColor}
-                    _hover={{ bg: hoverBg, textDecoration: 'none' }}
+                    borderColor="gray.100"
+                    _hover={{ bg: 'gray.50', textDecoration: 'none' }}
                   >
                     <Text>{meta.icon}</Text>
                     <Box flex="1" minW={0}>
@@ -556,8 +555,8 @@ export default function Calendar() {
                     gap={3}
                     py={2.5}
                     borderBottomWidth="1px"
-                    borderColor={subtleBorderColor}
-                    _hover={{ bg: hoverBg, textDecoration: 'none' }}
+                    borderColor="gray.100"
+                    _hover={{ bg: 'gray.50', textDecoration: 'none' }}
                   >
                     <Text>🧠</Text>
                     <Box flex="1" minW={0}>
@@ -606,8 +605,8 @@ export default function Calendar() {
                       gap={3}
                       py={2.5}
                       borderBottomWidth="1px"
-                      borderColor={subtleBorderColor}
-                      _hover={reportPath ? { bg: hoverBg, textDecoration: 'none' } : undefined}
+                      borderColor="gray.100"
+                      _hover={reportPath ? { bg: 'gray.50', textDecoration: 'none' } : undefined}
                     >
                       <Text>⚡</Text>
                       <Box flex="1" minW={0}>
@@ -645,7 +644,7 @@ export default function Calendar() {
                 <EmptyState icon="🏖️" title="No holidays configured for this month" />
               ) : (
                 data.nonWorkingDays.map((day) => (
-                  <Flex key={day.date} align="center" gap={3} py={2.5} borderBottomWidth="1px" borderColor={subtleBorderColor}>
+                  <Flex key={day.date} align="center" gap={3} py={2.5} borderBottomWidth="1px" borderColor="gray.100">
                     <Text>🏖️</Text>
                     <Box flex="1" minW={0}>
                       <Text fontSize="sm" fontWeight="500" noOfLines={1}>

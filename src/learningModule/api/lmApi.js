@@ -187,6 +187,7 @@ const lmApi = {
   getClass: (classId) => request(`/classes/${classId}`),
   updateClass: (classId, body) => request(`/classes/${classId}`, { method: 'PATCH', body }),
   archiveClass: (classId, archive) => request(`/classes/${classId}/archive`, { method: 'POST', body: { archive } }),
+  achieveClass: (classId, achieve) => request(`/classes/${classId}/achieve`, { method: 'POST', body: { achieve } }),
   regenerateCode: (classId) => request(`/classes/${classId}/code/regenerate`, { method: 'POST', body: {} }),
   deleteClass: (classId) => request(`/classes/${classId}`, { method: 'DELETE' }),
   joinByCode: (code) => request('/join', { method: 'POST', body: { code } }),

@@ -147,6 +147,16 @@ export default function ClassSettings() {
       toast({ status: 'error', title: error.message });
     }
   };
+  const achieve = async () => {
+  const achieving = klass.status !== 'achieved';
+  try {
+    await lmApi.achieveClass(classId, achieving);
+    toast({ status: 'success', title: achieving ? 'Class marked as achieved' : 'Class restored' });
+    reloadClass();
+  } catch (error) {
+    toast({ status: 'error', title: error.message });
+  }
+};
 
   const destroy = async () => {
     // eslint-disable-next-line no-alert
@@ -300,6 +310,20 @@ export default function ClassSettings() {
       </Flex>
 
       <SectionCard title="Danger zone" borderColor="red.200">
+        <Flex justify="space-between" align="center" gap={3} wrap="wrap" py={2}>
+          <Box>
+            <Text fontSize="sm" fontWeight="600">
+              {klass.status === 'achieved' ? 'Unmark as achieved' : 'Mark as achieved'}
+            </Text>
+            <Text fontSize="xs" color="gray.500">
+              Signals the class has been completed successfully. Stays readable, drops out of the main list.
+            </Text>
+          </Box>
+          <Button size="sm" variant="outline" colorScheme="green" onClick={achieve}>
+            {klass.status === 'achieved' ? 'Unmark' : 'Achieve'}
+          </Button>
+        </Flex>
+        <Divider my={3} />
         <Flex justify="space-between" align="center" gap={3} wrap="wrap" py={2}>
           <Box>
             <Text fontSize="sm" fontWeight="600">
