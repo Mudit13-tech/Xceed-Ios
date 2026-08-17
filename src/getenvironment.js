@@ -9,9 +9,7 @@ function getEnvironment() {
     return nitjServer;
   } else if (currentURL.includes('localhost') || currentURL.includes('127.0.0.1')) {
     return development;
-  } else if (currentURL.includes('nitjtt')) {
-    return production;
-  } else {
+  }else {
     // Default to a specific environment or handle other cases
     return nitjServer;
   }
