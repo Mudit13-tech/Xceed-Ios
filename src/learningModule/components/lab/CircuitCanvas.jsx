@@ -46,7 +46,13 @@ export default function CircuitCanvas({
   readOnly = false,
   selectedId = null,
   onSelect = () => {},
-  /** Instrument readings, keyed by component id, drawn beside their meters. */
+  /**
+   * Readings keyed by component id, drawn beside the part they belong to.
+   *
+   * A string, or several — a meter has one number and a resistor has three
+   * (volts, amps, watts), and stacking them over the component is what keeps a
+   * student from having to match a table of ids against a diagram.
+   */
   readings = {},
   height = 460,
 }) {
@@ -110,6 +116,10 @@ export default function CircuitCanvas({
   const startDrag = (event, component) => {
     if (readOnly) return;
     event.stopPropagation();
+    // Grabbing a component's body is not aiming at a terminal, so a wire that was
+    // half-drawn is abandoned here rather than left trailing off the pointer while
+    // the student drags something else around.
+    setPending(null);
     const at = pointAt(event);
     onSelect(component.id);
     setDrag({ id: component.id, dx: component.x - at.x, dy: component.y - at.y });
@@ -254,7 +264,13 @@ export default function CircuitCanvas({
           const symbol = symbolFor(component.type);
           const part = byType.get(component.type);
           const selected = component.id === selectedId;
-          const reading = readings[component.id];
+          // One reading or several, handled the same way from here on.
+          const lines = [].concat(readings[component.id] ?? []).filter(Boolean);
+          // Stacked upwards from just above the symbol, so the *first* line —
+          // the voltage — always sits nearest the component it belongs to and
+          // the block grows away from the circuit rather than into it.
+          const lineHeight = 13;
+          const readingTop = (component.y || 0) - symbol.box[1] / 2 - 8 - (lines.length - 1) * lineHeight;
 
           return (
             <g key={component.id}>
@@ -279,36 +295,6 @@ export default function CircuitCanvas({
                 {symbol.draw(component)}
               </g>
 
-              {/* Terminals are drawn *outside* the rotation group, at their
-                  already-rotated positions, so the hit area is a circle rather
-                  than a rotated ellipse and the click target does not move
-                  around as a component is turned. */}
-              {symbol.pins.map((_, pin) => {
-                const at = pinPosition(component, pin);
-                const isPending =
-                  pending?.from.component === component.id && pending.from.pin === pin;
-                const isHover = hoverPin === `${component.id}:${pin}`;
-                return (
-                  <circle
-                    key={pin}
-                    cx={at.x}
-                    cy={at.y}
-                    r={isHover || isPending ? PIN_RADIUS + 2 : PIN_RADIUS - 1}
-                    fill={isPending ? '#3182CE' : isHover ? '#63B3ED' : '#A0AEC0'}
-                    stroke="white"
-                    strokeWidth={1.5}
-                    style={{ cursor: readOnly ? 'default' : 'crosshair' }}
-                    onPointerEnter={() => setHoverPin(`${component.id}:${pin}`)}
-                    onPointerLeave={() => setHoverPin(null)}
-                    onPointerDown={(event) => clickPin(event, component, pin)}
-                  >
-                    {/* The terminal's name, so a student can tell a wattmeter's
-                        current coil from its pressure coil without guessing. */}
-                    <title>{`${component.label || component.id} · ${part?.pinNames?.[pin] ?? pin}`}</title>
-                  </circle>
-                );
-              })}
-
               <text
                 x={component.x}
                 y={(component.y || 0) + symbol.box[1] / 2 + 16}
@@ -320,22 +306,82 @@ export default function CircuitCanvas({
                 {part?.fields?.length ? ` · ${primaryValue(component, part.fields)}` : ''}
               </text>
 
-              {/* A live reading sits with its instrument. Putting the meter's
-                  value anywhere else would make the student match two lists. */}
-              {reading && (
-                <text
-                  x={component.x}
-                  y={(component.y || 0) - symbol.box[1] / 2 - 8}
-                  textAnchor="middle"
-                  fontSize={12}
-                  fontWeight="700"
-                  fill="#2F855A"
-                >
-                  {reading}
-                </text>
+              {/* A live reading sits with the part it was measured on. Putting
+                  it anywhere else would make the student match two lists. */}
+              {lines.length > 0 && (
+                <g pointerEvents="none">
+                  {/* A pale plate behind the numbers. Wires cross this area
+                      constantly and green text on a blue line is unreadable. */}
+                  <rect
+                    x={(component.x || 0) - 44}
+                    y={readingTop - 10}
+                    width={88}
+                    height={lines.length * lineHeight + 4}
+                    rx={3}
+                    fill="#F0FFF4"
+                    fillOpacity={0.92}
+                    stroke="#C6F6D5"
+                  />
+                  {lines.map((line, index) => (
+                    <text
+                      key={line}
+                      x={component.x}
+                      y={readingTop + index * lineHeight}
+                      textAnchor="middle"
+                      fontSize={11}
+                      fontWeight="700"
+                      fill="#2F855A"
+                    >
+                      {line}
+                    </text>
+                  ))}
+                </g>
               )}
             </g>
           );
+        })}
+
+        {/* Every terminal, in a pass of its own after every component body.
+            ────────────────────────────────────────────────────────────────
+            This ordering is the difference between a bench that wires up and one
+            that does not. SVG has no z-index — later elements are simply drawn on
+            top — so with the terminals inside each component's group, a part
+            dropped near an existing one covers that one's terminals with its own
+            body. The click then lands on the *body*, which starts a drag, and the
+            student watches a component slide around while trying to attach a
+            wire to it. Nothing is broken enough to produce an error; the wire
+            just never appears, which reads as "the components will not connect".
+
+            Terminals are also outside the rotation transform, at their
+            already-rotated positions, so the hit area stays a circle rather than
+            becoming a rotated ellipse that moves as a part is turned. */}
+        {components.map((component) => {
+          const symbol = symbolFor(component.type);
+          const part = byType.get(component.type);
+          return symbol.pins.map((_, pin) => {
+            const at = pinPosition(component, pin);
+            const isPending = pending?.from.component === component.id && pending.from.pin === pin;
+            const isHover = hoverPin === `${component.id}:${pin}`;
+            return (
+              <circle
+                key={`${component.id}:${pin}`}
+                cx={at.x}
+                cy={at.y}
+                r={isHover || isPending ? PIN_RADIUS + 2 : PIN_RADIUS - 1}
+                fill={isPending ? '#3182CE' : isHover ? '#63B3ED' : '#A0AEC0'}
+                stroke="white"
+                strokeWidth={1.5}
+                style={{ cursor: readOnly ? 'default' : 'crosshair' }}
+                onPointerEnter={() => setHoverPin(`${component.id}:${pin}`)}
+                onPointerLeave={() => setHoverPin(null)}
+                onPointerDown={(event) => clickPin(event, component, pin)}
+              >
+                {/* The terminal's name, so a student can tell a wattmeter's
+                    current coil from its pressure coil without guessing. */}
+                <title>{`${component.label || component.id} · ${part?.pinNames?.[pin] ?? pin}`}</title>
+              </circle>
+            );
+          });
         })}
       </Box>
 

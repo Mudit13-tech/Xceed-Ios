@@ -391,8 +391,8 @@ export default function Calendar() {
             ))}
           </Wrap>
 
-          <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={3} mb={5} overflowX="auto">
-            <Grid templateColumns="repeat(7, minmax(90px, 1fr))" gap={1} minW="640px">
+          <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={{ base: 1, md: 3 }} mb={5}>
+            <Grid templateColumns="repeat(7, 1fr)" gap={{ base: 0.5, md: 1 }}>
               {WEEKDAYS.map((day) => (
                 <Text key={day} fontSize={{ base: '0.55rem', md: 'xs' }} fontWeight="600" color="gray.500" textAlign="center" py={1}>
                   {day}
@@ -408,12 +408,12 @@ export default function Calendar() {
                 let borderColor = 'gray.100';
                 let bg = 'white';
                 if (holiday) {
-                  borderColor = 'red.200';
-                  bg = 'red.50';
+                  borderColor = 'blue.200';
+                  bg = 'blue.50';
                 }
                 if (isToday) {
-                  borderColor = 'blue.400';
-                  bg = holiday ? 'red.50' : 'blue.50';
+                  borderColor = 'blue.800';
+                  bg = '#2c5f99';
                 }
 
                 const open = () => setSelectedDay(date);

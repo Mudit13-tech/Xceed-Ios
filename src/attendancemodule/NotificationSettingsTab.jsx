@@ -161,6 +161,15 @@ export default function NotificationSettingsTab() {
   const [savingFacultySummary, setSavingFacultySummary] = useState(false);
   const [sampleEmail, setSampleEmail] = useState('');
   const [sendingSample, setSendingSample] = useState(false);
+  const [studentConfig, setStudentConfig] = useState({
+    enabled: false,
+    onPresent: true,
+    onAbsent: true,
+    allowDispute: true,
+  });
+  const [savingStudent, setSavingStudent] = useState(false);
+  const [studentSampleEmail, setStudentSampleEmail] = useState('');
+  const [sendingStudentSample, setSendingStudentSample] = useState(false);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('admin');
@@ -181,6 +190,7 @@ export default function NotificationSettingsTab() {
         setRecipients(d.settings?.recipients || []);
         if (d.settings?.dailySummaryConfig) setDailySummaryConfig(d.settings.dailySummaryConfig);
         if (d.settings?.facultySummaryConfig) setFacultySummaryConfig(d.settings.facultySummaryConfig);
+        if (d.settings?.studentAttendanceConfig) setStudentConfig(d.settings.studentAttendanceConfig);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -282,6 +292,57 @@ export default function NotificationSettingsTab() {
       showMsg('Error: ' + err.message, 'error');
     } finally {
       setSavingFacultySummary(false);
+    }
+  };
+
+  const handleStudentConfigChange = async (patch) => {
+    const previous = studentConfig;
+    const next = { ...studentConfig, ...patch };
+    setStudentConfig(next);
+    setSavingStudent(true);
+    try {
+      const res = await fetch(`${BASE}/student-attendance`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update');
+      setStudentConfig(data.settings.studentAttendanceConfig);
+    } catch (err) {
+      // Unlike the other cards here, a rejected change must not be left showing
+      // as applied — the server refuses "on with no statuses", and a switch that
+      // silently keeps a state the server never stored is how people end up
+      // believing mail is going out when it is not.
+      setStudentConfig(previous);
+      showMsg('Error: ' + err.message, 'error');
+    } finally {
+      setSavingStudent(false);
+    }
+  };
+
+  const handleSendStudentSample = async () => {
+    const trimmed = studentSampleEmail.trim();
+    if (!trimmed) {
+      showMsg('Enter an email address for the sample.', 'error');
+      return;
+    }
+    setSendingStudentSample(true);
+    try {
+      const res = await fetch(`${BASE}/student-attendance/sample`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmed }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send');
+      showMsg(data.message || `Sample sent to ${trimmed}`);
+    } catch (err) {
+      showMsg('Error: ' + err.message, 'error');
+    } finally {
+      setSendingStudentSample(false);
     }
   };
 
@@ -904,6 +965,146 @@ export default function NotificationSettingsTab() {
               The sample uses the most recent real attendance report, and does not count as that
               period&apos;s email to the faculty.
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* Per-student "you were marked Present/Absent" mail. The highest-volume
+          mail this system sends — one message per student per period — so the
+          card leads with that fact rather than burying it. */}
+      <div className="ns-card">
+        <div className="ns-card-header">
+          <span className="ns-section-title">Student attendance notification</span>
+        </div>
+        <div className="ns-card-body">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: studentConfig.enabled ? 18 : 0,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: T.text, marginBottom: 2 }}>
+                Email each student when their attendance is marked
+              </div>
+              <div style={{ fontSize: 12, color: T.textMuted }}>
+                Sent to the student&apos;s registered email the moment a period is finalised, with a
+                link to raise a dispute. One message per student per class — in-app and push
+                notifications are unaffected by this switch.
+              </div>
+            </div>
+            <div
+              onClick={() =>
+                !savingStudent && handleStudentConfigChange({ enabled: !studentConfig.enabled })
+              }
+              title={studentConfig.enabled ? 'Click to disable' : 'Click to enable'}
+              role="switch"
+              aria-checked={studentConfig.enabled}
+              aria-label="Email each student when their attendance is marked"
+              style={{
+                width: 46,
+                height: 26,
+                borderRadius: 26,
+                cursor: savingStudent ? 'not-allowed' : 'pointer',
+                opacity: savingStudent ? 0.6 : 1,
+                background: studentConfig.enabled ? T.accent : '#d1d5db',
+                transition: 'background .2s',
+                position: 'relative',
+                flexShrink: 0,
+              }}
+            >
+              <span
+                style={{
+                  position: 'absolute',
+                  height: 20,
+                  width: 20,
+                  left: studentConfig.enabled ? 23 : 3,
+                  top: 3,
+                  background: '#fff',
+                  borderRadius: '50%',
+                  transition: 'left .2s',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                }}
+              />
+            </div>
+          </div>
+
+          {studentConfig.enabled && (
+            <>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+                {[
+                  { key: 'onPresent', label: 'Notify on Present' },
+                  { key: 'onAbsent', label: 'Notify on Absent' },
+                  { key: 'allowDispute', label: 'Offer "Raise a dispute" link' },
+                ].map(({ key, label }) => (
+                  <label
+                    key={key}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 14px',
+                      borderRadius: 8,
+                      border: `1px solid ${studentConfig[key] ? T.accent : T.border}`,
+                      background: studentConfig[key] ? T.accentDim : 'transparent',
+                      cursor: savingStudent ? 'not-allowed' : 'pointer',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: studentConfig[key] ? T.accent : T.textMuted,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!studentConfig[key]}
+                      disabled={savingStudent}
+                      onChange={() => handleStudentConfigChange({ [key]: !studentConfig[key] })}
+                      style={{ margin: 0 }}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+
+              <div className="ns-add-row">
+                <div style={{ flex: 2, minWidth: 220 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>
+                    Send a sample to
+                  </label>
+                  <input
+                    type="email"
+                    className="native-input"
+                    value={studentSampleEmail}
+                    onChange={(e) => setStudentSampleEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && !sendingStudentSample && handleSendStudentSample()}
+                    placeholder="you@example.com"
+                    disabled={sendingStudentSample}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <button
+                    type="button"
+                    className="native-btn"
+                    onClick={handleSendStudentSample}
+                    disabled={sendingStudentSample || !studentSampleEmail.trim()}
+                    style={{
+                      background: T.accent,
+                      color: '#fff',
+                      opacity: sendingStudentSample || !studentSampleEmail.trim() ? 0.55 : 1,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {sendingStudentSample ? 'Sending…' : 'Send sample'}
+                  </button>
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: T.textMuted, marginTop: 10, lineHeight: 1.6 }}>
+                The sample uses the most recent real attendance report and goes only to the address
+                above — no student receives it.
+              </div>
+            </>
           )}
         </div>
       </div>

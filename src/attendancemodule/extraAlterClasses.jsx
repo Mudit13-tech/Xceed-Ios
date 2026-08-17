@@ -22,6 +22,7 @@ import {
   AlterClassForm,
   SCHEDULER_RESPONSIVE_CSS,
 } from './SchedulerPage';
+import { extraClassConflictDialogOptions } from './extraClassConflictDialog';
 
 // ── Shared data + action layer ──────────────────────────────────────────────
 // Holds the acquisition config plus the add/delete handlers for extra classes
@@ -40,9 +41,12 @@ function useAcquisitionExtras() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Promise-based replacement for window.confirm(); resolves 'cancel' | 'changeRoom' | 'replace'.
-  const askConfirm = (message, isRegular) =>
-    new Promise((resolve) => setConfirmDialog({ message, isRegular, resolve }));
+  // Promise-based replacement for window.confirm(); the options determine
+  // whether changing room or replacing is safe for this conflict type.
+  const askConfirm = (message, options = {}) =>
+    new Promise((resolve) =>
+      setConfirmDialog({ message, ...options, resolve }),
+    );
 
   const closeConfirm = (choice) => {
     confirmDialog?.resolve(choice);
@@ -92,10 +96,9 @@ function useAcquisitionExtras() {
     let data = await res.json();
 
     if (res.status === 409 && data.conflict) {
-      const isRegular = data.type === 'regular_timetable';
       const choice = await askConfirm(
         data.message || 'This slot is already booked.',
-        isRegular,
+        extraClassConflictDialogOptions(data.type),
       );
 
       if (choice === 'cancel') {
@@ -115,17 +118,28 @@ function useAcquisitionExtras() {
       data = await res.json();
     }
 
-    if (data.error) {
-      showToast(data.error, 'error');
+    if (!res.ok || !Array.isArray(data)) {
+      showToast(data.error || data.message || 'Extra class could not be added', 'error');
       return { success: false };
     }
     setConfig((p) => ({ ...p, extraClasses: data }));
-    const replaced = data.find?.((ec) => ec.replacedRegular);
+    const added = [...data].reverse().find(
+      (ec) =>
+        ec.active &&
+        ec.date === form.date &&
+        ec.periodKey === form.periodKey &&
+        ec.room?.trim().toLowerCase() === form.room.trim().toLowerCase(),
+    );
+    const replaced = added?.replacedRegular;
+    const notification = added?.facultyNotification;
+    const notificationFailed = !!notification?.lastError;
     showToast(
-      replaced
-        ? `Extra class added for "${form.subject}" — this replaced the regular timetable slot in ${form.room}`
-        : `Extra class added for "${form.subject}" in ${form.room}`,
-      replaced ? 'warning' : 'success',
+      notificationFailed
+        ? `Extra class added, but the faculty email was not sent: ${notification.lastError}`
+        : replaced
+          ? `Extra class added for "${form.subject}" — this replaced the regular timetable slot in ${form.room}`
+          : `Extra class added for "${form.subject}" in ${form.room}${notification?.sentAt ? ` — ${form.faculty} notified` : ''}`,
+      replaced || notificationFailed ? 'warning' : 'success',
     );
     return { success: true };
   };
@@ -150,7 +164,7 @@ function useAcquisitionExtras() {
         return { success: false };
       }
       // duplicate_slot — same replace-confirm pattern as extra classes
-      const choice = await askConfirm(data.message, false);
+      const choice = await askConfirm(data.message, { allowReplace: true });
       if (choice !== 'replace') {
         showToast('Alteration not added', 'error');
         return { success: false };
@@ -159,8 +173,8 @@ function useAcquisitionExtras() {
       data = await res.json();
     }
 
-    if (data.error) {
-      showToast(data.error, 'error');
+    if (!res.ok || !Array.isArray(data)) {
+      showToast(data.error || data.message || 'Alteration could not be added', 'error');
       return { success: false };
     }
     setConfig((p) => ({ ...p, extraClasses: data }));
@@ -267,6 +281,11 @@ export function ExtraClassPage() {
         open={!!confirmDialog}
         message={confirmDialog?.message}
         isRegular={confirmDialog?.isRegular}
+        title={confirmDialog?.title}
+        explanation={confirmDialog?.explanation}
+        allowChangeRoom={confirmDialog?.allowChangeRoom}
+        allowReplace={confirmDialog?.allowReplace}
+        cancelLabel={confirmDialog?.cancelLabel}
         onCancel={() => closeConfirm('cancel')}
         onChangeRoom={() => closeConfirm('changeRoom')}
         onReplace={() => closeConfirm('replace')}
@@ -489,6 +508,11 @@ export function AlterClassPage() {
         open={!!confirmDialog}
         message={confirmDialog?.message}
         isRegular={confirmDialog?.isRegular}
+        title={confirmDialog?.title}
+        explanation={confirmDialog?.explanation}
+        allowChangeRoom={confirmDialog?.allowChangeRoom}
+        allowReplace={confirmDialog?.allowReplace}
+        cancelLabel={confirmDialog?.cancelLabel}
         onCancel={() => closeConfirm('cancel')}
         onChangeRoom={() => closeConfirm('changeRoom')}
         onReplace={() => closeConfirm('replace')}

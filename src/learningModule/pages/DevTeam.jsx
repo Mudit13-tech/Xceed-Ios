@@ -1,6 +1,12 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogOverlay,
   AlertIcon,
   Badge,
   Box,
@@ -8,6 +14,7 @@ import {
   Divider,
   Flex,
   FormControl,
+  FormErrorMessage,
   FormHelperText,
   FormLabel,
   HStack,
@@ -30,6 +37,7 @@ import {
   Textarea,
   VStack,
   useColorModeValue,
+  useDisclosure,
   useToast,
 } from '@chakra-ui/react';
 
@@ -146,6 +154,39 @@ function RatingRow({ label, hint, value, onChange }) {
 }
 
 /**
+ * The same two link rules the server applies, so they are answered here rather
+ * than by a 400 after the pitch has been written. Kept deliberately in step with
+ * `parseHttpUrl`/`isGithubUrl` in devApplicationController.js — the server is
+ * the one that decides; this only spares somebody the round trip.
+ */
+function httpUrl(value) {
+  let url;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  // `https://github` parses but resolves nowhere.
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(url.hostname)) return null;
+  return url;
+}
+
+/** Checked on the host: a path like /my-github-clone is not a GitHub profile. */
+function githubProblem(value) {
+  if (!value.trim()) return null;
+  const url = httpUrl(value);
+  if (!url) return 'Give the full link, starting with https://';
+  if (!/(^|\.)github\.com$/i.test(url.hostname)) return 'This needs to be a github.com link.';
+  return null;
+}
+
+function deployedProblem(value) {
+  if (!value.trim()) return null;
+  return httpUrl(value) ? null : 'Give the full link, starting with https:// — or leave it empty.';
+}
+
+/**
  * The honesty prompts.
  *
  * Shown as the answer is given, not on submit, so it reads as something to
@@ -169,9 +210,116 @@ function warningsFor(form) {
   return list;
 }
 
+/**
+ * The last word before it goes.
+ *
+ * Everything here is already on the form somewhere, and it is repeated because
+ * the moment somebody is about to spend their one application for the semester
+ * is the moment they will actually read it. Two things are said here and nowhere
+ * else: that a rejection is on the record and is read next time, and that a
+ * first year who has not finished two semesters is almost certainly applying too
+ * early.
+ *
+ * It does not block anybody. Applying anyway is a real answer, and the admin
+ * gets to see that it was made with all of this in front of them.
+ */
+function ConfirmSend({ isOpen, onClose, onConfirm, saving, session, warnings }) {
+  const cancelRef = useRef(null);
+
+  return (
+    <AlertDialog isOpen={isOpen} onClose={onClose} leastDestructiveRef={cancelRef} isCentered size="lg">
+      <AlertDialogOverlay>
+        <AlertDialogContent mx={4}>
+          <AlertDialogHeader fontSize="lg" fontWeight="700">
+            Before you send this
+          </AlertDialogHeader>
+
+          <AlertDialogBody>
+            <VStack align="stretch" spacing={3} fontSize="sm">
+              <Alert status="warning" borderRadius="md" fontSize="sm" alignItems="flex-start">
+                <AlertIcon />
+                <Box>
+                  <Text fontWeight="700">This is your one application for {session}.</Text>
+                  <Text>
+                    Whatever the answer, the next chance is next semester. There is no second try
+                    and no editing it once it is sent.
+                  </Text>
+                </Box>
+              </Alert>
+
+              <Box>
+                <Text fontWeight="700" mb={1}>
+                  A rejection stays on your record.
+                </Text>
+                <Text>
+                  Every application you have made is visible to whoever reads the next one, and a
+                  pile of rejections counts against you in the long run. It is better to apply once,
+                  later, with something to show than three times with nothing. Think it through
+                  before you send.
+                </Text>
+              </Box>
+
+              <Box>
+                <Text fontWeight="700" mb={1}>
+                  This is not the place to start learning.
+                </Text>
+                <Text>
+                  It is a working team shipping to real users. If you are still learning to build,
+                  or already carrying several other projects, this is not the right place right now
+                  — and that is the most common reason applications are turned down.
+                </Text>
+              </Box>
+
+              <Box>
+                <Text fontWeight="700" mb={1}>
+                  First years: wait.
+                </Text>
+                <Text>
+                  If you have not finished two semesters yet, you are strongly discouraged from
+                  applying unless your profile is genuinely extraordinary. Finish the year, build
+                  something real, and apply with it.
+                </Text>
+              </Box>
+
+              {warnings.length ? (
+                <Box>
+                  <Divider mb={3} />
+                  <Text fontWeight="700" mb={2}>
+                    From your own answers:
+                  </Text>
+                  <VStack align="stretch" spacing={2}>
+                    {warnings.map((warning) => (
+                      <Alert key={warning} status="warning" borderRadius="md" fontSize="sm" alignItems="flex-start">
+                        <AlertIcon />
+                        <Text>{warning}</Text>
+                      </Alert>
+                    ))}
+                  </VStack>
+                </Box>
+              ) : null}
+            </VStack>
+          </AlertDialogBody>
+
+          <AlertDialogFooter gap={3}>
+            {/* The cancel is the least destructive action and holds focus: the
+                default answer to "are you sure" at this point is no. */}
+            <Button ref={cancelRef} onClick={onClose} variant="ghost" isDisabled={saving}>
+              Go back
+            </Button>
+            <Button colorScheme="teal" onClick={onConfirm} isLoading={saving}>
+              I have read this — send it
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialogOverlay>
+    </AlertDialog>
+  );
+}
+
 function ApplicationForm({ suggested, session, onSent }) {
   const [form, setForm] = useState({ ...EMPTY, department: suggested?.department || '' });
   const [saving, setSaving] = useState(false);
+  const confirm = useDisclosure();
   const toast = useToast();
 
   const set = (key) => (value) => setForm((current) => ({ ...current, [key]: value }));
@@ -180,10 +328,14 @@ function ApplicationForm({ suggested, session, onSent }) {
     setForm((current) => ({ ...current, skills: { ...current.skills, [key]: score } }));
 
   const warnings = warningsFor(form);
+  const githubError = githubProblem(form.githubLink);
+  const deployedError = deployedProblem(form.deployedLink);
   const ready =
     form.rollNo.trim() &&
     form.department.trim() &&
     form.githubLink.trim() &&
+    !githubError &&
+    !deployedError &&
     form.whyHire.trim().length >= 40 &&
     Number(form.dailyHours) > 0;
 
@@ -206,6 +358,9 @@ function ApplicationForm({ suggested, session, onSent }) {
       onSent();
     } catch (err) {
       toast({ status: 'error', title: err.message, duration: 8000 });
+      // Back to the form with the refusal on screen — a validation message
+      // behind a dialog is a message nobody can act on.
+      confirm.onClose();
       // A 409 means somebody applied from another tab, or the semester rule
       // caught up with them. Reloading swaps this form for the real state
       // rather than leaving a form that can never succeed.
@@ -251,7 +406,7 @@ function ApplicationForm({ suggested, session, onSent }) {
           ) : null}
         </FormControl>
 
-        <FormControl isRequired>
+        <FormControl isRequired isInvalid={Boolean(githubError)}>
           <FormLabel fontSize="sm">GitHub profile</FormLabel>
           <Input
             value={form.githubLink}
@@ -259,10 +414,14 @@ function ApplicationForm({ suggested, session, onSent }) {
             placeholder="https://github.com/yourname"
             type="url"
           />
-          <FormHelperText fontSize="xs">The code matters more than the CV. Pin your best repo.</FormHelperText>
+          {githubError ? (
+            <FormErrorMessage fontSize="xs">{githubError}</FormErrorMessage>
+          ) : (
+            <FormHelperText fontSize="xs">The code matters more than the CV. Pin your best repo.</FormHelperText>
+          )}
         </FormControl>
 
-        <FormControl>
+        <FormControl isInvalid={Boolean(deployedError)}>
           <FormLabel fontSize="sm">A deployed project</FormLabel>
           <Input
             value={form.deployedLink}
@@ -270,9 +429,13 @@ function ApplicationForm({ suggested, session, onSent }) {
             placeholder="https://yourproject.vercel.app"
             type="url"
           />
-          <FormHelperText fontSize="xs">
-            Anything of yours that is live and clickable. Leave empty if you have none yet.
-          </FormHelperText>
+          {deployedError ? (
+            <FormErrorMessage fontSize="xs">{deployedError}</FormErrorMessage>
+          ) : (
+            <FormHelperText fontSize="xs">
+              Anything of yours that is live and clickable. Leave empty if you have none yet.
+            </FormHelperText>
+          )}
         </FormControl>
 
         <FormControl isRequired>
@@ -357,7 +520,7 @@ function ApplicationForm({ suggested, session, onSent }) {
       <Flex gap={3} wrap="wrap" align="center">
         <Button
           colorScheme="teal"
-          onClick={submit}
+          onClick={confirm.onOpen}
           isLoading={saving}
           isDisabled={!ready}
           w={{ base: '100%', sm: 'auto' }}
@@ -369,6 +532,15 @@ function ApplicationForm({ suggested, session, onSent }) {
           hear back by email and in your notifications.
         </Text>
       </Flex>
+
+      <ConfirmSend
+        isOpen={confirm.isOpen}
+        onClose={confirm.onClose}
+        onConfirm={submit}
+        saving={saving}
+        session={session}
+        warnings={warnings}
+      />
     </VStack>
   );
 }
@@ -486,40 +658,20 @@ function MyApplication({ application }) {
   );
 }
 
-/** The admin queue. Only rendered when the API let this account read it. */
-function AdminQueue({ applications, counts, onReviewed }) {
-  const [message, setMessage] = useState({});
-  const [deciding, setDeciding] = useState(null);
-  const toast = useToast();
+/**
+ * The queue, read-only.
+ *
+ * Deliberately has no reply box and no Accept/Reject: deciding happens in the
+ * Super Admin queue at /superadmin/dev-team, which is the one place the
+ * notification emails point at. Two screens that could both send a verdict meant
+ * two screens to keep in step, and a reply box sitting under an application on a
+ * page an applicant can open reads as something they are being asked to fill in.
+ *
+ * Only rendered when the API let this account read it.
+ */
+function AdminQueue({ applications, counts }) {
   const labelColor = useColorModeValue('gray.500', 'gray.400');
   const flagBg = useColorModeValue('orange.50', 'orange.900');
-
-  const decide = async (application, status) => {
-    const text = (message[application._id] ?? '').trim();
-    if (!text) {
-      toast({
-        status: 'warning',
-        title: 'Write a line back to them first',
-        description: 'It goes out with the decision, by email and in-app.',
-      });
-      return;
-    }
-    setDeciding(`${application._id}:${status}`);
-    try {
-      await lmApi.reviewDevApplication(application._id, { status, adminMessage: text });
-      toast({ status: 'success', title: status === 'accepted' ? 'Accepted — they have been told' : 'Rejected — they have been told' });
-      setMessage((current) => {
-        const next = { ...current };
-        delete next[application._id];
-        return next;
-      });
-      onReviewed();
-    } catch (err) {
-      toast({ status: 'error', title: err.message });
-    } finally {
-      setDeciding(null);
-    }
-  };
 
   if (!applications.length) return <EmptyState icon="📭" title="No applications yet" />;
 
@@ -602,35 +754,6 @@ function AdminQueue({ applications, counts, onReviewed }) {
               </Alert>
             ) : null}
 
-            <Textarea
-              size="sm"
-              rows={2}
-              mb={2}
-              placeholder="Your message to them — required, and it goes out with the decision"
-              value={message[application._id] ?? ''}
-              onChange={(event) =>
-                setMessage((current) => ({ ...current, [application._id]: event.target.value }))
-              }
-            />
-            <Stack direction={{ base: 'column', sm: 'row' }} spacing={2}>
-              <Button
-                size="sm"
-                colorScheme="green"
-                isLoading={deciding === `${application._id}:accepted`}
-                onClick={() => decide(application, 'accepted')}
-              >
-                Accept
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                colorScheme="red"
-                isLoading={deciding === `${application._id}:rejected`}
-                onClick={() => decide(application, 'rejected')}
-              >
-                Reject
-              </Button>
-            </Stack>
           </Box>
         );
       })}
@@ -672,7 +795,7 @@ export default function DevTeam() {
   const applyPanel = (
     <SectionCard
       title="🚀 Join our development team"
-      subtitle="XCEED is built by students. If you want to work on the thing you are using, tell us about yourself — one application per person, per semester."
+      subtitle="XCEED invites developers to join the team. If you want to work on the thing you are using, tell us about yourself — one application per person, per semester."
     >
       {mine.current ? (
         <MyApplication application={mine.current} />
@@ -742,13 +865,9 @@ export default function DevTeam() {
         <TabPanel px={0}>
           <SectionCard
             title="Development team applications"
-            subtitle="Accepting or rejecting emails your message straight back to them."
+            subtitle="A read-only view. Accept or reject from the Super Admin queue, which is where the notification emails point."
           >
-            <AdminQueue
-              applications={queue.applications}
-              counts={queue.counts || {}}
-              onReviewed={load}
-            />
+            <AdminQueue applications={queue.applications} counts={queue.counts || {}} />
           </SectionCard>
         </TabPanel>
       </TabPanels>

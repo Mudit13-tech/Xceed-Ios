@@ -103,6 +103,7 @@ const NAV = [
   },
   { id: 'institute', route: '/attendance/institute-identification', label: 'Institute Identification' },
   { id: 'erpOverrides', route: '/attendance/erp-overrides', label: 'ERP Overrides' },
+  { id: 'disputes', route: '/attendance/disputes', label: 'Attendance Disputes' },
   { id: 'manual', route: '/ams-manual', label: 'Help & Manual', newTab: true },
 ];
 
@@ -124,6 +125,7 @@ const COLORS = {
   manual: '#64748b',
   institute: '#8b5cf6',
   erpOverrides: '#f59e0b',
+  disputes: '#0ea5e9',
 };
 
 const CSS = `

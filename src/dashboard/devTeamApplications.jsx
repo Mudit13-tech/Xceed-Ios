@@ -99,6 +99,9 @@ function SkillMeter({ label, score }) {
 function ApplicationCard({ application, onDecide }) {
   const [message, setMessage] = useState(application.adminMessage || '');
   const [busy, setBusy] = useState(null);
+  // An answered application is a record, not a job. Changing a verdict re-mails
+  // the applicant, so the reply box and the two buttons have to be asked for.
+  const [reopened, setReopened] = useState(false);
   const cardBg = useColorModeValue('white', 'gray.800');
   const border = useColorModeValue('gray.200', 'gray.700');
   const quoteBg = useColorModeValue('gray.50', 'gray.900');
@@ -120,6 +123,7 @@ function ApplicationCard({ application, onDecide }) {
     colorScheme: 'gray',
     label: application.status,
   };
+  const decided = application.status !== 'pending';
 
   // The two things the form warned them about. Surfaced at the top rather than
   // left in the body: they are the reason most applications are turned down,
@@ -218,38 +222,51 @@ function ApplicationCard({ application, onDecide }) {
         </Text>
       )}
 
-      {/* Required for both outcomes. An acceptance with no word on what happens
-          next leaves somebody waiting, and a rejection with no reason is how
-          people stop applying — which costs more than the reading it saves. */}
-      <Textarea
-        size="sm"
-        rows={3}
-        mb={2}
-        placeholder="Your message to them — required, and it goes out by email with the decision"
-        value={message}
-        onChange={(event) => setMessage(event.target.value)}
-      />
-      <Stack direction={{ base: 'column', sm: 'row' }} spacing={2}>
-        <Button
-          size="sm"
-          colorScheme="green"
-          isLoading={busy === 'accepted'}
-          isDisabled={!message.trim()}
-          onClick={() => decide('accepted')}
-        >
-          Accept
+      {decided && !reopened ? (
+        <Button size="xs" variant="ghost" colorScheme="gray" onClick={() => setReopened(true)}>
+          Change this decision
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          colorScheme="red"
-          isLoading={busy === 'rejected'}
-          isDisabled={!message.trim()}
-          onClick={() => decide('rejected')}
-        >
-          Reject
-        </Button>
-      </Stack>
+      ) : (
+        <>
+          {/* Required for both outcomes. An acceptance with no word on what happens
+              next leaves somebody waiting, and a rejection with no reason is how
+              people stop applying — which costs more than the reading it saves. */}
+          <Textarea
+            size="sm"
+            rows={3}
+            mb={2}
+            placeholder="Your message to them — required, and it goes out by email with the decision"
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+          />
+          <Stack direction={{ base: 'column', sm: 'row' }} spacing={2}>
+            <Button
+              size="sm"
+              colorScheme="green"
+              isLoading={busy === 'accepted'}
+              isDisabled={!message.trim()}
+              onClick={() => decide('accepted')}
+            >
+              Accept
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              colorScheme="red"
+              isLoading={busy === 'rejected'}
+              isDisabled={!message.trim()}
+              onClick={() => decide('rejected')}
+            >
+              Reject
+            </Button>
+            {decided ? (
+              <Button size="sm" variant="ghost" colorScheme="gray" onClick={() => setReopened(false)}>
+                Cancel
+              </Button>
+            ) : null}
+          </Stack>
+        </>
+      )}
     </Box>
   );
 }

@@ -24,6 +24,7 @@ const PREFIXES = {
   rheostat: 'Rh',
   capacitor: 'C',
   inductor: 'L',
+  transformer: 'T',
   vsource: 'V',
   isource: 'I',
   ground: 'GND',

@@ -20,6 +20,7 @@ import { keyframes } from '@emotion/react';
 import lmApi from '../api/lmApi';
 import { buttonTextStyles } from './common';
 import { relativeTime } from '../format';
+import NotificationPreferencesModal from './NotificationPreferencesModal';
 
 const POLL_MS = 60000;
 
@@ -51,6 +52,7 @@ const TYPE_ICONS = {
 export default function NotificationBell() {
   const [items, setItems] = useState([]);
   const [unread, setUnread] = useState(0);
+  const [prefsModalOpen, setPrefsModalOpen] = useState(false);
   const navigate = useNavigate();
   const isOpenRef = React.useRef(false);
 
@@ -148,11 +150,21 @@ export default function NotificationBell() {
             <Text fontWeight="600" fontSize="sm">
               Notifications
             </Text>
-            {unread > 0 && (
-              <Button size="xs" variant="link" colorScheme="blue" onClick={markAll}>
-                Mark all read
-              </Button>
-            )}
+            <Flex align="center" gap={2}>
+              {unread > 0 && (
+                <Button size="xs" variant="link" colorScheme="blue" onClick={markAll}>
+                  Mark all read
+                </Button>
+              )}
+              <IconButton
+                size="xs"
+                variant="ghost"
+                aria-label="Notification settings"
+                icon={<span>⚙️</span>}
+                onClick={() => setPrefsModalOpen(true)}
+                title="Notification settings"
+              />
+            </Flex>
           </Flex>
         </PopoverHeader>
         <PopoverBody px={0} maxH="420px" overflowY="auto">
@@ -195,6 +207,10 @@ export default function NotificationBell() {
           ))}
         </PopoverBody>
       </PopoverContent>
+      <NotificationPreferencesModal
+        isOpen={prefsModalOpen}
+        onClose={() => setPrefsModalOpen(false)}
+      />
     </Popover>
   );
 }

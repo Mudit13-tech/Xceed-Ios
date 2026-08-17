@@ -23,6 +23,7 @@ const ALL_MENUS = [
     { key: 'alteringClasses',   label: 'Altering Classes',      desc: 'One-time faculty/subject swaps',          color: '#d946ef' },
     { key: 'instituteIdentification', label: 'Institute Identification', desc: 'Identify students institute-wide from video/stream', color: '#8b5cf6' },
     { key: 'erpOverrides',      label: 'ERP Overrides',         desc: 'Audit manually/ERP-overridden attendance records',      color: '#f59e0b' },
+    { key: 'attendanceDisputes', label: 'Attendance Disputes',  desc: 'Accept or reject student challenges to a marking',      color: '#0ea5e9' },
     { key: 'bugReports',        label: 'Raise a Bug / Suggestion', desc: 'Report defects and ideas to the platform admins', color: '#ef4444' },
     { key: 'helpManual',        label: 'Help & Manual',         desc: 'Documentation and user guide',           color: '#64748b' },
 ];

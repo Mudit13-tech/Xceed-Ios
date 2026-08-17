@@ -23,7 +23,7 @@ import {
   VStack,
 } from '@chakra-ui/react';
 import { symbolFor } from './symbols';
-import { eng, phase } from './format';
+import { deviceSummary, eng, phase } from './format';
 
 /**
  * The panels around the canvas: what you can place, what the thing you selected is
@@ -84,7 +84,7 @@ export function Palette({ parts = [], onPlace }) {
   // measure, and semiconductors are a separate box of parts.
   const groups = [
     { label: 'Sources', types: ['vsource', 'isource', 'ground'] },
-    { label: 'Passive', types: ['resistor', 'rheostat', 'capacitor', 'inductor'] },
+    { label: 'Passive', types: ['resistor', 'rheostat', 'capacitor', 'inductor', 'transformer'] },
     { label: 'Instruments', types: ['ammeter', 'voltmeter', 'wattmeter', 'cro', 'dso'] },
     { label: 'Semiconductors', types: ['diode', 'npn', 'pnp', 'opamp'] },
   ];
@@ -347,6 +347,123 @@ export function InstrumentReadings({ result }) {
           : result.analysis === 'dc'
             ? 'DC operating point. Capacitors are open circuits and inductors are shorts.'
             : `Transient over ${eng(result.duration, 's')}.`}
+      </Text>
+    </VStack>
+  );
+}
+
+/* ────────────────────────── every component's numbers ─────────────────────── */
+
+/**
+ * The voltage across, current through and power in every component on the bench.
+ *
+ * The instruments answer "what does the meter say", which is the experiment a
+ * student was asked to do. This answers "what is happening in R2", which is the
+ * thing they are trying to understand — and on a real bench getting it means
+ * moving the probes and running again, once per component. The solved system
+ * already contains all of it, so making them go one at a time would be a
+ * scarcity this bench invented rather than one it is modelling.
+ *
+ * The meters stay, and stay first: an experiment whose readings come from a table
+ * that appears by itself is not an experiment in measurement any more. This is
+ * the answer sheet beside it, which is roughly what a demonstrator leaning over a
+ * bench is.
+ */
+export function DeviceReadings({ result }) {
+  if (!result?.ok) return null;
+
+  if (result.analysis === 'transient') {
+    return (
+      <Text fontSize="xs" color="gray.500">
+        A transient run gives a waveform rather than a single number, so the values are on the scope
+        below. Switch to DC or AC for a table of voltage, current and power.
+      </Text>
+    );
+  }
+
+  // Instruments are left out: they have their own panel above, and a voltmeter
+  // appearing in both — once as a reading and once as a part with a dash for its
+  // current — would read as two different measurements of the same thing.
+  const devices = (result.devices || []).filter((device) => !device.instrument);
+  if (!devices.length) {
+    return (
+      <Text fontSize="xs" color="gray.500">
+        Nothing to report — put a component on the bench and run again.
+      </Text>
+    );
+  }
+
+  return (
+    <VStack align="stretch" spacing={2}>
+      <Table size="sm" variant="simple">
+        <Thead>
+          <Tr>
+            <Th px={1}>Part</Th>
+            <Th px={1} isNumeric>V</Th>
+            <Th px={1} isNumeric>I</Th>
+            <Th px={1} isNumeric>P</Th>
+          </Tr>
+        </Thead>
+        <Tbody>
+          {devices.flatMap((device) => {
+            // A transformer occupies two rows, because it has two windings and
+            // the pair *is* the reading: an open-circuit test is the primary's
+            // current read against the secondary's voltage. One row would make a
+            // student do the experiment with one probe.
+            const rows = device.secondary
+              ? [
+                { ...device, key: `${device.id}-p`, label: `${device.label} primary` },
+                { ...device.secondary, key: `${device.id}-s`, label: `${device.label} secondary` },
+              ]
+              : [{ ...device, key: device.id }];
+
+            return rows.map((row) => {
+              const shown = deviceSummary(row);
+              return (
+                <Tr key={row.key}>
+                  <Td px={1}>
+                    <Text fontSize="sm" fontWeight="600">
+                      {row.label}
+                    </Text>
+                    {result.analysis === 'ac' && row.currentPhase !== null && row.currentPhase !== undefined && (
+                      <Text fontSize="10px" color="gray.500">
+                        {phase(row.currentPhase)}
+                      </Text>
+                    )}
+                  </Td>
+                  <Td px={1} isNumeric fontSize="xs">
+                    {shown.voltage}
+                  </Td>
+                  <Td px={1} isNumeric fontSize="xs">
+                    {shown.current}
+                  </Td>
+                  <Td px={1} isNumeric fontSize="xs">
+                    <Text as="span" color={shown.delivering ? 'purple.600' : undefined}>
+                      {shown.power}
+                    </Text>
+                    {shown.delivering && (
+                      // Said in words rather than shown as a minus sign, because a
+                      // student meeting "−50 mW" on a battery learns the passive
+                      // sign convention backwards and by accident.
+                      <Text fontSize="9px" color="purple.600">
+                        supplied
+                      </Text>
+                    )}
+                  </Td>
+                </Tr>
+              );
+            });
+          })}
+        </Tbody>
+      </Table>
+
+      <Text fontSize="10px" color="gray.500">
+        Voltage is across the part, current through it, power in it.
+        {result.analysis === 'ac'
+          ? ' At AC these are magnitudes of peak values, and P is real power — the part a wattmeter reads.'
+          : ''}
+        {' '}A dash means the solver will not put a number on it: a transistor’s terminal current
+        depends on its own model rather than on one branch of the circuit.
       </Text>
     </VStack>
   );

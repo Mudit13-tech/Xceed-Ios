@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
+  Button,
   Container,
   Flex,
   Heading,
@@ -208,6 +209,33 @@ const AllocatedRolesPage = () => {
   const [learningCards, setLearningCards] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [isPublishing, setIsPublishing] = useState(false);
+
+  const handlePublishOTA = async () => {
+    setIsPublishing(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/v1/ota/trigger-update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        alert("Sync & OTA Update Triggered Successfully! The process is running on GitHub.");
+      } else {
+        const data = await response.json().catch(() => ({}));
+        alert(`Failed to trigger update: ${data.error || 'Please check console for errors.'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("An error occurred.");
+    } finally {
+      setIsPublishing(false);
+    }
+  };
 
   const pageBg = useColorModeValue('gray.50', 'gray.900');
   const subColor = useColorModeValue('gray.500', 'gray.400');
@@ -313,32 +341,44 @@ const AllocatedRolesPage = () => {
     <Box bg={pageBg} minH="100vh" py={{ base: 8, md: 16 }}>
       <Container maxW="5xl">
         {/* Header */}
-        <Box mb={{ base: 8, md: 12 }}>
-          <Text
-            fontSize={{ base: 'xs', md: 'sm' }}
-            fontWeight="bold"
-            letterSpacing="0.12em"
-            textTransform="uppercase"
-            color={labelColor}
-            mb={2}
-          >
-            Welcome back
-          </Text>
-          <Heading
-            as="h1"
-            fontSize={{ base: 'xl', md: '3xl' }}
-            lineHeight="1.2"
-            letterSpacing="-0.01em"
-            wordBreak="break-word"
-          >
-            {email || displayName}
-          </Heading>
-          <Text color={subColor} fontSize={{ base: 'md', md: 'lg' }} mt={3}>
-            {roleCount
-              ? `Choose a workspace to continue — you have ${roleCount} ${roleCount === 1 ? 'role' : 'roles'}.`
-              : 'No roles have been assigned to your account yet.'}
-          </Text>
-        </Box>
+        <Flex justify="space-between" align={{ base: "flex-start", sm: "center" }} direction={{ base: "column", sm: "row" }} mb={{ base: 8, md: 12 }} gap={4}>
+          <Box>
+            <Text
+              fontSize={{ base: 'xs', md: 'sm' }}
+              fontWeight="bold"
+              letterSpacing="0.12em"
+              textTransform="uppercase"
+              color={labelColor}
+              mb={2}
+            >
+              Welcome back
+            </Text>
+            <Heading
+              as="h1"
+              fontSize={{ base: 'xl', md: '3xl' }}
+              lineHeight="1.2"
+              letterSpacing="-0.01em"
+              wordBreak="break-word"
+            >
+              {email || displayName}
+            </Heading>
+            <Text color={subColor} fontSize={{ base: 'md', md: 'lg' }} mt={3}>
+              {roleCount
+                ? `Choose a workspace to continue — you have ${roleCount} ${roleCount === 1 ? 'role' : 'roles'}.`
+                : 'No roles have been assigned to your account yet.'}
+            </Text>
+          </Box>
+          
+          {allocatedRoles.includes('admin') && (
+            <Button 
+              colorScheme="blue" 
+              onClick={handlePublishOTA}
+              isLoading={isPublishing}
+            >
+              Publish OTA Update
+            </Button>
+          )}
+        </Flex>
 
         {roleCount ? (
           <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={{ base: 4, md: 6 }}>

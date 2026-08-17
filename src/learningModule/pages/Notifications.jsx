@@ -4,6 +4,7 @@ import { Badge, Box, Button, Flex, HStack, Heading, IconButton,useColorModeValue
 import lmApi from '../api/lmApi';
 import { buttonTextStyles, EmptyState, ErrorState, Loading } from '../components/common';
 import { relativeTime } from '../format';
+import NotificationPreferencesModal from '../components/NotificationPreferencesModal';
 
 const TYPE_ICONS = {
   announcement: '📣',
@@ -25,6 +26,7 @@ export default function Notifications() {
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [prefsModalOpen, setPrefsModalOpen] = useState(false);
   const navigate = useNavigate();
 
   const readBg = useColorModeValue('white', 'gray.700');
@@ -76,6 +78,14 @@ export default function Notifications() {
           <Button
             size="sm"
             variant="outline"
+            leftIcon={<span>⚙️</span>}
+            onClick={() => setPrefsModalOpen(true)}
+          >
+            Notification Settings
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             isDisabled={unread === 0}
             onClick={async () => {
               await lmApi.markNotificationsRead().catch(() => {});
@@ -96,6 +106,11 @@ export default function Notifications() {
           </Button>
         </HStack>
       </Flex>
+
+      <NotificationPreferencesModal
+        isOpen={prefsModalOpen}
+        onClose={() => setPrefsModalOpen(false)}
+      />
 
       <ErrorState error={error} onRetry={load} />
 

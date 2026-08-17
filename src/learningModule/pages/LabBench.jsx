@@ -23,9 +23,14 @@ import {
 import lmApi from '../api/lmApi';
 import { ErrorState, Loading, SectionCard } from '../components/common';
 import CircuitCanvas from '../components/lab/CircuitCanvas';
-import { InstrumentReadings, Palette, PartInspector } from '../components/lab/BenchPanels';
+import {
+  DeviceReadings,
+  InstrumentReadings,
+  Palette,
+  PartInspector,
+} from '../components/lab/BenchPanels';
 import ScopeView from '../components/lab/ScopeView';
-import { eng } from '../components/lab/format';
+import { deviceSummary, eng } from '../components/lab/format';
 import {
   placeComponent,
   removeComponent,
@@ -73,6 +78,10 @@ export default function LabBench() {
   const [frequency, setFrequency] = useState(50);
   const [result, setResult] = useState(null);
   const [running, setRunning] = useState(false);
+  // Whether every component's V/I/P is drawn on the bench as well as listed in
+  // the panel. On by default — the numbers are the reason to press Run — but a
+  // dense circuit is easier to *wire* with them off, so it is a switch.
+  const [showOnBench, setShowOnBench] = useState(true);
 
   const [readings, setReadings] = useState({});
   const [conclusion, setConclusion] = useState('');
@@ -217,15 +226,50 @@ export default function LabBench() {
     [circuit],
   );
 
-  /** Meter readings keyed by component id, for the labels on the canvas. */
+  /**
+   * What each component is labelled with on the canvas after a run.
+   *
+   * A meter gets the one number it measures, because that is what a meter is. Every
+   * other part gets its voltage, current and power stacked over it — the three
+   * numbers the run already solved for, put where the component is rather than in a
+   * table the student has to match ids against.
+   */
   const canvasReadings = useMemo(() => {
     if (!result?.ok) return {};
-    return Object.fromEntries(
+
+    const meters = Object.fromEntries(
       (result.instruments || [])
         .filter((meter) => meter.type !== 'cro' && meter.type !== 'dso')
         .map((meter) => [meter.id, eng(meter.magnitude, meter.unit)]),
     );
-  }, [result]);
+
+    if (!showOnBench) return meters;
+
+    const parts = Object.fromEntries(
+      (result.devices || [])
+        .filter((device) => !device.instrument)
+        .map((device) => {
+          const shown = deviceSummary(device);
+          // Voltage first and nearest the part, because it is the one a student
+          // can also get by putting a voltmeter across it — so the canvas and the
+          // meter agree at a glance.
+          const lines = [
+            shown.voltage,
+            shown.current,
+            shown.delivering ? `${shown.power} out` : shown.power,
+          ];
+          // A transformer's secondary voltage, because it is half of every
+          // reading taken from one and it is not on the primary side of the
+          // symbol where the other three sit.
+          if (device.secondary) {
+            lines.push(`sec ${deviceSummary(device.secondary).voltage}`);
+          }
+          return [device.id, lines];
+        }),
+    );
+
+    return { ...parts, ...meters };
+  }, [result, showOnBench]);
 
   const locked = !isTeacher && (!attempt || attempt.status === 'submitted');
   const canEdit = !locked && (lab?.settings?.allowEditing !== false || isTeacher);
@@ -337,9 +381,23 @@ export default function LabBench() {
                   </HStack>
                 )}
               </HStack>
-              <Button size="sm" colorScheme="teal" onClick={run} isLoading={running}>
-                ▶ Run
-              </Button>
+              <HStack>
+                {/* Only offered once there is something to show, so it is never a
+                    switch that appears to do nothing. */}
+                {result?.ok && result.analysis !== 'transient' && (
+                  <Button
+                    size="sm"
+                    variant={showOnBench ? 'solid' : 'outline'}
+                    colorScheme="green"
+                    onClick={() => setShowOnBench((on) => !on)}
+                  >
+                    {showOnBench ? 'Hide readings' : 'Show readings'}
+                  </Button>
+                )}
+                <Button size="md" colorScheme="teal" onClick={run} isLoading={running} loadingText="Solving">
+                  ▶ Run
+                </Button>
+              </HStack>
             </Flex>
 
             {/* A frequency of zero is a real setting — a DC supply stepped at
@@ -363,9 +421,21 @@ export default function LabBench() {
 
             <Text fontSize="xs" color="gray.500" mt={2}>
               Drag a component on, or click it in the palette. Click one terminal then another to wire
-              them. Click a wire to remove it.
+              them — the terminals are the grey dots, and they light up as you pass over them. Click a
+              wire to remove it. Then press Run.
             </Text>
           </SectionCard>
+
+          {/* Every component's numbers, under the bench rather than beside it: it
+              is a four-column table and the side panel is 290 px wide. */}
+          {result?.ok && (
+            <SectionCard mt={3}>
+              <Text fontSize="sm" fontWeight="700" mb={2}>
+                Across each component
+              </Text>
+              <DeviceReadings result={result} />
+            </SectionCard>
+          )}
 
           {/* The scopes, one screen each. */}
           {result?.ok && result.analysis === 'transient' && probes.length > 0 && (
