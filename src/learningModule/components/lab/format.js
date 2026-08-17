@@ -57,6 +57,35 @@ export const phase = (degrees) =>
     : `∠${Number(degrees).toFixed(1)}°`;
 
 /**
+ * What a run says about one component, as three strings.
+ *
+ * Shared by the canvas labels and the readings table so the number a student
+ * reads off the bench is character-for-character the number in the table. Two
+ * formatters would eventually round differently, and a student comparing them
+ * would be right to think one of them was wrong.
+ *
+ * A `null` current is not zero — it is a component whose current the solver will
+ * not claim to know (a transistor, an op-amp), and it is shown as a dash for
+ * exactly that reason.
+ */
+export function deviceSummary(device) {
+  const power = device.power === null || device.power === undefined
+    ? null
+    // Sources come back with the power they *absorb*, which is negative when
+    // they are driving the circuit. A student reading "−50 mW" off a battery
+    // learns the sign convention by accident and the wrong way round, so the
+    // magnitude is shown and the direction is said in words.
+    : eng(Math.abs(device.power), 'W');
+
+  return {
+    voltage: eng(device.voltage, 'V'),
+    current: device.current === null || device.current === undefined ? '—' : eng(device.current, 'A'),
+    power: power === null ? '—' : power,
+    delivering: Boolean(device.delivering),
+  };
+}
+
+/**
  * The one value worth printing next to a component on the canvas.
  *
  * A resistor is its resistance; a source is its amplitude. Showing every field

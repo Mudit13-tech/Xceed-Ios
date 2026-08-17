@@ -105,6 +105,61 @@ export const SYMBOLS = {
     ),
   },
 
+  /**
+   * A two-winding transformer, with the dots.
+   *
+   * Pins 0–1 are the primary and 2–3 the secondary; **0 and 2 are the dotted
+   * terminals**, matching the server's `transformer` model, where the two branch
+   * currents are defined as flowing into the dots.
+   *
+   * The dots are drawn rather than left to the tooltip because they are the only
+   * thing on the symbol that distinguishes it from a transformer wired backwards,
+   * and a student who cannot see them has no way to get the polarity right except
+   * by running it and noticing the answer is upside down. They sit inboard of the
+   * terminals so they never overlap the circles a wire is dropped on.
+   *
+   * The two bars down the middle are the core — the reason the windings are
+   * coupled at all, and what tells a student at a glance that this is an iron-core
+   * transformer rather than two coils near each other.
+   */
+  transformer: {
+    pins: [[-34, -26], [-34, 26], [34, -26], [34, 26]],
+    box: [82, 76],
+    draw: () => (
+      <>
+        {/* Primary, left. The arcs bulge away from the core on each side, which
+            is how a winding is drawn and which keeps the two coils from reading
+            as one zig-zag. */}
+        {lead(-34, -26, -12, -26)}
+        {lead(-12, -26, -12, -20)}
+        <path
+          d="M -12 -20 A 5 5 0 0 0 -12 -10 A 5 5 0 0 0 -12 0 A 5 5 0 0 0 -12 10 A 5 5 0 0 0 -12 20"
+          {...stroke}
+        />
+        {lead(-12, 20, -12, 26)}
+        {lead(-12, 26, -34, 26)}
+
+        {/* The core. */}
+        {lead(-4, -28, -4, 28)}
+        {lead(4, -28, 4, 28)}
+
+        {/* Secondary, right. */}
+        {lead(34, -26, 12, -26)}
+        {lead(12, -26, 12, -20)}
+        <path
+          d="M 12 -20 A 5 5 0 0 1 12 -10 A 5 5 0 0 1 12 0 A 5 5 0 0 1 12 10 A 5 5 0 0 1 12 20"
+          {...stroke}
+        />
+        {lead(12, 20, 12, 26)}
+        {lead(12, 26, 34, 26)}
+
+        {/* The dots. Pin 0 and pin 2 — same end of each winding. */}
+        <circle cx={-20} cy={-33} r={3} fill="currentColor" stroke="none" />
+        <circle cx={20} cy={-33} r={3} fill="currentColor" stroke="none" />
+      </>
+    ),
+  },
+
   vsource: {
     // Pin 0 is the + terminal, matching the server's pinNames.
     pins: [[0, -28], [0, 28]],

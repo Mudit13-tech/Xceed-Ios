@@ -22,6 +22,7 @@ import { FiChevronDown } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import StartShortModal from '../components/StartShortModal';
 import { relativeTime } from '../format';
 
 /**
@@ -51,6 +52,8 @@ export default function Shorts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState('');
+  // The deck waiting on the mail question, or null when nothing is being started.
+  const [pendingStart, setPendingStart] = useState(null);
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -96,6 +99,11 @@ export default function Shorts() {
    * `email` left undefined presents the deck the way it is configured
    * (Edit → "Email the class when I start it"); passing it overrides that
    * setting for this run only.
+   *
+   * Starting a *fresh* session never takes the undefined path from here: the
+   * mail question is put to the teacher first (`StartShortModal`), because a
+   * launch mail cannot be recalled. Rejoining a live session notifies nobody,
+   * so that one goes straight through.
    */
   const present = async (short, { email } = {}) => {
     setBusy(short._id);
@@ -123,6 +131,7 @@ export default function Shorts() {
       });
     } finally {
       setBusy('');
+      setPendingStart(null);
     }
   };
 
@@ -247,15 +256,17 @@ export default function Shorts() {
 
                 {isTeacher ? (
                   <HStack spacing={2} wrap="wrap">
-                    {/* Split button: the main half presents the way the deck is
-                        set up, the caret is for the run that needs the other
-                        answer. Rejoining a live session notifies nobody, so it
-                        stays a plain button. */}
+                    {/* Split button: the main half asks the mail question and
+                        then starts, the caret answers it in one click for a
+                        teacher who already knows. Rejoining a live session
+                        notifies nobody, so it starts immediately. */}
                     <HStack spacing={0}>
                       <Button
                         size="sm"
                         colorScheme={short.liveSession ? 'red' : 'purple'}
-                        onClick={() => present(short)}
+                        onClick={() =>
+                          short.liveSession ? present(short) : setPendingStart(short)
+                        }
                         isLoading={busy === short._id}
                         borderRightRadius={short.liveSession ? undefined : 0}
                       >
@@ -322,6 +333,14 @@ export default function Shorts() {
           ))}
         </VStack>
       )}
+
+      <StartShortModal
+        isOpen={Boolean(pendingStart)}
+        short={pendingStart}
+        isBusy={Boolean(pendingStart) && busy === pendingStart._id}
+        onClose={() => setPendingStart(null)}
+        onConfirm={(email) => present(pendingStart, { email })}
+      />
     </VStack>
   );
 }

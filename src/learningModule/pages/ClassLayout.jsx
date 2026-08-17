@@ -18,23 +18,27 @@ import lmApi from '../api/lmApi';
 import { loginPathFor } from '../../authRedirect';
 import { ErrorState, Loading } from '../components/common';
 import useStableNavigate from '../hooks/useStableNavigate';
+import NotificationPreferencesModal from '../components/NotificationPreferencesModal';
 
 // People and Settings are about the class rather than its work, so they sit in
 // the header beside the class code instead of competing with the teaching tabs.
+// Insights is up there too: it is what a teacher opens the class to check —
+// who is behind, what needs chasing — not another kind of coursework.
 const TABS = [
   { path: '', label: 'Stream', end: true },
   { path: 'material', label: 'Material' },
+  // Beside Material: both are things to watch or read before the work, so they
+  // belong together rather than with the things you hand in.
+  { path: 'shorts', label: 'Shorts' },
   { path: 'quizzes', label: 'Quizzes' },
   { path: 'tutorials', label: 'Tutorials' },
   { path: 'assignments', label: 'Assignments' },
   { path: 'labs', label: 'Virtual Lab' },
-  { path: 'shorts', label: 'Shorts' },
-  { path: 'discussions', label: 'Forum' },
   { path: 'notebooks', label: 'Coding' },
   { path: 'grades', label: 'Grades' },
   { path: 'studio', label: 'AI Studio' },
   { path: 'playground', label: 'AI Playground', studentOnly: true },
-  { path: 'insights', label: 'Insights', teacherOnly: true },
+  { path: 'discussions', label: 'Forum' },
   // Last, and in its own colour. It is not another kind of classwork — it runs
   // the other way, from the class to the teacher — and sitting it mid-row in
   // the same grey as Quizzes made it read as one more thing to submit. The
@@ -57,6 +61,7 @@ export default function ClassLayout() {
   const { classId } = useParams();
   const navigate = useStableNavigate();
   const toast = useToast();
+  const [prefsOpen, setPrefsOpen] = useState(false);
 
   const { data: klass, isLoading: loading, error, refetch: load } = useQuery({
     queryKey: ['learning', 'class', classId],
@@ -146,6 +151,30 @@ export default function ClassLayout() {
               People · {klass.counts?.studentCount ?? 0}
             </Button>
 
+            {isTeacher && (
+              <IconButton
+                as={NavLink}
+                to={`/learning/class/${classId}/insights`}
+                size="sm"
+                aria-label="Insights"
+                icon={<span>📊</span>}
+                display={{ base: 'flex', md: 'none' }}
+                {...headerLinkStyles}
+              />
+            )}
+            {isTeacher && (
+              <Button
+                as={NavLink}
+                to={`/learning/class/${classId}/insights`}
+                size="sm"
+                leftIcon={<span>📊</span>}
+                display={{ base: 'none', md: 'flex' }}
+                {...headerLinkStyles}
+              >
+                Insights
+              </Button>
+            )}
+
             <IconButton
               as={NavLink}
               to={`/learning/class/${classId}/leaderboard`}
@@ -181,6 +210,15 @@ export default function ClassLayout() {
                 </Button>
               </Tooltip>
             )}
+            <Tooltip label="Notification preferences">
+              <IconButton
+                onClick={() => setPrefsOpen(true)}
+                size="sm"
+                aria-label="Notification preferences"
+                icon={<span>🔔</span>}
+                {...headerLinkStyles}
+              />
+            </Tooltip>
             {isTeacher && (
               <Tooltip label="Class settings">
                 <IconButton
@@ -196,6 +234,14 @@ export default function ClassLayout() {
           </HStack>
         </Flex>
       </Box>
+
+      <NotificationPreferencesModal
+        isOpen={prefsOpen}
+        onClose={() => setPrefsOpen(false)}
+        classId={classId}
+        className={klass.name}
+        isTeacher={isTeacher}
+      />
 
       <Flex
         gap={1}

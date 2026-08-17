@@ -185,14 +185,18 @@ function Toggle({ value, onChange, label }) {
   );
 }
 
-// Conflict modal: isRegular=true → slot holds a REGULAR timetable class (never
-// silently overwritten — user must pick "Change Room" or explicitly "Replace",
-// used when a faculty is exchanging/covering a class). isRegular=false → slot
-// holds another EXTRA class already (simple Cancel/Replace).
+// Conflict modal. Callers explicitly control which recovery actions are safe:
+// ordinary room conflicts may be replaced, while timetable-data and faculty
+// conflicts are informational and cannot be bypassed with confirmation.
 export function ConflictModal({
   open,
   message,
   isRegular,
+  title,
+  explanation,
+  allowChangeRoom = isRegular,
+  allowReplace = true,
+  cancelLabel = 'Cancel',
   onCancel,
   onChangeRoom,
   onReplace,
@@ -258,9 +262,10 @@ export function ConflictModal({
                 marginBottom: 4,
               }}
             >
-              {isRegular
-                ? 'A regular class is scheduled here'
-                : 'Slot already booked'}
+              {title ||
+                (isRegular
+                  ? 'A regular class is scheduled here'
+                  : 'Slot already booked')}
             </div>
             <div
               style={{
@@ -271,7 +276,7 @@ export function ConflictModal({
             >
               {message}
             </div>
-            {isRegular && (
+            {(explanation || isRegular) && (
               <div
                 style={{
                   fontSize: 11.5,
@@ -280,8 +285,8 @@ export function ConflictModal({
                   marginTop: 8,
                 }}
               >
-                Pick a different room if this is unintentional, or replace it
-                only if a faculty is genuinely exchanging/covering this class.
+                {explanation ||
+                  'Pick a different room if this is unintentional, or replace it only if a faculty is genuinely exchanging/covering this class.'}
               </div>
             )}
           </div>
@@ -296,23 +301,25 @@ export function ConflictModal({
           }}
         >
           <button onClick={onCancel} style={styles.btnGhost}>
-            Cancel
+            {cancelLabel}
           </button>
-          {isRegular && (
+          {allowChangeRoom && (
             <button onClick={onChangeRoom} style={styles.btnPrimary}>
               Choose Different Room
             </button>
           )}
-          <button
-            onClick={onReplace}
-            style={{
-              ...styles.btnPrimary,
-              background: theme.warning,
-              color: '#1a1a1a',
-            }}
-          >
-            {isRegular ? 'Replace This Class' : 'Replace It'}
-          </button>
+          {allowReplace && (
+            <button
+              onClick={onReplace}
+              style={{
+                ...styles.btnPrimary,
+                background: theme.warning,
+                color: '#1a1a1a',
+              }}
+            >
+              {isRegular ? 'Replace This Class' : 'Replace It'}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -747,8 +754,19 @@ export function ExtraClassForm({ onAdd, allRooms }) {
   const updateSemester = (sem) =>
     setForm((p) => ({ ...p, semester: sem, subject: '' }));
 
+  const timeOverrideValid =
+    (!form.startTime && !form.endTime) ||
+    (!!form.startTime && !!form.endTime && form.startTime < form.endTime);
+
   const handleAdd = async () => {
-    if (!form.room || !form.semester || !form.subject || !form.date) return;
+    if (
+      !form.room ||
+      !form.semester ||
+      !form.subject ||
+      !form.faculty ||
+      !form.date ||
+      !timeOverrideValid
+    ) return;
     setSaving(true);
     const result = await onAdd(form);
     if (result?.changeRoom) {
@@ -760,7 +778,13 @@ export function ExtraClassForm({ onAdd, allRooms }) {
     setSaving(false);
   };
 
-  const canAdd = form.room && form.semester && form.subject && form.date;
+  const canAdd =
+    form.room &&
+    form.semester &&
+    form.subject &&
+    form.faculty &&
+    form.date &&
+    timeOverrideValid;
 
   return (
     <div style={{ ...styles.card, padding: 20, background: theme.surfaceAlt }}>
@@ -908,6 +932,11 @@ export function ExtraClassForm({ onAdd, allRooms }) {
         <button
           onClick={handleAdd}
           disabled={saving || !canAdd}
+          title={
+            !timeOverrideValid
+              ? 'Set both override times and keep the start before the end'
+              : undefined
+          }
           style={{ ...styles.btnPrimary, opacity: saving || !canAdd ? 0.5 : 1 }}
         >
           {saving ? 'Adding…' : '+ Add Class'}

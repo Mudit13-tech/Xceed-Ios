@@ -23,7 +23,7 @@ import { describe, expect, it } from 'vitest';
 import { pinPosition, symbolFor } from '../components/lab/symbols';
 import { measure } from '../components/lab/ScopeView';
 import { designator, placeComponent, removeComponent, rotateComponent } from '../components/lab/benchOps';
-import { eng } from '../components/lab/format';
+import { deviceSummary, eng } from '../components/lab/format';
 
 describe('pin geometry', () => {
   it('puts a resistor’s terminals either side of it', () => {
@@ -277,5 +277,77 @@ describe('engineering notation', () => {
     expect(eng(NaN, 'V')).toBe('—');
     expect(eng(undefined, 'V')).toBe('—');
     expect(eng(Infinity, 'V')).toBe('—');
+  });
+});
+
+describe('the transformer’s terminals', () => {
+  const transformer = { id: 'T1', type: 'transformer', x: 0, y: 0, rotation: 0 };
+
+  it('has four, a winding either side', () => {
+    // Pin order is the contract with the solver: 0–1 primary, 2–3 secondary, and
+    // 0 and 2 the dotted ends. Reordering them here would quietly rewire every
+    // saved circuit, and a transformer wired backwards looks like one that works.
+    expect(symbolFor('transformer').pins).toHaveLength(4);
+
+    const [p1, p2, s1, s2] = [0, 1, 2, 3].map((pin) => pinPosition(transformer, pin));
+    // Primary left, secondary right.
+    expect(p1.x).toBeLessThan(0);
+    expect(p2.x).toBeLessThan(0);
+    expect(s1.x).toBeGreaterThan(0);
+    expect(s2.x).toBeGreaterThan(0);
+    // The dotted terminals are the *same end* of each winding — the top. If these
+    // ever land on opposite ends, the symbol says one thing and the solver's sign
+    // convention says another, and only the solver is right.
+    expect(p1.y).toBeLessThan(p2.y);
+    expect(s1.y).toBeLessThan(s2.y);
+    expect(p1.y).toBeCloseTo(s1.y, 9);
+  });
+
+  it('turns its terminals with it', () => {
+    const turned = { ...transformer, rotation: 90 };
+    const dot = pinPosition(turned, 0);
+    const flat = pinPosition(transformer, 0);
+    // A quarter turn maps (x, y) to (−y, x). Checked because a transformer is
+    // the widest part on the bench and is the one most likely to be rotated to
+    // fit, and a wire attaching near — rather than to — a terminal is invisible.
+    expect(dot.x).toBeCloseTo(-flat.y, 9);
+    expect(dot.y).toBeCloseTo(flat.x, 9);
+  });
+});
+
+describe('a component’s voltage, current and power', () => {
+  it('formats all three the way a bench meter would', () => {
+    const shown = deviceSummary({
+      voltage: 5,
+      current: 0.005,
+      power: 0.025,
+      delivering: false,
+    });
+    expect(shown).toMatchObject({ voltage: '5 V', current: '5 mA', power: '25 mW' });
+    expect(shown.delivering).toBe(false);
+  });
+
+  it('shows a source’s power as a magnitude and says which way it flows', () => {
+    // The solver reports power *absorbed*, so a battery driving the circuit comes
+    // back negative. Printing "−50 mW" on a battery teaches the passive sign
+    // convention backwards, so the sign becomes a word instead.
+    const shown = deviceSummary({ voltage: 10, current: 0.005, power: -0.05, delivering: true });
+    expect(shown.power).toBe('50 mW');
+    expect(shown.delivering).toBe(true);
+  });
+
+  it('shows a dash where the solver will not claim a current', () => {
+    // A transistor's terminal current is not one branch of the circuit. A dash is
+    // obviously missing; a plausible number would be quietly wrong.
+    const shown = deviceSummary({ voltage: 0.7, current: null, power: null });
+    expect(shown.current).toBe('—');
+    expect(shown.power).toBe('—');
+  });
+
+  it('distinguishes a genuine zero from an unknown', () => {
+    // A capacitor at DC really does carry no current, and that zero is a result.
+    const shown = deviceSummary({ voltage: 5, current: 0, power: 0 });
+    expect(shown.current).toBe('0 A');
+    expect(shown.power).toBe('0 W');
   });
 });

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend, Cell,
+  ResponsiveContainer, Legend,
 } from 'recharts';
 import getEnvironment from '../getenvironment';
 import HealthDashboard from './HealthDashboard';
@@ -44,10 +44,6 @@ const T = {
   teal:    '#14b8a6', tealDim:    'rgba(20,184,166,0.09)',
   orange:  '#f97316', orangeDim:  'rgba(249,115,22,0.09)',
 };
-
-const DEPT_COLORS = [
-  T.indigo, T.sky, T.emerald, T.purple, T.teal, T.orange, T.amber, T.red,
-];
 
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
@@ -920,10 +916,8 @@ export default function AMSDashboard() {
                   <YAxis tick={{ fontSize: 9, fill: T.textMuted }} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(99,102,241,0.05)' }} />
                   <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 10, color: T.textMuted, paddingTop: 8 }} />
-                  <Bar dataKey="present" name="Present" radius={[4, 4, 0, 0]}>
-                    {chartData.byDept.map((_, i) => <Cell key={i} fill={DEPT_COLORS[i % DEPT_COLORS.length]} />)}
-                  </Bar>
-                  <Bar dataKey="absent" name="Absent" fill="rgba(239,68,68,0.45)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="present" name="Present" fill={T.emerald} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="absent" name="Absent" fill={T.red} radius={[4, 4, 0, 0]} opacity={0.7} />
                 </BarChart>
               </ResponsiveContainer>
             )}

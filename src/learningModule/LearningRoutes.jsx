@@ -53,6 +53,7 @@ import Todo from './pages/Todo';
 import Calendar from './pages/Calendar';
 import Timetable from './pages/Timetable';
 import Notifications from './pages/Notifications';
+import MyAttendance from './pages/MyAttendance';
 import Profile from './pages/Profile';
 import BugReports from './pages/BugReports';
 import DevTeam from './pages/DevTeam';
@@ -81,6 +82,9 @@ export default function LearningRoutes() {
         <Route path="calendar" element={<Calendar />} />
         <Route path="timetable" element={<Timetable />} />
         <Route path="notifications" element={<Notifications />} />
+        {/* Attendance markings and disputes. Served by the attendance module's
+            API, but reached from here because this is where students sign in. */}
+        <Route path="attendance" element={<MyAttendance />} />
         <Route path="profile" element={<Profile />} />
         <Route path="bugs" element={<BugReports />} />
         <Route path="dev-team" element={<DevTeam />} />

@@ -22,6 +22,7 @@ import {
   FiArrowRight,
   FiAlertCircle,
   FiUserPlus,
+  FiUploadCloud,
 } from 'react-icons/fi';
 
 const MODULES = [
@@ -80,6 +81,13 @@ const MODULES = [
     to: '/superadmin/dev-team',
     icon: FiUserPlus,
     accent: 'teal',
+  },
+  {
+    title: 'Pull & Deploy',
+    description: 'Merge a pull request, pull main and restart the Node server and React build.',
+    to: '/superadmin/deploy',
+    icon: FiUploadCloud,
+    accent: 'red',
   },
   {
     title: 'Logs',

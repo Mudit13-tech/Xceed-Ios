@@ -33,7 +33,10 @@ function StatusDot({ status, size = 7 }) {
   );
 }
 
+// `action` takes a single {label, onClick} or an array of them — the Server
+// pill needs two (console + deploy), every other caller still passes one.
 function ServiceButton({ label, status, details, action, dropWidth = 220 }) {
+  const actions = action ? (Array.isArray(action) ? action : [action]) : [];
   const [open, setOpen] = useState(false);
   const [dropPos, setDropPos] = useState({ top: 0, right: 0 });
   const btnRef = useRef(null);
@@ -136,26 +139,27 @@ function ServiceButton({ label, status, details, action, dropWidth = 220 }) {
           {validDetails.map((d, i) => (
             <div key={i} style={{
               padding: '8px 14px',
-              borderBottom: i < validDetails.length - 1 || action ? `1px solid ${T.border}` : 'none',
+              borderBottom: i < validDetails.length - 1 || actions.length ? `1px solid ${T.border}` : 'none',
               fontSize: 11, color: T.textMuted, fontFamily: T.fontMono,
             }}>
               {d}
             </div>
           ))}
 
-          {action && (
+          {actions.map((a, i) => (
             <button
-              onClick={() => { setOpen(false); action.onClick(); }}
+              key={i}
+              onClick={() => { setOpen(false); a.onClick(); }}
               style={{
                 display: 'block', width: '100%', textAlign: 'left',
                 padding: '9px 14px', background: 'transparent', border: 'none',
-                fontSize: 11.5, fontWeight: 700, color: '#6366f1',
+                fontSize: 11.5, fontWeight: 700, color: a.danger ? '#ef4444' : '#6366f1',
                 cursor: 'pointer', fontFamily: T.fontBody,
               }}
             >
-              {action.label} →
+              {a.label} →
             </button>
-          )}
+          ))}
         </div>,
         document.body
       )}
@@ -254,7 +258,10 @@ export default function HealthDashboard() {
             ? `Uptime: ${formatUptime(healthData?.services?.server?.uptime)}`
             : 'Backend unreachable',
         ]}
-        action={{ label: 'View Console', onClick: () => navigate('/attendance/server-console') }}
+        action={[
+          { label: 'View Console', onClick: () => navigate('/attendance/server-console') },
+          { label: 'Pull & Deploy', onClick: () => navigate('/superadmin/deploy'), danger: true },
+        ]}
       />
 
       <ServiceButton

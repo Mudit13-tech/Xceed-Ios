@@ -225,6 +225,8 @@ const lmApi = {
     request(`/classes/${classId}/members/${membershipId}/email`, { method: 'POST', body: { subject, body } }),
   transferOwnership: (classId, membershipId) =>
     request(`/classes/${classId}/members/${membershipId}/transfer-ownership`, { method: 'POST', body: {} }),
+  getMyPreferences: (classId) => request(`/classes/${classId}/my-preferences`),
+  updateMyPreferences: (classId, body) => request(`/classes/${classId}/my-preferences`, { method: 'PATCH', body }),
 
   /* stream */
   getStream: (classId, params) => request(`/classes/${classId}/stream${qs(params)}`),

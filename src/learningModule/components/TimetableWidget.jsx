@@ -88,8 +88,8 @@ export default function TimetableWidget({ me }) {
             setTimetableData(null);
             return;
           }
-          // Assuming the first class has the required class code and semester
-          const { code, semester: sem } = classes[0];
+          // Assuming the first class has the required department code and semester
+          const { dept: code, semester: sem } = classes[0];
           if (!code || !sem) {
             setTimetableData(null);
             return;

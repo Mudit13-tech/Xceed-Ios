@@ -23,6 +23,7 @@ import {
   FiPlay,
   FiSquare,
   FiTrash2,
+  FiXCircle,
 } from 'react-icons/fi';
 import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
@@ -40,66 +41,85 @@ import RichText from './RichText';
  * screen. Stacked also survives a phone, which a split pane does not.
  */
 
-/** stderr and tracebacks read as errors; everything else is plain output. */
+/** stderr and tracebacks read as errors; everything else gets its own tint. */
 const OUTPUT_COLOUR = {
   stderr: 'red.400',
   error: 'red.400',
-  result: 'inherit',
-  stdout: 'inherit',
+  result: 'purple.400',
+  stdout: 'green.400',
 };
 
 /**
  * The output pane. Absent until there is something to put in it — "this cell is
  * running" is the gutter's job now, and saying it in both places produced two
  * spinners for one run.
+ *
+ * `onClear` wipes the outputs via the same onChange mechanism the editor uses
+ * for source edits, so it goes through whatever save/persistence path already
+ * exists rather than needing a new one.
  */
-function OutputBlock({ outputs }) {
+function OutputBlock({ outputs, onClear }) {
   const bg = useColorModeValue('gray.50', 'blackAlpha.400');
   const border = useColorModeValue('gray.200', 'whiteAlpha.200');
 
   if (!outputs || outputs.length === 0) return null;
 
   return (
-    <Box
-      bg={bg}
-      borderTopWidth="1px"
-      borderColor={border}
-      px={4}
-      py={3}
-      fontSize="sm"
-      maxH="480px"
-      overflowY="auto"
-      // Wide output scrolls inside the cell rather than stretching the page.
-      overflowX="auto"
-    >
-      {(outputs || []).map((output, index) =>
-        output.type === 'image' ? (
-          <Image
-            key={index}
-            src={`data:image/png;base64,${output.text}`}
-            alt="Figure produced by this cell"
-            maxW="100%"
-            my={2}
+    <Box bg={bg} borderTopWidth="1px" borderColor={border}>
+      <Flex align="center" justify="space-between" px={4} pt={2}>
+        <Text fontSize="2xs" fontWeight="600" opacity={0.5} textTransform="uppercase">
+          Output
+        </Text>
+        <HintTooltip label="Clear this cell's output">
+          <IconButton
+            aria-label="Clear output"
+            icon={<FiXCircle />}
+            size="xs"
+            variant="ghost"
+            onClick={onClear}
           />
-        ) : (
-          <Box
-            key={index}
-            as="pre"
-            fontFamily="mono"
-            fontSize="13px"
-            lineHeight="1.5"
-            whiteSpace="pre-wrap"
-            wordBreak="break-word"
-            color={OUTPUT_COLOUR[output.type] || 'inherit'}
-            // The repr of the last expression is the notebook's "return value";
-            // italics distinguish it from something the code printed itself.
-            fontStyle={output.type === 'result' ? 'italic' : 'normal'}
-            m={0}
-          >
-            {output.text}
-          </Box>
-        ),
-      )}
+        </HintTooltip>
+      </Flex>
+
+      <Box
+        px={4}
+        pb={3}
+        pt={1}
+        fontSize="sm"
+        maxH="480px"
+        overflowY="auto"
+        // Wide output scrolls inside the cell rather than stretching the page.
+        overflowX="auto"
+      >
+        {(outputs || []).map((output, index) =>
+          output.type === 'image' ? (
+            <Image
+              key={index}
+              src={`data:image/png;base64,${output.text}`}
+              alt="Figure produced by this cell"
+              maxW="100%"
+              my={2}
+            />
+          ) : (
+            <Box
+              key={index}
+              as="pre"
+              fontFamily="mono"
+              fontSize="13px"
+              lineHeight="1.5"
+              whiteSpace="pre-wrap"
+              wordBreak="break-word"
+              color={OUTPUT_COLOUR[output.type] || 'inherit'}
+              // The repr of the last expression is the notebook's "return value";
+              // italics distinguish it from something the code printed itself.
+              fontStyle={output.type === 'result' ? 'italic' : 'normal'}
+              m={0}
+            >
+              {output.text}
+            </Box>
+          ),
+        )}
+      </Box>
     </Box>
   );
 }
@@ -305,7 +325,7 @@ export default function NotebookCell({
         minHeight="72px"
       />
 
-      <OutputBlock outputs={cell.outputs} />
+      <OutputBlock outputs={cell.outputs} onClear={() => onChange({ outputs: [] })} />
     </Box>
   );
 }

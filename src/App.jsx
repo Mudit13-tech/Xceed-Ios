@@ -172,6 +172,7 @@ import { ExtraClassPage, AlterClassPage } from './attendancemodule/extraAlterCla
 import LiveReportPage from './attendancemodule/LiveReportPage';
 import RecordStream from './attendancemodule/RecordStream';
 import ErpOverrides from './attendancemodule/ErpOverrides';
+import AttendanceDisputes from './attendancemodule/AttendanceDisputes';
 import ErpOverrideAnalysis from './attendancemodule/ErpOverrideAnalysis';
 import StudentPhotoUpdate from './attendancemodule/StudentPhotoUpdate';
 import PhotoSwapBatchSendPage from './platform/PhotoSwapBatchSendPage';
@@ -184,6 +185,7 @@ import EditSessionDates from './attendancemodule/editSessionDates'; // 1. Added 
 import GpuMetrics from './attendancemodule/GpuMetrics';
 import NodeConsole from './attendancemodule/NodeConsole';
 import ReactConsole from './attendancemodule/ReactConsole';
+import DeployConsole from './dashboard/DeployConsole';
 import AMSManual from './attendancemodule/manual';
 import TTManual from './timetableadmin/TTManual';
 import CertManual from './certificatemodule/CertManual';
@@ -194,6 +196,7 @@ import DeptAdminLayout from './deptadmin/DeptAdminLayout';
 import DeptDashboard from './deptadmin/DeptDashboard';
 import DeptReports from './deptadmin/DeptReports';
 import DeptBugReports from './deptadmin/DeptBugReports';
+import DeptDisputes from './deptadmin/DeptDisputes';
 import {
     DeptAssignRolls,
     DeptLiveRTSP,
@@ -286,6 +289,9 @@ function App() {
         <Route path="/superadmin" element={<SuperAdminPage />} />
         <Route path="/superadmin/bugs" element={<BugReportsAdmin />} />
         <Route path="/superadmin/dev-team" element={<DevTeamApplicationsAdmin />} />
+        {/* Whole-server deploy — not attendance-specific, so it lives here
+            rather than under /attendance with the module's own ops pages. */}
+        <Route path="/superadmin/deploy" element={<DeployConsole />} />
         <Route path="/usermanagement" element={<UserManagement />} />
         <Route path="/fileupload" element={<FileUpload />} />
         <Route path="/camera" element={<Camera />} />
@@ -572,6 +578,7 @@ function App() {
           <Route path="dept-admins" element={<DeptAdminAssignPage />} />
           <Route path="erp-overrides" element={<ErpOverrides />} />
           <Route path="erp-overrides/:reportId" element={<ErpOverrideAnalysis />} />
+          <Route path="disputes" element={<AttendanceDisputes />} />
           <Route path="confidence" element={<ConfidenceMonitor />} />
           <Route path="ml-fine-tuning" element={<MLFineTuning />} />
           <Route path="acquisition-control" element={<SchedulerPage />} />
@@ -603,6 +610,7 @@ function App() {
           <Route path="stats/progress" element={<Navigate to="/dept-admin/dashboard" replace />} />
           <Route path="dept-reports-view" element={<DeptReports />} />
           <Route path="bug-report" element={<DeptBugReports />} />
+          <Route path="disputes" element={<DeptDisputes />} />
           <Route path="*" element={
             <div style={{ padding: 48, textAlign: 'center' }}>
               <h2 style={{ marginBottom: 12 }}>Access Restricted</h2>

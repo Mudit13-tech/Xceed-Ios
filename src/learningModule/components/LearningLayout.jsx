@@ -37,12 +37,83 @@ import NotificationBell from './NotificationBell';
 import { buttonTextStyles } from './common';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 
+// Shared look for the header's square action buttons (theme toggle, logout) so
+// they read as one pair. Mirrors the attendance shell's SQUARE_BTN.
+const SQUARE_BTN = {
+  w: '32px',
+  h: '32px',
+  minW: '32px',
+  flexShrink: 0,
+  bg: 'transparent',
+  borderWidth: '1px',
+  borderRadius: '8px',
+};
+
+// Power glyph for the header's logout button — the same mark the attendance
+// module uses, so signing out looks identical wherever you are in the platform.
+function PowerIcon({ size = 18 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 2v10" />
+      <path d="M18.4 6.6a9 9 0 1 1-12.8 0" />
+    </svg>
+  );
+}
+
+function MoonIcon({ size = 18 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+    </svg>
+  );
+}
+
+function SunIcon({ size = 18 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </svg>
+  );
+}
+
 const NAV_ITEMS = [
   { to: '/learning', label: 'Classes', icon: '🏫', end: true },
   { to: '/learning/todo', label: 'To-do', icon: '✅' },
   { to: '/learning/calendar', label: 'Calendar', icon: '📅' },
   { to: '/learning/timetable', label: 'Timetable', icon: '⏰' },
   { to: '/learning/notifications', label: 'Notifications', icon: '🔔' },
+  // Where the "you were marked Present/Absent" mail and notification land.
+  // Students only: staff read the same markings from the attendance module,
+  // and nobody else has a roll number to look up.
+  { to: '/learning/attendance', label: 'My attendance', icon: '🪪', studentOnly: true },
   // Points and badges are a student's record. Staff earn none — they set the
   // work rather than doing it, and the leaderboard leaves them off entirely —
   // so a "My progress" that was always empty would only invite the question.
@@ -96,7 +167,7 @@ function DevTeamCta({ onNavigate }) {
         </Text>
       </Flex>
       <Text fontSize="xs" color={subColor} mt={0.5}>
-        XCEED is built by students — help build it.
+        XCEED invites developers to join the team.
       </Text>
     </Box>
   );
@@ -362,13 +433,19 @@ export default function LearningLayout() {
     <Box minH={studentOnly ? '100vh' : 'calc(100vh - 64px)'} bg={pageBg}>
       <Box bg={headerBg} borderBottomWidth="1px" borderColor={headerBorderColor} position="sticky" top={0} zIndex={20}>
         <Container maxW="1400px" py={3}>
-          <Flex align="center" gap={3}>
+          <Flex align="center" gap={{ base: 2, md: 3 }}>
+            {/* Pulled back into the container's own padding so it sits in the
+                corner rather than inset next to the wordmark — the ghost
+                button's box is wider than the glyph, which otherwise reads as
+                a gap the header did not intend. */}
             <IconButton
               display={{ base: 'inline-flex', md: 'none' }}
               variant="ghost"
               aria-label="Open menu"
               icon={<span>☰</span>}
               onClick={onOpen}
+              ml={-2}
+              mr={-1}
             />
             <Flex as={RouterLink} to="/learning" align="center" gap={2} _hover={{ textDecoration: 'none' }}>
               <Text fontSize="xl">🎓</Text>
@@ -400,7 +477,31 @@ export default function LearningLayout() {
 
             <NotificationBell />
 
-
+            {/* Theme and sign-out sit together in the bar as one pair of square
+                buttons — the same 32px bordered treatment the attendance shell
+                uses — rather than being buried in the avatar menu. */}
+            <HStack spacing={2}>
+              <IconButton
+                onClick={toggleColorMode}
+                variant="ghost"
+                aria-label={colorMode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+                title={colorMode === 'light' ? 'Dark mode' : 'Light mode'}
+                icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
+                {...SQUARE_BTN}
+                borderColor={headerBorderColor}
+                color={headerTitleColor}
+              />
+              <IconButton
+                onClick={handleLogout}
+                variant="ghost"
+                aria-label="Logout"
+                title="Logout"
+                icon={<PowerIcon />}
+                {...SQUARE_BTN}
+                borderColor={headerBorderColor}
+                color="red.500"
+              />
+            </HStack>
 
             {me && (
               <Menu placement="bottom-end">
@@ -427,10 +528,6 @@ export default function LearningLayout() {
                       {me.email}
                     </Text>
                   </Box>
-                  <MenuDivider />
-                  <MenuItem color={menuTextColor} onClick={toggleColorMode}>
-                    {colorMode === 'light' ? '🌙 Dark mode' : '☀️ Light mode'}
-                  </MenuItem>
                   <MenuDivider />
                   <MenuItem color={menuTextColor} onClick={handleLogout}>
                     Log out

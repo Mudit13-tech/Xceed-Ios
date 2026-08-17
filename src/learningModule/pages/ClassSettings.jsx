@@ -40,7 +40,17 @@ export default function ClassSettings() {
     semester: klass.semester,
     batch: klass.batch,
   });
-  const [settings, setSettings] = useState({ ...klass.settings });
+  const [settings, setSettings] = useState({
+    ...klass.settings,
+    emailTriggers: {
+      announcements: true,
+      assignments: true,
+      grades: true,
+      comments: true,
+      submissions: true,
+      ...(klass.settings?.emailTriggers || {}),
+    },
+  });
   const [code, setCode] = useState(klass.code);
   const [saving, setSaving] = useState(false);
   const [lockedRooms, setLockedRooms] = useState([]);
@@ -110,6 +120,11 @@ export default function ClassSettings() {
 
   const set = (field) => (event) => setForm((prev) => ({ ...prev, [field]: event.target.value }));
   const setSetting = (field, value) => setSettings((prev) => ({ ...prev, [field]: value }));
+  const setEmailTrigger = (key, value) =>
+    setSettings((prev) => ({
+      ...prev,
+      emailTriggers: { ...(prev.emailTriggers || {}), [key]: value },
+    }));
 
   const save = async () => {
     setSaving(true);
@@ -289,8 +304,53 @@ export default function ClassSettings() {
           isChecked={settings.emailNotifications}
           onChange={(event) => setSetting('emailNotifications', event.target.checked)}
         >
-          Email the class when something is posted
+          Email class members on updates
         </Checkbox>
+
+        {settings.emailNotifications && (
+          <Box ml={6} mt={2} p={3} bg="gray.50" borderRadius="md" borderLeft="3px solid" borderColor="blue.400">
+            <Text fontSize="xs" fontWeight="700" color="gray.600" mb={2}>
+              Class email triggers:
+            </Text>
+            <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={2}>
+              <Checkbox
+                size="sm"
+                isChecked={settings.emailTriggers?.announcements !== false}
+                onChange={(e) => setEmailTrigger('announcements', e.target.checked)}
+              >
+                Stream announcements & posts
+              </Checkbox>
+              <Checkbox
+                size="sm"
+                isChecked={settings.emailTriggers?.assignments !== false}
+                onChange={(e) => setEmailTrigger('assignments', e.target.checked)}
+              >
+                New assignments & quizzes
+              </Checkbox>
+              <Checkbox
+                size="sm"
+                isChecked={settings.emailTriggers?.grades !== false}
+                onChange={(e) => setEmailTrigger('grades', e.target.checked)}
+              >
+                Grades returned
+              </Checkbox>
+              <Checkbox
+                size="sm"
+                isChecked={settings.emailTriggers?.comments !== false}
+                onChange={(e) => setEmailTrigger('comments', e.target.checked)}
+              >
+                Forum replies & comments
+              </Checkbox>
+              <Checkbox
+                size="sm"
+                isChecked={settings.emailTriggers?.submissions !== false}
+                onChange={(e) => setEmailTrigger('submissions', e.target.checked)}
+              >
+                Student submissions
+              </Checkbox>
+            </SimpleGrid>
+          </Box>
+        )}
         <FormControl mt={4} maxW="200px">
           <FormLabel fontSize="sm">Default points for new work</FormLabel>
           <Input
