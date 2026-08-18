@@ -98,7 +98,7 @@ export default function TutorialResults() {
       <Heading size="md" mb={1}>
         {tutorial.title}
       </Heading>
-      <Text fontSize="sm" color="gray.500" mb={4}>
+      <Text fontSize="sm" color="lmFg.muted" mb={4}>
         {tutorial.questions.length} questions · {tutorial.totalMarks} marks · every student receives their
         own values
       </Text>
@@ -170,7 +170,7 @@ export default function TutorialResults() {
                                   : 'red'
                           }
                         />
-                        <Text fontSize="xs" color="gray.500">
+                        <Text fontSize="xs" color="lmFg.muted">
                           {entry.correctPercent === null ? '—' : `${entry.correctPercent}%`}
                         </Text>
                       </Td>
@@ -211,7 +211,7 @@ export default function TutorialResults() {
 
                   <AccordionPanel pb={4}>
                     {attempt.submittedAt && (
-                      <Text fontSize="xs" color="gray.500" mb={3}>
+                      <Text fontSize="xs" color="lmFg.muted" mb={3}>
                         Submitted {formatDateTime(attempt.submittedAt)} · took{' '}
                         {Math.round(attempt.durationSec / 60)} min
                       </Text>
@@ -225,11 +225,11 @@ export default function TutorialResults() {
                     )}
 
                     {(attempt.questions || []).map((question, index) => (
-                      <Box key={index} mb={4} borderLeftWidth="3px" borderColor="gray.200" pl={3}>
+                      <Box key={index} mb={4} borderLeftWidth="3px" borderColor="lmBorder.base" pl={3}>
                         <Text fontSize="sm" fontWeight="500">
                           Q{index + 1}. {richTextToPlain(question.prompt)}
                         </Text>
-                        <HStack fontSize="xs" color="gray.500" mt={1} wrap="wrap">
+                        <HStack fontSize="xs" color="lmFg.muted" mt={1} wrap="wrap">
                           {Object.entries(question.values || {}).map(([name, value]) => (
                             <Code key={name} fontSize="xs">
                               {name} = {String(value)}

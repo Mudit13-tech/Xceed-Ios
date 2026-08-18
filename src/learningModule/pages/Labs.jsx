@@ -99,7 +99,7 @@ export default function Labs() {
       <Flex justify="space-between" align="flex-start" mb={4} gap={3} wrap="wrap">
         <Box>
           <Heading size="md">Virtual lab</Heading>
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="lmFg.muted">
             Wire up a circuit, put meters on it and run it. Voltage, current and power in AC and DC,
             with a scope for waveforms — solved properly, so the numbers are the ones the bench would
             give.
@@ -115,7 +115,7 @@ export default function Labs() {
                 <MenuItem key={domain.key} onClick={() => create(domain)}>
                   <Box>
                     <Text fontWeight="600">{domain.label}</Text>
-                    <Text fontSize="xs" color="gray.500" maxW="320px" whiteSpace="normal">
+                    <Text fontSize="xs" color="lmFg.muted" maxW="320px" whiteSpace="normal">
                       {domain.blurb}
                     </Text>
                   </Box>
@@ -153,7 +153,7 @@ export default function Labs() {
                   )}
                   {lab.topicName && <Badge colorScheme="gray">{lab.topicName}</Badge>}
                 </HStack>
-                <Text fontSize="xs" color="gray.500" mt={1}>
+                <Text fontSize="xs" color="lmFg.muted" mt={1}>
                   {lab.componentCount
                     ? `${lab.componentCount} component(s) laid out`
                     : 'Students build it from scratch'}
@@ -163,7 +163,7 @@ export default function Labs() {
                     : ''}
                 </Text>
                 {isTeacher && lab.stats && (
-                  <Text fontSize="xs" color="gray.500">
+                  <Text fontSize="xs" color="lmFg.muted">
                     {lab.stats.submissions} submission(s)
                   </Text>
                 )}

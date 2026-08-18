@@ -25,7 +25,14 @@ import lmApi from '../api/lmApi';
 import { ErrorState, Loading, SectionCard } from '../components/common';
 import RichTextEditor from '../components/RichTextEditor';
 import CircuitCanvas from '../components/lab/CircuitCanvas';
-import { Palette, PartInspector } from '../components/lab/BenchPanels';
+import {
+  DeviceReadings,
+  InstrumentReadings,
+  Palette,
+  PartInspector,
+} from '../components/lab/BenchPanels';
+import ScopeView from '../components/lab/ScopeView';
+import { benchReadings } from '../components/lab/format';
 import {
   placeComponent,
   removeComponent,
@@ -54,6 +61,19 @@ import {
  * through a fixed resistor has one right answer, and "what happens to the power
  * factor as you increase the inductance" does not. Requiring an expected value for
  * everything would have quietly banned the second kind of question.
+ *
+ * ## Why the bench runs here as well as on the bench screen
+ *
+ * The expected values a teacher types in below are the numbers a student is marked
+ * against, and until this screen could run a circuit the only way to find them was
+ * to save, open the bench, run, remember four numbers, and come back — during which
+ * the layout on the bench is not the one being edited, because a teacher's wiring
+ * there is never saved. So Run is here, on the layout as it stands, and the
+ * readings come back beside the fields they are about to be typed into.
+ *
+ * It runs *what is on the canvas*, saved or not: the run endpoint solves the circuit
+ * in the request rather than the stored one, so an experiment can be tried before it
+ * is committed to. Nothing is recorded — the server discards a teacher's run.
  */
 export default function LabEditor() {
   const { classId } = useOutletContext();
@@ -67,6 +87,13 @@ export default function LabEditor() {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+
+  // The trial run. `analysis` is null until the teacher picks one, so it follows
+  // the experiment's own first allowed analysis while they change that setting.
+  const [analysis, setAnalysis] = useState(null);
+  const [result, setResult] = useState(null);
+  const [running, setRunning] = useState(false);
+  const [showOnBench, setShowOnBench] = useState(true);
 
   const load = useCallback(async () => {
     setError(null);
@@ -128,6 +155,53 @@ export default function LabEditor() {
   const setSettings = (patch) => setLab({ ...lab, settings: { ...lab.settings, ...patch } });
   const setCircuit = (next) => setLab({ ...lab, startingCircuit: next });
 
+  const deleteComponent = (id) => {
+    if (!id) return;
+    // Wires and all — see `removeComponent`. A wire left naming a component that
+    // is not there resolves to ground in the solver rather than failing, so the
+    // circuit would still run, as something nobody drew.
+    setCircuit(removeComponent(circuit, id));
+    setSelectedId((current) => (current === id ? null : current));
+  };
+
+  const allowedAnalyses = lab.settings.analyses || [];
+  const runningAnalysis = analysis || allowedAnalyses[0] || 'dc';
+  const probes = circuit.components.filter((cm) => cm.type === 'cro' || cm.type === 'dso');
+  const canvasReadings = benchReadings(result, { detailed: showOnBench });
+
+  const run = async () => {
+    setRunning(true);
+    try {
+      const solved = await lmApi.runLab(classId, labId, {
+        circuit,
+        analysis: runningAnalysis,
+        frequency: lab.settings.frequency,
+      });
+      setResult(solved);
+      if (!solved.ok) {
+        toast({
+          status: 'warning',
+          title: 'The circuit did not solve',
+          description: solved.message,
+          duration: 8000,
+        });
+      }
+    } catch (err) {
+      // The likeliest 400 here is an analysis the *saved* experiment does not
+      // offer yet, because the tick box beside it has not been saved. Worth
+      // saying, since the fix is one button away and the message alone would
+      // read as though the bench were broken.
+      toast({
+        status: 'error',
+        title: err.message,
+        description: 'If you have just changed which runs are allowed, save first.',
+        duration: 9000,
+      });
+    } finally {
+      setRunning(false);
+    }
+  };
+
   const addReading = () =>
     set({
       readings: [
@@ -155,7 +229,7 @@ export default function LabEditor() {
       <Flex justify="space-between" align="center" mb={4} gap={3} wrap="wrap">
         <Box>
           <Heading size="md">Set up the experiment</Heading>
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="lmFg.muted">
             {domain?.label} bench · {palette.length} components available
           </Text>
         </Box>
@@ -196,7 +270,7 @@ export default function LabEditor() {
               {/* Worth saying plainly: the domain fixes the palette, so moving an
                   experiment to a bench without a transistor on it will reject the
                   transistor already in the circuit rather than quietly drop it. */}
-              <Text fontSize="xs" color="gray.500" mt={1}>
+              <Text fontSize="xs" color="lmFg.muted" mt={1}>
                 Changing the bench changes which components exist. Anything already placed that the
                 new bench does not have will be refused on save.
               </Text>
@@ -279,7 +353,7 @@ export default function LabEditor() {
                 value={lab.settings.attemptsAllowed ?? 0}
                 onChange={(event) => setSettings({ attemptsAllowed: Number(event.target.value) })}
               />
-              <Text fontSize="xs" color="gray.500">
+              <Text fontSize="xs" color="lmFg.muted">
                 0 = unlimited
               </Text>
             </HStack>
@@ -294,21 +368,73 @@ export default function LabEditor() {
             <Text fontSize="sm" fontWeight="600">
               Starting layout
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color="lmFg.muted">
               Leave it empty and they build from scratch. Place part of it and they finish the wiring.
               Place all of it and the experiment becomes “predict, then run”.
             </Text>
           </Box>
-          {!!circuit.components.length && (
-            <Button
-              size="xs"
-              variant="ghost"
-              colorScheme="red"
-              onClick={() => setCircuit({ components: [], wires: [] })}
-            >
-              Clear the bench
-            </Button>
-          )}
+          <HStack>
+            {/* Which run, then Run. Both only once there is something to run:
+                an experiment with an empty starting layout is a legitimate one,
+                and a Run button on an empty canvas would only ever return "there
+                is nothing on the canvas yet". */}
+            {!!circuit.components.length && (
+              <>
+                {allowedAnalyses.length > 1 && (
+                  <Select
+                    size="sm"
+                    maxW="170px"
+                    value={runningAnalysis}
+                    onChange={(event) => setAnalysis(event.target.value)}
+                  >
+                    {allowedAnalyses.map((option) => (
+                      <option key={option} value={option}>
+                        {option === 'dc'
+                          ? 'DC operating point'
+                          : option === 'ac'
+                            ? 'AC steady state'
+                            : 'Transient (scope)'}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+                {result?.ok && result.analysis !== 'transient' && (
+                  <Button
+                    size="sm"
+                    variant={showOnBench ? 'solid' : 'outline'}
+                    colorScheme="green"
+                    onClick={() => setShowOnBench((on) => !on)}
+                  >
+                    {showOnBench ? 'Hide readings' : 'Show readings'}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  colorScheme="teal"
+                  onClick={run}
+                  isLoading={running}
+                  loadingText="Solving"
+                >
+                  ▶ Run
+                </Button>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  colorScheme="red"
+                  onClick={() => {
+                    setCircuit({ components: [], wires: [] });
+                    setSelectedId(null);
+                    // The result belongs to a bench that no longer exists, and
+                    // readings left over one would be labelled against parts the
+                    // teacher has just removed.
+                    setResult(null);
+                  }}
+                >
+                  Clear the bench
+                </Button>
+              </>
+            )}
+          </HStack>
         </Flex>
 
         <Flex gap={3} align="flex-start" wrap={{ base: 'wrap', lg: 'nowrap' }}>
@@ -333,8 +459,15 @@ export default function LabEditor() {
               palette={palette}
               selectedId={selectedId}
               onSelect={setSelectedId}
+              onDelete={deleteComponent}
+              readings={canvasReadings}
               height={400}
             />
+            <Text fontSize="xs" color="lmFg.muted" mt={2}>
+              Click a terminal then another to wire them, click a wire to remove it, or select a
+              component and press Delete to take it and its wires off. Run solves what is on the
+              bench, saved or not — nothing about a run of yours is recorded.
+            </Text>
           </Box>
           <Box flex="0 0 250px" minW="230px">
             <PartInspector
@@ -342,13 +475,59 @@ export default function LabEditor() {
               part={selectedPart}
               onChange={(next) => setCircuit(updateComponent(circuit, next))}
               onRotate={() => setCircuit(rotateComponent(circuit, selectedId))}
-              onDelete={() => {
-                setCircuit(removeComponent(circuit, selectedId));
-                setSelectedId(null);
-              }}
+              onDelete={deleteComponent}
             />
           </Box>
         </Flex>
+
+        {/* What it did. Under the bench rather than beside it: the device table is
+            four columns and the inspector column is 250 px. */}
+        {result && (
+          <Box mt={4}>
+            <Divider mb={3} />
+            <Flex gap={4} align="flex-start" wrap={{ base: 'wrap', lg: 'nowrap' }}>
+              <Box flex="0 0 290px" minW="260px">
+                <Text fontSize="sm" fontWeight="600" mb={2}>
+                  Instruments
+                </Text>
+                <InstrumentReadings result={result} />
+              </Box>
+              <Box flex="1 1 auto" minW="300px">
+                {result.ok && (
+                  <>
+                    <Text fontSize="sm" fontWeight="600" mb={2}>
+                      Across each component
+                    </Text>
+                    <DeviceReadings result={result} />
+                    {/* Worth saying here and not on the student's bench: these are
+                        the numbers to copy into the expected values below, and
+                        they are this layout's numbers — a student who wires it
+                        differently, or turns a rheostat, will legitimately read
+                        something else. */}
+                    <Text fontSize="xs" color="lmFg.muted" mt={2}>
+                      These are what this layout reads. Copy them into the expected values below if
+                      the student is meant to reproduce them — but leave a reading blank where their
+                      circuit may legitimately differ.
+                    </Text>
+                  </>
+                )}
+              </Box>
+            </Flex>
+
+            {result.ok && result.analysis === 'transient' && probes.length > 0 && (
+              <Box mt={3}>
+                {probes.map((probe) => (
+                  <Box key={probe.id} mb={3}>
+                    <Text fontSize="sm" fontWeight="600" mb={1}>
+                      {probe.label || probe.id}
+                    </Text>
+                    <ScopeView result={result} probe={probe} />
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </Box>
+        )}
       </SectionCard>
 
       {/* What they must record. */}
@@ -358,7 +537,7 @@ export default function LabEditor() {
             <Text fontSize="sm" fontWeight="600">
               Readings to record
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color="lmFg.muted">
               Give an expected value and it is checked automatically. Leave it blank and you mark it
               yourself — which is the right choice for anything that has no single right answer.
             </Text>
@@ -369,7 +548,7 @@ export default function LabEditor() {
         </Flex>
 
         {!(lab.readings || []).length ? (
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="lmFg.muted">
             None yet. Without any, students still build and run the circuit — they just have nothing
             to write down.
           </Text>
@@ -463,7 +642,7 @@ export default function LabEditor() {
           </Table>
         )}
 
-        <Text fontSize="xs" color="gray.500" mt={3}>
+        <Text fontSize="xs" color="lmFg.muted" mt={3}>
           <Badge colorScheme="blue" mr={1}>
             Measured
           </Badge>

@@ -49,6 +49,7 @@ function Row({ row, highlight, onOpen }) {
   const bg = useColorModeValue('purple.50', 'purple.900');
   const hoverBg = useColorModeValue('gray.50', 'whiteAlpha.100');
   const mutedText = useColorModeValue('gray.500', 'gray.400');
+  const nameText = useColorModeValue('gray.800', 'gray.100');
   return (
     <Flex
       align="center"
@@ -58,7 +59,7 @@ function Row({ row, highlight, onOpen }) {
       borderRadius="md"
       bg={highlight ? bg : 'transparent'}
       borderWidth={highlight ? '1px' : 0}
-      borderColor="purple.200"
+      borderColor="lmHue.purple200"
       // A row is only a button when there is something behind it to read:
       // staff may open anybody, a student only themselves.
       {...(onOpen
@@ -83,7 +84,7 @@ function Row({ row, highlight, onOpen }) {
       </Box>
       <Avatar size="xs" name={row.studentName} />
       <Box flex="1" minW={0}>
-        <Text fontSize="sm" fontWeight={highlight ? '700' : '500'} noOfLines={1} color={useColorModeValue('gray.800', 'gray.100')}>
+        <Text fontSize="sm" fontWeight={highlight ? '700' : '500'} noOfLines={1} color={nameText}>
           {row.studentName}
           {highlight && (
             <Text as="span" fontSize="xs" color="purple.500" ml={2}>
@@ -105,6 +106,7 @@ function Row({ row, highlight, onOpen }) {
 }
 
 function Board({ data, onOpenStudent }) {
+  const mutedText = useColorModeValue('gray.500', 'gray.400');
   if (!data.rows.length) {
     return (
       <EmptyState
@@ -183,6 +185,8 @@ const KIND_LABELS = {
 function StudentPoints({ classId, student, onClose }) {
   const studentId = student?.studentId;
   const mutedText = useColorModeValue('gray.500', 'gray.400');
+  const headingText = useColorModeValue('gray.800', 'gray.100');
+  const detailText = useColorModeValue('gray.600', 'gray.300');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['learning', 'studentPoints', classId, studentId],
@@ -206,7 +210,7 @@ function StudentPoints({ classId, student, onClose }) {
           <HStack spacing={3}>
             <Avatar size="sm" name={data?.studentName || student?.studentName} />
             <Box minW={0}>
-              <Text noOfLines={1} color={useColorModeValue('gray.800', 'gray.100')}>{data?.studentName || student?.studentName}</Text>
+              <Text noOfLines={1} color={headingText}>{data?.studentName || student?.studentName}</Text>
               {student?.rank && (
                 <Text fontSize="xs" color={mutedText} fontWeight="400">
                   #{student.rank} on this table
@@ -269,7 +273,7 @@ function StudentPoints({ classId, student, onClose }) {
                               {row.points} pts · {row.awards} time{row.awards === 1 ? '' : 's'}
                             </Text>
                           </Flex>
-                          <Box bg="gray.100" borderRadius="full" h="6px" overflow="hidden">
+                          <Box bg="lmBg.track" borderRadius="full" h="6px" overflow="hidden">
                             <Box
                               bg="purple.400"
                               h="100%"
@@ -311,7 +315,7 @@ function StudentPoints({ classId, student, onClose }) {
                           </HStack>
                           {/* What it was actually for — "#1 of the all-time
                               table" says more than the badge name repeated. */}
-                          <Text fontSize="xs" color={useColorModeValue('gray.600', 'gray.300')}>
+                          <Text fontSize="xs" color={detailText}>
                             {badge.detail || badge.hint}
                           </Text>
                         </Box>
@@ -365,7 +369,7 @@ function StudentPoints({ classId, student, onClose }) {
                           align="baseline"
                           py={2}
                           borderBottomWidth="1px"
-                          borderColor="gray.100"
+                          borderColor="lmBorder.subtle"
                         >
                           <Box flex="1" minW={0}>
                             <Text fontSize="sm" noOfLines={1}>
@@ -403,6 +407,7 @@ function StudentPoints({ classId, student, onClose }) {
  */
 function TeacherView({ week, all, classId }) {
   const mutedText = useColorModeValue('gray.500', 'gray.400');
+  const nameText = useColorModeValue('gray.800', 'gray.100');
   const [opened, setOpened] = useState(null);
   const summary = week?.summary;
   if (!summary) return <ErrorState error={{ message: 'No summary available.' }} />;
@@ -466,7 +471,7 @@ function TeacherView({ week, all, classId }) {
                       {row.points} pts · {row.awards} award{row.awards === 1 ? '' : 's'}
                     </Text>
                   </Flex>
-                  <Box bg="gray.100" borderRadius="full" h="6px" overflow="hidden">
+                  <Box bg="lmBg.track" borderRadius="full" h="6px" overflow="hidden">
                     <Box bg="purple.400" h="100%" w={`${share}%`} />
                   </Box>
                 </Box>
@@ -498,9 +503,9 @@ function TeacherView({ week, all, classId }) {
                   borderRadius="md"
                   _hover={{ bg: 'blackAlpha.50' }}
                   {...buttonTextStyles}
-                  color={useColorModeValue('gray.800', 'gray.100')}
+                  color={nameText}
                 >
-                  <Text fontSize="sm" color={useColorModeValue('gray.800', 'gray.100')}>{row.studentName}</Text>
+                  <Text fontSize="sm" color={nameText}>{row.studentName}</Text>
                   <Badge colorScheme="gray" borderRadius="full">
                     {row.points}
                   </Badge>
@@ -634,8 +639,8 @@ export default function Leaderboard() {
                   p={3}
                   borderWidth={badge.rare ? '2px' : '1px'}
                   borderRadius="lg"
-                  borderColor={mine ? (badge.rare ? 'orange.300' : 'purple.200') : 'gray.200'}
-                  bg={mine ? (badge.rare ? 'orange.50' : 'purple.50') : 'transparent'}
+                  borderColor={mine ? (badge.rare ? 'lmHue.orange300' : 'lmHue.purple200') : 'lmBorder.base'}
+                  bg={mine ? (badge.rare ? 'lmHue.orange50' : 'lmHue.purple50') : 'transparent'}
                   opacity={mine ? 1 : 0.45}
                   filter={mine ? 'none' : 'grayscale(1)'}
                   position="relative"

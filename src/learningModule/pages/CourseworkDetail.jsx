@@ -147,17 +147,17 @@ function YourWork({ classId, coursework, submission, onChanged }) {
       </HStack>
 
       {submission.turnedInAt && (
-        <Text fontSize="xs" color="gray.500" mt={3}>
+        <Text fontSize="xs" color="lmFg.muted" mt={3}>
           Turned in {formatDateTime(submission.turnedInAt)}
           {submission.late ? ' (late)' : ''}
         </Text>
       )}
 
       <Divider my={4} />
-      <Heading size="xs" color="gray.700" mb={2}>
+      <Heading size="xs" color="lmFg.body" mb={2}>
         Private comments
       </Heading>
-      <Text fontSize="xs" color="gray.500" mb={2}>
+      <Text fontSize="xs" color="lmFg.muted" mb={2}>
         Only you and the teaching staff can see these.
       </Text>
       <CommentThread
@@ -223,15 +223,15 @@ export default function CourseworkDetail() {
             <Flex gap={3} align="flex-start">
               <Text fontSize="2xl">{meta.icon}</Text>
               <Box flex="1" minW={0}>
-                <Heading size="md" color="gray.800">
+                <Heading size="md" color="lmFg.heading">
                   {item.title}
                 </Heading>
                 <HStack mt={2} spacing={3} wrap="wrap">
-                  <Text fontSize="sm" color="gray.600">
+                  <Text fontSize="sm" color="lmFg.subtle">
                     {item.createdByName}
                   </Text>
                   <Badge colorScheme={meta.colorScheme}>{meta.label}</Badge>
-                  {item.points > 0 && <Text fontSize="sm" color="gray.600">{item.points} points</Text>}
+                  {item.points > 0 && <Text fontSize="sm" color="lmFg.subtle">{item.points} points</Text>}
                   <DueBadge dueDate={item.dueDate} />
                   {item.topicName && <Badge colorScheme="gray">{item.topicName}</Badge>}
                   {item.aiSourceSessionId && <Badge colorScheme="purple">✨ From a class recording</Badge>}
@@ -277,7 +277,7 @@ export default function CourseworkDetail() {
                     <Text fontSize="xl" fontWeight="700">
                       {item.submissions.filter((s) => s.state === 'turned_in').length}
                     </Text>
-                    <Text fontSize="xs" color="gray.500">
+                    <Text fontSize="xs" color="lmFg.muted">
                       Turned in
                     </Text>
                   </Box>
@@ -285,7 +285,7 @@ export default function CourseworkDetail() {
                     <Text fontSize="xl" fontWeight="700">
                       {item.submissions.filter((s) => s.state === 'assigned').length}
                     </Text>
-                    <Text fontSize="xs" color="gray.500">
+                    <Text fontSize="xs" color="lmFg.muted">
                       Assigned
                     </Text>
                   </Box>
@@ -293,7 +293,7 @@ export default function CourseworkDetail() {
                     <Text fontSize="xl" fontWeight="700">
                       {item.submissions.filter((s) => s.state === 'returned').length}
                     </Text>
-                    <Text fontSize="xs" color="gray.500">
+                    <Text fontSize="xs" color="lmFg.muted">
                       Graded
                     </Text>
                   </Box>

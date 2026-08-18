@@ -197,7 +197,7 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
             <FormHelperText>Separate with commas, spaces or new lines.</FormHelperText>
           </FormControl>
 
-          <Box mt={5} p={4} borderWidth="1px" borderColor="gray.200" borderRadius="md" bg="gray.50">
+          <Box mt={5} p={4} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" bg="lmBg.sunken">
             <Checkbox
               isChecked={createAccounts}
               onChange={(event) => setCreateAccounts(event.target.checked)}
@@ -206,7 +206,7 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
                 Create XCEED accounts for addresses that don&apos;t have one
               </Text>
             </Checkbox>
-            <Text fontSize="xs" color="gray.600" mt={2} ml={6}>
+            <Text fontSize="xs" color="lmFg.subtle" mt={2} ml={6}>
               {createAccounts ? (
                 <>
                   Each new person gets an account with the <Badge colorScheme="cyan">{platformRole}</Badge>{' '}
@@ -230,7 +230,7 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
             >
               Also give the {platformRole} role to people who already have an account without it
             </Checkbox>
-            <Text fontSize="xs" color="gray.500" mt={1} ml={6}>
+            <Text fontSize="xs" color="lmFg.muted" mt={1} ml={6}>
               Off by default — changing an existing user&apos;s platform roles is usually an
               administrator&apos;s decision.
             </Text>
@@ -239,10 +239,10 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
           {mailProgress && (
             <Box mt={4}>
               <Flex justify="space-between" mb={1}>
-                <Text fontSize="xs" color="gray.600">
+                <Text fontSize="xs" color="lmFg.subtle">
                   Sending invite emails…
                 </Text>
-                <Text fontSize="xs" color="gray.600">
+                <Text fontSize="xs" color="lmFg.subtle">
                   {mailProgress.completed} of {mailProgress.total}
                 </Text>
               </Flex>
@@ -326,7 +326,7 @@ function ProgressModal({ isOpen, onClose, classId, membership }) {
                   <Text fontSize="2xl" fontWeight="700">
                     {data.summary.turnedIn}
                   </Text>
-                  <Text fontSize="xs" color="gray.500">
+                  <Text fontSize="xs" color="lmFg.muted">
                     Turned in
                   </Text>
                 </Box>
@@ -334,7 +334,7 @@ function ProgressModal({ isOpen, onClose, classId, membership }) {
                   <Text fontSize="2xl" fontWeight="700" color="red.500">
                     {data.summary.late}
                   </Text>
-                  <Text fontSize="xs" color="gray.500">
+                  <Text fontSize="xs" color="lmFg.muted">
                     Late
                   </Text>
                 </Box>
@@ -342,7 +342,7 @@ function ProgressModal({ isOpen, onClose, classId, membership }) {
                   <Text fontSize="2xl" fontWeight="700" color="blue.500">
                     {data.summary.percent === null ? '—' : `${data.summary.percent}%`}
                   </Text>
-                  <Text fontSize="xs" color="gray.500">
+                  <Text fontSize="xs" color="lmFg.muted">
                     {data.summary.earned}/{data.summary.possible} points
                   </Text>
                 </Box>
@@ -352,10 +352,10 @@ function ProgressModal({ isOpen, onClose, classId, membership }) {
               )}
               <Divider mb={3} />
               {data.submissions.map((submission) => (
-                <Flex key={submission._id} justify="space-between" py={2} borderBottomWidth="1px" borderColor="gray.100">
+                <Flex key={submission._id} justify="space-between" py={2} borderBottomWidth="1px" borderColor="lmBorder.subtle">
                   <Box>
                     <Text fontSize="sm">{submission.courseworkId?.title || 'Deleted item'}</Text>
-                    <Text fontSize="xs" color="gray.500">
+                    <Text fontSize="xs" color="lmFg.muted">
                       {submission.state}
                       {submission.late ? ' · late' : ''}
                     </Text>
@@ -421,7 +421,7 @@ function EmailModal({ isOpen, onClose, classId, membership, className }) {
         <ModalBody>
           <FormControl mb={4}>
             <FormLabel fontSize="sm">To</FormLabel>
-            <Input value={membership.email || 'No email address registered'} isReadOnly bg="gray.50" fontSize="sm" />
+            <Input value={membership.email || 'No email address registered'} isReadOnly bg="lmBg.sunken" fontSize="sm" />
           </FormControl>
           <FormControl mb={4} isRequired>
             <FormLabel fontSize="sm">Subject</FormLabel>
@@ -492,7 +492,7 @@ function PersonRow({ member, isTeacher, isOwner, classId, onChanged, onViewProgr
   };
 
   return (
-    <Flex align="center" gap={3} py={3} borderBottomWidth="1px" borderColor="gray.100">
+    <Flex align="center" gap={3} py={3} borderBottomWidth="1px" borderColor="lmBorder.subtle">
       <Avatar size="sm" name={member.name || member.email} getInitials={() => initials(member.name || member.email)} />
       <Box flex="1" minW={0}>
         <HStack spacing={2}>
@@ -504,7 +504,7 @@ function PersonRow({ member, isTeacher, isOwner, classId, onChanged, onViewProgr
           {member.status === 'invited' && <Badge colorScheme="cyan">Invited</Badge>}
           {member.muted && <Badge colorScheme="red">Muted</Badge>}
         </HStack>
-        <Text fontSize="xs" color="gray.500" noOfLines={1}>
+        <Text fontSize="xs" color="lmFg.muted" noOfLines={1}>
           {member.email}
           {member.rollNumber ? ` · ${member.rollNumber}` : ''}
           {member.lastSeenAt ? ` · active ${relativeTime(member.lastSeenAt)}` : ''}
@@ -740,7 +740,7 @@ export default function People() {
 
       {!isTeacher && (
         <Box mt={4}>
-          <Text fontSize="xs" color="gray.500">
+          <Text fontSize="xs" color="lmFg.muted">
             Joined {formatDate(klass.created_at)} · taught by {klass.ownerName}
           </Text>
         </Box>

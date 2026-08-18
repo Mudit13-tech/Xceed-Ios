@@ -139,7 +139,7 @@ export default function Assignments() {
       <Flex justify="space-between" align="flex-start" mb={4} gap={3} wrap="wrap">
         <Box>
           <Heading size="md">Assignments</Heading>
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="lmFg.muted">
             Assessed numerical work. Every student gets their own values, and answers are marked
             against a formula rather than a fixed key.
           </Text>
@@ -207,11 +207,11 @@ export default function Assignments() {
                   {assignment.topicName && <Badge colorScheme="gray">{assignment.topicName}</Badge>}
                 </HStack>
                 {assignment.description && (
-                  <Text fontSize="sm" color="gray.600" noOfLines={2} mt={1}>
+                  <Text fontSize="sm" color="lmFg.subtle" noOfLines={2} mt={1}>
                     {assignment.description}
                   </Text>
                 )}
-                <Text fontSize="xs" color="gray.500" mt={1}>
+                <Text fontSize="xs" color="lmFg.muted" mt={1}>
                   {assignment.questionCount ?? assignment.questions?.length ?? 0} questions ·{' '}
                   {assignment.totalMarks} marks
                   {assignment.settings?.attemptsAllowed > 1
@@ -219,7 +219,7 @@ export default function Assignments() {
                     : ''}
                 </Text>
                 {isTeacher && assignment.stats && (
-                  <Text fontSize="xs" color="gray.500">
+                  <Text fontSize="xs" color="lmFg.muted">
                     {assignment.stats.attempts} submission(s)
                     {assignment.stats.avg !== null && assignment.stats.avg !== undefined
                       ? ` · avg ${Math.round(assignment.stats.avg * 10) / 10}%`

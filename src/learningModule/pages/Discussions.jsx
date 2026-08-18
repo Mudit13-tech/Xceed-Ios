@@ -89,7 +89,7 @@ function NewTopicModal({ isOpen, onClose, classId, onCreated }) {
               value={body}
               onChange={(event) => setBody(event.target.value)}
             />
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color="lmFg.muted">
               You get one new topic a week, so make it one worth the class&apos;s time. Replying to
               other people&apos;s threads is unlimited.
             </Text>
@@ -164,7 +164,7 @@ function Thread({ discussion, classId, isTeacher, onChanged }) {
               {discussion.title}
             </Text>
           </HStack>
-          <Text fontSize="xs" color="gray.500">
+          <Text fontSize="xs" color="lmFg.muted">
             {discussion.authorName}
             {discussion.authorRole !== 'student' ? ' · staff' : ''} · {relativeTime(discussion.created_at)}
             {discussion.replyCount > 0
@@ -301,7 +301,7 @@ export default function Discussions() {
         )}
       </SectionCard>
 
-      <Heading size="xs" color="gray.500" fontWeight="500">
+      <Heading size="xs" color="lmFg.muted" fontWeight="500">
         Starting a discussion and replying to one both earn points. Staff can remove anything; you can
         remove your own thread while nobody has replied to it.
       </Heading>

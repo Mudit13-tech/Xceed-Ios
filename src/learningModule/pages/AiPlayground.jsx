@@ -31,9 +31,9 @@ export default function AiPlayground() {
   return (
     <Box>
       <Box
-        bg="white"
+        bg="lmBg.surface"
         borderWidth="1px"
-        borderColor="gray.200"
+        borderColor="lmBorder.base"
         borderRadius="lg"
         px={{ base: 6, md: 10 }}
         py={{ base: 10, md: 14 }}
@@ -44,14 +44,14 @@ export default function AiPlayground() {
           🤖
         </Text>
         <HStack justify="center" spacing={3} mb={3}>
-          <Heading size="lg" color="gray.800">
+          <Heading size="lg" color="lmFg.heading">
             AI Playground
           </Heading>
           <Badge colorScheme="purple" borderRadius="full" px={3} py={1}>
             Launching soon
           </Badge>
         </HStack>
-        <Text color="gray.600" fontSize="sm" maxW="520px" mx="auto">
+        <Text color="lmFg.subtle" fontSize="sm" maxW="520px" mx="auto">
           A space to study with AI built around this class — your lectures, your material, your
           quiz attempts. It is being built now and will appear right here.
         </Text>
@@ -61,9 +61,9 @@ export default function AiPlayground() {
         {PLANNED.map((feature) => (
           <Flex
             key={feature.title}
-            bg="white"
+            bg="lmBg.surface"
             borderWidth="1px"
-            borderColor="gray.200"
+            borderColor="lmBorder.base"
             borderRadius="lg"
             p={5}
             gap={4}
@@ -72,10 +72,10 @@ export default function AiPlayground() {
           >
             <Text fontSize="2xl">{feature.icon}</Text>
             <Box>
-              <Heading size="sm" color="gray.800" mb={1}>
+              <Heading size="sm" color="lmFg.heading" mb={1}>
                 {feature.title}
               </Heading>
-              <Text fontSize="sm" color="gray.600">
+              <Text fontSize="sm" color="lmFg.subtle">
                 {feature.description}
               </Text>
             </Box>

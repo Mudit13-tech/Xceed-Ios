@@ -30,7 +30,7 @@ import {
   PartInspector,
 } from '../components/lab/BenchPanels';
 import ScopeView from '../components/lab/ScopeView';
-import { deviceSummary, eng } from '../components/lab/format';
+import { benchReadings } from '../components/lab/format';
 import {
   placeComponent,
   removeComponent,
@@ -226,53 +226,29 @@ export default function LabBench() {
     [circuit],
   );
 
-  /**
-   * What each component is labelled with on the canvas after a run.
-   *
-   * A meter gets the one number it measures, because that is what a meter is. Every
-   * other part gets its voltage, current and power stacked over it — the three
-   * numbers the run already solved for, put where the component is rather than in a
-   * table the student has to match ids against.
-   */
-  const canvasReadings = useMemo(() => {
-    if (!result?.ok) return {};
-
-    const meters = Object.fromEntries(
-      (result.instruments || [])
-        .filter((meter) => meter.type !== 'cro' && meter.type !== 'dso')
-        .map((meter) => [meter.id, eng(meter.magnitude, meter.unit)]),
-    );
-
-    if (!showOnBench) return meters;
-
-    const parts = Object.fromEntries(
-      (result.devices || [])
-        .filter((device) => !device.instrument)
-        .map((device) => {
-          const shown = deviceSummary(device);
-          // Voltage first and nearest the part, because it is the one a student
-          // can also get by putting a voltmeter across it — so the canvas and the
-          // meter agree at a glance.
-          const lines = [
-            shown.voltage,
-            shown.current,
-            shown.delivering ? `${shown.power} out` : shown.power,
-          ];
-          // A transformer's secondary voltage, because it is half of every
-          // reading taken from one and it is not on the primary side of the
-          // symbol where the other three sit.
-          if (device.secondary) {
-            lines.push(`sec ${deviceSummary(device.secondary).voltage}`);
-          }
-          return [device.id, lines];
-        }),
-    );
-
-    return { ...parts, ...meters };
-  }, [result, showOnBench]);
+  // Shared with the teacher's editor, which draws the same canvas from the same
+  // result — see `benchReadings`.
+  const canvasReadings = useMemo(
+    () => benchReadings(result, { detailed: showOnBench }),
+    [result, showOnBench],
+  );
 
   const locked = !isTeacher && (!attempt || attempt.status === 'submitted');
   const canEdit = !locked && (lab?.settings?.allowEditing !== false || isTeacher);
+
+  /**
+   * One component off the bench, wherever the gesture came from.
+   *
+   * `removeComponent` takes the wires with it. Left behind they would name a
+   * component that is not there, and the net solver resolves an unknown pin to
+   * ground rather than complaining — so the circuit would still solve, as
+   * something nobody drew.
+   */
+  const deleteComponent = (id) => {
+    if (!id) return;
+    changeCircuit(removeComponent(circuit, id));
+    setSelectedId((current) => (current === id ? null : current));
+  };
 
   if (loading) return <Loading label="Setting up the bench…" />;
   if (error) return <ErrorState error={error} onRetry={load} />;
@@ -285,11 +261,18 @@ export default function LabBench() {
           <HStack>
             <Heading size="md">{lab.title}</Heading>
             <Badge colorScheme="teal">{lab.domainSpec?.label || lab.domain}</Badge>
-            {isTeacher && <Badge colorScheme="blue">Teacher view — nothing is recorded</Badge>}
+            {/* Said plainly, because a teacher who changes a component here and
+                comes back to find it unchanged has been misled by the bench
+                rather than by their own memory: a teacher's Run is not recorded
+                and neither is their wiring. The starting layout is the editor's,
+                and it now runs there too. */}
+            {isTeacher && (
+              <Badge colorScheme="blue">Teacher view — changes here are not saved</Badge>
+            )}
             {attempt?.status === 'submitted' && <Badge colorScheme="green">Submitted</Badge>}
           </HStack>
           {lab.task && (
-            <Text fontSize="sm" color="gray.600" mt={1} maxW="720px">
+            <Text fontSize="sm" color="lmFg.subtle" mt={1} maxW="720px">
               {lab.task}
             </Text>
           )}
@@ -308,13 +291,13 @@ export default function LabBench() {
 
       {lab.brief && (
         <SectionCard mb={3}>
-          <Box fontSize="sm" color="gray.700" dangerouslySetInnerHTML={{ __html: lab.brief }} />
+          <Box fontSize="sm" color="lmFg.body" dangerouslySetInnerHTML={{ __html: lab.brief }} />
         </SectionCard>
       )}
 
       {locked && attempt?.status !== 'submitted' && (
         <SectionCard mb={3}>
-          <Text fontSize="sm" color="orange.700">
+          <Text fontSize="sm" color="lmHue.orange700">
             This experiment is not open to you right now — either it has not started, its due date has
             passed, or you have used all your attempts.
           </Text>
@@ -375,7 +358,7 @@ export default function LabBench() {
                       value={frequency}
                       onChange={(event) => setFrequency(Number(event.target.value))}
                     />
-                    <Text fontSize="xs" color="gray.500">
+                    <Text fontSize="xs" color="lmFg.muted">
                       Hz
                     </Text>
                   </HStack>
@@ -404,7 +387,7 @@ export default function LabBench() {
                 t = 0 — and the solver treats it as one, so it is worth saying
                 rather than letting a student assume it is invalid. */}
             {analysis === 'transient' && Number(frequency) === 0 && (
-              <Text fontSize="xs" color="gray.500" mb={2}>
+              <Text fontSize="xs" color="lmFg.muted" mb={2}>
                 0 Hz on a transient run is a DC supply switched on at t = 0 — the step response.
               </Text>
             )}
@@ -416,13 +399,15 @@ export default function LabBench() {
               readOnly={!canEdit}
               selectedId={selectedId}
               onSelect={setSelectedId}
+              onDelete={deleteComponent}
               readings={canvasReadings}
             />
 
-            <Text fontSize="xs" color="gray.500" mt={2}>
+            <Text fontSize="xs" color="lmFg.muted" mt={2}>
               Drag a component on, or click it in the palette. Click one terminal then another to wire
               them — the terminals are the grey dots, and they light up as you pass over them. Click a
-              wire to remove it. Then press Run.
+              wire to remove it, or select a component and press Delete to take it and its wires off.
+              Then press Run.
             </Text>
           </SectionCard>
 
@@ -474,14 +459,7 @@ export default function LabBench() {
               readOnly={!canEdit}
               onChange={(next) => changeCircuit(updateComponent(circuit, next))}
               onRotate={() => changeCircuit(rotateComponent(circuit, selectedId))}
-              onDelete={() => {
-                // `removeComponent` takes the wires with it. Left behind they
-                // would name a component that is not there, and the net solver
-                // resolves an unknown pin to ground rather than complaining — so
-                // the circuit would still solve, as something nobody drew.
-                changeCircuit(removeComponent(circuit, selectedId));
-                setSelectedId(null);
-              }}
+              onDelete={deleteComponent}
             />
           </SectionCard>
 
@@ -491,7 +469,7 @@ export default function LabBench() {
               <Text fontSize="sm" fontWeight="700" mb={1}>
                 Record your readings
               </Text>
-              <Text fontSize="xs" color="gray.500" mb={3}>
+              <Text fontSize="xs" color="lmFg.muted" mb={3}>
                 Read these off the instruments and type them in. Show your working for anything you
                 worked out rather than measured.
               </Text>
@@ -502,7 +480,7 @@ export default function LabBench() {
                   return (
                     <Box key={wanted.key}>
                       <Flex justify="space-between" align="center">
-                        <Text fontSize="xs" color="gray.600">
+                        <Text fontSize="xs" color="lmFg.subtle">
                           {wanted.label}
                           {wanted.unit ? ` (${wanted.unit})` : ''}
                         </Text>
@@ -555,7 +533,7 @@ export default function LabBench() {
 
                 <Divider />
                 <Box>
-                  <Text fontSize="xs" color="gray.600" mb={1}>
+                  <Text fontSize="xs" color="lmFg.subtle" mb={1}>
                     Conclusion
                   </Text>
                   <Textarea
@@ -572,18 +550,18 @@ export default function LabBench() {
                 </Box>
 
                 {attempt?.status === 'submitted' ? (
-                  <Box bg="green.50" p={3} borderRadius="md">
-                    <Text fontSize="sm" fontWeight="600" color="green.800">
+                  <Box bg="lmHue.green50" p={3} borderRadius="md">
+                    <Text fontSize="sm" fontWeight="600" color="lmHue.green800">
                       Submitted
                     </Text>
                     {attempt.percent !== null && attempt.percent !== undefined && (
-                      <Text fontSize="sm" color="green.800">
+                      <Text fontSize="sm" color="lmHue.green800">
                         {attempt.correctCount}/{attempt.checkedCount} readings within tolerance (
                         {attempt.percent}%)
                       </Text>
                     )}
                     {attempt.teacherFeedback && (
-                      <Text fontSize="sm" color="gray.700" mt={2}>
+                      <Text fontSize="sm" color="lmFg.body" mt={2}>
                         {attempt.teacherFeedback}
                       </Text>
                     )}

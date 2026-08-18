@@ -57,19 +57,19 @@ export default function StartShortModal({ isOpen, onClose, short, onConfirm, isB
             <Stack spacing={3}>
               <Radio value="email">
                 <Text fontSize="sm">Email the class the join code</Text>
-                <Text fontSize="xs" color="gray.600">
+                <Text fontSize="xs" color="lmFg.subtle">
                   One mail per member, sent as the session starts. It cannot be recalled.
                 </Text>
               </Radio>
               <Radio value="quiet">
                 <Text fontSize="sm">Start without emailing</Text>
-                <Text fontSize="xs" color="gray.600">
+                <Text fontSize="xs" color="lmFg.subtle">
                   For a rehearsal, a re-run, or a room already in front of you.
                 </Text>
               </Radio>
             </Stack>
           </RadioGroup>
-          <Text fontSize="xs" color="gray.500" mt={4}>
+          <Text fontSize="xs" color="lmFg.muted" mt={4}>
             {deckDefault
               ? 'This deck is set to email on start (Edit → “Email the class when I start it”).'
               : 'This deck is set not to email on start (Edit → “Email the class when I start it”).'}

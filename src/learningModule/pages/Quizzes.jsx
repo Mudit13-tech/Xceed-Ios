@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useNavigate, useOutletContext } from 'react-router-dom';
 import {
+  Alert,
+  AlertIcon,
   Badge,
   Box,
   Button,
@@ -76,15 +78,28 @@ const liveDotBeacon = keyframes`
   }
 `;
 
-// Two starting points over the same model. "Quiz" is the low-stakes default —
-// one page, free navigation, answers shown straight after. "Exam" switches on
-// the placement-test behaviour the exam engine already supports; everything
-// stays editable afterwards in the quiz editor.
-const PRESETS = {
+/**
+ * The three ways a paper can be run, as one choice.
+ *
+ * Delivery and timing used to be asked separately, which offered four
+ * combinations of which only three exist — the one-page paper cannot enforce a
+ * per-question clock — and let a teacher undo their timing decision by changing
+ * delivery afterwards. Asking once removes both problems, and the answer is a
+ * whole preset: the feedback and proctoring defaults that go with a low-stakes
+ * quiz are not the ones that go with an exam. Everything stays editable in the
+ * editor afterwards.
+ */
+const METHODS = {
   quiz: {
-    label: 'Quiz',
+    label: 'Quiz — one page, one timer',
     icon: '📝',
-    hint: 'All questions on one page, free navigation, answers shown on submit.',
+    hint: 'All questions on one page, answered in any order, answers shown on submit. One countdown for the whole paper.',
+    timerField: 'Time limit for the whole paper (minutes)',
+    timerPlaceholder: 'Leave blank for no limit',
+    timerHelp: 'Leave blank or 0 for an untimed quiz.',
+    // Free navigation is what the one-page paper *is*, so there is nothing to
+    // offer here — the checkbox below appears for the other two only.
+    canChooseBacktracking: false,
     settings: {
       deliveryMode: 'all_at_once',
       allowBacktracking: true,
@@ -94,13 +109,16 @@ const PRESETS = {
       allowReviewBeforeSubmit: true,
     },
   },
-  exam: {
-    label: 'Exam',
+  exam_paper_timer: {
+    label: 'Exam — one question at a time, one timer',
     icon: '🎓',
-    hint: 'One question at a time, no going back, results held until you release them.',
+    hint: 'Questions are handed out one at a time with a single countdown over the whole paper. Results are held until you release them.',
+    timerField: 'Time limit for the whole paper (minutes)',
+    timerPlaceholder: 'e.g. 60',
+    timerHelp: 'Leave blank or 0 for an untimed paper.',
+    canChooseBacktracking: true,
     settings: {
       deliveryMode: 'one_at_a_time',
-      allowBacktracking: false,
       perQuestionTiming: false,
       showAnswersAfterSubmit: false,
       showScoreImmediately: false,
@@ -113,30 +131,35 @@ const PRESETS = {
       disableRightClick: true,
     },
   },
-};
-
-// The two clocks are exclusive, and the choice is made here rather than in the
-// editor: a teacher who has already typed times onto twenty questions should
-// never discover afterwards that only the paper clock was ever running.
-const TIMING = {
-  overall: {
-    label: 'One timer for the whole paper',
-    hint: 'Students see a single countdown and the test submits when it reaches zero.',
-    field: 'Time limit (minutes)',
-    placeholder: 'Leave blank for no limit',
-  },
-  per_question: {
-    label: 'A timer on each question',
-    hint: 'Each question gets its own countdown and moves on by itself. Questions are delivered one at a time, with no going back.',
-    field: 'Seconds per question',
-    placeholder: '60',
+  exam_question_timer: {
+    label: 'Exam — one question at a time, a timer on each question',
+    icon: '⏱',
+    hint: 'Every question carries its own allowance and moves on by itself when it runs out. No overall clock.',
+    timerField: 'Seconds per question',
+    timerPlaceholder: '60',
+    timerHelp: 'Stamped on every question you add — change it per question in the editor.',
+    canChooseBacktracking: true,
+    settings: {
+      deliveryMode: 'one_at_a_time',
+      perQuestionTiming: true,
+      showAnswersAfterSubmit: false,
+      showScoreImmediately: false,
+      allowReviewBeforeSubmit: false,
+      shuffleQuestions: true,
+      shuffleOptions: true,
+      disableCopyPaste: true,
+      disableRightClick: true,
+    },
   },
 };
 
 function CreateQuizModal({ isOpen, onClose, classId }) {
-  const [mode, setMode] = useState('quiz');
-  const [timing, setTiming] = useState('overall');
+  const [method, setMethod] = useState('quiz');
   const [allowBack, setAllowBack] = useState(false);
+  // Whether the sitting is watched, which is what decides if the browser may
+  // hold the next question. Defaults off: the safe answer for a paper whose
+  // conditions nobody has told us about yet.
+  const [proctored, setProctored] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [timeLimit, setTimeLimit] = useState('');
@@ -144,16 +167,12 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
   const navigate = useNavigate();
   const toast = useToast();
 
-  // Going back is only a decision to make when questions are handed out one at
-  // a time *and* one clock covers the paper. On a single-page quiz students can
-  // already move freely, and under per-question timers a revisit would restart
-  // that question's countdown — so there is nothing coherent to offer.
-  const canChooseBacktracking = mode === 'exam' && timing === 'overall';
+  const chosen = METHODS[method];
 
   const reset = () => {
-    setMode('quiz');
-    setTiming('overall');
+    setMethod('quiz');
     setAllowBack(false);
+    setProctored(false);
     setTitle('');
     setDescription('');
     setTimeLimit('');
@@ -170,28 +189,22 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
     try {
       const entered = Number(timeLimit);
       const value = Number.isFinite(entered) && entered > 0 ? entered : 0;
-      // Per-question timers are only enforceable one question at a time, so
-      // choosing them settles the delivery mode too — the server holds the same
-      // rule, and a quiz that claimed both would run on the paper clock alone.
-      const timingSettings =
-        timing === 'per_question'
-          ? {
-              perQuestionTiming: true,
-              deliveryMode: 'one_at_a_time',
-              allowBacktracking: false,
-              timeLimitMinutes: 0,
-              defaultQuestionSec: value || 60,
-            }
-          : {
-              perQuestionTiming: false,
-              timeLimitMinutes: value,
-              defaultQuestionSec: 0,
-              ...(canChooseBacktracking ? { allowBacktracking: allowBack } : {}),
-            };
+      // The one number in the dialog changes unit with the methodology, so which
+      // clock it lands on is decided here rather than by the field.
+      const timingSettings = chosen.settings.perQuestionTiming
+        ? { timeLimitMinutes: 0, defaultQuestionSec: value || 60 }
+        : { timeLimitMinutes: value, defaultQuestionSec: 0 };
       const created = await lmApi.createQuiz(classId, {
         title: title.trim(),
         description: description.trim(),
-        settings: { ...PRESETS[mode].settings, ...timingSettings },
+        settings: {
+          ...chosen.settings,
+          ...timingSettings,
+          ...(chosen.canChooseBacktracking ? { allowBacktracking: allowBack } : {}),
+          // Only meaningful one question at a time; on a one-page paper the whole
+          // thing is already in the browser and there is nothing to fetch ahead.
+          prefetchQuestions: chosen.settings.deliveryMode === 'one_at_a_time' && proctored,
+        },
       });
       reset();
       onClose();
@@ -233,104 +246,147 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
             />
           </FormControl>
 
-          <FormControl mb={4}>
-            <FormLabel fontSize="sm">Mode</FormLabel>
-            <RadioGroup value={mode} onChange={setMode}>
-              <Stack spacing={3}>
-                {Object.entries(PRESETS).map(([key, preset]) => (
-                  <Box
-                    key={key}
-                    borderWidth="1px"
-                    borderColor={mode === key ? 'blue.400' : 'gray.200'}
-                    bg={mode === key ? 'blue.50' : 'white'}
-                    borderRadius="md"
-                    px={3}
-                    py={2}
-                  >
-                    <Radio value={key}>
-                      <Text fontSize="sm" fontWeight="600">
-                        {preset.icon} {preset.label}
-                      </Text>
-                      <Text fontSize="xs" color="gray.600">
-                        {preset.hint}
-                      </Text>
-                    </Radio>
-                  </Box>
-                ))}
-              </Stack>
-            </RadioGroup>
-            <FormHelperText>Every one of these settings stays editable afterwards.</FormHelperText>
-          </FormControl>
-
-          <FormControl mb={4}>
-            <FormLabel fontSize="sm">Timing</FormLabel>
+          {/* Methodology, its clock and its navigation rule in one block: they
+              are one decision, and reading them apart was how a teacher ended up
+              with per-question times on twenty questions and only the paper clock
+              actually running. */}
+          <FormControl>
+            <FormLabel fontSize="sm">How this paper runs</FormLabel>
             <RadioGroup
-              value={timing}
-              // The number below changes unit with the mode, so a value typed
-              // for the other one must not carry over.
+              value={method}
+              // The number below changes unit between methodologies, so a value
+              // typed for one must not silently carry into another.
               onChange={(value) => {
-                setTiming(value);
+                setMethod(value);
                 setTimeLimit('');
+                if (!METHODS[value].canChooseBacktracking) setAllowBack(false);
               }}
             >
               <Stack spacing={3}>
-                {Object.entries(TIMING).map(([key, option]) => (
+                {Object.entries(METHODS).map(([key, option]) => (
                   <Box
                     key={key}
                     borderWidth="1px"
-                    borderColor={timing === key ? 'blue.400' : 'gray.200'}
-                    bg={timing === key ? 'blue.50' : 'white'}
+                    borderColor={method === key ? 'blue.400' : 'lmBorder.base'}
+                    bg={method === key ? 'lmHue.blue50' : 'lmBg.surface'}
                     borderRadius="md"
                     px={3}
                     py={2}
                   >
-                    <Radio value={key}>
+                    <Radio value={key} alignItems="flex-start">
                       <Text fontSize="sm" fontWeight="600">
-                        {option.label}
+                        {option.icon} {option.label}
                       </Text>
-                      <Text fontSize="xs" color="gray.600">
+                      <Text fontSize="xs" color="lmFg.subtle">
                         {option.hint}
                       </Text>
                     </Radio>
+
+                    {/* The clock and the going-back rule sit inside the chosen
+                        card, so what is being set is unmistakably a property of
+                        the methodology above it rather than a fourth question. */}
+                    {method === key && (
+                      <Stack spacing={3} mt={3} pt={3} borderTopWidth="1px" borderColor="lmHue.blue200" pl={6}>
+                        <FormControl>
+                          <FormLabel fontSize="xs">{option.timerField}</FormLabel>
+                          <Input
+                            size="sm"
+                            type="number"
+                            min={0}
+                            value={timeLimit}
+                            onChange={(event) => setTimeLimit(event.target.value)}
+                            placeholder={option.timerPlaceholder}
+                            maxW="220px"
+                            bg="lmBg.surface"
+                          />
+                          <FormHelperText fontSize="xs">{option.timerHelp}</FormHelperText>
+                        </FormControl>
+
+                        {option.canChooseBacktracking && (
+                          <Checkbox
+                            size="sm"
+                            alignItems="flex-start"
+                            isChecked={allowBack}
+                            onChange={(event) => setAllowBack(event.target.checked)}
+                          >
+                            <Text fontSize="sm">Let students go back and change earlier answers</Text>
+                            <Text fontSize="xs" color="lmFg.subtle">
+                              {option.settings.perQuestionTiming
+                                ? 'A revisited question resumes with the seconds it had left, so going back cannot buy more time. Off is placement-test behaviour: once you move on, the question is closed.'
+                                : 'Off is placement-test behaviour: once you move on, the question is closed.'}
+                            </Text>
+                          </Checkbox>
+                        )}
+                      </Stack>
+                    )}
                   </Box>
                 ))}
               </Stack>
             </RadioGroup>
             <FormHelperText>
-              Only one clock ever runs. Pick per-question timing and the whole-paper limit is switched
-              off; pick a paper limit and the per-question boxes stay disabled.
+              Only one clock ever runs, and every one of these settings stays editable afterwards.
             </FormHelperText>
           </FormControl>
 
-          <FormControl>
-            <FormLabel fontSize="sm">{TIMING[timing].field}</FormLabel>
-            <Input
-              type="number"
-              min={0}
-              value={timeLimit}
-              onChange={(event) => setTimeLimit(event.target.value)}
-              placeholder={TIMING[timing].placeholder}
-              maxW="220px"
-            />
-            <FormHelperText fontSize="xs">
-              {timing === 'per_question'
-                ? 'Stamped on every question you add — change it per question in the editor.'
-                : 'Leave blank or 0 for an untimed quiz.'}
-            </FormHelperText>
-          </FormControl>
+          {/* ---- how much the browser may hold ----
+              Only for papers handed out one question at a time. On a one-page
+              paper every question is on screen already, so there is nothing to
+              fetch ahead and nothing to decide. */}
+          {chosen.settings.deliveryMode === 'one_at_a_time' && (
+            <FormControl mt={5}>
+              <FormLabel fontSize="sm">How this paper is invigilated</FormLabel>
+              <RadioGroup value={proctored ? 'proctored' : 'high'} onChange={(v) => setProctored(v === 'proctored')}>
+                <Stack spacing={3}>
+                  <Box
+                    borderWidth="1px"
+                    borderColor={proctored ? 'blue.400' : 'lmBorder.base'}
+                    bg={proctored ? 'lmHue.blue50' : 'lmBg.surface'}
+                    borderRadius="md"
+                    px={3}
+                    py={2}
+                  >
+                    <Radio value="proctored" alignItems="flex-start">
+                      <Text fontSize="sm" fontWeight="600">👁 Proctored — students are watched</Text>
+                      <Text fontSize="xs" color="lmFg.subtle">
+                        The next question is loaded quietly while the student reads the current one, so
+                        pressing Next is immediate. On a paper that already lets them go back it is sent
+                        plainly; otherwise it is encrypted, and the key is only released when they
+                        actually reach it — so it cannot be read ahead of time.
+                      </Text>
+                    </Radio>
+                  </Box>
 
-          {canChooseBacktracking && (
-            <Checkbox
-              mt={4}
-              size="sm"
-              isChecked={allowBack}
-              onChange={(event) => setAllowBack(event.target.checked)}
-            >
-              <Text fontSize="sm">Let students go back to earlier questions</Text>
-              <Text fontSize="xs" color="gray.600">
-                Off is placement-test behaviour: once a question is answered, it is closed.
-              </Text>
-            </Checkbox>
+                  <Box
+                    borderWidth="1px"
+                    borderColor={!proctored ? 'orange.400' : 'lmBorder.base'}
+                    bg={!proctored ? 'lmHue.orange50' : 'lmBg.surface'}
+                    borderRadius="md"
+                    px={3}
+                    py={2}
+                  >
+                    <Radio value="high" alignItems="flex-start">
+                      <Text fontSize="sm" fontWeight="600">🔒 High security — nothing loads ahead</Text>
+                      <Text fontSize="xs" color="lmFg.subtle">
+                        Nothing about the next question reaches the browser until the student has
+                        reached it.
+                      </Text>
+                    </Radio>
+                    {/* The cost, next to the choice rather than discovered on exam
+                        day by sixty students at once. */}
+                    {!proctored && (
+                      <Alert status="warning" borderRadius="md" mt={2} py={2} fontSize="xs">
+                        <AlertIcon boxSize={3} />
+                        <Box>
+                          Every question is fetched only when it is asked for, so students will see a
+                          pause on each Next — noticeably so on a slow or busy connection, and worst
+                          when a whole batch starts together.
+                        </Box>
+                      </Alert>
+                    )}
+                  </Box>
+                </Stack>
+              </RadioGroup>
+            </FormControl>
           )}
         </ModalBody>
         <ModalFooter gap={2}>
@@ -350,6 +406,12 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
 // that carries questionCount instead of questions, and `window` rather than any
 // single "can I start this" flag.
 function startState(quiz) {
+  // An open sitting outranks everything below it, mirroring the server:
+  // `startAttempt` resumes an in-progress attempt before it looks at the window.
+  // This is what carries a teacher's reopen through to the student — the case it
+  // exists for is a paper that has already closed, or already been sat, so
+  // neither may be what turns them away.
+  if (quiz.inProgress) return { can: true, why: null };
   // One sitting per student — a submitted paper cannot be taken again.
   if (quiz.attemptsUsed) return { can: false, why: 'Already attempted' };
   if (quiz.window?.notYetOpen) return { can: false, why: 'Not open yet' };
@@ -432,15 +494,19 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
   const reviewable = !isTeacher && Boolean(quiz.lastAttemptId) && !quiz.resultsPending;
 
   const isLive = Boolean(state.live || state.open);
+  // A reopened paper is not a finished one. The attempt row survives a reopen,
+  // so `attemptsUsed` still counts it, and on its own that would show a student
+  // whose teacher just gave them more time a finished test with no way back
+  // into it. An open sitting therefore vetoes "Completed".
   const isCompleted = !isTeacher
-    ? Boolean(state.completedAt || quiz.attemptsUsed > 0)
+    ? Boolean(!quiz.inProgress && (state.completedAt || quiz.attemptsUsed > 0))
     : Boolean(state.completedAt || (quiz.stats?.attempts > 0 && quiz.window?.closed));
 
   return (
     <Flex
-      bg="white"
+      bg="lmBg.surface"
       borderWidth="1px"
-      borderColor={isLive ? 'green.400' : 'gray.200'}
+      borderColor={isLive ? 'green.400' : 'lmBorder.base'}
       boxShadow={isLive ? '0 2px 12px -2px rgba(34, 197, 94, 0.25)' : 'none'}
       borderRadius="lg"
       p={4}
@@ -481,7 +547,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
                   as="span"
                   w="7px"
                   h="7px"
-                  bg="white"
+                  bg="lmBg.surface"
                   borderRadius="full"
                   display="inline-block"
                   sx={{ animation: `${liveDotBeacon} 1.2s ease-in-out infinite` }}
@@ -506,7 +572,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
           )}
         </HStack>
         {isTeacher && (scheduled || opensAt || entryCloses) && (
-          <Text fontSize="xs" color="gray.600" mt={1}>
+          <Text fontSize="xs" color="lmFg.subtle" mt={1}>
             {[
               scheduled && `🔗 Link goes live ${formatDateTime(quiz.publish.publishAt)}`,
               opensAt && `▶️ Starts ${formatDateTime(opensAt)}`,
@@ -516,7 +582,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
               .join(' · ')}
           </Text>
         )}
-        <Text fontSize="xs" color="gray.500" mt={1}>
+        <Text fontSize="xs" color="lmFg.muted" mt={1}>
           {questionCount} questions · {quiz.totalMarks} marks
           {quiz.settings?.timeLimitMinutes ? ` · ${quiz.settings.timeLimitMinutes} min` : ''}
         </Text>
@@ -527,19 +593,19 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
             scheduled window does not tell them. */}
         {state.completedAt && (
           <Tooltip label={formatDateTime(state.completedAt)}>
-            <Text fontSize="xs" color="green.700" mt={1} fontWeight="500" display="inline-block">
+            <Text fontSize="xs" color="lmHue.green700" mt={1} fontWeight="500" display="inline-block">
               ✅ {state.completedLabel} {relativeTime(state.completedAt)} ·{' '}
               {formatDateTime(state.completedAt)}
             </Text>
           </Tooltip>
         )}
         {!state.completedAt && !state.live && quiz.window?.closed && (
-          <Text fontSize="xs" color="gray.500" mt={1}>
+          <Text fontSize="xs" color="lmFg.muted" mt={1}>
             🔒 Closed {relativeTime(quiz.window.closesAt)} · {formatDateTime(quiz.window.closesAt)}
           </Text>
         )}
         {isTeacher && quiz.stats && (
-          <Text fontSize="xs" color="gray.500">
+          <Text fontSize="xs" color="lmFg.muted">
             {quiz.stats.attempts} attempt(s)
             {quiz.stats.avg !== null && quiz.stats.avg !== undefined
               ? ` · avg ${Math.round(quiz.stats.avg * 10) / 10}%`
@@ -566,7 +632,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
           </Badge>
         )}
         {!isTeacher && start.why && (
-          <Text fontSize="xs" color="gray.500" mt={1}>
+          <Text fontSize="xs" color="lmFg.muted" mt={1}>
             {start.why}
           </Text>
         )}
@@ -647,7 +713,21 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
           </>
         ) : (
           <>
-            {reviewable ? (
+            {/* An open sitting comes first: a student whose paper is live —
+                including one their teacher has just reopened or extended — needs
+                the door back into it, not a verdict on a test they have not
+                finished. */}
+            {quiz.inProgress ? (
+              <Button
+                as={RouterLink}
+                to={`/learning/class/${classId}/quiz/${quiz._id}`}
+                size="sm"
+                colorScheme="green"
+                sx={{ animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`, fontWeight: 'bold' }}
+              >
+                Resume test
+              </Button>
+            ) : reviewable ? (
               <Button
                 as={RouterLink}
                 to={`/learning/class/${classId}/quiz/${quiz._id}/attempt/${quiz.lastAttemptId}`}
@@ -697,11 +777,9 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
               >
                 {quiz.attemptsUsed > 0
                   ? 'Review answers'
-                  : quiz.inProgress
-                    ? 'Resume test'
-                    : start.can
-                      ? 'Start test'
-                      : 'View instructions'}
+                  : start.can
+                    ? 'Start test'
+                    : 'View instructions'}
               </Button>
             )}
           </>
@@ -775,10 +853,10 @@ export default function Quizzes() {
     <Box>
       <Flex justify="space-between" align="center" mb={4} gap={3} wrap="wrap">
         <Box>
-          <Heading size="md" color="gray.800">
+          <Heading size="md" color="lmFg.heading">
             Quizzes & exams
           </Heading>
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="lmFg.muted">
             {isTeacher
               ? 'Build a paper here, then publish it to the class.'
               : 'Everything your teacher has published.'}

@@ -100,7 +100,7 @@ export default function ScopeView({ result, probe }) {
   if (!result?.ok) return null;
   if (!trace) {
     return (
-      <Text fontSize="sm" color="gray.500">
+      <Text fontSize="sm" color="lmFg.muted">
         No trace — this probe is not wired to anything, or the run was not a transient one.
       </Text>
     );
@@ -144,7 +144,7 @@ export default function ScopeView({ result, probe }) {
             </Badge>
           )}
         </HStack>
-        <HStack fontSize="10px" color="gray.500">
+        <HStack fontSize="10px" color="lmFg.muted">
           <Text>{eng(voltsPerDivision, 'V')}/div</Text>
           <Text>{eng(secondsPerDivision, 's')}/div</Text>
         </HStack>
@@ -159,6 +159,8 @@ export default function ScopeView({ result, probe }) {
         bg="#0B1220"
         borderRadius="md"
         borderWidth="1px"
+        // The bezel of a dark screen, so it stays dark in light mode too — this
+        // is not a `lmBorder` token and should not become one.
         borderColor="gray.700"
       >
         {/* The graticule. This is the instrument on a CRO: the divisions are how
@@ -200,8 +202,8 @@ export default function ScopeView({ result, probe }) {
             ['Vmean', eng(stats.mean, 'V')],
             ['Freq', stats.frequency ? eng(stats.frequency, 'Hz') : '—'],
           ].map(([label, value]) => (
-            <Box key={label} bg="gray.50" borderRadius="md" p={2} textAlign="center">
-              <Text fontSize="9px" color="gray.500" textTransform="uppercase">
+            <Box key={label} bg="lmBg.sunken" borderRadius="md" p={2} textAlign="center">
+              <Text fontSize="9px" color="lmFg.muted" textTransform="uppercase">
                 {label}
               </Text>
               <Text fontSize="sm" fontWeight="700">
@@ -211,7 +213,7 @@ export default function ScopeView({ result, probe }) {
           ))}
         </SimpleGrid>
       ) : (
-        <Text fontSize="xs" color="gray.500" mt={2}>
+        <Text fontSize="xs" color="lmFg.muted" mt={2}>
           Read the trace off the graticule: count divisions and multiply by{' '}
           {eng(voltsPerDivision, 'V')} per division vertically, {eng(secondsPerDivision, 's')} per
           division horizontally. Put a DSO on the bench if you want the numbers computed for you.

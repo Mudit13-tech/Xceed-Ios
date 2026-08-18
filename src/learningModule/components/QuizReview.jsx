@@ -103,7 +103,7 @@ export default function QuizReview({ review, title = 'Question review', answerLa
         </HStack>
 
         <InputGroup size="xs" maxW="240px">
-          <InputLeftElement pointerEvents="none" color="gray.400">
+          <InputLeftElement pointerEvents="none" color="lmFg.faint">
             🔍
           </InputLeftElement>
           <Input
@@ -116,8 +116,8 @@ export default function QuizReview({ review, title = 'Question review', answerLa
       </Flex>
 
       {filtered.length === 0 ? (
-        <Box textAlign="center" py={6} bg="gray.50" borderRadius="md">
-          <Text fontSize="sm" color="gray.500">
+        <Box textAlign="center" py={6} bg="lmBg.sunken" borderRadius="md">
+          <Text fontSize="sm" color="lmFg.muted">
             No questions match your filter criteria.
           </Text>
         </Box>
@@ -135,11 +135,11 @@ export default function QuizReview({ review, title = 'Question review', answerLa
               borderWidth="1px"
               borderLeftWidth="4px"
               borderLeftColor={accent}
-              borderColor="gray.200"
+              borderColor="lmBorder.base"
               borderRadius="md"
               p={4}
               mb={3}
-              bg="white"
+              bg="lmBg.surface"
               boxShadow="2xs"
             >
               <Flex justify="space-between" gap={3} mb={2}>
@@ -169,7 +169,7 @@ export default function QuizReview({ review, title = 'Question review', answerLa
                     {answer?.awarded ?? 0}/{entry.marks}
                   </Text>
                   {entry.timeSpentSec > 0 && (
-                    <Text fontSize="xs" color="gray.500">
+                    <Text fontSize="xs" color="lmFg.muted">
                       ⏱ {entry.timeSpentSec}s
                     </Text>
                   )}
@@ -191,18 +191,18 @@ export default function QuizReview({ review, title = 'Question review', answerLa
                         align="center"
                         bg={
                           isCorrect
-                            ? 'green.50'
+                            ? 'lmHue.green50'
                             : chose
-                              ? 'red.50'
+                              ? 'lmHue.red50'
                               : 'transparent'
                         }
                         borderWidth={isCorrect || chose ? '1px' : '0px'}
-                        borderColor={isCorrect ? 'green.200' : chose ? 'red.200' : 'transparent'}
+                        borderColor={isCorrect ? 'lmHue.green200' : chose ? 'lmHue.red200' : 'transparent'}
                       >
-                        <Text fontSize="sm" fontWeight="bold" flexShrink={0} w="20px" color={isCorrect ? 'green.600' : chose ? 'red.600' : 'gray.400'}>
+                        <Text fontSize="sm" fontWeight="bold" flexShrink={0} w="20px" color={isCorrect ? 'green.600' : chose ? 'red.600' : 'lmFg.faint'}>
                           {isCorrect ? '✓' : chose ? '✗' : '•'}
                         </Text>
-                        <RichText color={isCorrect ? 'green.900' : chose ? 'red.900' : 'gray.700'}>
+                        <RichText color={isCorrect ? 'lmHue.green900' : chose ? 'lmHue.red900' : 'lmFg.body'}>
                           {option}
                         </RichText>
                         {isCorrect && (
@@ -222,19 +222,19 @@ export default function QuizReview({ review, title = 'Question review', answerLa
               )}
 
               {entry.type === 'numerical' && (
-                <Box mt={2} p={2} bg="gray.50" borderRadius="md" fontSize="sm">
-                  <Text color="gray.700">
+                <Box mt={2} p={2} bg="lmBg.sunken" borderRadius="md" fontSize="sm">
+                  <Text color="lmFg.body">
                     {answerLabel}: <b>{answer?.text || '—'}</b>
                   </Text>
-                  <Text color="green.700" mt={0.5}>
+                  <Text color="lmHue.green700" mt={0.5}>
                     Expected: <b>{(entry.correctAnswers || []).join(', ')}</b>
                   </Text>
                 </Box>
               )}
 
               {entry.explanation && (
-                <Box mt={3} bg="blue.50" borderRadius="md" px={3} py={2} borderLeftWidth="3px" borderLeftColor="blue.400">
-                  <Text fontSize="xs" fontWeight="700" color="blue.700" mb={0.5}>
+                <Box mt={3} bg="lmHue.blue50" borderRadius="md" px={3} py={2} borderLeftWidth="3px" borderLeftColor="blue.400">
+                  <Text fontSize="xs" fontWeight="700" color="lmHue.blue700" mb={0.5}>
                     Explanation
                   </Text>
                   <RichText>{entry.explanation}</RichText>
@@ -242,7 +242,7 @@ export default function QuizReview({ review, title = 'Question review', answerLa
               )}
 
               {entry.sourceExcerpt && (
-                <Text fontSize="xs" color="gray.500" mt= {2} fontStyle="italic">
+                <Text fontSize="xs" color="lmFg.muted" mt= {2} fontStyle="italic">
                   From the lecture: “{entry.sourceExcerpt}”
                 </Text>
               )}

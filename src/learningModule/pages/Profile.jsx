@@ -197,8 +197,8 @@ export default function Profile() {
                         <HStack
                           spacing={1.5}
                           borderWidth="1px"
-                          borderColor={badge.rare ? 'orange.300' : 'purple.300'}
-                          bg={badge.rare ? 'orange.50' : badgeBg}
+                          borderColor={badge.rare ? 'lmHue.orange300' : 'lmHue.purple300'}
+                          bg={badge.rare ? 'lmHue.orange50' : badgeBg}
                           borderRadius="full"
                           px={2.5}
                           py={1}

@@ -169,7 +169,7 @@ export default function NotificationBell() {
         </PopoverHeader>
         <PopoverBody px={0} maxH="420px" overflowY="auto">
           {items.length === 0 && (
-            <Text px={4} py={6} fontSize="sm" color="gray.500" textAlign="center">
+            <Text px={4} py={6} fontSize="sm" color="lmFg.muted" textAlign="center">
               Nothing new.
             </Text>
           )}
@@ -183,7 +183,7 @@ export default function NotificationBell() {
                 px={4}
                 py={3}
                 gap={3}
-                bg={notification.read ? 'transparent' : 'blue.50'}
+                bg={notification.read ? 'transparent' : 'lmHue.blue50'}
                 _hover={{ bg: 'gray.50' }}
                 onClick={() => open(notification)}
                 {...buttonTextStyles}
@@ -194,11 +194,11 @@ export default function NotificationBell() {
                     {notification.title}
                   </Text>
                   {notification.body && (
-                    <Text fontSize="xs" color="gray.600" noOfLines={2}>
+                    <Text fontSize="xs" color="lmFg.subtle" noOfLines={2}>
                       {notification.body}
                     </Text>
                   )}
-                  <Text fontSize="xs" color="gray.400" mt={0.5}>
+                  <Text fontSize="xs" color="lmFg.muted" mt={0.5}>
                     {relativeTime(notification.created_at)}
                   </Text>
                 </Box>

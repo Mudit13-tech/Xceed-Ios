@@ -527,7 +527,7 @@ function ApplicationForm({ suggested, session, onSent }) {
         >
           Send my application
         </Button>
-        <Text fontSize="xs" color="gray.500">
+        <Text fontSize="xs" color="lmFg.muted">
           This is your one application for {session}. It goes straight to the admins, and you will
           hear back by email and in your notifications.
         </Text>

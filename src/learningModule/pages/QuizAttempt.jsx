@@ -22,9 +22,13 @@ import lmApi from '../api/lmApi';
 import RichText from '../components/RichText';
 import { ErrorState, Loading, SectionCard, StatTile } from '../components/common';
 import useProctoring from '../hooks/useProctoring';
+import useQuizCountdown from '../hooks/useQuizCountdown';
+import useAnswerAutosave from '../hooks/useAnswerAutosave';
+import useQuestionPrefetch from '../hooks/useQuestionPrefetch';
 import QuizReview from '../components/QuizReview';
 import QuizStage from '../components/QuizStage';
 import QuizCalculator from '../components/QuizCalculator';
+import NumericKeypad from '../components/NumericKeypad';
 import { requestQuizFullscreen, scrollStageToTop } from '../quizStage';
 import { formatDateTime } from '../format';
 
@@ -42,13 +46,34 @@ const clock = (seconds) => {
  * minutes ago: it is the one rule that ends the paper without warning, so it is
  * said wherever a student can still act on it.
  */
+/**
+ * How long a save may take before the student is told something about it.
+ *
+ * Long enough that an ordinary slow request passes unremarked, short enough that
+ * nobody sits watching a spinner wondering whether the click registered — which
+ * is the moment they reach for reload or another window, either of which ends
+ * their paper.
+ */
+const SLOW_REQUEST_MS = 8000;
+
 const LEAVING_COST =
   'Leaving fullscreen, or switching to another window, tab or application, submits your test ' +
   'immediately. There are no warnings and no allowance.';
 
 /** Answer widget shared by both delivery modes. */
-function AnswerInput({ question, value, onChange, isDisabled }) {
+function AnswerInput({ question, value, onChange, isDisabled, keypadOnly }) {
   if (question.type === 'numerical') {
+    // With the keyboard blocked there is nothing to type into a text field, so the
+    // keypad replaces it rather than sitting beside it. See NumericKeypad.
+    if (keypadOnly) {
+      return (
+        <NumericKeypad
+          value={value.text || ''}
+          isDisabled={isDisabled}
+          onChange={(text) => onChange({ selected: [], text })}
+        />
+      );
+    }
     return (
       <Input
         type="text"
@@ -130,12 +155,22 @@ export default function QuizAttempt() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState('');
-  const [remaining, setRemaining] = useState(null);
   const [notice, setNotice] = useState(null);
   // Set when Submit is pressed with questions still blank: the confirmation is
   // rendered inline rather than as a modal, because a Chakra modal portals to
   // document.body and would be invisible behind a fullscreened paper.
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  // A request that has been in flight long enough to worry a student.
+  const [slow, setSlow] = useState(false);
+  /**
+   * The answers as the server last handed them over.
+   *
+   * The autosave compares against this rather than against nothing, so a
+   * question arriving with an answer already on it is not immediately saved
+   * back — one pointless request per question, on the connection least able to
+   * afford it.
+   */
+  const [baseline, setBaseline] = useState({});
   const finishedRef = useRef(false);
   const noticeTimer = useRef(null);
   // The proctoring hook's queue drain, held in a ref because the paths that bank
@@ -158,9 +193,66 @@ export default function QuizAttempt() {
     noticeTimer.current = setTimeout(() => setNotice(null), 4000);
   }, []);
 
+  /**
+   * Runs a request, and says so on screen if it is taking too long.
+   *
+   * A spinner that never resolves is what a saturated server looks like from a
+   * desk: `fetch` has no timeout, so Save-and-Next span for minutes with nothing
+   * to read. The request is deliberately **not** aborted — cancelling and
+   * retrying against a server that is already queueing is how a slow exam
+   * becomes a failed one — so this only replaces the silence with an
+   * explanation, and above all with the instruction not to leave the screen.
+   * That instinct is the dangerous one: alt-tabbing or reloading a hung paper
+   * ends the attempt under the proctoring rules.
+   */
+  const slowAware = useCallback(async (work) => {
+    const timer = setTimeout(() => setSlow(true), SLOW_REQUEST_MS);
+    try {
+      return await work();
+    } finally {
+      clearTimeout(timer);
+      setSlow(false);
+    }
+  }, []);
+
   useEffect(() => () => clearTimeout(noticeTimer.current), []);
 
   /* ------------------------------ loading ------------------------------ */
+
+  /** Answers that came from the server: they are the draft *and* its baseline. */
+  const applyServerAnswers = useCallback((map) => {
+    setAnswers(map);
+    setBaseline(map);
+  }, []);
+
+  /* ------------------------------ autosave -----------------------------
+     Banking answers as they are given, rather than only when the student moves.
+
+     On a sequential paper the draft is the question in front of them and nothing
+     else — the server refuses the rest, because a draft aimed at an earlier
+     question would be a way around a paper that does not allow going back. On
+     the one-page paper it is the whole thing, which is what the manual Save
+     button did and what most students never pressed. */
+  const draft = useMemo(() => {
+    if (!sequential) return answers;
+    const id = current?.question?._id;
+    return id && answers[id] ? { [id]: answers[id] } : {};
+  }, [sequential, answers, current]);
+
+  const draftBaseline = useMemo(() => {
+    if (!sequential) return baseline;
+    const id = current?.question?._id;
+    return id && baseline[id] ? { [id]: baseline[id] } : {};
+  }, [sequential, baseline, current]);
+
+  const autosave = useAnswerAutosave({
+    payload: draft,
+    baseline: draftBaseline,
+    // Never on a question whose own clock has gone: its answer is fixed, and a
+    // save there would be an answer arriving after its deadline.
+    active: Boolean(current || paper) && !result && !current?.questionClosed,
+    save: (entries) => lmApi.saveAttemptDraft(classId, attemptId, entries),
+  });
 
   const loadSequential = useCallback(async () => {
     try {
@@ -170,18 +262,22 @@ export default function QuizAttempt() {
         return true;
       }
       setCurrent(data);
-      setAnswers(
+      applyServerAnswers(
         data.saved ? { [data.question._id]: { selected: data.saved.selected || [], text: data.saved.text || '' } } : {},
       );
       return false;
     } catch (err) {
-      if (err.code === 'FINISHED' || err.message?.includes('finished')) {
+      // `payload.code`, not `err.code` — `LmApiError` carries the server's body
+      // under `payload`, so the code check was dead and the whole thing rested on
+      // the wording of the message. A student opening a submitted paper landed on
+      // an error screen the day that sentence was reworded.
+      if (err.payload?.code === 'FINISHED' || err.message?.includes('finished')) {
         setCurrent(null);
         return true;
       }
       throw err;
     }
-  }, [classId, attemptId]);
+  }, [classId, attemptId, applyServerAnswers]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -211,7 +307,7 @@ export default function QuizAttempt() {
             };
           }
         });
-        setAnswers(restored);
+        applyServerAnswers(restored);
         if (data.attempt.status !== 'in_progress') {
           const finished = await lmApi.getAttempt(classId, attemptId);
           setResult(finished);
@@ -223,7 +319,7 @@ export default function QuizAttempt() {
     } finally {
       setLoading(false);
     }
-  }, [classId, quizId, attemptId, loadSequential]);
+  }, [classId, quizId, attemptId, loadSequential, applyServerAnswers]);
 
   useEffect(() => {
     load();
@@ -251,9 +347,14 @@ export default function QuizAttempt() {
       await flushRef.current?.();
       if (finishedRef.current) return;
       finishedRef.current = true;
+      // The submit carries every answer itself, so a debounced draft racing it
+      // is a write for nothing.
+      autosave.cancel();
       setBusy('submit');
       try {
-        const submitted = await lmApi.submitAttempt(classId, attemptId, payload(), expired);
+        const submitted = await slowAware(() =>
+          lmApi.submitAttempt(classId, attemptId, payload(), expired),
+        );
         setAttempt(submitted.attempt);
         setResult(submitted);
         if (expired) notify({ status: 'warning', title: 'Time is up — your answers were submitted.' });
@@ -264,7 +365,7 @@ export default function QuizAttempt() {
         setBusy('');
       }
     },
-    [classId, attemptId, payload, notify],
+    [classId, attemptId, payload, notify, slowAware, autosave],
   );
 
   /* ---------------------------- proctoring ----------------------------- */
@@ -288,7 +389,7 @@ export default function QuizAttempt() {
     settings: settings || {},
     active: sitting,
     attemptId,
-    onViolation: (type, at) => lmApi.recordViolation(classId, attemptId, type, at),
+    onViolation: (type, at, detail) => lmApi.recordViolation(classId, attemptId, type, at, detail),
     onHeartbeat: () => lmApi.heartbeat(classId, attemptId),
     onTerminated: async () => {
       finishedRef.current = true;
@@ -302,6 +403,45 @@ export default function QuizAttempt() {
 
   flushRef.current = proctoring.flushViolations;
 
+  /**
+   * The student has left the test screen, seen locally rather than confirmed by
+   * the server.
+   *
+   * Everything downstream keys off this rather than off the server's reply, so a
+   * dropped connection cannot buy time: the clock stops, the paper is not
+   * rendered, and re-entering fullscreen does not bring it back.
+   */
+  const departed = proctoring.departed;
+
+  /* ----------------------------- prefetch ------------------------------
+     The next question, fetched while this one is being read. The server decides
+     whether it will send it at all, and whether in the clear or sealed, so
+     nothing here can widen what a paper discloses. */
+  const prefetch = useQuestionPrefetch({
+    attemptId,
+    questionId: current?.question?._id,
+    active: sequential && Boolean(current) && !result && !departed,
+    fetchNext: () => lmApi.getNextQuestion(classId, attemptId),
+  });
+
+  /**
+   * A served question with its payload attached, wherever that came from.
+   *
+   * The reply to an advance leaves the question out when the browser already
+   * holds it — that is the whole saving. If what we hold turns out not to open
+   * it, the paper must not stop: ask for it plainly and carry on a round trip
+   * poorer.
+   */
+  const materialise = useCallback(
+    async (served) => {
+      if (!served || served.done || served.question) return served;
+      const question = await prefetch.open(served);
+      if (question) return { ...served, question };
+      return lmApi.getCurrentQuestion(classId, attemptId);
+    },
+    [prefetch, classId, attemptId],
+  );
+
   /* ------------------------------ timers ------------------------------- */
 
   const deadline = sequential ? current?.deadline : paper?.deadline;
@@ -314,16 +454,34 @@ export default function QuizAttempt() {
       // returns FINISHED, and `onTerminated` has already swapped in the result.
       await flushRef.current?.();
       if (finishedRef.current) return;
-      const value = answers[current.question._id] || {};
+      // A question whose own time is gone is read-only, so leaving it carries no
+      // answer at all. Sending the one already on screen would be an answer
+      // arriving after its deadline, which the server records as a proctoring
+      // flag — earned by pressing Next on a question the student was invited to
+      // look back at.
+      const value = current.questionClosed ? {} : answers[current.question._id] || {};
+      // Same reason as in `finish`, plus one of its own: the cursor is about to
+      // move, and a draft in flight is aimed at where it used to be.
+      autosave.cancel();
       setBusy('advance');
       try {
-        const next = await lmApi.answerAndAdvance(classId, attemptId, {
-          selected: value.selected || [],
-          text: value.text || '',
-          direction,
-          autoSubmitted,
-        });
-        if (next.done) {
+        const served = await slowAware(() =>
+          lmApi.answerAndAdvance(classId, attemptId, {
+            // What this browser is already holding for the question after this
+            // one. When it turns out to be the question being served, the reply
+            // leaves the payload out — a key, or nothing at all.
+            holding: prefetch.holding(),
+            // Which question this answer belongs to. The server ignores the
+            // request if the cursor has already moved past it, so pressing Next
+            // again after a reply went missing cannot answer the wrong question.
+            questionId: current.question._id,
+            selected: value.selected || [],
+            text: value.text || '',
+            direction,
+            autoSubmitted,
+          }),
+        );
+        if (served.done) {
           finishedRef.current = true;
           setCurrent(null);
           const finished = await lmApi.getAttempt(classId, attemptId);
@@ -331,8 +489,11 @@ export default function QuizAttempt() {
           setResult(finished);
           return;
         }
+        // Fills in the question when the reply left it out because we already
+        // held it, sealed or otherwise.
+        const next = await materialise(served);
         setCurrent(next);
-        setAnswers(
+        applyServerAnswers(
           next.saved
             ? { [next.question._id]: { selected: next.saved.selected || [], text: next.saved.text || '' } }
             : {},
@@ -356,31 +517,28 @@ export default function QuizAttempt() {
         setBusy('');
       }
     },
-    [current, answers, classId, attemptId, notify],
+    [current, answers, classId, attemptId, notify, slowAware, autosave, applyServerAnswers, prefetch, materialise],
   );
 
-  useEffect(() => {
-    if (!deadline || finishedRef.current) {
-      setRemaining(null);
-      return undefined;
-    }
-    const tick = () => {
-      const left = Math.round((new Date(deadline) - Date.now()) / 1000);
-      setRemaining(left);
-      if (left <= 0) {
-        // A per-question clock only ends that question; the paper clock ends
-        // the whole sitting.
-        if (sequential && settings?.perQuestionTiming) advance('forward', true);
-        else finish(true);
-      }
-    };
-    tick();
-    const timer = setInterval(tick, 1000);
-    return () => clearInterval(timer);
-    // `advance` and `finish` are stable enough here; re-running on every
-    // keystroke would restart the countdown.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deadline, sequential, settings?.perQuestionTiming]);
+  /**
+   * The countdown, in `useQuizCountdown` so what stops it can be tested.
+   *
+   * `Boolean(result)` is the finished flag rather than `finishedRef`: a ref does
+   * not re-run an effect, which is why the old interval outlived the attempt.
+   */
+  const remaining = useQuizCountdown({
+    deadline,
+    departed,
+    finished: Boolean(result),
+    onExpire: () => {
+      // A per-question clock only ends that question; the paper clock ends the
+      // whole sitting. On a question that is already closed the deadline being
+      // counted is the paper's — its own ran out long ago — so advancing there
+      // would carry the student forward on the wrong clock's expiry.
+      if (sequential && settings?.perQuestionTiming && !current?.questionClosed) advance('forward', true);
+      else finish(true);
+    },
+  });
 
   /* ------------------------------ render ------------------------------- */
 
@@ -417,6 +575,18 @@ export default function QuizAttempt() {
   const inFullscreen = proctoring.isFullscreen;
   const finished = Boolean(result) && Boolean(attempt) && attempt.status !== 'in_progress';
 
+  /**
+   * Whether the stage should be putting itself fullscreen.
+   *
+   * True from the first frame, loading included: the request has to go out while
+   * the "Start test" click still counts as a user gesture, and gating it on a
+   * paper that has not been fetched yet spends exactly that window — the fetch
+   * lands, the request goes out with nothing behind it, and the browser refuses.
+   * It goes false only once there is nothing left to sit, so neither a submitted
+   * paper nor a sitting closed by leaving gets pulled back into fullscreen.
+   */
+  const wantsFullscreen = !finished && !departed;
+
   // The screen is handed back by leaving, not by submitting: the stage drops
   // fullscreen when it unmounts, so the result is read on the same canvas the
   // paper was written on and nothing jumps at the moment of submitting.
@@ -439,7 +609,7 @@ export default function QuizAttempt() {
             <Text fontSize="sm">{error.message}</Text>
           </Box>
         </Alert>
-        <Text fontSize="sm" color="gray.600">
+        <Text fontSize="sm" color="lmFg.subtle">
           Your clock is still running, and your answers are safe. If the other browser has
           closed or crashed, wait a couple of minutes and reload this page — it will let you
           back in once that one has stopped responding.
@@ -447,7 +617,50 @@ export default function QuizAttempt() {
       </SectionCard>
     );
   } else if (error) content = <ErrorState error={error} onRetry={load} />;
-  else if (finished) {
+  else if (departed) {
+    /* ---- left the test screen ----
+       The paper is over. Shown while the server is still being told, and shown
+       instead of the result if that report could not be delivered at all.
+
+       Ahead of `finished`, and this is the whole reason it moved: the server's
+       reply arrives a moment later and swaps the whole screen for the result
+       card, so the student who has just been told their test closed loses that
+       message mid-sentence and is handed a score instead. The paper ended by
+       leaving; what they need on screen is why, and it has to stay put long
+       enough to read.
+
+       For the same reason the text is fixed rather than `proctoring.warning`:
+       that value arrives from the server after the departure has already been
+       announced locally, and rewriting the paragraph under someone's eyes is
+       what made this screen unreadable. The alert above already says what
+       leaving costs, in the same words the brief used.
+
+       There is deliberately **no way back into the paper**. The old screen
+       offered "Enter fullscreen and continue" and said the clock was still
+       running, which contradicted the rule the brief promises and the server
+       enforces — and on a dropped connection it was a real way to leave, come
+       back, and carry on with only the lost seconds to show for it. Re-entering
+       fullscreen does not reopen a paper that leaving has closed. The only
+       button here leaves for good. */
+    content = (
+      <SectionCard title="Your test has been closed">
+        <Alert status="error" borderRadius="md" mb={4}>
+          <AlertIcon />
+          <Box>
+            <Text fontWeight="600">You left the test screen</Text>
+            <Text fontSize="sm">{LEAVING_COST}</Text>
+          </Box>
+        </Alert>
+        <Text fontSize="sm" color="lmFg.body">
+          Your answers so far are being submitted. This paper cannot be reopened — speak to your
+          teacher if you believe this was a mistake.
+        </Text>
+        <Button mt={4} onClick={() => navigate(`/learning/class/${classId}/quizzes`)}>
+          Back to quizzes
+        </Button>
+      </SectionCard>
+    );
+  } else if (finished) {
     /* ---- finished: show the result ---- */
     content = (
       <Box>
@@ -510,7 +723,7 @@ export default function QuizAttempt() {
                       <HStack spacing={3}>
                         <Text color="green.600">{section.correct} ✓</Text>
                         <Text color="red.600">{section.wrong} ✗</Text>
-                        <Text color="gray.500">{section.unattempted} —</Text>
+                        <Text color="lmFg.muted">{section.unattempted} —</Text>
                         <Text fontWeight="600">
                           {section.score}/{section.maxScore}
                         </Text>
@@ -527,19 +740,37 @@ export default function QuizAttempt() {
           </Button>
         </SectionCard>
 
-        {result.review && (
+        {result.review ? (
           <Box mt={4}>
             <QuizReview review={result.review} />
           </Box>
+        ) : (
+          result.answerKeyHidden && (
+            /* The marks are out and the paper is open, but the teacher turned
+               "show correct answers and explanations after submitting" off —
+               which the exam presets do by default. Said plainly, because to a
+               student the screen is otherwise indistinguishable from a page that
+               failed to load the questions. */
+            <Alert status="info" borderRadius="md" mt={4}>
+              <AlertIcon />
+              <Box>
+                <Text fontWeight="600">The answers are not being shown for this test</Text>
+                <Text fontSize="sm">
+                  Your teacher has kept the question paper and the answer key back — your marks above
+                  are the whole of what was released. Ask them if you want to go through your paper.
+                </Text>
+              </Box>
+            </Alert>
+          )
         )}
       </Box>
     );
   } else if (!inFullscreen) {
-    /* ---- fullscreen gate ----
-       What is left when the browser refused fullscreen — a cold tab with no
-       user gesture behind it, or a reload. A student who *left* fullscreen mid
-       sitting does not land here: that submits the paper, and the finished
-       branch above catches them first. */
+    /* ---- entry gate ----
+       Only for a student who has *not* left: the browser refused fullscreen with
+       no user gesture behind it, or the tab was reloaded. They never got in, so
+       there is nothing to hold against them and the button is the way in. A
+       departure is caught by the branch above, which has no button. */
     content = (
       <SectionCard title="Fullscreen required">
         <Alert status="warning" borderRadius="md" mb={4}>
@@ -549,11 +780,16 @@ export default function QuizAttempt() {
             <Text fontSize="sm">{LEAVING_COST}</Text>
           </Box>
         </Alert>
-        <Text fontSize="sm" color="gray.600" mb={4}>
-          Your clock is still running — go back into fullscreen to carry on.
+        {/* Truthfully: the clock is *not* paused here. The deadline is an absolute
+            time the server derived from when the attempt started, so sitting on
+            this screen costs real minutes and nothing on the client can change
+            that. Saying otherwise would be a kindness that loses someone marks. */}
+        <Text fontSize="sm" color="lmFg.subtle" mb={4}>
+          Your clock is already running, so enter fullscreen now. Once you are in, leaving again ends
+          the test.
         </Text>
         <Button colorScheme="purple" onClick={requestQuizFullscreen}>
-          Enter fullscreen and continue
+          Enter fullscreen and start
         </Button>
       </SectionCard>
     );
@@ -568,9 +804,9 @@ export default function QuizAttempt() {
           position="sticky"
           top={0}
           zIndex={5}
-          bg="white"
+          bg="lmBg.surface"
           borderWidth="1px"
-          borderColor="gray.200"
+          borderColor="lmBorder.base"
           borderRadius="lg"
           mb={4}
           overflow="hidden"
@@ -587,9 +823,22 @@ export default function QuizAttempt() {
                     {percentComplete}%
                   </Badge>
                 )}
+                {/* Deliberately small and grey. It answers "did that register?"
+                    for a student who glances at it, and is ignorable for one who
+                    does not — an answer being banked is not news, and a retry is
+                    not an error worth interrupting a question for. */}
+                {autosave.status !== 'idle' && (
+                  <Text fontSize="xs" color={autosave.status === 'retrying' ? 'orange.600' : 'lmFg.muted'}>
+                    {autosave.status === 'saving'
+                      ? 'Saving…'
+                      : autosave.status === 'saved'
+                        ? '✓ Answer saved'
+                        : 'Not saved yet — retrying'}
+                  </Text>
+                )}
               </HStack>
               {!sequential && unansweredCount > 0 && (
-                <Text fontSize="xs" color="gray.500">
+                <Text fontSize="xs" color="lmFg.muted">
                   {unansweredCount} still blank
                 </Text>
               )}
@@ -655,9 +904,9 @@ export default function QuizAttempt() {
               document.body and disappear behind a fullscreened paper. */}
           {confirmSubmit && unansweredCount > 0 && (
             <Flex
-              bg="orange.50"
+              bg="lmHue.orange50"
               borderTopWidth="1px"
-              borderColor="orange.200"
+              borderColor="lmHue.orange200"
               px={4}
               py={2}
               gap={2}
@@ -684,6 +933,22 @@ export default function QuizAttempt() {
           <AlertIcon />
           <Text fontSize="sm">{LEAVING_COST}</Text>
         </Alert>
+
+        {/* Not dismissible, and no retry button: the request is still running,
+            and the one thing that must not happen is the student going looking
+            for a way out of the screen. */}
+        {slow && (
+          <Alert status="info" borderRadius="md" mb={4}>
+            <AlertIcon />
+            <Box flex="1">
+              <Text fontWeight="600">Still saving — the connection is slow</Text>
+              <Text fontSize="sm">
+                Your answer has been sent and is not lost. Please wait. Do not reload, and do not
+                switch to another window or tab — leaving this screen ends your test.
+              </Text>
+            </Box>
+          </Alert>
+        )}
 
         {notice && (
           <Alert status={notice.status || 'info'} borderRadius="md" mb={4}>
@@ -712,16 +977,16 @@ export default function QuizAttempt() {
         {!sequential && total > 1 && (
           <SectionCard mb={4} p={4}>
             <Flex justify="space-between" align="center" gap={3} wrap="wrap" mb={3}>
-              <Text fontSize="xs" fontWeight="700" color="gray.600" textTransform="uppercase" letterSpacing="wide">
+              <Text fontSize="xs" fontWeight="700" color="lmFg.subtle" textTransform="uppercase" letterSpacing="wide">
                 Jump to question
               </Text>
-              <HStack spacing={3} fontSize="0.65rem" color="gray.500">
+              <HStack spacing={3} fontSize="0.65rem" color="lmFg.muted">
                 <HStack spacing={1.5}>
                   <Box w="10px" h="10px" borderRadius="sm" bg="purple.500" />
                   <Text>Answered</Text>
                 </HStack>
                 <HStack spacing={1.5}>
-                  <Box w="10px" h="10px" borderRadius="sm" borderWidth="1px" borderColor="gray.300" />
+                  <Box w="10px" h="10px" borderRadius="sm" borderWidth="1px" borderColor="lmBorder.strong" />
                   <Text>Blank</Text>
                 </HStack>
               </HStack>
@@ -738,7 +1003,7 @@ export default function QuizAttempt() {
                     fontSize="xs"
                     variant={done ? 'solid' : 'outline'}
                     colorScheme={done ? 'purple' : 'gray'}
-                    color={done ? undefined : 'gray.600'}
+                    color={done ? undefined : 'lmFg.subtle'}
                     onClick={() => goToQuestion(question._id)}
                     aria-label={`Question ${index + 1}, ${done ? 'answered' : 'not answered'}`}
                   >
@@ -765,10 +1030,25 @@ export default function QuizAttempt() {
               </Badge>
             </Flex>
 
+            {/* Only reachable by going back to a question whose own allowance
+                already ran out. It is shown rather than skipped — a student who
+                asked to see it is owed the sight of what they answered — but it
+                cannot be written on, and the server would refuse the answer
+                anyway. */}
+            {current.questionClosed && (
+              <Alert status="warning" borderRadius="md" mb={3} fontSize="sm">
+                <AlertIcon />
+                This question&apos;s time has run out. You can see it and your answer, but you cannot
+                change it.
+              </Alert>
+            )}
+
             <AnswerInput
               question={current.question}
               value={answers[current.question._id] || {}}
               onChange={(value) => setAnswers({ [current.question._id]: value })}
+              isDisabled={current.questionClosed}
+              keypadOnly={Boolean(settings.keyboardLockdown)}
             />
 
             <Divider my={4} />
@@ -780,13 +1060,19 @@ export default function QuizAttempt() {
               )}
               <Box flex="1" />
               <Button size="sm" colorScheme="purple" onClick={() => advance('forward')} isLoading={busy === 'advance'}>
-                {position >= total ? 'Finish test' : 'Save & next →'}
+                {position >= total ? 'Finish test' : current.questionClosed ? 'Next →' : 'Save & next →'}
               </Button>
             </Flex>
-            {!settings?.allowBacktracking && (
-              <Text fontSize="xs" color="gray.500" mt={2}>
+            {!settings?.allowBacktracking ? (
+              <Text fontSize="xs" color="lmFg.muted" mt={2}>
                 You cannot return to this question once you move on.
               </Text>
+            ) : (
+              settings?.perQuestionTiming && (
+                <Text fontSize="xs" color="lmFg.muted" mt={2}>
+                  You may come back to this question — it will resume with whatever time it has left.
+                </Text>
+              )
             )}
           </SectionCard>
         )}
@@ -824,8 +1110,8 @@ export default function QuizAttempt() {
                           flexShrink={0}
                           fontSize="xs"
                           fontWeight="700"
-                          bg={done ? 'purple.500' : 'gray.100'}
-                          color={done ? 'white' : 'gray.600'}
+                          bg={done ? 'purple.500' : 'lmBg.track'}
+                          color={done ? 'lmFg.onAccent' : 'lmFg.subtle'}
                         >
                           {index + 1}
                         </Flex>
@@ -850,6 +1136,7 @@ export default function QuizAttempt() {
                     question={question}
                     value={answers[question._id] || {}}
                     onChange={(value) => setAnswers((prev) => ({ ...prev, [question._id]: value }))}
+                    keypadOnly={Boolean(settings.keyboardLockdown)}
                   />
                 </SectionCard>
               </Box>
@@ -887,7 +1174,7 @@ export default function QuizAttempt() {
       subject={[banner.subject, klass?.subject, klass?.name].find(Boolean)}
       faculty={[banner.facultyName, klass?.ownerName].find(Boolean)}
       title={banner.title}
-      autoFullscreen={!loading && !finished && Boolean(current || attempt?.status === 'in_progress')}
+      autoFullscreen={wantsFullscreen}
     >
       {content}
     </QuizStage>

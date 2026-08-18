@@ -154,7 +154,7 @@ function NewSessionModal({ isOpen, onClose, classId, onCreated }) {
                         <Box
                           key={recording.filename}
                           borderWidth="1px"
-                          borderColor={selected === recording.filename ? 'purple.400' : 'gray.200'}
+                          borderColor={selected === recording.filename ? 'purple.400' : 'lmBorder.base'}
                           borderRadius="md"
                           p={3}
                         >
@@ -163,7 +163,7 @@ function NewSessionModal({ isOpen, onClose, classId, onCreated }) {
                               <Text fontSize="sm" fontWeight="500">
                                 {recording.label || recording.filename}
                               </Text>
-                              <Text fontSize="xs" color="gray.500">
+                              <Text fontSize="xs" color="lmFg.muted">
                                 {recording.filename} · {prettySize(recording.sizeBytes)} ·{' '}
                                 {recording.started ? relativeTime(recording.started) : ''}
                               </Text>
@@ -181,7 +181,7 @@ function NewSessionModal({ isOpen, onClose, classId, onCreated }) {
                 )}
               </TabPanel>
               <TabPanel px={0}>
-                <Text fontSize="sm" color="gray.600" mb={2}>
+                <Text fontSize="sm" color="lmFg.subtle" mb={2}>
                   Paste the lecture transcript. Notes, a tutorial and a quiz are generated from it directly —
                   no speech-to-text needed.
                 </Text>
@@ -191,7 +191,7 @@ function NewSessionModal({ isOpen, onClose, classId, onCreated }) {
                   onChange={(event) => setTranscript(event.target.value)}
                   placeholder="Paste the full transcript here…"
                 />
-                <Text fontSize="xs" color="gray.500" mt={1}>
+                <Text fontSize="xs" color="lmFg.muted" mt={1}>
                   {transcript.trim().split(/\s+/).filter(Boolean).length} words
                 </Text>
               </TabPanel>
@@ -219,9 +219,9 @@ function QuestionEditor({ question, index, onChange, onRemove }) {
   const duplicates = isChoice ? duplicateOptionIndexes(question.options) : new Set();
 
   return (
-    <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" p={4} mb={3} bg="white">
+    <Box borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" p={4} mb={3} bg="lmBg.surface">
       <Flex justify="space-between" align="flex-start" gap={2} mb={2}>
-        <Text fontSize="xs" color="gray.500" fontWeight="600">
+        <Text fontSize="xs" color="lmFg.muted" fontWeight="600">
           Q{index + 1}
         </Text>
         <HStack>
@@ -315,7 +315,7 @@ function QuestionEditor({ question, index, onChange, onRemove }) {
         placeholder="Explanation shown after submission"
       />
       {question.sourceExcerpt && (
-        <Text fontSize="xs" color="gray.500" mt={2} fontStyle="italic" noOfLines={2}>
+        <Text fontSize="xs" color="lmFg.muted" mt={2} fontStyle="italic" noOfLines={2}>
           Source: “{question.sourceExcerpt}”
         </Text>
       )}
@@ -388,7 +388,7 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
             ← All lectures
           </Button>
           <Heading size="md">{session.title}</Heading>
-          <HStack fontSize="sm" color="gray.500" spacing={3} mt={1} wrap="wrap">
+          <HStack fontSize="sm" color="lmFg.muted" spacing={3} mt={1} wrap="wrap">
             <Text>{formatDate(session.lectureDate)}</Text>
             <Badge colorScheme={session.status === 'ready' ? 'green' : session.status === 'failed' ? 'red' : 'gray'}>
               {session.status}
@@ -467,7 +467,7 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                     >
                       Transcribe automatically
                     </Button>
-                    <Text fontSize="xs" color="gray.500">
+                    <Text fontSize="xs" color="lmFg.muted">
                       Requires a speech-to-text service (LM_TRANSCRIBE_URL). Otherwise paste below.
                     </Text>
                   </HStack>
@@ -497,7 +497,7 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                 >
                   Save transcript
                 </Button>
-                <Text fontSize="xs" color="gray.500">
+                <Text fontSize="xs" color="lmFg.muted">
                   {transcriptDraft.trim().split(/\s+/).filter(Boolean).length} words
                 </Text>
               </HStack>
@@ -558,7 +558,7 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                 ✨ Generate {artefacts.join(', ') || 'nothing'}
               </Button>
               {!hasTranscript && (
-                <Text fontSize="xs" color="gray.500" mt={2}>
+                <Text fontSize="xs" color="lmFg.muted" mt={2}>
                   Save a transcript of at least 100 characters first.
                 </Text>
               )}
@@ -637,7 +637,7 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                     Save edits
                   </Button>
                   <Divider mb={4} />
-                  <Text fontSize="xs" color="gray.500" mb={2}>
+                  <Text fontSize="xs" color="lmFg.muted" mb={2}>
                     Preview
                   </Text>
                   <Markdown>{session.notes.markdown}</Markdown>
@@ -671,7 +671,7 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
               {session.tutorial?.markdown || session.tutorial?.summary ? (
                 <>
                   {session.tutorial.summary && (
-                    <Box bg="purple.50" borderRadius="md" p={4} mb={4}>
+                    <Box bg="lmHue.purple50" borderRadius="md" p={4} mb={4}>
                       <Text fontSize="sm" fontWeight="600" mb={1}>
                         Summary
                       </Text>
@@ -685,11 +685,11 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                         Key terms
                       </Heading>
                       {session.tutorial.keyTerms.map((term) => (
-                        <Box key={term.term} py={1.5} borderBottomWidth="1px" borderColor="gray.100">
+                        <Box key={term.term} py={1.5} borderBottomWidth="1px" borderColor="lmBorder.subtle">
                           <Text fontSize="sm" fontWeight="600">
                             {term.term}
                           </Text>
-                          <Text fontSize="sm" color="gray.600">
+                          <Text fontSize="sm" color="lmFg.subtle">
                             {term.definition}
                           </Text>
                         </Box>
@@ -707,16 +707,16 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                           <Box
                             key={index}
                             borderWidth="1px"
-                            borderColor="gray.200"
+                            borderColor="lmBorder.base"
                             borderRadius="md"
                             p={3}
                             w="220px"
-                            bg="white"
+                            bg="lmBg.surface"
                           >
                             <Text fontSize="sm" fontWeight="600" mb={1}>
                               {card.front}
                             </Text>
-                            <Text fontSize="xs" color="gray.600">
+                            <Text fontSize="xs" color="lmFg.subtle">
                               {card.back}
                             </Text>
                           </Box>
@@ -735,7 +735,7 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                           <Text fontSize="sm" fontWeight="600">
                             {entry.question}
                           </Text>
-                          <Text fontSize="sm" color="gray.600">
+                          <Text fontSize="sm" color="lmFg.subtle">
                             {entry.answer}
                           </Text>
                         </Box>
@@ -778,7 +778,7 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                         Save edits
                       </Button>
                       <Divider mb={4} />
-                      <Text fontSize="xs" color="gray.500" mb={2}>
+                      <Text fontSize="xs" color="lmFg.muted" mb={2}>
                         Preview
                       </Text>
                       <Markdown>{session.tutorial.markdown}</Markdown>
@@ -912,7 +912,7 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                 </Button>
               </Flex>
               {askAnswer && (
-                <Box mt={4} p={4} bg="gray.50" borderRadius="md">
+                <Box mt={4} p={4} bg="lmBg.sunken" borderRadius="md">
                   <Markdown>{askAnswer}</Markdown>
                 </Box>
               )}
@@ -966,7 +966,7 @@ function StudentLibrary({ classId }) {
           {open === session._id && (
             <Box mt={2}>
               {session.tutorial?.summary && (
-                <Box bg="purple.50" p={4} borderRadius="md" mb={4}>
+                <Box bg="lmHue.purple50" p={4} borderRadius="md" mb={4}>
                   <Text fontSize="sm">{session.tutorial.summary}</Text>
                 </Box>
               )}
@@ -1035,7 +1035,7 @@ export default function AiStudio() {
       <Flex justify="space-between" align="flex-start" mb={4} gap={3} wrap="wrap">
         <Box>
           <Heading size="md">AI Studio</Heading>
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="lmFg.muted">
             Turn a recorded class into notes, a tutorial and a quiz, then publish them to the class.
           </Text>
         </Box>
@@ -1084,9 +1084,9 @@ export default function AiStudio() {
         sessions.map((session) => (
           <Flex
             key={session._id}
-            bg="white"
+            bg="lmBg.surface"
             borderWidth="1px"
-            borderColor="gray.200"
+            borderColor="lmBorder.base"
             borderRadius="lg"
             p={4}
             mb={3}
@@ -1097,7 +1097,7 @@ export default function AiStudio() {
           >
             <Box flex="1" minW="220px">
               <Heading size="sm">{session.title}</Heading>
-              <HStack fontSize="xs" color="gray.500" spacing={3} mt={1} wrap="wrap">
+              <HStack fontSize="xs" color="lmFg.muted" spacing={3} mt={1} wrap="wrap">
                 <Text>{formatDate(session.lectureDate)}</Text>
                 <Badge colorScheme={session.status === 'ready' ? 'green' : session.status === 'failed' ? 'red' : 'gray'}>
                   {session.status}

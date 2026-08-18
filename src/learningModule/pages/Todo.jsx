@@ -57,7 +57,7 @@ function WorkRow({ entry, showStudent }) {
           {entry.title || 'Untitled'}
         </Heading>
         <HStack spacing={3} mt={1} wrap="wrap">
-          <Text fontSize="xs" color="gray.500">
+          <Text fontSize="xs" color="lmFg.muted">
             {entry.class?.name}
             {entry.class?.section ? ` · ${entry.class.section}` : ''}
           </Text>
@@ -97,7 +97,7 @@ export default function Todo() {
       <Heading size="lg" mb={1}>
         To-do
       </Heading>
-      <Text color="gray.500" fontSize="sm" mb={5}>
+      <Text color="lmFg.muted" fontSize="sm" mb={5}>
         Work across every class you are in.
       </Text>
 

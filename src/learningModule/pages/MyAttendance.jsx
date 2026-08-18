@@ -114,15 +114,15 @@ function DisputeDialog({ record, reasons, isOpen, onClose, onRaised }) {
         <ModalHeader>Raise a dispute</ModalHeader>
         <ModalCloseButton />
         <ModalBody>
-          <Box borderWidth="1px" borderRadius="md" p={3} mb={4} bg="gray.50">
+          <Box borderWidth="1px" borderRadius="md" p={3} mb={4} bg="lmBg.sunken">
             <Text fontWeight="600">{record.subject || 'Class'}</Text>
-            <Text fontSize="sm" color="gray.600">
+            <Text fontSize="sm" color="lmFg.subtle">
               {record.date} · {record.periodName}
               {record.periodTime ? ` (${record.periodTime})` : ''}
               {record.faculty ? ` · ${record.faculty}` : ''}
             </Text>
             <HStack mt={2}>
-              <Text fontSize="sm" color="gray.600">You were marked</Text>
+              <Text fontSize="sm" color="lmFg.subtle">You were marked</Text>
               <Badge colorScheme={STATUS_STYLE[record.status]?.colorScheme}>
                 {STATUS_STYLE[record.status]?.label}
               </Badge>
@@ -243,13 +243,13 @@ export default function MyAttendance() {
                       <Td whiteSpace="nowrap">
                         <Text fontSize="sm">{record.periodName}</Text>
                         {record.periodTime && (
-                          <Text fontSize="xs" color="gray.500">{record.periodTime}</Text>
+                          <Text fontSize="xs" color="lmFg.muted">{record.periodTime}</Text>
                         )}
                       </Td>
                       <Td>
                         <Text fontSize="sm" fontWeight="600">{record.subject || '—'}</Text>
                         {record.semester && (
-                          <Text fontSize="xs" color="gray.500">Sem {record.semester}</Text>
+                          <Text fontSize="xs" color="lmFg.muted">Sem {record.semester}</Text>
                         )}
                       </Td>
                       <Td fontSize="sm">{record.faculty || '—'}</Td>
@@ -261,16 +261,16 @@ export default function MyAttendance() {
                           <VStack align="start" spacing={0}>
                             <Badge colorScheme={dispute.colorScheme}>{dispute.label}</Badge>
                             {record.dispute.coordinatorRemark && (
-                              <Text fontSize="xs" color="gray.600" maxW="220px">
+                              <Text fontSize="xs" color="lmFg.subtle" maxW="220px">
                                 “{record.dispute.coordinatorRemark}”
                               </Text>
                             )}
-                            <Text fontSize="xs" color="gray.500">
+                            <Text fontSize="xs" color="lmFg.muted">
                               {relativeTime(record.dispute.decidedAt || record.dispute.createdAt)}
                             </Text>
                           </VStack>
                         ) : (
-                          <Text fontSize="xs" color="gray.400">—</Text>
+                          <Text fontSize="xs" color="lmFg.faint">—</Text>
                         )}
                       </Td>
                       <Td textAlign="right">
@@ -289,7 +289,7 @@ export default function MyAttendance() {
         )}
       </SectionCard>
 
-      <Flex fontSize="xs" color="gray.500" px={1}>
+      <Flex fontSize="xs" color="lmFg.muted" px={1}>
         <Text>
           An accepted dispute is the coordinator agreeing your marking was wrong; the correction
           itself is made through the ERP, so the attendance shown here may take a while to change.

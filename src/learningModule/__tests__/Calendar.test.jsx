@@ -1,8 +1,10 @@
 import React from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
-import { renderWithProviders } from '../../test/renderWithProviders';
+import { ChakraProvider } from '@chakra-ui/react';
+import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import lmApi from '../api/lmApi';
 import Calendar from '../pages/Calendar';
 
@@ -14,6 +16,27 @@ import Calendar from '../pages/Calendar';
  */
 
 vi.mock('../api/lmApi', () => ({ default: { calendar: vi.fn() } }));
+
+/* The page reads `me` from the outlet context to decide whose calendar it is.
+   This test renders it on its own, outside the layout that supplies it, so the
+   context has to be stood in for — without it `useOutletContext()` is undefined
+   and the destructure throws before anything renders. */
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return { ...actual, useOutletContext: () => ({ me: { roles: ['STUDENT'] } }) };
+});
+
+/* The page fetches through react-query, so it needs a provider — and a fresh
+   client per render with retries off, or a failed month is retried into the next
+   test and the cache carries a previous test's feed. */
+const renderWithProviders = (ui) =>
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <ChakraProvider>
+        <MemoryRouter>{ui}</MemoryRouter>
+      </ChakraProvider>
+    </QueryClientProvider>,
+  );
 
 const DSP = { _id: 'c1', name: 'ECE-A 2026', subject: 'Digital Signal Processing', subjectCode: 'EC8553', coverColor: '#1967d2' };
 const MATHS = { _id: 'c2', name: 'ECE-A 2026', subject: 'Probability', subjectCode: 'MA8451', coverColor: '#0f9d58' };
@@ -118,12 +141,22 @@ describe('learningModule <Calendar />', () => {
     }
   });
 
-  it('leaves an empty day alone', async () => {
+  /**
+   * The restored design opens the day panel for any day, including an empty one.
+   * That was a deliberate revert, so what is worth guarding is not that the panel
+   * stays shut but that an empty day reports itself as empty — rather than
+   * crashing on a missing list or showing whichever day was open before.
+   */
+  it('opens an empty day as empty rather than showing a stale one', async () => {
     lmApi.calendar.mockResolvedValue({ coursework: [], quizzes: [], shorts: [], nonWorkingDays: [] });
     renderWithProviders(<Calendar />);
 
     await waitFor(() => expect(screen.getByText('7')).toBeInTheDocument());
     fireEvent.click(screen.getByText('7'));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    const dialog = await screen.findByRole('dialog');
+    // The count and the word are separate nodes, so this reads the collapsed text
+    // rather than trying to match across them.
+    expect(dialog.textContent.replace(/\s+/g, ' ')).toContain('0 activities');
   });
 });

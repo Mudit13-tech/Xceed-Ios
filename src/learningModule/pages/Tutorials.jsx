@@ -139,7 +139,7 @@ export default function Tutorials() {
       <Flex justify="space-between" align="flex-start" mb={4} gap={3} wrap="wrap">
         <Box>
           <Heading size="md">Tutorials</Heading>
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="lmFg.muted">
             Numerical practice where every student gets their own values and answers are marked
             against a formula.
           </Text>
@@ -206,11 +206,11 @@ export default function Tutorials() {
                   {tutorial.topicName && <Badge colorScheme="gray">{tutorial.topicName}</Badge>}
                 </HStack>
                 {tutorial.description && (
-                  <Text fontSize="sm" color="gray.600" noOfLines={2} mt={1}>
+                  <Text fontSize="sm" color="lmFg.subtle" noOfLines={2} mt={1}>
                     {tutorial.description}
                   </Text>
                 )}
-                <Text fontSize="xs" color="gray.500" mt={1}>
+                <Text fontSize="xs" color="lmFg.muted" mt={1}>
                   {tutorial.questionCount ?? tutorial.questions?.length ?? 0} questions ·{' '}
                   {tutorial.totalMarks} marks
                   {tutorial.settings?.attemptsAllowed > 1
@@ -218,7 +218,7 @@ export default function Tutorials() {
                     : ''}
                 </Text>
                 {isTeacher && tutorial.stats && (
-                  <Text fontSize="xs" color="gray.500">
+                  <Text fontSize="xs" color="lmFg.muted">
                     {tutorial.stats.attempts} submission(s)
                     {tutorial.stats.avg !== null && tutorial.stats.avg !== undefined
                       ? ` · avg ${Math.round(tutorial.stats.avg * 10) / 10}%`

@@ -130,7 +130,7 @@ export default function GradeWork() {
           <Heading size="md" mt={1}>
             {data.coursework.title}
           </Heading>
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="lmFg.muted">
             {data.coursework.points} points
           </Text>
         </Box>
@@ -185,7 +185,7 @@ export default function GradeWork() {
                   px={2}
                   py={2}
                   borderRadius="md"
-                  bg={submission._id === selectedId ? 'blue.50' : 'transparent'}
+                  bg={submission._id === selectedId ? 'lmHue.blue50' : 'transparent'}
                   _hover={{ bg: submission._id === selectedId ? 'blue.50' : 'gray.50' }}
                 >
                   <Checkbox
@@ -209,14 +209,14 @@ export default function GradeWork() {
                       </Text>
                       <StateBadge state={submission.state} late={submission.late} />
                     </Box>
-                    <Text fontSize="sm" fontWeight="600" color={submission.grade === null ? 'gray.300' : 'gray.700'}>
+                    <Text fontSize="sm" fontWeight="600" color={submission.grade === null ? 'lmFg.faint' : 'lmFg.body'}>
                       {submission.grade === null || submission.grade === undefined ? '—' : submission.grade}
                     </Text>
                   </Flex>
                 </Flex>
               ))}
               {filtered.length === 0 && (
-                <Text fontSize="sm" color="gray.500" py={4} textAlign="center">
+                <Text fontSize="sm" color="lmFg.muted" py={4} textAlign="center">
                   No students match this filter.
                 </Text>
               )}
@@ -227,7 +227,7 @@ export default function GradeWork() {
         <Box flex="1" minW={0} w="100%">
           {!selected ? (
             <SectionCard>
-              <Text color="gray.500">Select a student to review their work.</Text>
+              <Text color="lmFg.muted">Select a student to review their work.</Text>
             </SectionCard>
           ) : (
             <SectionCard
@@ -241,8 +241,8 @@ export default function GradeWork() {
               <StateBadge state={selected.state} late={selected.late} />
 
               {selected.textAnswer && (
-                <Box mt={4} p={4} bg="gray.50" borderRadius="md" borderWidth="1px" borderColor="gray.200">
-                  <Text fontSize="sm" whiteSpace="pre-wrap" color="gray.700">
+                <Box mt={4} p={4} bg="lmBg.sunken" borderRadius="md" borderWidth="1px" borderColor="lmBorder.base">
+                  <Text fontSize="sm" whiteSpace="pre-wrap" color="lmFg.body">
                     {selected.textAnswer}
                   </Text>
                 </Box>
@@ -255,7 +255,7 @@ export default function GradeWork() {
               <AttachmentList attachments={selected.attachments} />
 
               {!selected.textAnswer && !selected.choiceAnswer && !selected.attachments?.length && (
-                <Text mt={4} fontSize="sm" color="gray.500">
+                <Text mt={4} fontSize="sm" color="lmFg.muted">
                   This student has not submitted anything.
                 </Text>
               )}
@@ -277,7 +277,7 @@ export default function GradeWork() {
                       value={grade}
                       onChange={(event) => setGrade(event.target.value)}
                     />
-                    <Text fontSize="sm" color="gray.500">
+                    <Text fontSize="sm" color="lmFg.muted">
                       / {selected.maxPoints}
                     </Text>
                   </HStack>
@@ -318,7 +318,7 @@ export default function GradeWork() {
               </Box>
 
               <Divider my={5} />
-              <Heading size="xs" mb={2} color="gray.700">
+              <Heading size="xs" mb={2} color="lmFg.body">
                 Private comments
               </Heading>
               <CommentThread

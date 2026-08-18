@@ -65,6 +65,52 @@ const TYPE_LABELS = {
   numerical: 'Numerical / integer',
 };
 
+/**
+ * The three ways a paper can run, as one control.
+ *
+ * Delivery and timing are not independent — the one-page paper cannot enforce a
+ * per-question clock — so offering them as two controls advertised a fourth
+ * combination that does not exist and let a teacher undo per-question times by
+ * changing delivery. The same three appear in the create dialog
+ * (`Quizzes.jsx`), so a quiz is described the same way before and after it
+ * exists.
+ */
+const METHODOLOGIES = [
+  {
+    key: 'one_page',
+    icon: '📋',
+    label: 'All questions on one page, one timer',
+    hint: 'Students answer in any order and submit when ready, under a single countdown. Best for classroom quizzes.',
+    deliveryMode: 'all_at_once',
+    perQuestionTiming: false,
+    canChooseBacktracking: false,
+  },
+  {
+    key: 'sequential_paper_timer',
+    icon: '1️⃣',
+    label: 'One question at a time, one timer for the whole paper',
+    hint: 'The server hands out one question at a time and remembers the position, so a refresh or a dropped connection resumes instead of restarting. One countdown covers the paper.',
+    deliveryMode: 'one_at_a_time',
+    perQuestionTiming: false,
+    canChooseBacktracking: true,
+  },
+  {
+    key: 'sequential_question_timer',
+    icon: '⏱',
+    label: 'One question at a time, a timer on each question',
+    hint: 'Every question carries its own allowance and moves on by itself when it runs out. No overall clock, so each question needs a time of its own.',
+    deliveryMode: 'one_at_a_time',
+    perQuestionTiming: true,
+    canChooseBacktracking: true,
+  },
+];
+
+/** Which of the three a stored settings object is. */
+const methodologyOf = (settings) => {
+  if (settings.deliveryMode !== 'one_at_a_time') return 'one_page';
+  return settings.perQuestionTiming ? 'sequential_question_timer' : 'sequential_paper_timer';
+};
+
 const toLocalInput = (value) =>
   value ? new Date(new Date(value).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
 
@@ -204,7 +250,7 @@ function QuestionCard({ question, index, sections, onChange, onRemove, onDuplica
 
       {isChoice && (
         <Stack spacing={2} mb={3}>
-          <Text fontSize="xs" color="gray.500">
+          <Text fontSize="xs" color="lmFg.muted">
             Tick the correct {question.type === 'msq' ? 'answers' : 'answer'}.
           </Text>
           {question.options.map((option, optionIndex) => (
@@ -427,7 +473,7 @@ export default function QuizEditor() {
   const setSetting = (key, value) => set({ settings: { ...quiz.settings, [key]: value } });
   const setSettings = (changes) => set({ settings: { ...quiz.settings, ...changes } });
   const settings = quiz.settings;
-  const timingMode = settings.perQuestionTiming ? 'per_question' : 'overall';
+  const methodology = methodologyOf(settings);
 
   const addQuestion = () =>
     set({
@@ -441,25 +487,25 @@ export default function QuizEditor() {
     });
 
   /**
-   * The two clocks are exclusive, so switching between them puts the other one
-   * away rather than leaving both set. Going per-question also settles the
-   * delivery mode: the all-at-once page has no way to enforce a question's own
-   * timer, and the server clears the flag for it anyway.
+   * Switching methodology sets delivery and timing together, so the other
+   * clock is put away rather than left set behind a control that no longer shows
+   * it. `allowBacktracking` is deliberately *not* reset: it is a choice that
+   * means the same thing under both one-at-a-time methodologies, and clearing it
+   * on a switch would silently reopen a paper the teacher had closed.
    */
-  const setTimingMode = (mode) => {
-    if (mode === 'per_question') {
-      setSettings({
-        perQuestionTiming: true,
-        deliveryMode: 'one_at_a_time',
-        // A revisited question would restart its own countdown, so going back
-        // cannot be offered alongside per-question timers.
-        allowBacktracking: false,
-        timeLimitMinutes: 0,
-        defaultQuestionSec: settings.defaultQuestionSec || 60,
-      });
-    } else {
-      setSettings({ perQuestionTiming: false });
-    }
+  const setMethodology = (key) => {
+    const chosen = METHODOLOGIES.find((option) => option.key === key);
+    if (!chosen) return;
+    setSettings({
+      deliveryMode: chosen.deliveryMode,
+      perQuestionTiming: chosen.perQuestionTiming,
+      // The one-page paper is free navigation by definition; the server pins the
+      // flag on for it too, so the editor must not disagree.
+      ...(chosen.canChooseBacktracking ? {} : { allowBacktracking: true }),
+      ...(chosen.perQuestionTiming
+        ? { timeLimitMinutes: 0, defaultQuestionSec: settings.defaultQuestionSec || 60 }
+        : {}),
+    });
   };
 
   // Questions still carrying 0 seconds block publishing while per-question
@@ -480,7 +526,7 @@ export default function QuizEditor() {
           <Heading size="md" mt={1}>
             {quiz.title}
           </Heading>
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="lmFg.muted">
             {quiz.questions.length} questions · {totalMarks} marks
             {settings.questionsPerAttempt > 0 && ` · ${settings.questionsPerAttempt} drawn per student`}
             {quiz.source === 'ai' && ' · generated from a class recording'}
@@ -546,7 +592,7 @@ export default function QuizEditor() {
             {/* The same two actions as the header. A long paper puts the header
                 pair a few screens up, and scrolling back to save is exactly the
                 moment a teacher loses the work they just typed. */}
-            <Flex justify="flex-end" gap={2} mt={6} pt={4} borderTopWidth="1px" borderColor="gray.200">
+            <Flex justify="flex-end" gap={2} mt={6} pt={4} borderTopWidth="1px" borderColor="lmBorder.base">
               <Button size="sm" variant="outline" onClick={save} isLoading={saving}>
                 Save
               </Button>
@@ -563,7 +609,7 @@ export default function QuizEditor() {
               subtitle="Group questions into parts, e.g. Aptitude / Coding. Question order is only ever shuffled inside a section, never across them."
             >
               {quiz.sections.length === 0 && (
-                <Text fontSize="sm" color="gray.500" mb={3}>
+                <Text fontSize="sm" color="lmFg.muted" mb={3}>
                   No sections — every question sits in one flat list.
                 </Text>
               )}
@@ -621,7 +667,7 @@ export default function QuizEditor() {
               >
                 + Add section
               </Button>
-              <Text fontSize="xs" color="gray.500" mt={3}>
+              <Text fontSize="xs" color="lmFg.muted" mt={3}>
                 Save after adding a section, then assign questions to it from the Questions tab.
               </Text>
             </SectionCard>
@@ -629,138 +675,100 @@ export default function QuizEditor() {
 
           {/* ---------- delivery & timing ---------- */}
           <TabPanel px={0}>
-            <SectionCard title="How questions are delivered" mb={4}>
-              {/* Dropping back to one page takes per-question timing with it —
-                  that page runs a single paper clock and cannot enforce a
-                  question's own time, so leaving the flag on would promise a
-                  countdown that never fires. */}
-              <RadioGroup
-                value={settings.deliveryMode}
-                onChange={(value) =>
-                  setSettings(
-                    value === 'all_at_once'
-                      ? { deliveryMode: value, perQuestionTiming: false }
-                      : { deliveryMode: value },
-                  )
-                }
-              >
-                <Stack spacing={3}>
-                  <Radio value="all_at_once">
-                    <Box>
-                      <Text fontSize="sm" fontWeight="600">
-                        All questions on one page
-                      </Text>
-                      <Text fontSize="xs" color="gray.500">
-                        Students answer in any order and submit when ready. Best for classroom quizzes.
-                      </Text>
-                    </Box>
-                  </Radio>
-                  <Radio value="one_at_a_time">
-                    <Box>
-                      <Text fontSize="sm" fontWeight="600">
-                        One question at a time
-                      </Text>
-                      <Text fontSize="xs" color="gray.500">
-                        The server hands out one question at a time and remembers the position, so a refresh or
-                        a dropped connection resumes instead of restarting. Best for placement-style tests.
-                      </Text>
-                    </Box>
-                  </Radio>
-                </Stack>
-              </RadioGroup>
-
-              {/* Only a real choice under the whole-paper clock: a question
-                  revisited under its own timer would start a fresh countdown,
-                  so the two together have no coherent meaning. */}
-              {settings.deliveryMode === 'one_at_a_time' &&
-                (settings.perQuestionTiming ? (
-                  <Alert status="info" borderRadius="md" mt={4} fontSize="xs">
-                    <AlertIcon />
-                    Going back is off while each question has its own timer — a revisited question would
-                    start its countdown again. Switch to one timer for the whole paper below to offer it.
-                  </Alert>
-                ) : (
-                  <Checkbox
-                    mt={4}
-                    size="sm"
-                    isChecked={settings.allowBacktracking}
-                    onChange={(e) => setSetting('allowBacktracking', e.target.checked)}
-                  >
-                    <Text fontSize="sm">Let students go back to earlier questions</Text>
-                    <Text fontSize="xs" color="gray.500">
-                      Off is placement-test behaviour: once a question is answered, it is closed.
-                    </Text>
-                  </Checkbox>
-                ))}
-            </SectionCard>
-
+            {/* Delivery, the clock and the going-back rule are one card because
+                they are one decision: only three of the four delivery/timing
+                combinations exist, and asked separately a teacher could set
+                per-question times and then quietly lose them by changing
+                delivery. Each methodology carries its own clock field and, where
+                it means something, its own navigation choice. */}
             <SectionCard
-              title="Timing"
-              subtitle="One clock or one per question — never both. The other method's boxes are switched off so there is no doubt about which countdown a student is watching."
+              title="How this paper runs"
+              subtitle="One clock or one per question — never both, so there is no doubt about which countdown a student is watching."
               mb={4}
             >
-              <RadioGroup value={timingMode} onChange={setTimingMode}>
-                <Stack spacing={3}>
-                  <Radio value="overall">
-                    <Box>
-                      <Text fontSize="sm" fontWeight="600">
-                        One timer for the whole paper
-                      </Text>
-                      <Text fontSize="xs" color="gray.500">
-                        A single countdown from the moment a student starts. The per-question time boxes
-                        stay disabled.
-                      </Text>
+              <RadioGroup value={methodology} onChange={setMethodology}>
+                <Stack spacing={4}>
+                  {METHODOLOGIES.map((option) => (
+                    <Box key={option.key}>
+                      <Radio value={option.key} alignItems="flex-start">
+                        <Box>
+                          <Text fontSize="sm" fontWeight="600">
+                            {option.icon} {option.label}
+                          </Text>
+                          <Text fontSize="xs" color="lmFg.muted">
+                            {option.hint}
+                          </Text>
+                        </Box>
+                      </Radio>
+
+                      {methodology === option.key && (
+                        <Stack spacing={3} mt={3} ml={6} pl={3} borderLeftWidth="2px" borderColor="lmHue.purple200">
+                          <FormControl maxW="260px">
+                            {option.perQuestionTiming ? (
+                              <>
+                                <Tooltip label="Stamped on each question you add from now on. Existing questions keep their own time.">
+                                  <FormLabel fontSize="xs">Default time for new questions (seconds)</FormLabel>
+                                </Tooltip>
+                                <Input
+                                  size="sm"
+                                  type="number"
+                                  min={0}
+                                  value={settings.defaultQuestionSec ?? 60}
+                                  onChange={(e) => setSetting('defaultQuestionSec', Number(e.target.value) || 0)}
+                                />
+                              </>
+                            ) : (
+                              <>
+                                <FormLabel fontSize="xs">Overall time limit (minutes, 0 = none)</FormLabel>
+                                <Input
+                                  size="sm"
+                                  type="number"
+                                  min={0}
+                                  value={settings.timeLimitMinutes}
+                                  onChange={(e) => setSetting('timeLimitMinutes', Number(e.target.value) || 0)}
+                                />
+                              </>
+                            )}
+                          </FormControl>
+
+                          {/* Offered under both clocks. Under per-question
+                              timing a revisit resumes the question's remaining
+                              budget rather than restarting it, which is what
+                              makes the combination safe to offer. */}
+                          {option.canChooseBacktracking && (
+                            <Checkbox
+                              size="sm"
+                              alignItems="flex-start"
+                              isChecked={settings.allowBacktracking}
+                              onChange={(e) => setSetting('allowBacktracking', e.target.checked)}
+                            >
+                              <Text fontSize="sm">Let students go back and change earlier answers</Text>
+                              <Text fontSize="xs" color="lmFg.muted">
+                                {option.perQuestionTiming
+                                  ? 'A revisited question resumes with the seconds it had left, and one whose time is gone is shown read-only — so going back cannot buy more time. Off is placement-test behaviour.'
+                                  : 'Off is placement-test behaviour: once a question is answered, it is closed.'}
+                              </Text>
+                            </Checkbox>
+                          )}
+
+                          {option.perQuestionTiming && (
+                            <Alert status={untimedCount ? 'warning' : 'info'} borderRadius="md" fontSize="xs">
+                              <AlertIcon />
+                              {untimedCount
+                                ? `${untimedCount} question(s) still have no time set — publishing is blocked until every question has one.`
+                                : 'Every question carries its own time, set in the Questions tab.'}
+                            </Alert>
+                          )}
+                        </Stack>
+                      )}
                     </Box>
-                  </Radio>
-                  <Radio value="per_question">
-                    <Box>
-                      <Text fontSize="sm" fontWeight="600">
-                        A timer on each question
-                      </Text>
-                      <Text fontSize="xs" color="gray.500">
-                        Each question auto-advances when its own time runs out. Needs one-question-at-a-time
-                        delivery, and switches to it.
-                      </Text>
-                    </Box>
-                  </Radio>
+                  ))}
                 </Stack>
               </RadioGroup>
+            </SectionCard>
 
-              {settings.perQuestionTiming && (
-                <Alert status={untimedCount ? 'warning' : 'info'} borderRadius="md" mt={3} fontSize="xs">
-                  <AlertIcon />
-                  {untimedCount
-                    ? `${untimedCount} question(s) still have no time set — publishing is blocked until every question has one.`
-                    : 'Every question carries its own time, set in the Questions tab.'}
-                </Alert>
-              )}
-
-              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} mt={4}>
-                {settings.perQuestionTiming ? (
-                  <FormControl>
-                    <Tooltip label="Stamped on each question you add from now on. Existing questions keep their own time.">
-                      <FormLabel fontSize="xs">Default time for new questions (seconds)</FormLabel>
-                    </Tooltip>
-                    <Input
-                      size="sm"
-                      type="number"
-                      min={0}
-                      value={settings.defaultQuestionSec ?? 60}
-                      onChange={(e) => setSetting('defaultQuestionSec', Number(e.target.value) || 0)}
-                    />
-                  </FormControl>
-                ) : (
-                  <FormControl>
-                    <FormLabel fontSize="xs">Overall time limit (minutes, 0 = none)</FormLabel>
-                    <Input
-                      size="sm"
-                      type="number"
-                      min={0}
-                      value={settings.timeLimitMinutes}
-                      onChange={(e) => setSetting('timeLimitMinutes', Number(e.target.value) || 0)}
-                    />
-                  </FormControl>
-                )}
+            <SectionCard title="When students may sit it" mb={4}>
+              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
                 <FormControl>
                   <Tooltip label="Students may still be sitting the test after this, but nobody new can begin">
                     <FormLabel fontSize="xs">Late-entry window (minutes after opening)</FormLabel>
@@ -897,17 +905,52 @@ export default function QuizEditor() {
                     paper is sat in fullscreen and the first departure submits
                     it. Stated here so a teacher setting the paper knows exactly
                     what their class will be held to. */}
-                <Box p={3} bg="orange.50" borderRadius="md" borderWidth="1px" borderColor="orange.200">
+                <Box p={3} bg="lmHue.orange50" borderRadius="md" borderWidth="1px" borderColor="lmHue.orange200">
                   <Text fontSize="sm" fontWeight="600" mb={1}>
                     Always on: fullscreen lockdown
                   </Text>
-                  <Text fontSize="xs" color="gray.700">
+                  <Text fontSize="xs" color="lmFg.body">
                     Every test runs in fullscreen. Leaving fullscreen, or switching to another tab,
                     window or application, submits the student&apos;s attempt immediately and records
                     the reason on it. There is no allowance to configure — your students are told
                     this on the pre-test screen before they can start.
                   </Text>
                 </Box>
+
+                {/* Set at creation as "is this sitting watched?", and changeable
+                    here for the same reason everything else is. Only shown for
+                    one-at-a-time delivery: on a one-page paper every question is
+                    already in the browser, so there is nothing to fetch ahead
+                    and the setting would be a lie. */}
+                {settings.deliveryMode === 'one_at_a_time' && (
+                  <Box p={3} borderRadius="md" borderWidth="1px" borderColor="lmBorder.base">
+                    <Checkbox
+                      size="sm"
+                      alignItems="flex-start"
+                      isChecked={Boolean(settings.prefetchQuestions)}
+                      onChange={(e) => setSetting('prefetchQuestions', e.target.checked)}
+                    >
+                      <Text fontSize="sm" fontWeight="600">
+                        Proctored — load the next question ahead
+                      </Text>
+                      <Text fontSize="xs" color="lmFg.subtle">
+                        Pressing Next is immediate, because the browser already has the question.
+                        Where this paper lets students go back it is sent plainly; otherwise it is
+                        encrypted and the key is only released when they reach it.
+                      </Text>
+                    </Checkbox>
+                    {!settings.prefetchQuestions && (
+                      <Alert status="warning" borderRadius="md" mt={2} py={2} fontSize="xs">
+                        <AlertIcon boxSize={3} />
+                        <Box>
+                          <b>High security:</b> nothing loads ahead. Students will see a pause on every
+                          Next — noticeable on a slow or busy connection, and worst when a whole batch
+                          starts at once.
+                        </Box>
+                      </Alert>
+                    )}
+                  </Box>
+                )}
 
                 {/* Named honestly. The check is on the User-Agent string, which
                     a browser chooses for itself and any student can change from
@@ -927,6 +970,27 @@ export default function QuizEditor() {
                     Turns away phones that identify themselves as phones. Trivially bypassed — treat it as a
                     nudge, not a control.
                   </Text>
+                </Box>
+                <Box>
+                  <Checkbox
+                    size="sm"
+                    isChecked={settings.keyboardLockdown !== false}
+                    onChange={(e) => setSetting('keyboardLockdown', e.target.checked)}
+                  >
+                    Block the keyboard, and submit on the first key pressed
+                  </Checkbox>
+                  <Text fontSize="xs" opacity={0.6} ml={6}>
+                    Closes the gap that a desktop AI assistant opens: on macOS one answers a global
+                    hotkey with a panel drawn over the browser, which fires none of the events that
+                    end a paper. Every answer here is clicked — a numerical answer gets an on-screen
+                    keypad — so during a sitting the keyboard has no legitimate use.
+                  </Text>
+                  {settings.keyboardLockdown === false && (
+                    <Text fontSize="xs" color="lmHue.orange700" ml={6} mt={1}>
+                      Off: a student can reach a hotkey without ending their paper. Turn it off only
+                      for a candidate who needs a keyboard for assistive input.
+                    </Text>
+                  )}
                 </Box>
                 <Checkbox
                   size="sm"
@@ -954,7 +1018,7 @@ export default function QuizEditor() {
                 >
                   Offer an on-screen scientific calculator
                 </Checkbox>
-                <Text fontSize="xs" color="gray.500" pl={6} mt={-1}>
+                <Text fontSize="xs" color="lmFg.muted" pl={6} mt={-1}>
                   Turn this off for a paper where the arithmetic is the point.
                 </Text>
               </Stack>
@@ -1044,13 +1108,13 @@ export default function QuizEditor() {
               )}
             </SectionCard>
 
-            <SectionCard title="Danger zone" borderColor="red.200">
+            <SectionCard title="Danger zone" borderColor="lmHue.red200">
               <Flex justify="space-between" align="center" gap={3} wrap="wrap" py={2}>
                 <Box>
                   <Text fontSize="sm" fontWeight="600" color="red.600">
                     Delete all responses
                   </Text>
-                  <Text fontSize="xs" color="gray.500">
+                  <Text fontSize="xs" color="lmFg.muted">
                     Clears every attempt so the same cohort can sit this test again. Their gradebook entries
                     are reset too.
                   </Text>

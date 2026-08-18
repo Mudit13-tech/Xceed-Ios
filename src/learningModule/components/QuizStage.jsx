@@ -25,6 +25,28 @@ export default function QuizStage({ subject, faculty, title, children, autoFulls
 
   useEffect(() => openQuizStage({ autoFullscreen }), [autoFullscreen]);
 
+  /**
+   * Second chance at fullscreen, taken from the student's next click.
+   *
+   * `requestFullscreen` is only granted while a user gesture is in hand, and the
+   * request on mount has none in the two cases that matter: a paper opened from
+   * a pasted link in a fresh tab, and a tab reloaded mid-brief. Waiting for the
+   * student to notice a button in the corner is how a test that is supposed to
+   * put itself fullscreen ends up not being in one — so the first click anywhere
+   * on the stage does it instead, whatever they were clicking on.
+   *
+   * Only while the screen is asking for fullscreen: once the paper is over, or
+   * the sitting has been closed by leaving, `autoFullscreen` is false and a click
+   * must not drag the student back into a fullscreen they are done with.
+   */
+  useEffect(() => {
+    if (!autoFullscreen || isFullscreen) return undefined;
+    const onGesture = () => requestQuizFullscreen();
+    const node = host;
+    node.addEventListener('pointerdown', onGesture);
+    return () => node.removeEventListener('pointerdown', onGesture);
+  }, [autoFullscreen, isFullscreen, host]);
+
   const enter = useCallback(() => {
     requestQuizFullscreen();
   }, []);

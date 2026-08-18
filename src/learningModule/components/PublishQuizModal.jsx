@@ -59,7 +59,7 @@ function ClockRow({ step, title, subtitle, children, isInvalid, action }) {
           mt="2px"
           borderRadius="full"
           bg="purple.500"
-          color="white"
+          color="lmFg.onAccent"
           fontSize="xs"
           fontWeight="700"
         >
@@ -72,7 +72,7 @@ function ClockRow({ step, title, subtitle, children, isInvalid, action }) {
             </FormLabel>
             {action}
           </Flex>
-          <Text fontSize="xs" color="gray.600" mb={2}>
+          <Text fontSize="xs" color="lmFg.subtle" mb={2}>
             {subtitle}
           </Text>
           {children}
@@ -241,7 +241,7 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
                   {hasCopied ? '✓ Copied' : 'Copy'}
                 </Button>
               </HStack>
-              <Text fontSize="xs" color="gray.500" mt={2}>
+              <Text fontSize="xs" color="lmFg.muted" mt={2}>
                 It opens the test in fullscreen. Anyone in the class can use it; nobody outside can.
               </Text>
             </>
@@ -311,7 +311,7 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
                       isChecked={limitEntry}
                       onChange={(event) => setLimitEntry(event.target.checked)}
                     />
-                    <Text fontSize="xs" color="gray.500">
+                    <Text fontSize="xs" color="lmFg.muted">
                       {limitEntry ? 'On' : 'Off — anyone may begin while it is open'}
                     </Text>
                   </HStack>
@@ -373,13 +373,13 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
                   <Stack spacing={2}>
                     <Radio value="immediate">
                       <Text fontSize="sm">As each student submits</Text>
-                      <Text fontSize="xs" color="gray.600">
+                      <Text fontSize="xs" color="lmFg.subtle">
                         Their score appears on the last page of their own paper.
                       </Text>
                     </Radio>
                     <Radio value="scheduled">
                       <Text fontSize="sm">At a set time, for the whole class together</Text>
-                      <Text fontSize="xs" color="gray.600">
+                      <Text fontSize="xs" color="lmFg.subtle">
                         Nobody sees a mark until then, however early they finish.
                       </Text>
                     </Radio>

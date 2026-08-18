@@ -207,7 +207,7 @@ function StudentView({ data, classId, klass, toast, onChange }) {
 
           <Grid templateColumns={{ base: '1fr', sm: '1fr 1fr' }} gap={3} mb={3}>
             <Box>
-              <Text fontSize="xs" color="gray.600" mb={1} fontWeight="600">
+              <Text fontSize="xs" color="lmFg.subtle" mb={1} fontWeight="600">
                 What is this about?
               </Text>
               <Select
@@ -224,7 +224,7 @@ function StudentView({ data, classId, klass, toast, onChange }) {
               </Select>
             </Box>
             <Box>
-              <Text fontSize="xs" color="gray.600" mb={1} fontWeight="600">
+              <Text fontSize="xs" color="lmFg.subtle" mb={1} fontWeight="600">
                 How would you describe it?
               </Text>
               <Select
@@ -252,13 +252,13 @@ function StudentView({ data, classId, klass, toast, onChange }) {
           />
 
           <Flex justify="space-between" align="center" mt={2} gap={3} wrap="wrap">
-            <Text fontSize="xs" color={tooShort ? 'orange.600' : 'gray.500'}>
+            <Text fontSize="xs" color={tooShort ? 'orange.600' : 'lmFg.muted'}>
               {tooShort
                 ? `At least ${MIN_LENGTH} characters, so your teacher can act on it.`
                 : `${text.length} / ${MAX_LENGTH} characters`}
             </Text>
             <HStack spacing={3}>
-              <Text fontSize="xs" color="gray.500">
+              <Text fontSize="xs" color="lmFg.muted">
                 {data.remainingToday} left today
               </Text>
               <Button size="sm" colorScheme="blue" onClick={send} isLoading={sending} isDisabled={!canSend}>
@@ -285,7 +285,7 @@ function StudentView({ data, classId, klass, toast, onChange }) {
               <Box
                 key={item._id}
                 borderWidth="1px"
-                borderColor="gray.200"
+                borderColor="lmBorder.base"
                 borderRadius="md"
                 p={3}
                 opacity={item.withdrawn ? 0.55 : 1}
@@ -295,27 +295,27 @@ function StudentView({ data, classId, klass, toast, onChange }) {
                     <Badge colorScheme={SENTIMENT_META[item.sentiment]?.colorScheme || 'gray'}>
                       {SENTIMENT_META[item.sentiment]?.label || item.sentiment}
                     </Badge>
-                    <Text fontSize="xs" color="gray.500">
+                    <Text fontSize="xs" color="lmFg.muted">
                       {categoryLabel(item.category)}
                     </Text>
                   </HStack>
                   <Tooltip label={formatDateTime(item.created_at)}>
-                    <Text fontSize="xs" color="gray.500">
+                    <Text fontSize="xs" color="lmFg.muted">
                       {relativeTime(item.created_at)}
                     </Text>
                   </Tooltip>
                 </Flex>
 
-                <Text fontSize="sm" whiteSpace="pre-wrap" color="gray.800">
+                <Text fontSize="sm" whiteSpace="pre-wrap" color="lmFg.heading">
                   {item.text}
                 </Text>
 
                 {item.response && (
-                  <Box mt={3} bg="blue.50" borderRadius="md" p={3}>
-                    <Text fontSize="xs" fontWeight="700" color="blue.800">
+                  <Box mt={3} bg="lmHue.blue50" borderRadius="md" p={3}>
+                    <Text fontSize="xs" fontWeight="700" color="lmHue.blue800">
                       Reply from {item.respondedByName || 'the teaching staff'}
                     </Text>
-                    <Text fontSize="sm" color="blue.900" whiteSpace="pre-wrap" mt={1}>
+                    <Text fontSize="sm" color="lmHue.blue900" whiteSpace="pre-wrap" mt={1}>
                       {item.response}
                     </Text>
                   </Box>
@@ -345,12 +345,12 @@ function StudentView({ data, classId, klass, toast, onChange }) {
  */
 function PromiseNote() {
   return (
-    <Box bg="gray.50" borderRadius="md" p={3} mb={4} borderLeftWidth="3px" borderLeftColor="blue.400">
-      <Text fontSize="sm" color="gray.700">
+    <Box bg="lmBg.sunken" borderRadius="md" p={3} mb={4} borderLeftWidth="3px" borderLeftColor="blue.400">
+      <Text fontSize="sm" color="lmFg.body">
         <b>Your teacher will not see who wrote this.</b> No name, no roll number, no email — and the
         time is shown to them only as a date.
       </Text>
-      <Text fontSize="sm" color="gray.700" mt={2}>
+      <Text fontSize="sm" color="lmFg.body" mt={2}>
         <b>Your institute administrator can.</b> The sender is recorded, so the channel can stay open
         without becoming a place to abuse staff anonymously. Say what you honestly think — including
         things that are hard to say — but say it the way you would sign your name to.
@@ -405,7 +405,7 @@ function StaffView({ data, classId, toast, onChange }) {
             deliberately — a timestamp is enough to identify someone in a small class.
           </Text>
           {isAdminView && (
-            <Text mt={2} fontWeight="600" color="red.700">
+            <Text mt={2} fontWeight="600" color="lmHue.red700">
               You are viewing this as a platform administrator, so the senders are shown below. A
               member of teaching staff sees none of it.
             </Text>
@@ -469,7 +469,7 @@ function FeedbackCard({ item, isAdminView, onUpdate }) {
   const sentiment = SENTIMENT_META[item.sentiment] || SENTIMENT_META.suggestion;
 
   return (
-    <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={5}>
+    <Box bg="lmBg.surface" borderWidth="1px" borderColor="lmBorder.base" borderRadius="lg" p={5}>
       <Flex justify="space-between" align="flex-start" gap={3} wrap="wrap" mb={3}>
         <HStack spacing={2} wrap="wrap">
           <Badge colorScheme={sentiment.colorScheme}>
@@ -482,21 +482,21 @@ function FeedbackCard({ item, isAdminView, onUpdate }) {
             {STATUS_META[item.status]?.label || item.status}
           </Badge>
         </HStack>
-        <Text fontSize="xs" color="gray.500">
+        <Text fontSize="xs" color="lmFg.muted">
           {isAdminView ? formatDateTime(item.created_at) : formatDate(item.created_at)}
         </Text>
       </Flex>
 
-      <Text color="gray.800" whiteSpace="pre-wrap">
+      <Text color="lmFg.heading" whiteSpace="pre-wrap">
         {item.text}
       </Text>
 
       {isAdminView && item.student && (
-        <Box mt={4} bg="red.50" borderRadius="md" p={3} borderWidth="1px" borderColor="red.100">
-          <Text fontSize="xs" fontWeight="700" color="red.800" textTransform="uppercase" letterSpacing="wide">
+        <Box mt={4} bg="lmHue.red50" borderRadius="md" p={3} borderWidth="1px" borderColor="lmHue.red100">
+          <Text fontSize="xs" fontWeight="700" color="lmHue.red800" textTransform="uppercase" letterSpacing="wide">
             Administrator view — sender
           </Text>
-          <Text fontSize="sm" color="red.900" mt={1}>
+          <Text fontSize="sm" color="lmHue.red900" mt={1}>
             {item.student.name || 'Unknown'}
             {item.student.rollNumber ? ` · ${item.student.rollNumber}` : ''}
             {item.student.email ? ` · ${item.student.email}` : ''}
@@ -505,7 +505,7 @@ function FeedbackCard({ item, isAdminView, onUpdate }) {
       )}
 
       {item.withdrawn && (
-        <Text fontSize="xs" color="gray.500" mt={2}>
+        <Text fontSize="xs" color="lmFg.muted" mt={2}>
           Withdrawn by the sender.
         </Text>
       )}
@@ -513,11 +513,11 @@ function FeedbackCard({ item, isAdminView, onUpdate }) {
       <Divider my={4} />
 
       {item.response ? (
-        <Box bg="blue.50" borderRadius="md" p={3}>
-          <Text fontSize="xs" fontWeight="700" color="blue.800">
+        <Box bg="lmHue.blue50" borderRadius="md" p={3}>
+          <Text fontSize="xs" fontWeight="700" color="lmHue.blue800">
             Your reply — sent to the student, still anonymously
           </Text>
-          <Text fontSize="sm" color="blue.900" whiteSpace="pre-wrap" mt={1}>
+          <Text fontSize="sm" color="lmHue.blue900" whiteSpace="pre-wrap" mt={1}>
             {item.response}
           </Text>
         </Box>
@@ -592,7 +592,7 @@ function RevealableEmail({ email }) {
 
   return (
     <HStack spacing={1} display="inline-flex">
-      <Text fontSize="sm" color="gray.700" fontFamily={shown ? 'inherit' : 'mono'}>
+      <Text fontSize="sm" color="lmFg.body" fontFamily={shown ? 'inherit' : 'mono'}>
         {shown ? email : masked}
       </Text>
       <Tooltip label={shown ? 'Hide email address' : 'Show email address'}>
@@ -621,26 +621,26 @@ function StrikeAudit({ strikes }) {
       title="Blocked attempts"
       subtitle="Messages the language filter refused. These never reached any teacher."
       mb={4}
-      borderColor="red.200"
+      borderColor="lmHue.red200"
     >
       <Flex direction="column" gap={3}>
         {strikes.map((strike) => (
-          <Box key={strike._id} borderWidth="1px" borderColor="red.100" borderRadius="md" p={3} bg="red.50">
+          <Box key={strike._id} borderWidth="1px" borderColor="lmHue.red100" borderRadius="md" p={3} bg="lmHue.red50">
             <Flex justify="space-between" gap={3} wrap="wrap" mb={2}>
               <HStack spacing={2} wrap="wrap">
-                <Text fontSize="sm" fontWeight="600" color="red.900">
+                <Text fontSize="sm" fontWeight="600" color="lmHue.red900">
                   {strike.studentName || 'Unknown'}
                 </Text>
                 <RevealableEmail email={strike.studentEmail} />
               </HStack>
               <HStack spacing={2}>
                 <Badge colorScheme="red">Warning {strike.strikeNumber}</Badge>
-                <Text fontSize="xs" color="gray.600">
+                <Text fontSize="xs" color="lmFg.subtle">
                   {formatDateTime(strike.created_at)}
                 </Text>
               </HStack>
             </Flex>
-            <Text fontSize="sm" color="gray.800" whiteSpace="pre-wrap">
+            <Text fontSize="sm" color="lmFg.heading" whiteSpace="pre-wrap">
               {strike.text}
             </Text>
             <HStack mt={2} spacing={2} wrap="wrap">

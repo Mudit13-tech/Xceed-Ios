@@ -1,4 +1,5 @@
 import getEnvironment from '../../getenvironment';
+import { sync as syncServerClock } from '../serverClock';
 
 // Every learning-module call goes through here so auth, error shape and the
 // base URL are decided in exactly one place.
@@ -61,6 +62,9 @@ export const shortGuest = {
  */
 const QUIZ_SESSION_KEY = (attemptId) => `lmQuizSession:${attemptId}`;
 
+/** Carries the token both ways; `SESSION_HEADER` in the server's quizController. */
+const SESSION_HEADER = 'X-Quiz-Session';
+
 export const quizSession = {
   save: (attemptId, token) => {
     if (!attemptId || !token) return;
@@ -110,7 +114,7 @@ async function request(path, { method = 'GET', body, raw = false, signal } = {})
   // later cannot forget it and silently reopen the second-screen hole.
   const attemptId = attemptIdIn(path);
   const sessionToken = attemptId && quizSession.token(attemptId);
-  if (sessionToken) options.headers['X-Quiz-Session'] = sessionToken;
+  if (sessionToken) options.headers[SESSION_HEADER] = sessionToken;
 
   if (body instanceof FormData) {
     // Let the browser set the multipart boundary.
@@ -121,6 +125,23 @@ async function request(path, { method = 'GET', body, raw = false, signal } = {})
   }
 
   const response = await fetch(`${BASE()}${path}`, options);
+
+  /* The binding, as the server currently sees it.
+     `guardSitting` mints a fresh token whenever it rebinds a sitting whose old
+     browser had gone quiet — a crash, a closed tab, a flat battery, or simply a
+     paper reopened from its own URL in a tab that no longer has the token in
+     sessionStorage. That token used to be echoed only by `startAttempt`, so a
+     rebind through any other endpoint produced a token the browser could never
+     present: the next request arrived tokenless against a binding that was now
+     seconds old and therefore "live", and the student was locked out of their own
+     paper with the second-screen 409. Taking it from the header here keeps this
+     browser in step with whatever the server last decided, on every path that
+     drives a sitting.
+
+     A losing second screen is unaffected: the conflict path sends no header, so
+     it cannot pick up the binding it was just refused. */
+  const issuedSession = attemptId && response.headers.get(SESSION_HEADER);
+  if (issuedSession) quizSession.save(attemptId, issuedSession);
 
   if (raw) {
     if (!response.ok) throw new LmApiError('Request failed', response.status, null);
@@ -138,6 +159,14 @@ async function request(path, { method = 'GET', body, raw = false, signal } = {})
   if (!response.ok) {
     throw new LmApiError(payload?.message || `Request failed (${response.status})`, response.status, payload);
   }
+
+  /* Learn the server's clock from anything that volunteers it.
+     Done here rather than at each call site for the same reason the sitting token
+     above is: a quiz deadline is only meaningful against the clock that produced
+     it, and an endpoint added later would otherwise have to remember to sync — ten
+     call sites being ten chances to miss one. See serverClock.js. */
+  if (payload && typeof payload === 'object') syncServerClock(payload.serverTime);
+
   return payload;
 }
 
@@ -175,6 +204,15 @@ const lmApi = {
     window.dispatchEvent(new Event('lmNotificationsUpdated'));
     return res;
   },
+
+  /* the signed-in person's own weekly timetable */
+  // Two calls, not four: `timetableOptions` answers "which timetable is mine and
+  // what else can I pick", `timetableGrid` returns the week. The joining — from
+  // enrolments to a department, to that department's current session, to the grid —
+  // happens on the server, because doing it here is what made the student view
+  // fetch nothing at all.
+  timetableOptions: () => request('/timetable/options'),
+  timetableGrid: (dept, sem) => request(`/timetable/grid${qs({ dept, sem })}`),
 
   /* timetable-sourced pickers (create class) */
   ttBranches: () => request('/timetable/branches'),
@@ -328,6 +366,10 @@ const lmApi = {
   },
   getAttemptPaper: (classId, attemptId) => request(`/classes/${classId}/attempts/${attemptId}/paper`),
   getCurrentQuestion: (classId, attemptId) => request(`/classes/${classId}/attempts/${attemptId}/current`),
+  // The question after this one, fetched while the student reads. Sealed unless
+  // the paper already lets them walk forward and back; 403 when the quiz does
+  // not allow prefetching at all, which the caller treats as "just don't".
+  getNextQuestion: (classId, attemptId) => request(`/classes/${classId}/attempts/${attemptId}/next`),
   answerAndAdvance: (classId, attemptId, body) =>
     request(`/classes/${classId}/attempts/${attemptId}/answer`, { method: 'POST', body }),
   saveAttemptDraft: (classId, attemptId, answers) =>
@@ -336,10 +378,12 @@ const lmApi = {
   // report that failed offline is queued and replayed, and the server judges it
   // by this timestamp rather than by its arrival. Clamped server-side, so a
   // hand-written one buys nothing.
-  recordViolation: (classId, attemptId, type, at) =>
+  // `detail` is a short note about the event — which key was pressed on a paper
+  // under keyboard lockdown. The server caps and strips it before storing.
+  recordViolation: (classId, attemptId, type, at, detail) =>
     request(`/classes/${classId}/attempts/${attemptId}/violation`, {
       method: 'POST',
-      body: at ? { type, at } : { type },
+      body: { type, ...(at ? { at } : {}), ...(detail ? { detail } : {}) },
     }),
   // Sent on a timer while a paper is open. Its absence is the signal — a client
   // that has had its reporting blocked stops sending these, and the server notes

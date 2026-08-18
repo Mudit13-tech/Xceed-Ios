@@ -184,7 +184,7 @@ export default function RichText({ children, fallback = null, markdown = false, 
       <Box
         className="lm-richtext"
         sx={PROSE_STYLES}
-        color="gray.700"
+        color="lmFg.body"
         fontSize="sm"
         // Sanitised immediately above with an explicit tag/attribute allowlist.
         dangerouslySetInnerHTML={{ __html: html }}
@@ -198,7 +198,7 @@ export default function RichText({ children, fallback = null, markdown = false, 
   }
 
   return (
-    <Text whiteSpace="pre-wrap" wordBreak="break-word" overflowWrap="anywhere" color="gray.700" fontSize="sm" {...rest}>
+    <Text whiteSpace="pre-wrap" wordBreak="break-word" overflowWrap="anywhere" color="lmFg.body" fontSize="sm" {...rest}>
       {source}
     </Text>
   );

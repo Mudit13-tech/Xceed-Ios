@@ -32,7 +32,7 @@ const FEEDBACK_STATUS_STYLE = {
 
 function CountBadges({ counts, styles }) {
   const entries = Object.entries(counts || {});
-  if (entries.length === 0) return <Text fontSize="sm" color="gray.500">Nothing yet.</Text>;
+  if (entries.length === 0) return <Text fontSize="sm" color="lmFg.muted">Nothing yet.</Text>;
   return (
     <Flex gap={2} wrap="wrap">
       {entries.map(([key, count]) => (
@@ -73,10 +73,10 @@ export default function LmAdmin() {
   return (
     <VStack align="stretch" spacing={6}>
       <Box>
-        <Text fontSize="xl" fontWeight="700" color="gray.800">
+        <Text fontSize="xl" fontWeight="700" color="lmFg.heading">
           Learning Module — Admin
         </Text>
-        <Text fontSize="sm" color="gray.500">
+        <Text fontSize="sm" color="lmFg.muted">
           Platform-wide numbers for the module, plus anything currently waiting on a look.
         </Text>
       </Box>
@@ -118,7 +118,7 @@ export default function LmAdmin() {
                 <Flex key={report._id} justify="space-between" gap={3} wrap="wrap" borderWidth="1px" borderRadius="md" p={3}>
                   <Box>
                     <Text fontSize="sm" fontWeight="600">{report.title}</Text>
-                    <Text fontSize="xs" color="gray.500">
+                    <Text fontSize="xs" color="lmFg.muted">
                       {report.reporterName} · {relativeTime(report.created_at)}
                       {report.className ? ` · in ${report.className}` : ' · platform-wide'}
                     </Text>
@@ -153,10 +153,10 @@ export default function LmAdmin() {
                       {FEEDBACK_STATUS_STYLE[item.status]?.label || item.status}
                     </Badge>
                   </Flex>
-                  <Text fontSize="sm" color="gray.700" noOfLines={2}>
+                  <Text fontSize="sm" color="lmFg.body" noOfLines={2}>
                     {item.text}
                   </Text>
-                  <Text fontSize="xs" color="gray.500" mt={1}>
+                  <Text fontSize="xs" color="lmFg.muted" mt={1}>
                     {item.studentName || 'Unknown student'} · {relativeTime(item.created_at)}
                   </Text>
                 </Box>

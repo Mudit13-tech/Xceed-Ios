@@ -33,11 +33,6 @@ import {
   FormControl,
   FormHelperText,
   FormLabel,
-  Menu,
-  MenuButton,
-  MenuDivider,
-  MenuItem,
-  MenuList,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -53,7 +48,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard, StatTile, buttonTextStyles } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
 import QuizReview from '../components/QuizReview';
 import { richTextToPlain } from '../richTextUtils';
 import { formatDateTime, relativeTime } from '../format';
@@ -98,7 +93,7 @@ function useSecondTick(enabled) {
 function TimeLeft({ deadline, skewMs }) {
   if (!deadline) {
     return (
-      <Text fontSize="xs" color="gray.500">
+      <Text fontSize="xs" color="lmFg.muted">
         no limit
       </Text>
     );
@@ -116,7 +111,7 @@ function TimeLeft({ deadline, skewMs }) {
   const totalSec = Math.floor(remaining / 1000);
   const mins = Math.floor(totalSec / 60);
   return (
-    <Text fontSize="xs" fontWeight="600" color={mins < 5 ? 'red.600' : mins < 15 ? 'orange.600' : 'gray.700'}>
+    <Text fontSize="xs" fontWeight="600" color={mins < 5 ? 'red.600' : mins < 15 ? 'orange.600' : 'lmFg.body'}>
       {mins}:{String(totalSec % 60).padStart(2, '0')}
     </Text>
   );
@@ -162,9 +157,9 @@ function AttemptFlags({ attempt }) {
 /**
  * The three ways a teacher can put one student's sitting right.
  *
- * They are kept behind a menu rather than laid out as buttons because two of
- * them destroy exam data and the third hands out extra time — none belongs
- * under a stray click in a table row that is otherwise read-only.
+ * Two of them destroy exam data and the third hands out extra time, so none is
+ * done on the click itself: every one opens the confirmation below, which spells
+ * out what happens to that student's paper before anything is touched.
  */
 const ACTIONS = {
   continue: {
@@ -195,25 +190,44 @@ const ACTIONS = {
   },
 };
 
-function AttemptActions({ attempt, onAct }) {
+/**
+ * The fixes laid out in the row itself, so an invigilator watching a student
+ * struggle can grant time without first hunting through a menu.
+ *
+ * `showContinue` is off for a paper that has already stopped: that table offers
+ * the same fix as its own **Let back in** button, and two controls doing one
+ * thing in one row reads as two different things.
+ */
+function AttemptActions({ attempt, onAct, showContinue = true }) {
   return (
-    <Menu placement="bottom-end">
-      <MenuButton as={Button} size="xs" variant="ghost" aria-label="Fix this attempt">
-        ⋯
-      </MenuButton>
-      <MenuList fontSize="sm">
-        <MenuItem {...buttonTextStyles} onClick={() => onAct('continue')}>
-          {attempt.status === 'in_progress' ? '⏱ Give more time' : ACTIONS.continue.label}
-        </MenuItem>
-        <MenuItem {...buttonTextStyles} onClick={() => onAct('restart')}>
-          {ACTIONS.restart.label}
-        </MenuItem>
-        <MenuDivider />
-        <MenuItem color="red.600" onClick={() => onAct('delete')}>
-          {ACTIONS.delete.label}
-        </MenuItem>
-      </MenuList>
-    </Menu>
+    <HStack spacing={1}>
+      {showContinue && (
+        <Button
+          size="xs"
+          variant="ghost"
+          colorScheme="blue"
+          onClick={() => onAct('continue')}
+        >
+          {attempt.status === 'in_progress' ? '⏱ More time' : '▶️ Reopen'}
+        </Button>
+      )}
+      <Button
+        size="xs"
+        variant="ghost"
+        colorScheme="orange"
+        onClick={() => onAct('restart')}
+      >
+        🔄 Restart
+      </Button>
+      <Button
+        size="xs"
+        variant="ghost"
+        colorScheme="red"
+        onClick={() => onAct('delete')}
+      >
+        🗑 Delete
+      </Button>
+    </HStack>
   );
 }
 
@@ -256,7 +270,7 @@ function AttemptAnswersModal({ attempt, classId, onClose }) {
       <ModalContent>
         <ModalHeader>
           {attempt?.studentName || attempt?.studentEmail}
-          <Text fontSize="sm" fontWeight="400" color="gray.600">
+          <Text fontSize="sm" fontWeight="400" color="lmFg.subtle">
             {attempt?.rollNumber ? `${attempt.rollNumber} · ` : ''}
             {attempt?.score}/{attempt?.maxScore} ({attempt?.percent}%) ·{' '}
             {attempt?.totalCorrect} correct · {attempt?.totalWrong} wrong ·{' '}
@@ -335,7 +349,7 @@ function AttemptActionModal({ state, onClose, onDone, classId, toast }) {
         <ModalHeader>{meta?.title}</ModalHeader>
         <ModalCloseButton />
         <ModalBody>
-          <Text fontSize="sm" color="gray.700">
+          <Text fontSize="sm" color="lmFg.body">
             {state && meta?.describe(state.attempt)}
           </Text>
 
@@ -474,7 +488,7 @@ function AnswerKeyModal({ isOpen, quiz, classId, onClose, onDone, toast }) {
       <ModalContent>
         <ModalHeader>
           Answer key — {quiz.title}
-          <Text fontSize="xs" fontWeight="400" color="gray.500">
+          <Text fontSize="xs" fontWeight="400" color="lmFg.muted">
             Tick the right answer, or change what a question is worth. Saving re-marks every paper
             already submitted and updates the gradebook. Question wording and options are edited in
             the quiz editor, not here.
@@ -537,8 +551,8 @@ function AnswerKeyModal({ isOpen, quiz, classId, onClose, onDone, toast }) {
                   py={3}
                   px={changed ? 2 : 0}
                   borderBottomWidth="1px"
-                  borderColor="gray.100"
-                  bg={changed ? 'purple.50' : undefined}
+                  borderColor="lmBorder.subtle"
+                  bg={changed ? 'lmHue.purple50' : undefined}
                   borderRadius="md"
                 >
                   <Flex justify="space-between" gap={3} align="flex-start">
@@ -650,7 +664,7 @@ function AnswerKeyModal({ isOpen, quiz, classId, onClose, onDone, toast }) {
         </ModalBody>
         <ModalFooter gap={2}>
           {!result && (
-            <Text fontSize="sm" color="gray.600" mr="auto">
+            <Text fontSize="sm" color="lmFg.subtle" mr="auto">
               {changedIds.length === 0
                 ? 'No changes yet'
                 : `${changedIds.length} question(s) will change and every submitted paper re-marked`}
@@ -759,7 +773,7 @@ function RegradeModal({ isOpen, onClose, onDone, classId, quizId, toast }) {
             </Box>
           ) : (
             <>
-              <Text fontSize="sm" color="gray.700">
+              <Text fontSize="sm" color="lmFg.body">
                 Every submitted, expired and terminated paper is marked again against the answer key,
                 marks and questions <b>as they stand now</b>. Use this when the paper was corrected
                 elsewhere — fixing a question on its own does not move marks that have already been
@@ -791,6 +805,65 @@ function RegradeModal({ isOpen, onClose, onDone, classId, quizId, toast }) {
 }
 
 /* ───────────────────────── live invigilation view ──────────────────────── */
+
+/** How a stopped paper ended, and whether it has been handed back before. */
+function StoppedStatus({ attempt }) {
+  return (
+    <>
+      <Badge
+        colorScheme={
+          attempt.status === 'terminated' ? 'red' : attempt.status === 'expired' ? 'orange' : 'green'
+        }
+        fontSize="0.6rem"
+      >
+        {attempt.status === 'terminated'
+          ? 'ended by proctoring'
+          : attempt.status === 'expired'
+            ? 'ran out of time'
+            : 'submitted'}
+      </Badge>
+      {attempt.terminationReason && (
+        <Text fontSize="0.65rem" color="red.600" maxW="220px">
+          {attempt.terminationReason}
+        </Text>
+      )}
+      {attempt.reopenCount > 0 && (
+        <Text color="purple.600" fontSize="0.65rem">
+          reopened ×{attempt.reopenCount}
+          {attempt.reopenedByName ? ` by ${attempt.reopenedByName}` : ''}
+        </Text>
+      )}
+    </>
+  );
+}
+
+/**
+ * The narrow-screen shape of a monitor row.
+ *
+ * A nine-column invigilation table cannot be read on a phone, and side-scrolling
+ * it hides exactly the column an invigilator reached for — the fixes. Below `lg`
+ * each row becomes a card carrying the same facts stacked, so the same view
+ * works in the app without a second screen being built for it.
+ */
+function MonitorCard({ children, accent }) {
+  return (
+    <Box borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" p={3} bg={accent}>
+      {children}
+    </Box>
+  );
+}
+
+/** One label-over-value fact on a monitor card. */
+function CardFact({ label, children }) {
+  return (
+    <Box>
+      <Text fontSize="0.6rem" color="lmFg.muted" textTransform="uppercase" fontWeight="700">
+        {label}
+      </Text>
+      <Box fontSize="xs">{children}</Box>
+    </Box>
+  );
+}
 
 /**
  * Who is writing, who has stopped, and who never appeared.
@@ -834,7 +907,7 @@ function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto
               Auto-refresh
             </FormLabel>
           </FormControl>
-          <Text fontSize="xs" color="gray.500">
+          <Text fontSize="xs" color="lmFg.muted">
             updated {relativeTime(updatedAt)}
           </Text>
         </HStack>
@@ -865,11 +938,58 @@ function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto
         mb={4}
       >
         {writing.length === 0 ? (
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="lmFg.muted">
             Nobody is sitting the test at the moment.
           </Text>
         ) : (
-          <Box overflowX="auto">
+          <>
+          <Stack spacing={3} display={{ base: 'flex', lg: 'none' }}>
+            {writing.map((attempt) => {
+              const total = attempt.questionCount || quiz.questions.length || 1;
+              const percent = Math.round((attempt.answeredCount / total) * 100);
+              return (
+                <MonitorCard key={attempt._id}>
+                  <Flex justify="space-between" gap={2} align="flex-start">
+                    <Box>
+                      <Text fontSize="sm" fontWeight="600">
+                        {nameOf(attempt)}
+                      </Text>
+                      <Text fontSize="xs" color="lmFg.muted">
+                        {attempt.rollNumber || '—'}
+                      </Text>
+                    </Box>
+                    <TimeLeft deadline={attempt.deadline} skewMs={skewMs} />
+                  </Flex>
+
+                  <Box mt={2}>
+                    <Progress value={percent} size="sm" borderRadius="full" colorScheme="green" />
+                    <Text fontSize="xs" color="lmFg.muted">
+                      {attempt.answeredCount}/{total} answered
+                      {quiz.settings.deliveryMode === 'one_at_a_time' &&
+                        ` · on Q${(attempt.cursor ?? 0) + 1}`}
+                    </Text>
+                  </Box>
+
+                  <Flex mt={2} gap={4} wrap="wrap">
+                    <CardFact label="Last answer">
+                      <Text fontSize="xs" color="lmFg.subtle">
+                        {relativeTime(attempt.lastActivityAt)}
+                      </Text>
+                    </CardFact>
+                    <CardFact label="Flags">
+                      <AttemptFlags attempt={attempt} />
+                    </CardFact>
+                  </Flex>
+
+                  <Flex mt={2} wrap="wrap">
+                    <AttemptActions attempt={attempt} onAct={(action) => onAct(attempt, action)} />
+                  </Flex>
+                </MonitorCard>
+              );
+            })}
+          </Stack>
+
+          <Box overflowX="auto" display={{ base: 'none', lg: 'block' }}>
             <Table size="sm">
               <Thead>
                 <Tr>
@@ -892,7 +1012,7 @@ function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto
                       <Td fontSize="xs">{attempt.rollNumber}</Td>
                       <Td>
                         <Progress value={percent} size="sm" borderRadius="full" colorScheme="green" />
-                        <Text fontSize="xs" color="gray.500">
+                        <Text fontSize="xs" color="lmFg.muted">
                           {attempt.answeredCount}/{total} answered
                           {quiz.settings.deliveryMode === 'one_at_a_time' &&
                             ` · on Q${(attempt.cursor ?? 0) + 1}`}
@@ -901,7 +1021,7 @@ function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto
                       <Td>
                         <TimeLeft deadline={attempt.deadline} skewMs={skewMs} />
                       </Td>
-                      <Td fontSize="xs" color="gray.600">
+                      <Td fontSize="xs" color="lmFg.subtle">
                         {relativeTime(attempt.lastActivityAt)}
                       </Td>
                       <Td>
@@ -916,6 +1036,7 @@ function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto
               </Tbody>
             </Table>
           </Box>
+          </>
         )}
       </SectionCard>
 
@@ -926,11 +1047,65 @@ function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto
         mb={4}
       >
         {stopped.length === 0 ? (
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="lmFg.muted">
             Nobody has finished yet.
           </Text>
         ) : (
-          <Box overflowX="auto">
+          <>
+          <Stack spacing={3} display={{ base: 'flex', lg: 'none' }}>
+            {stopped.map((attempt) => (
+              <MonitorCard key={attempt._id} accent={attempt.status === 'terminated' ? 'red.50' : undefined}>
+                <Flex justify="space-between" gap={2} align="flex-start">
+                  <Box>
+                    <Text fontSize="sm" fontWeight="600">
+                      {nameOf(attempt)}
+                    </Text>
+                    <Text fontSize="xs" color="lmFg.muted">
+                      {attempt.rollNumber || '—'}
+                    </Text>
+                  </Box>
+                  <Box textAlign="right">
+                    <StoppedStatus attempt={attempt} />
+                  </Box>
+                </Flex>
+
+                <Flex mt={2} gap={4} wrap="wrap">
+                  <CardFact label="Score">
+                    <Text fontSize="xs" fontWeight="600">
+                      {attempt.score}/{attempt.maxScore}
+                    </Text>
+                  </CardFact>
+                  <CardFact label="Answered">
+                    {attempt.answeredCount}/{attempt.questionCount || quiz.questions.length}
+                  </CardFact>
+                  <CardFact label="When">
+                    {attempt.submittedAt ? relativeTime(attempt.submittedAt) : '—'}
+                  </CardFact>
+                  <CardFact label="Flags">
+                    <AttemptFlags attempt={attempt} />
+                  </CardFact>
+                </Flex>
+
+                <Flex mt={2} gap={1} wrap="wrap" align="center">
+                  <Button
+                    size="xs"
+                    colorScheme="blue"
+                    variant={attempt.status === 'submitted' ? 'ghost' : 'solid'}
+                    onClick={() => onAct(attempt, 'continue')}
+                  >
+                    Let back in
+                  </Button>
+                  <AttemptActions
+                    attempt={attempt}
+                    showContinue={false}
+                    onAct={(action) => onAct(attempt, action)}
+                  />
+                </Flex>
+              </MonitorCard>
+            ))}
+          </Stack>
+
+          <Box overflowX="auto" display={{ base: 'none', lg: 'block' }}>
             <Table size="sm">
               <Thead>
                 <Tr>
@@ -947,37 +1122,11 @@ function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto
               </Thead>
               <Tbody>
                 {stopped.map((attempt) => (
-                  <Tr key={attempt._id} bg={attempt.status === 'terminated' ? 'red.50' : undefined}>
+                  <Tr key={attempt._id} bg={attempt.status === 'terminated' ? 'lmHue.red50' : undefined}>
                     <Td>{nameOf(attempt)}</Td>
                     <Td fontSize="xs">{attempt.rollNumber}</Td>
                     <Td>
-                      <Badge
-                        colorScheme={
-                          attempt.status === 'terminated'
-                            ? 'red'
-                            : attempt.status === 'expired'
-                              ? 'orange'
-                              : 'green'
-                        }
-                        fontSize="0.6rem"
-                      >
-                        {attempt.status === 'terminated'
-                          ? 'ended by proctoring'
-                          : attempt.status === 'expired'
-                            ? 'ran out of time'
-                            : 'submitted'}
-                      </Badge>
-                      {attempt.terminationReason && (
-                        <Text fontSize="0.65rem" color="red.600" maxW="220px">
-                          {attempt.terminationReason}
-                        </Text>
-                      )}
-                      {attempt.reopenCount > 0 && (
-                        <Text color="purple.600" fontSize="0.65rem">
-                          reopened ×{attempt.reopenCount}
-                          {attempt.reopenedByName ? ` by ${attempt.reopenedByName}` : ''}
-                        </Text>
-                      )}
+                      <StoppedStatus attempt={attempt} />
                     </Td>
                     <Td isNumeric fontSize="xs">
                       {attempt.answeredCount}/{attempt.questionCount || quiz.questions.length}
@@ -1000,20 +1149,25 @@ function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto
                       </Button>
                     </Td>
                     <Td>
-                      <AttemptActions attempt={attempt} onAct={(action) => onAct(attempt, action)} />
+                      <AttemptActions
+                        attempt={attempt}
+                        showContinue={false}
+                        onAct={(action) => onAct(attempt, action)}
+                      />
                     </Td>
                   </Tr>
                 ))}
               </Tbody>
             </Table>
           </Box>
+          </>
         )}
       </SectionCard>
 
       {/* ---- never started ---- */}
       <SectionCard title={`Not started (${notStartedStudents.length})`}>
         {notStartedStudents.length === 0 ? (
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="lmFg.muted">
             Every student on the roll has opened the test.
           </Text>
         ) : (
@@ -1210,9 +1364,17 @@ export default function QuizResults() {
           <Heading size="md" mt={1}>
             {quiz.title}
           </Heading>
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="lmFg.muted">
             {quiz.questions.length} questions · {quiz.totalMarks} marks ·{' '}
-            {quiz.settings.deliveryMode === 'one_at_a_time' ? 'one at a time' : 'all on one page'}
+            {quiz.settings.deliveryMode === 'one_at_a_time' ? 'one at a time' : 'all on one page'} ·{' '}
+            {/* Which clock ran, because it changes how a low score reads: a paper
+                nobody finished under one countdown is a different story from
+                questions that timed out one by one. */}
+            {quiz.settings.perQuestionTiming
+              ? 'a timer on each question'
+              : quiz.settings.timeLimitMinutes
+                ? `${quiz.settings.timeLimitMinutes} min for the paper`
+                : 'untimed'}
             {quiz.settings.negativeMarking > 0 && ` · −${quiz.settings.negativeMarking} per wrong answer`}
           </Text>
         </Box>
@@ -1271,7 +1433,7 @@ export default function QuizResults() {
                 ? `Results are scheduled for ${formatDateTime(results.releaseAt)} — students cannot see their scores yet, but you can.`
                 : 'Results are held until you release them — students cannot see their scores yet, but you can.'}
             </Text>
-            <Text fontSize="xs" color="gray.600">
+            <Text fontSize="xs" color="lmFg.subtle">
               Publishing notifies every student who sat the paper, and marks the subject on their
               class card until they have read it.
             </Text>
@@ -1287,7 +1449,7 @@ export default function QuizResults() {
               {results.announcedByName ? ` by ${results.announcedByName}` : ''}.
             </Text>
             {(results.viewed > 0 || results.awaitingView > 0) && (
-              <Text fontSize="xs" color="gray.600">
+              <Text fontSize="xs" color="lmFg.subtle">
                 {results.viewed} student(s) have opened their result; {results.awaitingView} have not
                 yet.
               </Text>
@@ -1369,7 +1531,7 @@ export default function QuizResults() {
               <SectionCard>
                 <Flex justify="space-between" align="center" gap={3} mb={4} wrap="wrap">
                   <HStack spacing={2}>
-                    <Text fontSize="xs" fontWeight="700" color="gray.600" textTransform="uppercase">
+                    <Text fontSize="xs" fontWeight="700" color="lmFg.subtle" textTransform="uppercase">
                       Filter Status:
                     </Text>
                     <Select
@@ -1388,7 +1550,7 @@ export default function QuizResults() {
                   </HStack>
 
                   <InputGroup size="xs" maxW="240px">
-                    <InputLeftElement pointerEvents="none" color="gray.400">
+                    <InputLeftElement pointerEvents="none" color="lmFg.faint">
                       🔍
                     </InputLeftElement>
                     <Input
@@ -1423,13 +1585,13 @@ export default function QuizResults() {
                     <Tbody>
                       {filteredAttempts.length === 0 ? (
                         <Tr>
-                          <Td colSpan={14} textAlign="center" py={6} color="gray.500">
+                          <Td colSpan={14} textAlign="center" py={6} color="lmFg.muted">
                             No student attempts match your search or filter criteria.
                           </Td>
                         </Tr>
                       ) : (
                         filteredAttempts.map((attempt) => (
-                          <Tr key={attempt._id} bg={attempt.status === 'terminated' ? 'red.50' : undefined}>
+                          <Tr key={attempt._id} bg={attempt.status === 'terminated' ? 'lmHue.red50' : undefined}>
                             <Td fontWeight="500">{attempt.studentName || attempt.studentEmail}</Td>
                             <Td fontSize="xs">{attempt.rollNumber}</Td>
                             <Td isNumeric>{attempt.attemptNumber}</Td>
@@ -1454,7 +1616,7 @@ export default function QuizResults() {
                             <Td isNumeric color="red.600">
                               {attempt.totalWrong}
                             </Td>
-                            <Td isNumeric color="gray.500">
+                            <Td isNumeric color="lmFg.muted">
                               {attempt.totalUnattempted}
                             </Td>
                             <Td isNumeric>{attempt.negativeApplied ? `−${attempt.negativeApplied}` : '—'}</Td>
@@ -1512,7 +1674,7 @@ export default function QuizResults() {
                     {attempts
                       .filter((attempt) => attempt.terminationReason)
                       .map((attempt) => (
-                        <Text key={attempt._id} fontSize="xs" color="gray.600">
+                        <Text key={attempt._id} fontSize="xs" color="lmFg.subtle">
                           {attempt.studentName}: {attempt.terminationReason}
                         </Text>
                       ))}
@@ -1530,22 +1692,22 @@ export default function QuizResults() {
             >
               {questionInsights && (
                 <Grid templateColumns={{ base: '1fr', md: '1fr 1fr' }} gap={3} mb={4}>
-                  <Box p={3} bg="red.50" borderWidth="1px" borderColor="red.200" borderRadius="md">
-                    <Text fontSize="xs" fontWeight="700" color="red.700" textTransform="uppercase">
+                  <Box p={3} bg="lmHue.red50" borderWidth="1px" borderColor="lmHue.red200" borderRadius="md">
+                    <Text fontSize="xs" fontWeight="700" color="lmHue.red700" textTransform="uppercase">
                       ⚠️ Most Difficult Question
                     </Text>
-                    <Text fontSize="xs" fontWeight="600" color="gray.800" mt={1} noOfLines={2}>
+                    <Text fontSize="xs" fontWeight="600" color="lmFg.heading" mt={1} noOfLines={2}>
                       {richTextToPlain(questionInsights.hardest.question || '')}
                     </Text>
                     <Text fontSize="xs" color="red.600" mt={1}>
                       Success rate: <b>{questionInsights.hardest.correctPercent ?? 0}%</b> ({questionInsights.hardest.correct}/{questionInsights.hardest.attempted} correct)
                     </Text>
                   </Box>
-                  <Box p={3} bg="orange.50" borderWidth="1px" borderColor="orange.200" borderRadius="md">
-                    <Text fontSize="xs" fontWeight="700" color="orange.700" textTransform="uppercase">
+                  <Box p={3} bg="lmHue.orange50" borderWidth="1px" borderColor="lmHue.orange200" borderRadius="md">
+                    <Text fontSize="xs" fontWeight="700" color="lmHue.orange700" textTransform="uppercase">
                       ⏩ Most Skipped Question
                     </Text>
-                    <Text fontSize="xs" fontWeight="600" color="gray.800" mt={1} noOfLines={2}>
+                    <Text fontSize="xs" fontWeight="600" color="lmFg.heading" mt={1} noOfLines={2}>
                       {richTextToPlain(questionInsights.mostSkipped.question || '')}
                     </Text>
                     <Text fontSize="xs" color="orange.600" mt={1}>
@@ -1595,7 +1757,7 @@ export default function QuizResults() {
                             borderRadius="full"
                             colorScheme={bandColor(entry.correctPercent)}
                           />
-                          <Text fontSize="xs" color="gray.500">
+                          <Text fontSize="xs" color="lmFg.muted">
                             {entry.correctPercent === null ? '—' : `${entry.correctPercent}%`}
                           </Text>
                         </Td>
@@ -1618,7 +1780,7 @@ export default function QuizResults() {
             <TabPanel px={0}>
               <SectionCard title="Section performance">
                 {perSection.map((section) => (
-                  <Box key={section.sectionName} py={3} borderBottomWidth="1px" borderColor="gray.100">
+                  <Box key={section.sectionName} py={3} borderBottomWidth="1px" borderColor="lmBorder.subtle">
                     <Flex justify="space-between" mb={1} gap={3} wrap="wrap">
                       <Text fontSize="sm" fontWeight="600">
                         {section.sectionName}
@@ -1626,7 +1788,7 @@ export default function QuizResults() {
                       <HStack fontSize="xs" spacing={3}>
                         <Text color="green.600">{section.correct} correct</Text>
                         <Text color="red.600">{section.wrong} wrong</Text>
-                        <Text color="gray.500">{section.unattempted} skipped</Text>
+                        <Text color="lmFg.muted">{section.unattempted} skipped</Text>
                         <Text fontWeight="600">
                           {section.avgPercent === null ? '—' : `${section.avgPercent}%`}
                         </Text>
@@ -1638,7 +1800,7 @@ export default function QuizResults() {
                       borderRadius="full"
                       colorScheme={bandColor(section.avgPercent)}
                     />
-                    <Text fontSize="xs" color="gray.500" mt={1}>
+                    <Text fontSize="xs" color="lmFg.muted" mt={1}>
                       {duration(Math.round(section.timeSpentSec / Math.max(1, section.count)))} average per
                       student
                     </Text>
@@ -1653,10 +1815,10 @@ export default function QuizResults() {
             <SectionCard title="Score distribution">
               {distribution.map((band) => (
                 <Flex key={band.label} align="center" gap={3} py={2}>
-                  <Text fontSize="xs" w="70px" color="gray.600">
+                  <Text fontSize="xs" w="70px" color="lmFg.subtle">
                     {band.label}
                   </Text>
-                  <Box flex="1" bg="gray.100" borderRadius="full" h="18px" overflow="hidden">
+                  <Box flex="1" bg="lmBg.track" borderRadius="full" h="18px" overflow="hidden">
                     <Box
                       w={`${(band.count / maxBand) * 100}%`}
                       h="100%"

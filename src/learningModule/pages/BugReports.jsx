@@ -132,7 +132,7 @@ function ReportForm({ classes, pointsPerReport, onSent }) {
             only way in: it reaches the queue, it pays points, and an admin
             decides what is worth raising on the tracker. Escalation lives in
             the queue instead — see AdminQueue. */}
-        <Text fontSize="xs" color="gray.500">
+        <Text fontSize="xs" color="lmFg.muted">
           {pointsPerReport} points once an administrator approves it — and a badge if it was in one
           of your classes.
         </Text>
@@ -210,7 +210,7 @@ function AdminQueue({ reports, counts, onReviewed }) {
               </HStack>
               <Badge colorScheme={STATUS_STYLE[report.status]?.colorScheme || 'gray'}>{report.status}</Badge>
             </Flex>
-            <Text fontSize="xs" color="gray.500" mb={2}>
+            <Text fontSize="xs" color="lmFg.muted" mb={2}>
               {report.reporterName} ({report.reporterRole || 'user'}) · {relativeTime(report.created_at)}
               {report.className ? ` · in ${report.className}` : ' · platform-wide'}
             </Text>
@@ -220,7 +220,7 @@ function AdminQueue({ reports, counts, onReviewed }) {
               </Text>
             )}
             {report.pageUrl && (
-              <Text fontSize="xs" color="gray.500" mb={2} wordBreak="break-all">
+              <Text fontSize="xs" color="lmFg.muted" mb={2} wordBreak="break-all">
                 {report.pageUrl}
               </Text>
             )}
@@ -365,7 +365,7 @@ export default function BugReports() {
                   </Badge>
                 </HStack>
               </Flex>
-              <Text fontSize="xs" color="gray.500">
+              <Text fontSize="xs" color="lmFg.muted">
                 {formatDateTime(report.created_at)}
                 {report.className ? ` · ${report.className}` : ''}
               </Text>

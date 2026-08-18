@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Box, Text } from '@chakra-ui/react';
+import { Box, Text, useColorModeValue } from '@chakra-ui/react';
 import { pinPosition, symbolFor } from './symbols';
 import { primaryValue } from './format';
 import { placeComponent } from './benchOps';
@@ -47,6 +47,16 @@ export default function CircuitCanvas({
   selectedId = null,
   onSelect = () => {},
   /**
+   * Remove one component, by id.
+   *
+   * The canvas does not do this itself because removing a component means
+   * removing every wire that touched it, and that lives in `benchOps` where both
+   * screens share it. Here it is only the gesture: select a part and press
+   * Delete, which is what a person who has just placed the wrong thing tries
+   * before hunting for a button.
+   */
+  onDelete = null,
+  /**
    * Readings keyed by component id, drawn beside the part they belong to.
    *
    * A string, or several — a meter has one number and a resistor has three
@@ -64,6 +74,40 @@ export default function CircuitCanvas({
   const [pending, setPending] = useState(null);
   const [drag, setDrag] = useState(null);
   const [hoverPin, setHoverPin] = useState(null);
+
+  /**
+   * The schematic palette.
+   *
+   * These are raw SVG `stroke` and `fill` attributes, not Chakra props, so they
+   * cannot take a semantic token — an SVG attribute needs a colour string. Hence
+   * a hook rather than the `lm*` tokens the rest of the module uses.
+   *
+   * A drawing has to be re-pitched for a dark sheet rather than inverted: ink
+   * goes light, the grid goes just visible against the sheet instead of just
+   * visible against white, and the wire and reading colours move to the bright
+   * end of their ramps so a thin 2px line still reads. The alternative — keeping
+   * a white sheet in dark mode — leaves a glaring panel in the middle of a dark
+   * page, and the bench is the largest thing on it.
+   */
+  const paper = {
+    grid: useColorModeValue('#EDF2F7', '#2D3748'),
+    wire: useColorModeValue('#2B6CB0', '#63B3ED'),
+    pendingWire: useColorModeValue('#3182CE', '#90CDF4'),
+    ink: useColorModeValue('#1A202C', '#E2E8F0'),
+    inkSelected: useColorModeValue('#2C5282', '#90CDF4'),
+    haloFill: useColorModeValue('#EBF8FF', '#1A365D'),
+    haloStroke: useColorModeValue('#4299E1', '#4299E1'),
+    label: useColorModeValue('#4A5568', '#A0AEC0'),
+    plateFill: useColorModeValue('#F0FFF4', '#1C4532'),
+    plateStroke: useColorModeValue('#C6F6D5', '#276749'),
+    reading: useColorModeValue('#2F855A', '#9AE6B4'),
+    pin: useColorModeValue('#A0AEC0', '#718096'),
+    pinHover: useColorModeValue('#63B3ED', '#63B3ED'),
+    pinPending: useColorModeValue('#3182CE', '#90CDF4'),
+    // The ring that separates a terminal dot from whatever is behind it, so it
+    // has to be the sheet's own colour rather than white.
+    pinRing: useColorModeValue('#FFFFFF', '#1A202C'),
+  };
 
   const byType = useMemo(() => {
     const map = new Map();
@@ -194,9 +238,9 @@ export default function CircuitCanvas({
         viewBox="0 0 1000 620"
         width="100%"
         height={`${height}px`}
-        bg="white"
+        bg="lmBg.surface"
         borderWidth="1px"
-        borderColor="gray.200"
+        borderColor="lmBorder.base"
         borderRadius="md"
         onDrop={onDrop}
         onDragOver={(event) => event.preventDefault()}
@@ -210,11 +254,24 @@ export default function CircuitCanvas({
           setPending(null);
           onSelect(null);
         }}
-        style={{ touchAction: 'none', cursor: pending ? 'crosshair' : 'default' }}
+        // Focusable so Delete can reach it. Only ever *given* focus by clicking
+        // the bench, so the key handler below cannot fire while someone is typing
+        // a value into the panel beside it — where Backspace has to keep meaning
+        // backspace.
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (readOnly || !onDelete || !selectedId) return;
+          if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+          // Backspace is the browser's Back on some setups, and a student who
+          // deletes a resistor should not lose the bench.
+          event.preventDefault();
+          onDelete(selectedId);
+        }}
+        style={{ touchAction: 'none', cursor: pending ? 'crosshair' : 'default', outline: 'none' }}
       >
         <defs>
           <pattern id="lab-grid" width={GRID * 2} height={GRID * 2} patternUnits="userSpaceOnUse">
-            <path d={`M ${GRID * 2} 0 L 0 0 0 ${GRID * 2}`} fill="none" stroke="#EDF2F7" strokeWidth="1" />
+            <path d={`M ${GRID * 2} 0 L 0 0 0 ${GRID * 2}`} fill="none" stroke={paper.grid} strokeWidth="1" />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#lab-grid)" />
@@ -242,7 +299,7 @@ export default function CircuitCanvas({
                   removeWire(index);
                 }}
               />
-              <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#2B6CB0" strokeWidth={2.5} />
+              <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={paper.wire} strokeWidth={2.5} />
             </g>
           );
         })}
@@ -254,7 +311,7 @@ export default function CircuitCanvas({
             y1={positionOf(pending.from.component, pending.from.pin)?.y}
             x2={pending.to.x}
             y2={pending.to.y}
-            stroke="#3182CE"
+            stroke={paper.pendingWire}
             strokeWidth={2}
             strokeDasharray="5 4"
           />
@@ -276,7 +333,7 @@ export default function CircuitCanvas({
             <g key={component.id}>
               <g
                 transform={`translate(${component.x || 0} ${component.y || 0}) rotate(${component.rotation || 0})`}
-                color={selected ? '#2C5282' : '#1A202C'}
+                color={selected ? paper.inkSelected : paper.ink}
                 onPointerDown={(event) => startDrag(event, component)}
                 style={{ cursor: readOnly ? 'default' : 'move' }}
               >
@@ -287,8 +344,8 @@ export default function CircuitCanvas({
                     width={symbol.box[0] + 12}
                     height={symbol.box[1] + 12}
                     rx={4}
-                    fill="#EBF8FF"
-                    stroke="#4299E1"
+                    fill={paper.haloFill}
+                    stroke={paper.haloStroke}
                     strokeDasharray="4 3"
                   />
                 )}
@@ -300,7 +357,7 @@ export default function CircuitCanvas({
                 y={(component.y || 0) + symbol.box[1] / 2 + 16}
                 textAnchor="middle"
                 fontSize={11}
-                fill="#4A5568"
+                fill={paper.label}
               >
                 {component.label || component.id}
                 {part?.fields?.length ? ` · ${primaryValue(component, part.fields)}` : ''}
@@ -318,9 +375,9 @@ export default function CircuitCanvas({
                     width={88}
                     height={lines.length * lineHeight + 4}
                     rx={3}
-                    fill="#F0FFF4"
+                    fill={paper.plateFill}
                     fillOpacity={0.92}
-                    stroke="#C6F6D5"
+                    stroke={paper.plateStroke}
                   />
                   {lines.map((line, index) => (
                     <text
@@ -330,7 +387,7 @@ export default function CircuitCanvas({
                       textAnchor="middle"
                       fontSize={11}
                       fontWeight="700"
-                      fill="#2F855A"
+                      fill={paper.reading}
                     >
                       {line}
                     </text>
@@ -368,8 +425,8 @@ export default function CircuitCanvas({
                 cx={at.x}
                 cy={at.y}
                 r={isHover || isPending ? PIN_RADIUS + 2 : PIN_RADIUS - 1}
-                fill={isPending ? '#3182CE' : isHover ? '#63B3ED' : '#A0AEC0'}
-                stroke="white"
+                fill={isPending ? paper.pinPending : isHover ? paper.pinHover : paper.pin}
+                stroke={paper.pinRing}
                 strokeWidth={1.5}
                 style={{ cursor: readOnly ? 'default' : 'crosshair' }}
                 onPointerEnter={() => setHoverPin(`${component.id}:${pin}`)}
@@ -387,7 +444,7 @@ export default function CircuitCanvas({
 
       {!components.length && (
         <Box position="absolute" top="45%" left="0" right="0" textAlign="center" pointerEvents="none">
-          <Text color="gray.400" fontSize="sm">
+          <Text color="lmFg.muted" fontSize="sm">
             Drag a component from the palette onto the bench, then click one terminal and another to
             wire them together.
           </Text>

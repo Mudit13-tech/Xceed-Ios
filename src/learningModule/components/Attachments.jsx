@@ -42,20 +42,20 @@ export function AttachmentList({ attachments = [], compact = false }) {
             align="center"
             gap={2}
             borderWidth="1px"
-            borderColor="gray.200"
+            borderColor="lmBorder.base"
             borderRadius="md"
             px={3}
             py={compact ? 1 : 2}
-            bg="gray.50"
+            bg="lmBg.sunken"
             maxW="280px"
           >
             <Text>{ICONS[attachment.kind] || '📎'}</Text>
             <Box overflow="hidden">
-              <Text fontSize="sm" noOfLines={1} color="blue.700">
+              <Text fontSize="sm" noOfLines={1} color="lmHue.blue700">
                 {attachment.name || attachment.url}
               </Text>
               {attachment.sizeBytes ? (
-                <Text fontSize="xs" color="gray.500">
+                <Text fontSize="xs" color="lmFg.muted">
                   {prettySize(attachment.sizeBytes)}
                 </Text>
               ) : null}
@@ -154,11 +154,11 @@ export function AttachmentPicker({ attachments = [], onChange, disabled }) {
               align="center"
               gap={2}
               borderWidth="1px"
-              borderColor="gray.200"
+              borderColor="lmBorder.base"
               borderRadius="md"
               px={3}
               py={1}
-              bg="white"
+              bg="lmBg.surface"
             >
               <Text fontSize="sm">{ICONS[attachment.kind] || '📎'}</Text>
               <Text fontSize="sm" noOfLines={1} maxW="200px">
