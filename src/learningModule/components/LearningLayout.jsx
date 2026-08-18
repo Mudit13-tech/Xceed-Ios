@@ -22,6 +22,7 @@ import {
   MenuDivider,
   MenuItem,
   MenuList,
+  Spinner,
   Text,
   Tooltip,
   useColorMode,
@@ -559,7 +560,9 @@ export default function LearningLayout() {
           </Box>
 
           <Box flex="1" minW={0} w="100%">
-            <Outlet context={{ me, overview, reloadOverview: load }} />
+            <React.Suspense fallback={<Flex p={8} justify="center"><Spinner color="blue.500" /></Flex>}>
+              <Outlet context={{ me, overview, reloadOverview: load }} />
+            </React.Suspense>
           </Box>
         </Flex>
       </Container>

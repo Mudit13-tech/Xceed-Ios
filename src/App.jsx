@@ -236,18 +236,27 @@ const MLFineTuning = lazy(() => import('./attendancemodule/MLFineTuning'));
 const HardwareBackButton = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  
+  const locationRef = React.useRef(location.pathname);
+  const navigateRef = React.useRef(navigate);
 
-  useEffect(() => {
+  // Keep refs updated without triggering the listener effect
+  React.useEffect(() => {
+    locationRef.current = location.pathname;
+    navigateRef.current = navigate;
+  }, [location.pathname, navigate]);
+
+  React.useEffect(() => {
     let listener = null;
 
     const registerListener = async () => {
       listener = await CapacitorApp.addListener('backButton', (event) => {
         // Paths where pressing back should exit the app instead of navigating back
         const exitPaths = ['/', '/login', '/home', '/learning', '/learning/'];
-        if (exitPaths.includes(location.pathname)) {
+        if (exitPaths.includes(locationRef.current)) {
           CapacitorApp.exitApp();
         } else if (event.canGoBack || window.history.length > 1) {
-          navigate(-1);
+          navigateRef.current(-1);
         } else {
           CapacitorApp.exitApp();
         }
@@ -256,15 +265,15 @@ const HardwareBackButton = () => {
 
     registerListener();
 
-    // Initialize Push Notifications since we have access to navigate here
-    initializePushNotifications(navigate);
+    // Initialize Push Notifications using the stable navigate ref wrapper
+    initializePushNotifications((...args) => navigateRef.current(...args));
 
     return () => {
       if (listener) {
         listener.remove();
       }
     };
-  }, [location, navigate]);
+  }, []); // Empty dependency array ensures this runs exactly once!
 
   return null;
 };
