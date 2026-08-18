@@ -135,6 +135,25 @@ export default function Shorts() {
     }
   };
 
+  /**
+   * Ending from here saves the teacher a trip through the presenter view just to
+   * shut a session down — the join code stops working either way.
+   */
+  const endSession = async (short) => {
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(`End the live session for "${short.title}"? The join code stops working.`)) return;
+    setBusy(short._id);
+    try {
+      await lmApi.endShortSession(classId, short.liveSession._id);
+      toast({ status: 'success', title: 'Session ended' });
+      await load();
+    } catch (err) {
+      toast({ status: 'error', title: err.message });
+    } finally {
+      setBusy('');
+    }
+  };
+
   const remove = async (short) => {
     // eslint-disable-next-line no-alert
     if (!window.confirm(`Delete "${short.title}" and every session's answers?`)) return;
@@ -259,7 +278,9 @@ export default function Shorts() {
                     {/* Split button: the main half asks the mail question and
                         then starts, the caret answers it in one click for a
                         teacher who already knows. Rejoining a live session
-                        notifies nobody, so it starts immediately. */}
+                        notifies nobody, so it starts immediately — and its
+                        caret carries the way out, so ending a session does not
+                        mean opening the presenter view first. */}
                     <HStack spacing={0}>
                       <Button
                         size="sm"
@@ -268,33 +289,39 @@ export default function Shorts() {
                           short.liveSession ? present(short) : setPendingStart(short)
                         }
                         isLoading={busy === short._id}
-                        borderRightRadius={short.liveSession ? undefined : 0}
+                        borderRightRadius={0}
                       >
                         {short.liveSession ? 'Back to presenting' : 'Present'}
                       </Button>
-                      {!short.liveSession && (
-                        <Menu placement="bottom-end">
-                          <MenuButton
-                            as={IconButton}
-                            aria-label="Presenting options"
-                            icon={<FiChevronDown />}
-                            size="sm"
-                            colorScheme="purple"
-                            borderLeftRadius={0}
-                            borderLeftWidth="1px"
-                            borderLeftColor="whiteAlpha.400"
-                            isDisabled={busy === short._id}
-                          />
-                          <MenuList>
-                            <MenuItem onClick={() => present(short, { email: true })}>
-                              Present and email the class
+                      <Menu placement="bottom-end">
+                        <MenuButton
+                          as={IconButton}
+                          aria-label={short.liveSession ? 'Session options' : 'Presenting options'}
+                          icon={<FiChevronDown />}
+                          size="sm"
+                          colorScheme={short.liveSession ? 'red' : 'purple'}
+                          borderLeftRadius={0}
+                          borderLeftWidth="1px"
+                          borderLeftColor="whiteAlpha.400"
+                          isDisabled={busy === short._id}
+                        />
+                        <MenuList>
+                          {short.liveSession ? (
+                            <MenuItem color="red.500" onClick={() => endSession(short)}>
+                              End session
                             </MenuItem>
-                            <MenuItem onClick={() => present(short, { email: false })}>
-                              Present without emailing
-                            </MenuItem>
-                          </MenuList>
-                        </Menu>
-                      )}
+                          ) : (
+                            <>
+                              <MenuItem onClick={() => present(short, { email: true })}>
+                                Present and email the class
+                              </MenuItem>
+                              <MenuItem onClick={() => present(short, { email: false })}>
+                                Present without emailing
+                              </MenuItem>
+                            </>
+                          )}
+                        </MenuList>
+                      </Menu>
                     </HStack>
                     <Button
                       size="sm"

@@ -50,12 +50,12 @@ function TopicManager({ classId, topics, onChanged }) {
   };
 
   return (
-    <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={4}>
-      <Heading size="xs" mb={3} color="gray.700">
+    <Box bg="lmBg.surface" borderWidth="1px" borderColor="lmBorder.base" borderRadius="lg" p={4}>
+      <Heading size="xs" mb={3} color="lmFg.body">
         Topics
       </Heading>
       {topics.length === 0 && (
-        <Text fontSize="sm" color="gray.500" mb={3}>
+        <Text fontSize="sm" color="lmFg.muted" mb={3}>
           Group material into units, chapters or weeks.
         </Text>
       )}
@@ -103,16 +103,16 @@ function MaterialRow({ item, classId, isTeacher, onChanged, onEdit }) {
 
   return (
     <Box
-      bg="white"
+      bg="lmBg.surface"
       borderWidth="1px"
-      borderColor="gray.200"
+      borderColor="lmBorder.base"
       borderRadius="lg"
       p={4}
       mb={3}
       _hover={{ borderColor: 'blue.300' }}
     >
       <Flex align="center" gap={4}>
-        <Flex w="40px" h="40px" borderRadius="full" bg="green.50" align="center" justify="center" flexShrink={0}>
+        <Flex w="40px" h="40px" borderRadius="full" bg="lmHue.green50" align="center" justify="center" flexShrink={0}>
           📚
         </Flex>
         <Box
@@ -123,7 +123,7 @@ function MaterialRow({ item, classId, isTeacher, onChanged, onEdit }) {
           _hover={{ textDecoration: 'none' }}
         >
           <Flex align="center" gap={2} wrap="wrap">
-            <Heading size="sm" color="gray.800" noOfLines={1}>
+            <Heading size="sm" color="lmFg.heading" noOfLines={1}>
               {item.title}
             </Heading>
             {item.status !== 'published' && (
@@ -132,7 +132,7 @@ function MaterialRow({ item, classId, isTeacher, onChanged, onEdit }) {
             {item.aiSourceSessionId && <Badge colorScheme="purple">✨ AI</Badge>}
           </Flex>
           <HStack spacing={3} mt={1} wrap="wrap">
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color="lmFg.muted">
               Posted {formatDate(item.publishedAt)}
             </Text>
           </HStack>
@@ -204,7 +204,7 @@ export default function Material() {
         <Flex justify="space-between" align="center" mb={4} gap={3} wrap="wrap">
           <Box>
             <Heading size="md">Material</Heading>
-            <Text fontSize="sm" color="gray.500">
+            <Text fontSize="sm" color="lmFg.muted">
               Reading material, notes and files for this class.
             </Text>
           </Box>
@@ -238,7 +238,7 @@ export default function Material() {
           <>
             {grouped.map((group) => (
               <Box key={group.topic._id} mb={6}>
-                <Heading size="sm" color="gray.700" mb={2}>
+                <Heading size="sm" color="lmFg.body" mb={2}>
                   {group.topic.name}
                 </Heading>
                 <Divider mb={3} />
@@ -258,7 +258,7 @@ export default function Material() {
               <Box>
                 {grouped.length > 0 && (
                   <>
-                    <Heading size="sm" color="gray.700" mb={2}>
+                    <Heading size="sm" color="lmFg.body" mb={2}>
                       Other
                     </Heading>
                     <Divider mb={3} />

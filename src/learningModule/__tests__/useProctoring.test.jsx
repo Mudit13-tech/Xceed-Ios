@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 
-import useProctoring from '../hooks/useProctoring';
+import useProctoring, { BLUR_GRACE_MS } from '../hooks/useProctoring';
 
 /**
  * The lockdown is only worth having if it is actually on, and both ways it can
@@ -92,20 +92,167 @@ describe('learningModule useProctoring', () => {
    * down, because the server ends the attempt on the first departure and the
    * report is what tells it one happened.
    */
-  it('reports leaving the tab and the window on a paper that configures nothing', () => {
+  it('reports leaving the tab on a paper that configures nothing', () => {
     const onViolation = vi.fn().mockResolvedValue({});
     renderHook(() => useProctoring({ settings: {}, active: true, onViolation }));
 
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
     act(() => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
     expect(onViolation).toHaveBeenCalledWith('tab_switch', expect.any(String));
+  });
 
-    act(() => {
-      window.dispatchEvent(new Event('blur'));
+  /**
+   * A window blur is not evidence of anything on its own.
+   *
+   * It fires for a notification toast, the Alt or Windows key, an IME switch, one
+   * of the browser's own bubbles, a click that lands on a second monitor. Under
+   * the old code each of those submitted the paper on the spot with no allowance
+   * and no way back, which is what students reported as being thrown out of the
+   * quiz at random. These tests pin both halves: the transient blur costs
+   * nothing, and the real departure still ends the sitting.
+   */
+  describe('a window blur', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     });
-    expect(onViolation).toHaveBeenCalledWith('blur', expect.any(String));
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    /** Focus really is gone — an alt-tab, not a popup that took it for a moment. */
+    const loseFocus = () => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+      act(() => {
+        window.dispatchEvent(new Event('blur'));
+      });
+    };
+
+    const waitOutGrace = async () => {
+      await act(async () => {
+        vi.advanceTimersByTime(BLUR_GRACE_MS + 50);
+      });
+    };
+
+    it('is not reported until it has been given a chance to prove itself', async () => {
+      const onViolation = vi.fn().mockResolvedValue({});
+      const { result } = renderHook(() =>
+        useProctoring({ settings: {}, active: true, onViolation }),
+      );
+
+      loseFocus();
+      // The moment of the event: nothing has happened to the paper yet.
+      expect(onViolation).not.toHaveBeenCalled();
+      expect(result.current.departed).toBe(false);
+
+      await waitOutGrace();
+      expect(onViolation).toHaveBeenCalledWith('blur', expect.any(String));
+      expect(result.current.departed).toBe(true);
+    });
+
+    it('costs nothing when focus comes straight back', async () => {
+      // The whole class of false positives, in one test.
+      const onViolation = vi.fn().mockResolvedValue({});
+      const { result } = renderHook(() =>
+        useProctoring({ settings: {}, active: true, onViolation }),
+      );
+
+      loseFocus();
+      act(() => {
+        window.dispatchEvent(new Event('focus'));
+      });
+
+      await waitOutGrace();
+      expect(onViolation).not.toHaveBeenCalled();
+      expect(result.current.departed).toBe(false);
+    });
+
+    it('costs nothing when the window turns out to still have focus', async () => {
+      // No `focus` event ever arrives — the bubble took focus and gave it back
+      // without the window noticing. The confirmation has to check the state
+      // itself rather than trust that it was told.
+      const onViolation = vi.fn().mockResolvedValue({});
+      const { result } = renderHook(() =>
+        useProctoring({ settings: {}, active: true, onViolation }),
+      );
+
+      vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+      act(() => {
+        window.dispatchEvent(new Event('blur'));
+      });
+
+      await waitOutGrace();
+      expect(onViolation).not.toHaveBeenCalled();
+      expect(result.current.departed).toBe(false);
+    });
+
+    it('is reported with the time it happened, not the time it was confirmed', async () => {
+      // Nothing is bought by the wait: the server sees the moment the student
+      // left, and judges the attempt against that.
+      const onViolation = vi.fn().mockResolvedValue({});
+      renderHook(() => useProctoring({ settings: {}, active: true, onViolation }));
+
+      const before = Date.now();
+      loseFocus();
+      await waitOutGrace();
+
+      const [, at] = onViolation.mock.calls[0];
+      expect(new Date(at).getTime()).toBeLessThan(before + BLUR_GRACE_MS);
+    });
+
+    /**
+     * The regression that would make all of the above worthless.
+     *
+     * The confirmation is a timer living in an effect, and the sitting re-renders
+     * every second while the countdown ticks. If the effect depends on the
+     * caller's callbacks — which arrive as fresh arrows each render — its cleanup
+     * cancels the pending timer before it can ever fire, and no departure is ever
+     * reported. That fails *open*, silently, which is the worst direction.
+     */
+    it('survives the re-renders that happen while it is being confirmed', async () => {
+      let renders = 0;
+      const onViolation = vi.fn().mockResolvedValue({});
+      const { rerender } = renderHook(() => {
+        renders += 1;
+        return useProctoring({
+          settings: {},
+          active: true,
+          // New identities on every render, exactly as `QuizAttempt` passes them.
+          onViolation: (...args) => onViolation(...args),
+          onHeartbeat: () => Promise.resolve({}),
+          onTerminated: () => {},
+        });
+      });
+
+      loseFocus();
+      rerender();
+      rerender();
+      await waitOutGrace();
+
+      expect(renders).toBeGreaterThan(1);
+      expect(onViolation).toHaveBeenCalledWith('blur', expect.any(String));
+    });
+
+    it('does not report twice when the tab goes hidden as well', async () => {
+      // One departure reaching us as two events. The unambiguous one wins, and it
+      // carries the blur's earlier timestamp.
+      const onViolation = vi.fn().mockResolvedValue({});
+      renderHook(() => useProctoring({ settings: {}, active: true, onViolation }));
+
+      loseFocus();
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      await waitOutGrace();
+
+      expect(onViolation).toHaveBeenCalledTimes(1);
+      expect(onViolation).toHaveBeenCalledWith('tab_switch', expect.any(String));
+    });
   });
 
   /**
@@ -165,10 +312,15 @@ describe('learningModule useProctoring', () => {
 
       setFullscreen(false);
       await act(async () => {});
+      // A second departure behind the first. Deliberately the tab, not the
+      // window: a blur is confirmed over two seconds and would be dropped here
+      // anyway, because the fullscreen exit above has already closed the paper.
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
       act(() => {
-        window.dispatchEvent(new Event('blur'));
+        document.dispatchEvent(new Event('visibilitychange'));
       });
       await act(async () => {});
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
       expect(JSON.parse(sessionStorage.getItem(`lmProctorQueue:${attemptId}`))).toHaveLength(2);
 
       await act(async () => {

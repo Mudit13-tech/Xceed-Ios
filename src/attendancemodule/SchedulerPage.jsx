@@ -4,7 +4,7 @@
 // Tab 1 (Control): working-day check, global toggle, Run Now / Preview trigger, live status.
 // Tab 2-5: config — periods & run settings, rooms, extra classes, stop days.
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { theme, styles, cssReset, formatSlotLabel } from './config';
 import BackButton from './BackButton';
 import { usePeriods } from './usePeriods';
@@ -17,6 +17,9 @@ export const AC_API = `${apiUrl}/attendancemodule/acquisitioncontrol`;
 export const CAMERA_API = `${apiUrl}/attendancemodule/cameras`;
 const SUBJECT_API = `${apiUrl}/timetablemodule/subject`;
 const FACULTY_API = `${apiUrl}/timetablemodule/faculty`;
+// Current-session timetable resolver — the same one the server uses to reject
+// a booked slot, so the form shows exactly what "Add Class" will enforce.
+const LOCK_LOOKUP_API = `${apiUrl}/timetablemodule/lock/attendance-lookup`;
 
 const DURATION_OPTIONS = [30, 60, 90, 120, 180, 300];
 // Keep in step with AcquisitionControl.globalNumRuns / periods[].numRuns
@@ -726,6 +729,9 @@ export function ExtraClassForm({ onAdd, allRooms }) {
   const [semesters, setSemesters] = useState([]);
   const [allSubjects, setAllSubjects] = useState([]);
   const [allFaculty, setAllFaculty] = useState([]);
+  // Live "is this slot already taken in the current timetable?" check, powered
+  // by the same resolver the server rejects against (currentSession only).
+  const [slotStatus, setSlotStatus] = useState(null);
 
   useEffect(() => {
     fetch(`${SUBJECT_API}/sem`)
@@ -744,8 +750,65 @@ export function ExtraClassForm({ onAdd, allRooms }) {
       .catch(() => {});
   }, []);
 
-  const subjectsForSemester = allSubjects.filter(
-    (s) => s.sem === form.semester,
+  // Whenever the date / period / room settle, ask the current timetable whether
+  // that slot already has a class. 200 = occupied, 404 = free / no class.
+  useEffect(() => {
+    if (!form.room || !form.date || !form.periodKey) {
+      setSlotStatus(null);
+      return;
+    }
+    let cancelled = false;
+    const params = new URLSearchParams({
+      room: form.room,
+      slot: form.periodKey,
+      date: form.date,
+    });
+    setSlotStatus({ status: 'loading' });
+    fetch(`${LOCK_LOOKUP_API}?${params}`)
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && data.subject) {
+          setSlotStatus({
+            status: data.ambiguous ? 'ambiguous' : 'occupied',
+            subject: data.subject,
+            faculty: data.faculty || '',
+          });
+        } else {
+          setSlotStatus({ status: 'free', note: data.error || '' });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSlotStatus({ status: 'unavailable' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.room, form.date, form.periodKey]);
+
+  // Order the pickers — the API returns DB order, which is not display order.
+  // Faculty and subjects are alphabetical so the dropdowns read cleanly.
+  const subjectsForSemester = useMemo(
+    () =>
+      allSubjects
+        .filter((s) => s.sem === form.semester)
+        .sort((a, b) =>
+          String(a?.subName || '').localeCompare(
+            String(b?.subName || ''),
+            undefined,
+            { sensitivity: 'base' },
+          ),
+        ),
+    [allSubjects, form.semester],
+  );
+  const sortedFaculty = useMemo(
+    () =>
+      [...allFaculty].sort((a, b) =>
+        String(a?.name || '').localeCompare(String(b?.name || ''), undefined, {
+          sensitivity: 'base',
+        }),
+      ),
+    [allFaculty],
   );
 
   const update = (k, v) => setForm((p) => ({ ...p, [k]: v }));
@@ -886,7 +949,7 @@ export function ExtraClassForm({ onAdd, allRooms }) {
             style={styles.select}
           >
             <option value="">Select faculty…</option>
-            {allFaculty.map((f) => (
+            {sortedFaculty.map((f) => (
               <option key={f._id} value={f.name}>
                 {f.name}
                 {f.dept ? ` — ${f.dept}` : ''}
@@ -895,6 +958,67 @@ export function ExtraClassForm({ onAdd, allRooms }) {
           </select>
         </div>
       </div>
+      {slotStatus && slotStatus.status !== 'loading' && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'wrap',
+            padding: '8px 12px',
+            borderRadius: 8,
+            marginBottom: 12,
+            fontSize: 12,
+            fontWeight: 600,
+            background:
+              slotStatus.status === 'occupied'
+                ? theme.dangerDim
+                : slotStatus.status === 'ambiguous'
+                  ? theme.warningDim
+                  : slotStatus.status === 'free'
+                    ? theme.successDim
+                    : theme.surfaceAlt,
+            color:
+              slotStatus.status === 'occupied'
+                ? theme.danger
+                : slotStatus.status === 'ambiguous'
+                  ? theme.warning
+                  : slotStatus.status === 'free'
+                    ? theme.success
+                    : theme.textMuted,
+            border: `1px solid ${
+              slotStatus.status === 'occupied'
+                ? theme.danger
+                : slotStatus.status === 'ambiguous'
+                  ? theme.warning
+                  : slotStatus.status === 'free'
+                    ? theme.success
+                    : theme.border
+            }`,
+          }}
+        >
+          {slotStatus.status === 'occupied' &&
+            `⚠ ${form.room} is already booked in the current timetable for ${slotLabel(
+              form.periodKey,
+            )} on ${form.date} — ${slotStatus.subject}${
+              slotStatus.faculty ? ` (${slotStatus.faculty})` : ''
+            }. Adding this class will replace it.`}
+          {slotStatus.status === 'ambiguous' &&
+            `⚠ Multiple current-session timetables claim ${form.room} for ${slotLabel(
+              form.periodKey,
+            )} on ${form.date} (${slotStatus.subject}${
+              slotStatus.faculty ? ` — ${slotStatus.faculty}` : ''
+            }). This is usually a stale session still flagged as current — set the correct session as current in Timetable Admin (Mark as Current), or pick another room/slot.`}
+          {slotStatus.status === 'free' &&
+            `🟢 ${form.room} is free in the current timetable for ${slotLabel(
+              form.periodKey,
+            )} on ${form.date}.`}
+          {slotStatus.status === 'unavailable' &&
+            'Could not reach the current-timetable lookup — the server will still validate on submit.'}
+        </div>
+      )}
+
+
       <div
         className="scheduler-action-grid"
         style={{

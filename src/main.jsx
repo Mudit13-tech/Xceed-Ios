@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import { HelmetProvider } from 'react-helmet-async';
-import { ChakraProvider } from '@chakra-ui/react';
+import { ChakraProvider, extendTheme } from '@chakra-ui/react';
 import './index.css';
 import { RecoilRoot } from 'recoil';
 import axios from 'axios';
@@ -10,6 +10,7 @@ import getEnvironment from './getenvironment';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { queryPersister } from './utils/queryPersister';
+import { learningModuleTheme } from './learningModule/theme';
 
 
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
@@ -91,10 +92,19 @@ axios.interceptors.response.use(
   }
 );
 
+/**
+ * Semantic colour tokens must be registered on the theme at the provider, which
+ * is here — there is nowhere else Chakra reads them from. The addition is purely
+ * additive: a new `lmGray` scale and new token names under an `lm` prefix, with
+ * no override of any existing scale or component style, so every other module
+ * renders exactly as before. The definitions live in learningModule/theme.js.
+ */
+const appTheme = extendTheme(learningModuleTheme);
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <HelmetProvider context={helmetContext}>
-      <ChakraProvider>
+      <ChakraProvider theme={appTheme}>
         <RecoilRoot>
           <PersistQueryClientProvider client={queryClient} persistOptions={{ persister: queryPersister }}>
             <App />

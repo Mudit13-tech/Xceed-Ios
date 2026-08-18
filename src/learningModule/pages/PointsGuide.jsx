@@ -87,7 +87,7 @@ export default function PointsGuide() {
                   <Td>
                     <Text fontWeight="500">{row.label}</Text>
                     {row.note && (
-                      <Text fontSize="xs" color="gray.500">
+                      <Text fontSize="xs" color="lmFg.muted">
                         {row.note}
                       </Text>
                     )}
@@ -95,10 +95,10 @@ export default function PointsGuide() {
                   <Td isNumeric fontWeight="700">
                     {row.points}
                   </Td>
-                  <Td isNumeric color={row.latePoints ? 'orange.500' : 'gray.400'}>
+                  <Td isNumeric color={row.latePoints ? 'orange.500' : 'lmFg.faint'}>
                     {row.latePoints ?? '—'}
                   </Td>
-                  <Td fontSize="xs" color="gray.600">
+                  <Td fontSize="xs" color="lmFg.subtle">
                     {row.bonus ? `+${row.bonus} for ${row.bonusFor}` : '—'}
                   </Td>
                 </Tr>
@@ -134,8 +134,8 @@ export default function PointsGuide() {
                 p={3}
                 borderWidth="1px"
                 borderRadius="md"
-                borderColor={mineNow ? 'purple.200' : 'gray.200'}
-                bg={mineNow ? 'purple.50' : 'transparent'}
+                borderColor={mineNow ? 'lmHue.purple200' : 'lmBorder.base'}
+                bg={mineNow ? 'lmHue.purple50' : 'transparent'}
               >
                 <Text fontSize="xl" filter={mineNow ? 'none' : 'grayscale(1)'} opacity={mineNow ? 1 : 0.5}>
                   {badge.emoji}
@@ -159,7 +159,7 @@ export default function PointsGuide() {
                   {/* Every badge says what it takes. A name that lands with one
                       person is a shrug to another, and a badge nobody can aim
                       at is just a surprise. */}
-                  <Text fontSize="xs" color="gray.600">
+                  <Text fontSize="xs" color="lmFg.subtle">
                     {badge.hint}
                   </Text>
                 </Box>
@@ -173,7 +173,7 @@ export default function PointsGuide() {
         <SectionCard title="Your last few" subtitle="Where your own points came from">
           <VStack align="stretch" spacing={0}>
             {mine.history.slice(0, 15).map((row) => (
-              <Flex key={row._id} justify="space-between" py={2} borderBottomWidth="1px" borderColor="gray.100">
+              <Flex key={row._id} justify="space-between" py={2} borderBottomWidth="1px" borderColor="lmBorder.subtle">
                 <Text fontSize="sm" noOfLines={1}>
                   {row.reason}
                 </Text>

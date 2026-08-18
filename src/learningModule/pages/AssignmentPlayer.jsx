@@ -37,7 +37,7 @@ const answerId = (questionId, key) => `${questionId}:${key}`;
  * before submission this is a nudge and not a mark.
  */
 function LiveVerdict({ verdict, busy }) {
-  if (busy) return <Spinner size="xs" color="gray.400" />;
+  if (busy) return <Spinner size="xs" color="lmFg.faint" />;
   if (!verdict) return null;
 
   if (verdict.checkable === false) {
@@ -325,11 +325,11 @@ export default function AssignmentPlayer() {
         <Box>
           <Heading size="md">{assignment.title}</Heading>
           {assignment.description && (
-            <Text fontSize="sm" color="gray.600">
+            <Text fontSize="sm" color="lmFg.subtle">
               {assignment.description}
             </Text>
           )}
-          <HStack fontSize="xs" color="gray.500" mt={1} wrap="wrap">
+          <HStack fontSize="xs" color="lmFg.muted" mt={1} wrap="wrap">
             <Text>
               Attempt {attempt.attemptNumber} of {meta.attemptsAllowed}
             </Text>
@@ -424,7 +424,7 @@ export default function AssignmentPlayer() {
             <RichText>{question.prompt}</RichText>
           </Box>
 
-          <HStack fontSize="xs" color="gray.500" mb={3} wrap="wrap">
+          <HStack fontSize="xs" color="lmFg.muted" mb={3} wrap="wrap">
             <Text>Your values:</Text>
             {Object.entries(question.values).map(([name, value]) => (
               <Code key={name} fontSize="xs">
@@ -511,7 +511,7 @@ export default function AssignmentPlayer() {
                   {!submitted && attempt.instantFeedback && (
                     <LiveVerdict verdict={verdicts[id]} busy={checking === id} />
                   )}
-                  <Text fontSize="xs" color="gray.500">
+                  <Text fontSize="xs" color="lmFg.muted">
                     {answer.marks} mark{answer.marks === 1 ? '' : 's'}
                   </Text>
                   {submitted && graded && (
@@ -524,7 +524,7 @@ export default function AssignmentPlayer() {
                   )}
                 </Flex>
                 {submitted && answer.expected !== undefined && (
-                  <Text fontSize="xs" color="gray.600" mt={1} ml="122px">
+                  <Text fontSize="xs" color="lmFg.subtle" mt={1} ml="122px">
                     Correct answer: <b>{Math.round(answer.expected * 1e6) / 1e6}</b> {answer.unit}
                   </Text>
                 )}
@@ -538,7 +538,7 @@ export default function AssignmentPlayer() {
           {submitted && question.solution && (
             <>
               <Divider my={3} />
-              <Text fontSize="xs" fontWeight="600" color="gray.600" mb={1}>
+              <Text fontSize="xs" fontWeight="600" color="lmFg.subtle" mb={1}>
                 Worked solution
               </Text>
               <RichText>{question.solution}</RichText>
@@ -550,7 +550,7 @@ export default function AssignmentPlayer() {
       {!submitted && (
         <>
           {savedAt && (
-            <Text fontSize="xs" color="gray.500" mb={2}>
+            <Text fontSize="xs" color="lmFg.muted" mb={2}>
               Draft saved {formatDateTime(savedAt)}
             </Text>
           )}

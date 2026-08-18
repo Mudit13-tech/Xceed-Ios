@@ -97,7 +97,7 @@ function DayChip({ to, bg, subject, label, title }) {
       py={0.5}
       borderRadius="sm"
       bg={bg}
-      color="white"
+      color="lmFg.onAccent"
       fontSize={{ base: '0.55rem', md: '0.65rem' }}
       noOfLines={1}
       _hover={to ? { opacity: 0.85, textDecoration: 'none' } : undefined}
@@ -124,20 +124,20 @@ function DayDetailModal({ date, items, holiday, onClose }) {
       <ModalContent>
         <ModalHeader fontSize="md">
           {date && formatDate(date)}
-          <Text fontSize="xs" color="gray.500" fontWeight="400">
+          <Text fontSize="xs" color="lmFg.muted" fontWeight="400">
             {items.length} {items.length === 1 ? 'activity' : 'activities'}
           </Text>
         </ModalHeader>
         <ModalCloseButton />
         <ModalBody pb={4}>
           {holiday && (
-            <Flex align="center" gap={3} py={2.5} borderBottomWidth="1px" borderColor="gray.100">
+            <Flex align="center" gap={3} py={2.5} borderBottomWidth="1px" borderColor="lmBorder.subtle">
               <Text>🏖️</Text>
               <Box flex="1" minW={0}>
                 <Text fontSize="sm" fontWeight="500">
                   {holiday.remark}
                 </Text>
-                <Text fontSize="xs" color="gray.500">
+                <Text fontSize="xs" color="lmFg.muted">
                   Non-working day{holiday.session ? ` · ${holiday.session}` : ''}
                 </Text>
               </Box>
@@ -155,14 +155,14 @@ function DayDetailModal({ date, items, holiday, onClose }) {
                 gap={3}
                 py={2.5}
                 borderBottomWidth="1px"
-                borderColor="gray.100"
+                borderColor="lmBorder.subtle"
                 _hover={item.to ? { bg: 'gray.50', textDecoration: 'none' } : undefined}
               >
                 <Text>{item.icon}</Text>
                 <Box flex="1" minW={0}>
                   <Flex align="center" gap={2} minW={0}>
                     {item.subject && (
-                      <Badge bg={item.bg} color="white" fontSize="0.6rem">
+                      <Badge bg={item.bg} color="lmFg.onAccent" fontSize="0.6rem">
                         {item.subject}
                       </Badge>
                     )}
@@ -170,7 +170,7 @@ function DayDetailModal({ date, items, holiday, onClose }) {
                       {item.title}
                     </Text>
                   </Flex>
-                  <Text fontSize="xs" color="gray.500" noOfLines={1}>
+                  <Text fontSize="xs" color="lmFg.muted" noOfLines={1}>
                     {item.kindLabel}
                     {item.showTime ? ` · ${formatTime(item.at)}` : ''}
                     {item.className ? ` · ${item.className}` : ''}
@@ -354,7 +354,7 @@ export default function Calendar() {
       <Flex justify="space-between" align="center" mb={4} gap={3} wrap="wrap">
         <Box>
           <Heading size="lg">Calendar</Heading>
-          <Text color="gray.500" fontSize="sm">
+          <Text color="lmFg.muted" fontSize="sm">
             Coursework due dates, quizzes, Shorts and institute holidays. Click a day to see
             everything on it.
           </Text>
@@ -383,7 +383,7 @@ export default function Calendar() {
               <WrapItem key={entry.label}>
                 <HStack spacing={2}>
                   <Box w="10px" h="10px" borderRadius="sm" bg={entry.color} />
-                  <Text fontSize="xs" color="gray.600">
+                  <Text fontSize="xs" color="lmFg.subtle">
                     {entry.label}
                   </Text>
                 </HStack>
@@ -391,10 +391,10 @@ export default function Calendar() {
             ))}
           </Wrap>
 
-          <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={{ base: 1, md: 3 }} mb={5}>
+          <Box bg="lmBg.surface" borderWidth="1px" borderColor="lmBorder.base" borderRadius="lg" p={{ base: 1, md: 3 }} mb={5}>
             <Grid templateColumns="repeat(7, 1fr)" gap={{ base: 0.5, md: 1 }}>
               {WEEKDAYS.map((day) => (
-                <Text key={day} fontSize={{ base: '0.55rem', md: 'xs' }} fontWeight="600" color="gray.500" textAlign="center" py={1}>
+                <Text key={day} fontSize={{ base: '0.55rem', md: 'xs' }} fontWeight="600" color="lmFg.muted" textAlign="center" py={1}>
                   {day}
                 </Text>
               ))}
@@ -447,7 +447,7 @@ export default function Calendar() {
                         <Text
                           fontSize={{ base: '0.6rem', md: 'xs' }}
                           fontWeight={isToday ? '700' : '500'}
-                          color={isToday ? 'white' : holiday ? 'blue.600' : 'gray.600'}
+                          color={isToday ? 'lmFg.onAccent' : holiday ? 'blue.600' : 'lmFg.subtle'}
                         >
                           {date.getDate()}
                         </Text>
@@ -465,7 +465,7 @@ export default function Calendar() {
                       {isToday && <AnimatedXceedLogo />}
                     </Flex>
                     {holiday && (
-                      <Text fontSize={{ base: '0.5rem', md: '0.6rem' }} color={isToday ? "white" : "blue.600"} noOfLines={1} title={holiday.remark}>
+                      <Text fontSize={{ base: '0.5rem', md: '0.6rem' }} color={isToday ? 'lmFg.onAccent' : "blue.600"} noOfLines={1} title={holiday.remark}>
                         {holiday.remark}
                       </Text>
                     )}
@@ -481,7 +481,7 @@ export default function Calendar() {
                     {dayItems.length > CHIPS_PER_CELL && (
                       <Text
                         fontSize={{ base: '0.5rem', md: '0.6rem' }}
-                        color={isToday ? 'white' : 'blue.600'}
+                        color={isToday ? 'lmFg.onAccent' : 'blue.600'}
                         fontWeight="600"
                         mt={0.5}
                         _hover={{ textDecoration: 'underline' }}
@@ -510,14 +510,14 @@ export default function Calendar() {
                     gap={3}
                     py={2.5}
                     borderBottomWidth="1px"
-                    borderColor="gray.100"
+                    borderColor="lmBorder.subtle"
                     _hover={{ bg: 'gray.50', textDecoration: 'none' }}
                   >
                     <Text>{meta.icon}</Text>
                     <Box flex="1" minW={0}>
                       <Flex align="center" gap={2} minW={0}>
                         {subjectShort(item.class) && (
-                          <Badge bg={item.class?.coverColor || 'gray.500'} color="white" fontSize="0.6rem">
+                          <Badge bg={item.class?.coverColor || 'gray.500'} color="lmFg.onAccent" fontSize="0.6rem">
                             {subjectShort(item.class)}
                           </Badge>
                         )}
@@ -525,7 +525,7 @@ export default function Calendar() {
                           {item.title}
                         </Text>
                       </Flex>
-                      <Text fontSize="xs" color="gray.500">
+                      <Text fontSize="xs" color="lmFg.muted">
                         {item.class?.name} · {item.dateKind === 'posted' ? 'Posted' : 'Due'}{' '}
                         {formatDate(item.calendarDate || item.dueDate)}
                       </Text>
@@ -555,14 +555,14 @@ export default function Calendar() {
                     gap={3}
                     py={2.5}
                     borderBottomWidth="1px"
-                    borderColor="gray.100"
+                    borderColor="lmBorder.subtle"
                     _hover={{ bg: 'gray.50', textDecoration: 'none' }}
                   >
                     <Text>🧠</Text>
                     <Box flex="1" minW={0}>
                       <Flex align="center" gap={2} minW={0}>
                         {subjectShort(quiz.class) && (
-                          <Badge bg="purple.500" color="white" fontSize="0.6rem">
+                          <Badge bg="purple.500" color="lmFg.onAccent" fontSize="0.6rem">
                             {subjectShort(quiz.class)}
                           </Badge>
                         )}
@@ -570,7 +570,7 @@ export default function Calendar() {
                           {quiz.title}
                         </Text>
                       </Flex>
-                      <Text fontSize="xs" color="gray.500">
+                      <Text fontSize="xs" color="lmFg.muted">
                         {quiz.class?.name} · {formatDateTime(quiz.conductedAt)}
                         {quiz.timeLimitMinutes ? ` · ${quiz.timeLimitMinutes} min` : ''}
                       </Text>
@@ -605,14 +605,14 @@ export default function Calendar() {
                       gap={3}
                       py={2.5}
                       borderBottomWidth="1px"
-                      borderColor="gray.100"
+                      borderColor="lmBorder.subtle"
                       _hover={reportPath ? { bg: 'gray.50', textDecoration: 'none' } : undefined}
                     >
                       <Text>⚡</Text>
                       <Box flex="1" minW={0}>
                         <Flex align="center" gap={2} minW={0}>
                           {subjectShort(short.class) && (
-                            <Badge bg="teal.500" color="white" fontSize="0.6rem">
+                            <Badge bg="teal.500" color="lmFg.onAccent" fontSize="0.6rem">
                               {subjectShort(short.class)}
                             </Badge>
                           )}
@@ -620,7 +620,7 @@ export default function Calendar() {
                             {short.title}
                           </Text>
                         </Flex>
-                        <Text fontSize="xs" color="gray.500">
+                        <Text fontSize="xs" color="lmFg.muted">
                           {short.class?.name} · {formatDateTime(short.startedAt)}
                           {short.presentedByName ? ` · ${short.presentedByName}` : ''}
                         </Text>
@@ -644,13 +644,13 @@ export default function Calendar() {
                 <EmptyState icon="🏖️" title="No holidays configured for this month" />
               ) : (
                 data.nonWorkingDays.map((day) => (
-                  <Flex key={day.date} align="center" gap={3} py={2.5} borderBottomWidth="1px" borderColor="gray.100">
+                  <Flex key={day.date} align="center" gap={3} py={2.5} borderBottomWidth="1px" borderColor="lmBorder.subtle">
                     <Text>🏖️</Text>
                     <Box flex="1" minW={0}>
                       <Text fontSize="sm" fontWeight="500" noOfLines={1}>
                         {day.remark}
                       </Text>
-                      <Text fontSize="xs" color="gray.500">
+                      <Text fontSize="xs" color="lmFg.muted">
                         {formatDate(parseDayKey(day.date))}
                         {day.session ? ` · ${day.session}` : ''}
                       </Text>

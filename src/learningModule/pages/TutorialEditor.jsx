@@ -182,7 +182,7 @@ function AnswerRow({ classId, answer, variableNames, onChange, onRemove }) {
   const check = useFormulaCheck(classId, answer.formula, variableNames);
 
   return (
-    <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" p={3} mb={2}>
+    <Box borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" p={3} mb={2}>
       <Flex gap={2} align="flex-end" wrap="wrap">
         <FormControl maxW="150px">
           <FormLabel fontSize="xs" mb={1}>
@@ -308,7 +308,7 @@ function QuestionCard({ classId, question, index, onChange, onRemove }) {
       )}
 
       <Divider my={4} />
-      <Heading size="xs" mb={2} color="gray.700">
+      <Heading size="xs" mb={2} color="lmFg.body">
         Variables
       </Heading>
       {(question.variables || []).map((variable, variableIndex) => (
@@ -334,10 +334,10 @@ function QuestionCard({ classId, question, index, onChange, onRemove }) {
       </Button>
 
       <Divider my={4} />
-      <Heading size="xs" mb={2} color="gray.700">
+      <Heading size="xs" mb={2} color="lmFg.body">
         Answers
       </Heading>
-      <Text fontSize="xs" color="gray.500" mb={2}>
+      <Text fontSize="xs" color="lmFg.muted" mb={2}>
         Each answer is a formula over the variables above. It is evaluated per student and compared
         with what they type.
       </Text>
@@ -366,20 +366,20 @@ function QuestionCard({ classId, question, index, onChange, onRemove }) {
       </Button>
 
       <Divider my={4} />
-      <Heading size="xs" mb={2} color="gray.700">
+      <Heading size="xs" mb={2} color="lmFg.body">
         Sub-questions
       </Heading>
-      <Text fontSize="xs" color="gray.500" mb={3}>
+      <Text fontSize="xs" color="lmFg.muted" mb={3}>
         Parts (a), (b), (c) … for a question with several steps. They share the variables above, so
         part (b) refers to the same numbers part (a) did. Each part has its own prompt and its own
         answers, and each answer is marked separately on submit. Leave this empty for a
         single-answer question.
       </Text>
       {(question.parts || []).map((part, partIndex) => (
-        <Box key={partIndex} borderWidth="1px" borderRadius="md" p={3} mb={3} bg="purple.50">
+        <Box key={partIndex} borderWidth="1px" borderRadius="md" p={3} mb={3} bg="lmHue.purple50">
           <Flex justify="space-between" align="center" gap={2} mb={2}>
             <HStack spacing={2}>
-              <Text fontSize="sm" fontWeight="700" color="purple.700">
+              <Text fontSize="sm" fontWeight="700" color="lmHue.purple700">
                 {part.label?.trim() || `(${String.fromCharCode(97 + partIndex)})`}
               </Text>
               <Input
@@ -579,17 +579,17 @@ function PreviewPanel({ classId, tutorialId, dirty }) {
       )}
 
       {!samples ? (
-        <Text fontSize="sm" color="gray.500">
+        <Text fontSize="sm" color="lmFg.muted">
           No samples rolled yet.
         </Text>
       ) : (
         samples.map((sample) => (
-          <Box key={sample.label} mb={4} borderWidth="1px" borderColor="gray.200" borderRadius="md" p={3}>
+          <Box key={sample.label} mb={4} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" p={3}>
             <Badge mb={2}>{sample.label}</Badge>
             {sample.questions.map((question, index) => (
               <Box key={index} mb={3}>
                 <RichText>{question.prompt}</RichText>
-                <HStack fontSize="xs" color="gray.500" mt={1} wrap="wrap">
+                <HStack fontSize="xs" color="lmFg.muted" mt={1} wrap="wrap">
                   {Object.entries(question.values).map(([name, value]) => (
                     <Code key={name} fontSize="xs">
                       {name} = {String(value)}
@@ -714,7 +714,7 @@ export default function TutorialEditor() {
           <Button size="sm" variant="ghost" onClick={() => navigate(`/learning/class/${classId}/tutorials`)}>
             ← Back to tutorials
           </Button>
-          <Text fontSize="sm" color="gray.500" mt={1}>
+          <Text fontSize="sm" color="lmFg.muted" mt={1}>
             {tutorial.questions.length} questions · {totalMarks} marks
             {dirty ? ' · unsaved changes' : ''}
           </Text>
@@ -817,7 +817,7 @@ export default function TutorialEditor() {
         >
           Tick each answer as the student types it
         </Checkbox>
-        <Text fontSize="xs" color="gray.600" mt={1}>
+        <Text fontSize="xs" color="lmFg.subtle" mt={1}>
           Students see a ✓ beside an answer as soon as it is right, before submitting. Useful for
           practice, but a numeric answer can be guessed at until it goes green — leave this off for
           a tutorial that counts. The number of tries each answer took is recorded either way, so
@@ -842,7 +842,7 @@ export default function TutorialEditor() {
 
       {reference && (
         <SectionCard title="Formula reference" mb={4}>
-          <Text fontSize="sm" color="gray.600" mb={2}>
+          <Text fontSize="sm" color="lmFg.subtle" mb={2}>
             Operators <Code fontSize="xs">+ - * / % ^</Code>, comparisons{' '}
             <Code fontSize="xs">== != &lt; &lt;= &gt; &gt;=</Code> and <Code fontSize="xs">&amp;&amp; ||</Code> for
             constraints. Constants: {reference.constants.map((c) => <Code key={c} fontSize="xs" mr={1}>{c}</Code>)}

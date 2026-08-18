@@ -12,7 +12,6 @@ import {
   Spinner,
   Text,
   Tooltip,
-  useColorModeValue,
   useClipboard,
 } from '@chakra-ui/react';
 import { formatDateTime, relativeTime } from '../format';
@@ -27,14 +26,14 @@ import { formatDateTime, relativeTime } from '../format';
  * away it was written. The result is white text on a white menu. Spread this
  * onto any such control that is not already saying its own colour.
  */
-export const buttonTextStyles = { color: 'gray.800' };
+export const buttonTextStyles = { color: 'lmFg.heading' };
 
 /** Consistent loading state for every panel in the module. */
 export function Loading({ label = 'Loading…', minH = '200px' }) {
   return (
     <Center minH={minH} flexDirection="column" gap={3}>
       <Spinner thickness="3px" speed="0.7s" color="blue.500" size="lg" />
-      <Text color="gray.500" fontSize="sm">
+      <Text color="lmFg.muted" fontSize="sm">
         {label}
       </Text>
     </Center>
@@ -68,9 +67,9 @@ export function ErrorState({ error, onRetry }) {
       <Box
         my={4}
         p={5}
-        bg="white"
+        bg="lmBg.surface"
         borderWidth="1px"
-        borderColor="orange.200"
+        borderColor="lmHue.orange200"
         borderLeftWidth="4px"
         borderLeftColor="orange.400"
         borderRadius="lg"
@@ -80,10 +79,10 @@ export function ErrorState({ error, onRetry }) {
             {denied.icon}
           </Text>
           <Box>
-            <Heading size="sm" color="gray.800">
+            <Heading size="sm" color="lmFg.heading">
               {denied.title}
             </Heading>
-            <Text fontSize="sm" color="gray.600" mt={2}>
+            <Text fontSize="sm" color="lmFg.subtle" mt={2}>
               {error.message}
             </Text>
           </Box>
@@ -104,7 +103,7 @@ export function ErrorState({ error, onRetry }) {
             mt={1}
             fontSize="sm"
             textDecoration="underline"
-            color="red.700"
+            color="lmHue.red700"
           >
             Try again
           </Text>
@@ -118,11 +117,11 @@ export function EmptyState({ icon = '📭', title, description, action }) {
   return (
     <Center flexDirection="column" py={12} px={6} textAlign="center" gap={2}>
       <Text fontSize="4xl">{icon}</Text>
-      <Heading size="sm" color="gray.700">
+      <Heading size="sm" color="lmFg.body">
         {title}
       </Heading>
       {description && (
-        <Text color="gray.500" fontSize="sm" maxW="420px">
+        <Text color="lmFg.muted" fontSize="sm" maxW="420px">
           {description}
         </Text>
       )}
@@ -132,16 +131,11 @@ export function EmptyState({ icon = '📭', title, description, action }) {
 }
 
 export function SectionCard({ title, subtitle, action, children, ...rest }) {
-  const cardBg = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const headingColor = useColorModeValue('gray.800', 'white');
-  const secondaryTextColor = useColorModeValue('gray.500', 'gray.300');
-
   return (
     <Box
-      bg={cardBg}
+      bg="lmBg.surface"
       borderWidth="1px"
-      borderColor={borderColor}
+      borderColor="lmBorder.base"
       borderRadius="lg"
       p={5}
       {...rest}
@@ -150,12 +144,12 @@ export function SectionCard({ title, subtitle, action, children, ...rest }) {
         <Flex justify="space-between" align="flex-start" mb={subtitle ? 1 : 4} gap={3}>
           <Box>
             {title && (
-              <Heading size="sm" color={headingColor}>
+              <Heading size="sm" color="lmFg.heading">
                 {title}
               </Heading>
             )}
             {subtitle && (
-              <Text fontSize="xs" color={secondaryTextColor} mt={1}>
+              <Text fontSize="xs" color="lmFg.muted" mt={1}>
                 {subtitle}
               </Text>
             )}
@@ -170,15 +164,11 @@ export function SectionCard({ title, subtitle, action, children, ...rest }) {
 }
 
 export function StatTile({ label, value, hint, accent = 'blue.500' }) {
-  const cardBg = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const secondaryTextColor = useColorModeValue('gray.500', 'gray.300');
-
   return (
     <Box
-      bg={cardBg}
+      bg="lmBg.surface"
       borderWidth="1px"
-      borderColor={borderColor}
+      borderColor="lmBorder.base"
       borderRadius="lg"
       p={4}
     >
@@ -186,7 +176,7 @@ export function StatTile({ label, value, hint, accent = 'blue.500' }) {
         fontSize="xs"
         textTransform="uppercase"
         letterSpacing="wide"
-        color={secondaryTextColor}
+        color="lmFg.muted"
       >
         {label}
       </Text>
@@ -202,7 +192,7 @@ export function StatTile({ label, value, hint, accent = 'blue.500' }) {
       </Text>
 
       {hint && (
-        <Text fontSize="xs" color={secondaryTextColor} mt={1}>
+        <Text fontSize="xs" color="lmFg.muted" mt={1}>
           {hint}
         </Text>
       )}
@@ -251,7 +241,7 @@ export function ColorPicker({ value, options, onChange, label = 'colour' }) {
             display="flex"
             alignItems="center"
             justifyContent="center"
-            color="white"
+            color="lmFg.onAccent"
             fontSize="sm"
             fontWeight="700"
             lineHeight="1"
@@ -277,8 +267,8 @@ export function ColorPicker({ value, options, onChange, label = 'colour' }) {
 /** Miniature of the dashboard class card, so the theme colour is visible while picking it. */
 export function ClassCardPreview({ color, title, subtitle }) {
   return (
-    <Box borderWidth="1px" borderColor="gray.200" borderRadius="lg" overflow="hidden">
-      <Box bg={color} px={4} py={3} color="white" transition="background-color 0.15s ease">
+    <Box borderWidth="1px" borderColor="lmBorder.base" borderRadius="lg" overflow="hidden">
+      <Box bg={color} px={4} py={3} color="lmFg.onAccent" transition="background-color 0.15s ease">
         <Text fontWeight="700" noOfLines={1}>
           {title}
         </Text>
@@ -390,7 +380,7 @@ export function DeadlineCountdown({ dueDate, prefix = 'Due in', size = 'sm', ...
 export function DueBadge({ dueDate }) {
   if (!dueDate) {
     return (
-      <Text fontSize="xs" color="gray.500">
+      <Text fontSize="xs" color="lmFg.muted">
         No due date
       </Text>
     );
@@ -398,7 +388,7 @@ export function DueBadge({ dueDate }) {
   const overdue = new Date(dueDate) < new Date();
   return (
     <Tooltip label={formatDateTime(dueDate)}>
-      <Text fontSize="xs" color={overdue ? 'red.500' : 'gray.600'} fontWeight={overdue ? '600' : '400'}>
+      <Text fontSize="xs" color={overdue ? 'red.500' : 'lmFg.subtle'} fontWeight={overdue ? '600' : '400'}>
         Due {relativeTime(dueDate)}
       </Text>
     </Tooltip>

@@ -211,7 +211,7 @@ export default function ClassSettings() {
             <Input 
               value={loadingRooms ? 'Loading...' : form.room} 
               isReadOnly 
-              bg="gray.50"
+              bg="lmBg.sunken"
               placeholder="No rooms allotted"
             />
           </FormControl>
@@ -241,7 +241,7 @@ export default function ClassSettings() {
           />
         </FormControl>
         <Box maxW="360px">
-          <Text fontSize="xs" color="gray.500" mb={2}>
+          <Text fontSize="xs" color="lmFg.muted" mb={2}>
             Preview
           </Text>
           <ClassCardPreview
@@ -308,8 +308,8 @@ export default function ClassSettings() {
         </Checkbox>
 
         {settings.emailNotifications && (
-          <Box ml={6} mt={2} p={3} bg="gray.50" borderRadius="md" borderLeft="3px solid" borderColor="blue.400">
-            <Text fontSize="xs" fontWeight="700" color="gray.600" mb={2}>
+          <Box ml={6} mt={2} p={3} bg="lmBg.sunken" borderRadius="md" borderLeft="3px solid" borderColor="blue.400">
+            <Text fontSize="xs" fontWeight="700" color="lmFg.subtle" mb={2}>
               Class email triggers:
             </Text>
             <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={2}>
@@ -369,13 +369,13 @@ export default function ClassSettings() {
         </Button>
       </Flex>
 
-      <SectionCard title="Danger zone" borderColor="red.200">
+      <SectionCard title="Danger zone" borderColor="lmHue.red200">
         <Flex justify="space-between" align="center" gap={3} wrap="wrap" py={2}>
           <Box>
             <Text fontSize="sm" fontWeight="600">
               {klass.status === 'achieved' ? 'Unmark as achieved' : 'Mark as achieved'}
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color="lmFg.muted">
               Signals the class has been completed successfully. Stays readable, drops out of the main list.
             </Text>
           </Box>
@@ -389,7 +389,7 @@ export default function ClassSettings() {
             <Text fontSize="sm" fontWeight="600">
               {klass.status === 'archived' ? 'Restore this class' : 'Archive this class'}
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color="lmFg.muted">
               Archived classes stay readable but drop out of the main list and accept no new work.
             </Text>
           </Box>
@@ -405,7 +405,7 @@ export default function ClassSettings() {
                 <Text fontSize="sm" fontWeight="600" color="red.600">
                   Delete this class
                 </Text>
-                <Text fontSize="xs" color="gray.500">
+                <Text fontSize="xs" color="lmFg.muted">
                   Removes every post, assignment, submission, grade, quiz and generated lecture artefact.
                 </Text>
               </Box>

@@ -151,7 +151,7 @@ function GradebookGrid({ classId, isTeacher }) {
                           max={cell.maxPoints}
                           placeholder={cell.state === 'turned_in' ? '•' : '—'}
                           borderColor={pending !== undefined ? 'blue.400' : undefined}
-                          bg={cell.state === 'turned_in' && cell.grade === null ? 'orange.50' : undefined}
+                          bg={cell.state === 'turned_in' && cell.grade === null ? 'lmHue.orange50' : undefined}
                           value={pending !== undefined ? pending : (cell.grade ?? '')}
                           onChange={(event) =>
                             setEdits((prev) => ({ ...prev, [cell.submissionId]: event.target.value }))
@@ -163,7 +163,7 @@ function GradebookGrid({ classId, isTeacher }) {
                   return (
                     <Td key={key} textAlign="center">
                       {cell.grade === null || cell.grade === undefined ? (
-                        <Text fontSize="xs" color={cell.state === 'turned_in' ? 'orange.500' : 'gray.300'}>
+                        <Text fontSize="xs" color={cell.state === 'turned_in' ? 'orange.500' : 'lmFg.faint'}>
                           {cell.state === 'turned_in' ? 'to grade' : '—'}
                         </Text>
                       ) : (

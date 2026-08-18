@@ -69,6 +69,9 @@ export default function NotebookEditor() {
   const [savingAction, setSavingAction] = useState(null);
   const [importingCells, setImportingCells] = useState(false);
   const [problems, setProblems] = useState([]);
+  // Packages the browser kernel cannot install. The save still goes through —
+  // this is what the server said about it, not why it refused.
+  const [packageNotes, setPackageNotes] = useState([]);
   const [setupDone, setSetupDone] = useState(false);
 
   // The buttons only disable once React has re-rendered, which is a tick later
@@ -269,12 +272,13 @@ export default function NotebookEditor() {
     savingRef.current = true;
     setSavingAction(thenPublish ? 'publish' : 'save');
     setProblems([]);
+    setPackageNotes([]);
 
     // Publishing is a second request on top of the save, and it can be rejected
     // on its own (an empty text cell, say) after the save has already landed.
     let stored = false;
     try {
-      await lmApi.updateNotebook(classId, notebookId, {
+      const saved = await lmApi.updateNotebook(classId, notebookId, {
         title: notebook.title,
         description: notebook.description,
         settings: notebook.settings,
@@ -296,6 +300,13 @@ export default function NotebookEditor() {
       });
 
       stored = true;
+
+      // The save worked; these packages just will not install in the browser.
+      // Shown as a standing note rather than a toast, because it stays true
+      // until the packages box changes.
+      if (saved?.packageWarnings?.length) {
+        setPackageNotes([...saved.packageWarnings, saved.advice].filter(Boolean));
+      }
 
       if (thenPublish) {
         await lmApi.publishNotebook(classId, notebookId, { publish: true });
@@ -398,6 +409,17 @@ export default function NotebookEditor() {
         </Alert>
       )}
 
+      {packageNotes.length > 0 && (
+        <Alert status="info" borderRadius="md" alignItems="flex-start">
+          <AlertIcon />
+          <VStack align="stretch" spacing={1} fontSize="sm">
+            {packageNotes.map((note) => (
+              <Text key={note}>{note}</Text>
+            ))}
+          </VStack>
+        </Alert>
+      )}
+
       {problems.length > 0 && (
         <Alert status="warning" borderRadius="md" alignItems="flex-start">
           <AlertIcon />
@@ -436,8 +458,9 @@ export default function NotebookEditor() {
             <FormHelperText fontSize="xs">
               Installed into the browser kernel before the notebook runs. numpy, pandas, matplotlib, scipy,
               sympy and scikit-learn have prebuilt WebAssembly builds; a package needing a C extension that has
-              not been built for the browser will not install. TensorFlow, PyTorch and Keras are refused on
-              save — they have no browser build at all, so use the Colab link below for those lessons.
+              not been built for the browser will not install. TensorFlow, PyTorch and Keras save fine but
+              have no browser build at all — the notebook is stored, the browser kernel skips them, and the
+              cells that need them want Run on server or the Colab link below.
             </FormHelperText>
           </FormControl>
 
@@ -630,7 +653,7 @@ export default function NotebookEditor() {
             setImportingCells(true);
           }}
         >
-          📥 Import cells from another subject
+          📥 Import cells
         </Button>
       </HStack>
 

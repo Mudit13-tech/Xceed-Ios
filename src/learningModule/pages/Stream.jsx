@@ -68,7 +68,7 @@ function Composer({ classId, onPosted }) {
   };
 
   return (
-    <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={4} mb={5}>
+    <Box bg="lmBg.surface" borderWidth="1px" borderColor="lmBorder.base" borderRadius="lg" p={4} mb={5}>
       {!open ? (
         <Flex
           as="button"
@@ -76,7 +76,7 @@ function Composer({ classId, onPosted }) {
           align="center"
           gap={3}
           onClick={() => setOpen(true)}
-          color="gray.500"
+          color="lmFg.muted"
           textAlign="left"
         >
           <Avatar size="sm" flexShrink={0} />
@@ -98,7 +98,7 @@ function Composer({ classId, onPosted }) {
                 Pin to top
               </Checkbox>
               <HStack spacing={2} w={{ base: '100%', sm: 'auto' }}>
-                <Text fontSize="sm" color="gray.600" flexShrink={0}>
+                <Text fontSize="sm" color="lmFg.subtle" flexShrink={0}>
                   Schedule
                 </Text>
                 <Input
@@ -216,7 +216,7 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
   };
   const canManage = isTeacher || String(item.authorId) === String(me?.id);
   return (
-    <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={{ base: 3, sm: 5 }} mb={4} w="100%">
+    <Box bg="lmBg.surface" borderWidth="1px" borderColor="lmBorder.base" borderRadius="lg" p={{ base: 3, sm: 5 }} mb={4} w="100%">
       <Flex gap={3} align="flex-start">
         <Avatar size="sm" name={item.authorName} flexShrink={0} />
         <Box flex="1" minW={0}>
@@ -229,7 +229,7 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
             {item.status === 'draft' && <Badge colorScheme="gray" flexShrink={0}>Draft</Badge>}
             {item.audience?.length > 0 && <Badge colorScheme="cyan" flexShrink={0}>Targeted</Badge>}
           </Flex>
-          <Text fontSize="xs" color="gray.500" mt={0.5}>
+          <Text fontSize="xs" color="lmFg.muted" mt={0.5}>
             {relativeTime(item.publishedAt)}
           </Text>
           {editing ? (
@@ -295,7 +295,7 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
         </Button>
         {likedBy.length > 0 && (
           <Tooltip label={likedBy.join(', ')} placement="top" hasArrow>
-            <Text fontSize="xs" color="gray.500" cursor="default" maxW={{ base: '100%', sm: '300px' }} noOfLines={1}>
+            <Text fontSize="xs" color="lmFg.muted" cursor="default" maxW={{ base: '100%', sm: '300px' }} noOfLines={1}>
               Liked by {likedBySummary(likedBy)}
             </Text>
           </Tooltip>
@@ -330,9 +330,9 @@ function CourseworkStreamCard({ item, classId }) {
       // has no code on it and nowhere to go from there.
       to={courseworkLink({ ...item, classId })}
       display="block"
-      bg="white"
+      bg="lmBg.surface"
       borderWidth="1px"
-      borderColor="gray.200"
+      borderColor="lmBorder.base"
       borderRadius="lg"
       p={{ base: 3, sm: 5 }}
       mb={4}
@@ -352,14 +352,14 @@ function CourseworkStreamCard({ item, classId }) {
           {meta.icon}
         </Flex>
         <Box flex="1" minW={0}>
-          <Text fontSize="sm" color="gray.600">
+          <Text fontSize="sm" color="lmFg.subtle">
             {item.createdByName} posted a new {meta.label.toLowerCase()}
           </Text>
-          <Heading size="sm" color="gray.800" noOfLines={1}>
+          <Heading size="sm" color="lmFg.heading" noOfLines={1}>
             {item.title}
           </Heading>
           <Flex gap={2} mt={1.5} align="center" wrap="wrap">
-            <Text fontSize="xs" color="gray.400" flexShrink={0}>
+            <Text fontSize="xs" color="lmFg.muted" flexShrink={0}>
               {relativeTime(item.publishedAt)}
             </Text>
             {item.workType !== 'material' && <DueBadge dueDate={item.dueDate} />}
@@ -423,11 +423,11 @@ export default function Stream() {
   return (
     <Flex gap={{ base: 4, lg: 6 }} align="flex-start" direction={{ base: 'column', lg: 'row' }} w="100%">
       <Box w={{ base: '100%', lg: '280px' }} flexShrink={0}>
-        <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={4} mb={4}>
-          <Heading size="xs" mb={3} color="gray.700">
+        <Box bg="lmBg.surface" borderWidth="1px" borderColor="lmBorder.base" borderRadius="lg" p={4} mb={4}>
+          <Heading size="xs" mb={3} color="lmFg.body">
             Upcoming
           </Heading>
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="lmFg.muted">
             Track due dates on the{' '}
             <Text as={RouterLink} to="/learning/todo" color="blue.600" textDecoration="underline">
               To-do page
@@ -440,11 +440,11 @@ export default function Stream() {
         </Box>
 
         {klass.description && (
-          <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" p={4}>
-            <Heading size="xs" mb={2} color="gray.700">
+          <Box bg="lmBg.surface" borderWidth="1px" borderColor="lmBorder.base" borderRadius="lg" p={4}>
+            <Heading size="xs" mb={2} color="lmFg.body">
               About
             </Heading>
-            <Text fontSize="sm" color="gray.600" whiteSpace="pre-wrap">
+            <Text fontSize="sm" color="lmFg.subtle" whiteSpace="pre-wrap">
               {klass.description}
             </Text>
           </Box>
@@ -457,7 +457,7 @@ export default function Stream() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search this class..."
-            bg="white"
+            bg="lmBg.surface"
           />
         </Box>
         <ErrorState error={error} onRetry={load} />
@@ -477,9 +477,9 @@ export default function Stream() {
                 as={RouterLink}
                 to={result.link}
                 display="block"
-                bg="white"
+                bg="lmBg.surface"
                 borderWidth="1px"
-                borderColor="gray.200"
+                borderColor="lmBorder.base"
                 borderRadius="lg"
                 p={{ base: 3, sm: 5 }}
                 mb={4}
@@ -489,7 +489,7 @@ export default function Stream() {
                   <Badge colorScheme="blue" textTransform="capitalize">
                     {result.type}
                   </Badge>
-                  <Heading size="sm" color="gray.800" noOfLines={1}>
+                  <Heading size="sm" color="lmFg.heading" noOfLines={1}>
                     {result.title}
                   </Heading>
                 </Flex>
@@ -499,7 +499,7 @@ export default function Stream() {
                   </Badge>
                 )}
                 {result.snippet && (
-                  <Text mt={2} fontSize="sm" color="gray.600" noOfLines={2}>
+                  <Text mt={2} fontSize="sm" color="lmFg.subtle" noOfLines={2}>
                     {result.snippet}
                   </Text>
                 )}

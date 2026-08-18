@@ -86,6 +86,59 @@ export function deviceSummary(device) {
 }
 
 /**
+ * What each component is labelled with on the canvas after a run.
+ *
+ * A meter gets the one number it measures, because that is what a meter is. Every
+ * other part gets its voltage, current and power stacked over it — the three
+ * numbers the run already solved for, put where the component is rather than in a
+ * table the student has to match ids against.
+ *
+ * Here rather than in the bench screen because the teacher's editor draws the same
+ * canvas from the same result, and a second copy of this mapping would eventually
+ * label one of the two benches differently from the other.
+ *
+ * @param detailed  false leaves only the meters. A dense circuit is easier to
+ *                  *wire* without three numbers over every part, so it is a switch
+ *                  rather than a decision made here.
+ */
+export function benchReadings(result, { detailed = true } = {}) {
+  if (!result?.ok) return {};
+
+  const meters = Object.fromEntries(
+    (result.instruments || [])
+      .filter((meter) => meter.type !== 'cro' && meter.type !== 'dso')
+      .map((meter) => [meter.id, eng(meter.magnitude, meter.unit)]),
+  );
+
+  if (!detailed) return meters;
+
+  const parts = Object.fromEntries(
+    (result.devices || [])
+      .filter((device) => !device.instrument)
+      .map((device) => {
+        const shown = deviceSummary(device);
+        // Voltage first and nearest the part, because it is the one a student can
+        // also get by putting a voltmeter across it — so the canvas and the meter
+        // agree at a glance.
+        const lines = [
+          shown.voltage,
+          shown.current,
+          shown.delivering ? `${shown.power} out` : shown.power,
+        ];
+        // A transformer's secondary voltage, because it is half of every reading
+        // taken from one and it is not on the primary side of the symbol where
+        // the other three sit.
+        if (device.secondary) lines.push(`sec ${deviceSummary(device.secondary).voltage}`);
+        return [device.id, lines];
+      }),
+  );
+
+  // Meters last: an ammeter is also a device, and the one number it measures is
+  // what it should be labelled with.
+  return { ...parts, ...meters };
+}
+
+/**
  * The one value worth printing next to a component on the canvas.
  *
  * A resistor is its resistance; a source is its amplitude. Showing every field

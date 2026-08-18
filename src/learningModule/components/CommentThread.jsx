@@ -91,7 +91,7 @@ export default function CommentThread({
   return (
     <Box>
       {!loading && comments.length === 0 && (
-        <Text fontSize="sm" color="gray.400" mb={2}>
+        <Text fontSize="sm" color="lmFg.muted" mb={2}>
           {emptyLabel}
         </Text>
       )}
@@ -107,14 +107,14 @@ export default function CommentThread({
           <Avatar size="xs" name={comment.authorName} flexShrink={0} />
           <Box flex="1" minW={0}>
             <HStack spacing={2} align="baseline" wrap="wrap">
-              <Text fontSize="sm" fontWeight="600" color="gray.800" noOfLines={1} maxW="100%" wordBreak="break-all">
+              <Text fontSize="sm" fontWeight="600" color="lmFg.heading" noOfLines={1} maxW="100%" wordBreak="break-all">
                 {comment.authorName}
               </Text>
-              <Text fontSize="xs" color="gray.400" flexShrink={0}>
+              <Text fontSize="xs" color="lmFg.muted" flexShrink={0}>
                 {relativeTime(comment.created_at)}
               </Text>
             </HStack>
-            <Text fontSize="sm" color="gray.700" whiteSpace="pre-wrap" wordBreak="break-word" overflowWrap="anywhere">
+            <Text fontSize="sm" color="lmFg.body" whiteSpace="pre-wrap" wordBreak="break-word" overflowWrap="anywhere">
               {comment.text}
             </Text>
           </Box>

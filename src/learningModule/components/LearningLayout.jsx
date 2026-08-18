@@ -287,7 +287,7 @@ function ClassSwitcher({ classes, activeClassId, carriedTab, onNavigate }) {
         </Box>
       )}
 
-      <Box borderTopWidth="1px" borderColor="gray.100">
+      <Box borderTopWidth="1px" borderColor="lmBorder.subtle">
         <Text
           as={RouterLink}
           to="/learning"
@@ -524,7 +524,7 @@ export default function LearningLayout() {
                     <Text fontSize="sm" fontWeight="600" noOfLines={1}>
                       {me.name}
                     </Text>
-                    <Text fontSize="xs" color="gray.500" noOfLines={1}>
+                    <Text fontSize="xs" color="lmFg.muted" noOfLines={1}>
                       {me.email}
                     </Text>
                   </Box>

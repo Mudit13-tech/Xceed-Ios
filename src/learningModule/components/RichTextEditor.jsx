@@ -103,11 +103,11 @@ export default function RichTextEditor({
 
       {variables && (
         <HStack mt={2} spacing={2} wrap="wrap">
-          <Text fontSize="xs" color="gray.500">
+          <Text fontSize="xs" color="lmFg.muted">
             Insert variable:
           </Text>
           {variables.filter(Boolean).length === 0 ? (
-            <Text fontSize="xs" color="gray.400">
+            <Text fontSize="xs" color="lmFg.muted">
               declare one below first
             </Text>
           ) : (

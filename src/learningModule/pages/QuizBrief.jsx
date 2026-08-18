@@ -68,7 +68,7 @@ function CountdownPanel({ label, seconds, note, accent }) {
 
   return (
     <Box
-      bg="white"
+      bg="lmBg.surface"
       borderWidth="1px"
       borderColor={`${accent}.200`}
       borderLeftWidth="4px"
@@ -92,14 +92,14 @@ function CountdownPanel({ label, seconds, note, accent }) {
             <Text fontSize="2xl" fontWeight="700" fontFamily="mono" lineHeight="1.1" color={`${accent}.700`}>
               {String(part.value).padStart(2, '0')}
             </Text>
-            <Text fontSize="0.6rem" color="gray.500" textTransform="uppercase" letterSpacing="wide">
+            <Text fontSize="0.6rem" color="lmFg.muted" textTransform="uppercase" letterSpacing="wide">
               {part.unit}
             </Text>
           </Box>
         ))}
       </HStack>
       {note && (
-        <Text fontSize="sm" color="gray.600" mt={2}>
+        <Text fontSize="sm" color="lmFg.subtle" mt={2}>
           {note}
         </Text>
       )}
@@ -228,8 +228,8 @@ export default function QuizBrief() {
           <StatTile label="Duration" value={formatDuration(brief.estimatedDurationSec)} />
           <StatTile
             label="Attempt"
-            value={attemptUsed ? 'Used' : 'Single'}
-            accent={attemptUsed ? 'red.500' : 'green.500'}
+            value={brief.hasInProgress ? 'In progress' : attemptUsed ? 'Used' : 'Single'}
+            accent={attemptUsed && !brief.hasInProgress ? 'red.500' : 'green.500'}
           />
         </Grid>
 
@@ -340,18 +340,28 @@ export default function QuizBrief() {
                 <ListItem>
                   <ListIcon as="span">{settings.allowBacktracking ? '↩️' : '⛔'}</ListIcon>
                   {settings.allowBacktracking
-                    ? 'You may go back to earlier questions.'
+                    ? 'You may go back to earlier questions and change your answers.'
                     : 'Once you move on, you cannot return to a question.'}
                 </ListItem>
               )}
               <ListItem>
                 <ListIcon as="span">⏱</ListIcon>
                 {settings.perQuestionTiming
-                  ? 'Each question has its own timer and submits automatically when it runs out.'
+                  ? 'Each question has its own timer and moves on automatically when it runs out.'
                   : settings.timeLimitMinutes
                     ? `You have ${settings.timeLimitMinutes} minutes for the whole paper.`
                     : 'There is no time limit.'}
               </ListItem>
+              {/* Spelled out because the obvious guess is wrong in both
+                  directions: going back does not hand you a fresh countdown, and
+                  it does not cost you the time you had left either. */}
+              {settings.perQuestionTiming && settings.allowBacktracking && (
+                <ListItem>
+                  <ListIcon as="span">⏳</ListIcon>
+                  A question you come back to resumes with the time it had left. Once a question&apos;s
+                  time is gone you can still see it, but you cannot change your answer.
+                </ListItem>
+              )}
               {settings.negativeMarking > 0 && (
                 <ListItem>
                   <ListIcon as="span">➖</ListIcon>
@@ -406,7 +416,7 @@ export default function QuizBrief() {
 
             {/* Always shown: leaving the test now ends it on the first offence,
                 so the rule is never conditional on how the paper was set up. */}
-            <Box mt={4} p={3} bg="orange.50" borderRadius="md" borderWidth="1px" borderColor="orange.200">
+            <Box mt={4} p={3} bg="lmHue.orange50" borderRadius="md" borderWidth="1px" borderColor="lmHue.orange200">
               <Text fontSize="sm" fontWeight="600" mb={1}>
                 Monitored conditions
               </Text>
@@ -424,6 +434,14 @@ export default function QuizBrief() {
                   • The clock is kept by the server. Closing the tab does not pause it, and the test
                   is submitted for you when the time runs out.
                 </ListItem>
+                {settings.keyboardLockdown !== false && (
+                  // Said before they start, because it is the one rule a student
+                  // would otherwise discover by breaking it.
+                  <ListItem>
+                    • <strong>The keyboard is disabled.</strong> Pressing any key submits your test
+                    immediately. Answer by clicking, and use the on-screen keypad for numbers.
+                  </ListItem>
+                )}
                 {settings.disableCopyPaste && <ListItem>• Copy and paste are disabled.</ListItem>}
                 {settings.disableRightClick && <ListItem>• Right-click is disabled.</ListItem>}
                 {settings.preventMobile && (
@@ -464,7 +482,7 @@ export default function QuizBrief() {
                     <Td fontWeight="500">{section.name}</Td>
                     <Td isNumeric>{section.questionCount}</Td>
                     <Td isNumeric>{section.marks}</Td>
-                    <Td fontSize="xs" color="gray.600">
+                    <Td fontSize="xs" color="lmFg.subtle">
                       {section.instructions}
                     </Td>
                   </Tr>
@@ -475,7 +493,12 @@ export default function QuizBrief() {
         )}
 
         <Flex gap={3} align="center" wrap="wrap">
-          {!attemptUsed ? (
+          {/* `hasInProgress` overrides the used attempt for the same reason it
+              overrides the window in `canStart`: a reopened or extended sitting
+              still counts against `attemptsUsed`, and on that alone the student
+              is handed a "Results pending" button for a paper they are supposed
+              to be writing. */}
+          {!attemptUsed || brief.hasInProgress ? (
             <Button
               size="lg"
               colorScheme="purple"
@@ -502,7 +525,7 @@ export default function QuizBrief() {
           {!canStart && !isTeacher && !mobileBlocked && attemptUsed && !brief.hasInProgress && (
             <Badge colorScheme="red">Already attempted — this test cannot be retaken</Badge>
           )}
-          <HStack fontSize="xs" color="gray.500">
+          <HStack fontSize="xs" color="lmFg.muted">
             <Text>Make sure you have a stable connection before starting.</Text>
           </HStack>
         </Flex>

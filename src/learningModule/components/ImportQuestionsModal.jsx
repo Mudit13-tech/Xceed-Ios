@@ -25,7 +25,12 @@ import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading } from './common';
 
 /**
- * Taking questions out of another subject.
+ * Taking questions out of another paper.
+ *
+ * The source may be any class the teacher staffs, this one included — reuse
+ * within a subject (a unit-test question wanted again in the model exam) is the
+ * commonest case of all. Only the item open in the editor is kept out of the
+ * list, since a paper importing from itself is duplication, not reuse.
  *
  * Three narrowing choices — which class, which paper, which questions — because
  * that is how a teacher actually remembers where a question is ("the entropy
@@ -42,6 +47,9 @@ import { EmptyState, ErrorState, Loading } from './common';
  * @param {string} targetId  the item open in the editor — where copies land
  * @param {string} partLabel  what to call the questions, in this type's words
  */
+/** How many items in a class can actually be imported from, given what is open. */
+const available = (klass) => Math.max(0, (klass.items || 0) - (klass.isCurrent ? 1 : 0));
+
 export default function ImportQuestionsModal({
   isOpen,
   onClose,
@@ -82,8 +90,10 @@ export default function ImportQuestionsModal({
         if (cancelled) return;
         setSources(list);
         // Straight to the first class that actually holds something of this
-        // type, so the dialog never opens on an empty list.
-        const withSome = list.find((klass) => klass.items > 0);
+        // type, so the dialog never opens on an empty list. The count for this
+        // class discounts the item open in the editor, which cannot be a source
+        // of its own questions.
+        const withSome = list.find((klass) => available(klass) > 0);
         if (withSome) setSourceId(String(withSome._id));
       })
       .catch((err) => !cancelled && setError(err))
@@ -105,8 +115,11 @@ export default function ImportQuestionsModal({
       .importItems(classId, sourceId, type)
       .then((list) => {
         if (cancelled) return;
-        setItems(list);
-        const withSome = list.find((item) => item.count > 0);
+        // The item open in the editor is never its own source; importing a
+        // question into the paper it came from would only duplicate it.
+        const usable = list.filter((item) => String(item._id) !== String(targetId));
+        setItems(usable);
+        const withSome = usable.find((item) => item.count > 0);
         if (withSome) setItemId(String(withSome._id));
       })
       .catch((err) => !cancelled && setError(err))
@@ -114,7 +127,7 @@ export default function ImportQuestionsModal({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, classId, sourceId, type]);
+  }, [isOpen, classId, sourceId, type, targetId]);
 
   const loadParts = useCallback(async () => {
     setPicked([]);
@@ -167,13 +180,15 @@ export default function ImportQuestionsModal({
     }
   };
 
-  const noSources = sources && sources.length === 0;
+  // Not "no classes" any more — this class is always in the list — but nothing
+  // anywhere that could be imported from.
+  const noSources = sources && !sources.some((klass) => available(klass) > 0);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="xl" scrollBehavior="inside">
       <ModalOverlay />
       <ModalContent mt="100px" mb="50px" pt={6} pb={4}>
-        <ModalHeader>Import {partLabel} from another subject</ModalHeader>
+        <ModalHeader>Import {partLabel}</ModalHeader>
         <ModalCloseButton top={8} />
         <ModalBody>
           <ErrorState error={error} onRetry={loadParts} />
@@ -181,8 +196,8 @@ export default function ImportQuestionsModal({
           {noSources ? (
             <EmptyState
               icon="📭"
-              title="No other classes to import from"
-              description="You can import from any other class you teach or co-teach."
+              title="Nothing to import from yet"
+              description="You can import from anything else in this class, or from any other class you teach or co-teach."
             />
           ) : (
             <>
@@ -198,7 +213,10 @@ export default function ImportQuestionsModal({
                   >
                     {(sources || []).map((klass) => (
                       <option key={klass._id} value={klass._id}>
-                        {[klass.name, klass.section].filter(Boolean).join(' · ')} — {klass.items}
+                        {klass.isCurrent ? 'This class' : null}
+                        {klass.isCurrent ? ' · ' : ''}
+                        {[klass.name, klass.section].filter(Boolean).join(' · ')} —{' '}
+                        {available(klass)}
                       </option>
                     ))}
                   </Select>
@@ -252,7 +270,7 @@ export default function ImportQuestionsModal({
                         description="Pick a different one above."
                       />
                     ) : (
-                      <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" maxH="340px" overflowY="auto">
+                      <Box borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" maxH="340px" overflowY="auto">
                         {parts.map((part, index) => {
                           const id = String(part._id);
                           const isPicked = picked.includes(id);
@@ -264,11 +282,11 @@ export default function ImportQuestionsModal({
                               gap={3}
                               align="flex-start"
                               borderBottomWidth="1px"
-                              borderColor="gray.100"
-                              bg={isPicked ? 'blue.50' : undefined}
+                              borderColor="lmBorder.subtle"
+                              bg={isPicked ? 'lmHue.blue50' : undefined}
                             >
                               <Checkbox mt={1} isChecked={isPicked} onChange={() => toggle(id)} />
-                              <Text fontSize="xs" color="gray.400" mt={1} w="22px" flexShrink={0}>
+                              <Text fontSize="xs" color="lmFg.muted" mt={1} w="22px" flexShrink={0}>
                                 {index + 1}
                               </Text>
                               <Box flex="1" minW={0}>

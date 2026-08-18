@@ -264,9 +264,9 @@ export default function QuizCalculator() {
         ? { left: `${position.left}px`, top: `${position.top}px` }
         : { right: '16px', bottom: '16px' })}
       w={`min(${PANEL_WIDTH}px, calc(100vw - 24px))`}
-      bg="white"
+      bg="lmBg.surface"
       borderWidth="1px"
-      borderColor="gray.300"
+      borderColor="lmBorder.strong"
       borderRadius="lg"
       boxShadow="2xl"
       overflow="hidden"
@@ -280,9 +280,9 @@ export default function QuizCalculator() {
         gap={2}
         px={3}
         py={2}
-        bg="gray.50"
+        bg="lmBg.sunken"
         borderBottomWidth="1px"
-        borderColor="gray.200"
+        borderColor="lmBorder.base"
         cursor="grab"
         _active={{ cursor: 'grabbing' }}
         sx={{ touchAction: 'none' }}
@@ -291,7 +291,7 @@ export default function QuizCalculator() {
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
       >
-        <Text fontSize="sm" fontWeight="700" color="gray.700">
+        <Text fontSize="sm" fontWeight="700" color="lmFg.body">
           🖩 Calculator
         </Text>
         <Box flex="1" />
@@ -335,7 +335,7 @@ export default function QuizCalculator() {
           textAlign="right"
           fontFamily="mono"
           fontSize="md"
-          borderColor={error ? 'red.300' : 'gray.200'}
+          borderColor={error ? 'lmHue.red300' : 'lmBorder.base'}
           aria-label="Calculation"
           spellCheck={false}
           autoComplete="off"
@@ -348,7 +348,7 @@ export default function QuizCalculator() {
           ) : (
             <>
               {memory !== 0 && (
-                <Text fontSize="xs" color="gray.400" mr="auto" title={`Memory: ${formatResult(memory)}`}>
+                <Text fontSize="xs" color="lmFg.muted" mr="auto" title={`Memory: ${formatResult(memory)}`}>
                   M
                 </Text>
               )}
@@ -356,7 +356,7 @@ export default function QuizCalculator() {
                 fontFamily="mono"
                 fontWeight={result ? '700' : '400'}
                 fontSize={result ? 'xl' : 'sm'}
-                color={result ? 'gray.800' : 'gray.400'}
+                color={result ? 'lmFg.heading' : 'lmFg.muted'}
                 lineHeight="1.2"
                 noOfLines={1}
               >
@@ -389,7 +389,7 @@ export default function QuizCalculator() {
             'subtract from memory',
           ],
         ].map(([label, onClick, aria]) => (
-          <Button key={label} size="xs" flex="1" variant="ghost" color="gray.600" onClick={onClick} aria-label={aria}>
+          <Button key={label} size="xs" flex="1" variant="ghost" color="lmFg.subtle" onClick={onClick} aria-label={aria}>
             {label}
           </Button>
         ))}
@@ -406,7 +406,7 @@ export default function QuizCalculator() {
             fontSize={button.label.length > 3 ? 'xs' : 'sm'}
             fontWeight="600"
             borderWidth={button.kind === 'equals' ? 0 : '1px'}
-            borderColor="gray.200"
+            borderColor="lmBorder.base"
             aria-label={button.aria || button.label}
             onClick={() => onKey(button)}
             {...KEY_KINDS[button.kind || 'number']}

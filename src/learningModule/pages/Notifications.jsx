@@ -70,7 +70,7 @@ export default function Notifications() {
       <Flex justify="space-between" align="center" mb={4} gap={3} wrap="wrap">
         <Box>
           <Heading size="lg">Notifications</Heading>
-          <Text color="gray.500" fontSize="sm">
+          <Text color="lmFg.muted" fontSize="sm">
             {unread} unread
           </Text>
         </Box>
@@ -153,7 +153,7 @@ export default function Notifications() {
                     {notification.className}
                   </Badge>
                 )}
-                <Text fontSize="xs" color="gray.400">
+                <Text fontSize="xs" color="lmFg.muted">
                   {relativeTime(notification.created_at)}
                 </Text>
               </HStack>

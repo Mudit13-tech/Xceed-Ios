@@ -112,7 +112,7 @@ function VariableRow({ variable, onChange, onRemove }) {
         <Button size="xs" variant="ghost" colorScheme="red" onClick={onRemove}>Remove</Button>
       </Flex>
 
-      <Flex gap={3} mt={2} wrap="wrap" fontSize="xs" color="gray.600">
+      <Flex gap={3} mt={2} wrap="wrap" fontSize="xs" color="lmFg.subtle">
         {/* The paper's own value, and the reason it cannot simply be dropped:
             it is what the derived formula is checked against. */}
         <Text>
@@ -184,7 +184,7 @@ function DraftQuestion({ classId, draftId, question, index, onChanged, selected,
       </FormControl>
 
       {question.parts?.length > 0 && (
-        <Box mb={3} pl={3} borderLeftWidth="2px" borderColor="purple.200">
+        <Box mb={3} pl={3} borderLeftWidth="2px" borderColor="lmHue.purple200">
           {question.parts.map((part, i) => (
             <Box key={i} mb={3}>
               <Flex gap={2} align="center" mb={1}>
@@ -198,7 +198,7 @@ function DraftQuestion({ classId, draftId, question, index, onChanged, selected,
                   }}
                 />
                 {part.answerText && (
-                  <Text fontSize="xs" color="gray.500">Paper’s answer: {part.answerText}</Text>
+                  <Text fontSize="xs" color="lmFg.muted">Paper’s answer: {part.answerText}</Text>
                 )}
               </Flex>
               {/* Editable for the same reason the stem is: transcription gets
@@ -232,7 +232,7 @@ function DraftQuestion({ classId, draftId, question, index, onChanged, selected,
 
       <Divider my={3} />
       <Flex justify="space-between" align="center" mb={2}>
-        <Heading size="xs" color="gray.700">Variables</Heading>
+        <Heading size="xs" color="lmFg.body">Variables</Heading>
         <Button
           size="xs"
           variant="outline"
@@ -262,7 +262,7 @@ function DraftQuestion({ classId, draftId, question, index, onChanged, selected,
 
       <Divider my={3} />
       <Flex justify="space-between" align="center" mb={2}>
-        <Heading size="xs" color="gray.700">Answers</Heading>
+        <Heading size="xs" color="lmFg.body">Answers</Heading>
         <Button
           size="xs"
           colorScheme="purple"
@@ -317,12 +317,12 @@ function DraftQuestion({ classId, draftId, question, index, onChanged, selected,
           <Flex gap={2} align="center" wrap="wrap" mb={2}>
             {answer.partLabel && <Badge>{answer.partLabel}</Badge>}
             <VerificationBadge verification={answer.verification} />
-            <Text fontSize="xs" color="gray.600">{answer.verification?.message}</Text>
+            <Text fontSize="xs" color="lmFg.subtle">{answer.verification?.message}</Text>
           </Flex>
 
           {answer.working && (
-            <Box bg="gray.50" borderRadius="md" p={2}>
-              <Text fontSize="xs" fontWeight="600" color="gray.600" mb={1}>Derivation, for you to check</Text>
+            <Box bg="lmBg.sunken" borderRadius="md" p={2}>
+              <Text fontSize="xs" fontWeight="600" color="lmFg.subtle" mb={1}>Derivation, for you to check</Text>
               <RichText fontSize="xs">{answer.working}</RichText>
             </Box>
           )}
@@ -384,7 +384,7 @@ function PreviewPanel({ classId, draftId, questionIds }) {
       )}
 
       {!samples && !problem && (
-        <Text fontSize="sm" color="gray.500">
+        <Text fontSize="sm" color="lmFg.muted">
           Derive the answers first, then roll a few papers to check the numbers come out sensibly.
         </Text>
       )}
@@ -411,19 +411,19 @@ function PreviewPanel({ classId, draftId, questionIds }) {
                 </Flex>
               ))}
 
-              <HStack fontSize="xs" color="gray.500" mt={2} wrap="wrap">
+              <HStack fontSize="xs" color="lmFg.muted" mt={2} wrap="wrap">
                 <Text>Values:</Text>
                 {Object.entries(question.values || {}).map(([name, value]) => (
                   <Code key={name} fontSize="xs">{name} = {String(value)}</Code>
                 ))}
               </HStack>
 
-              <Box bg="green.50" borderRadius="md" p={2} mt={2}>
-                <Text fontSize="xs" fontWeight="600" color="green.800" mb={1}>
+              <Box bg="lmHue.green50" borderRadius="md" p={2} mt={2}>
+                <Text fontSize="xs" fontWeight="600" color="lmHue.green800" mb={1}>
                   Answer key for this paper
                 </Text>
                 {(question.expected || []).map((slot, slotIndex) => (
-                  <Text key={slotIndex} fontSize="xs" color={slot.error ? 'red.600' : 'green.800'}>
+                  <Text key={slotIndex} fontSize="xs" color={slot.error ? 'red.600' : 'lmHue.green800'}>
                     {slot.partLabel ? `${slot.partLabel} ` : ''}{slot.label}:{' '}
                     <b>{slot.error ? `not markable — ${slot.error}` : `${Math.round(slot.value * 1e6) / 1e6} ${slot.unit || ''}`}</b>
                     {' '}({slot.marks} mark{slot.marks === 1 ? '' : 's'})
@@ -497,7 +497,7 @@ export default function AssignmentImport() {
       </Button>
 
       <Heading size="lg" mb={1}>{draft.title}</Heading>
-      <Text fontSize="sm" color="gray.600" mb={4}>
+      <Text fontSize="sm" color="lmFg.subtle" mb={4}>
         Read from {draft.sources?.map((s) => s.name).join(', ') || 'an uploaded file'}
         {draft.provider ? ` by ${draft.provider}` : ''}.
       </Text>
@@ -562,7 +562,7 @@ export default function AssignmentImport() {
           >
             Merge {chosen} question{chosen === 1 ? '' : 's'} into a assignment
           </Button>
-          <Text fontSize="xs" color="gray.500">
+          <Text fontSize="xs" color="lmFg.muted">
             Creates an unpublished assignment you can edit and release like any other.
           </Text>
         </Flex>

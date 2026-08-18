@@ -101,7 +101,7 @@ export default function LabResults() {
       <Flex justify="space-between" align="center" mb={4} wrap="wrap" gap={2}>
         <Box>
           <Heading size="md">{data.lab.title}</Heading>
-          <Text fontSize="sm" color="gray.500">
+          <Text fontSize="sm" color="lmFg.muted">
             {data.attempts.length} bench(es) · {data.attempts.filter((a) => a.status === 'submitted').length}{' '}
             submitted
           </Text>
@@ -198,7 +198,7 @@ export default function LabResults() {
                 What they reported
               </Text>
               {!wanted.length ? (
-                <Text fontSize="sm" color="gray.500">
+                <Text fontSize="sm" color="lmFg.muted">
                   This experiment asks for no specific readings.
                 </Text>
               ) : (
@@ -211,7 +211,7 @@ export default function LabResults() {
                           <Td px={1}>
                             <Text fontSize="sm">{want.label}</Text>
                             {given?.working && (
-                              <Text fontSize="xs" color="gray.500">
+                              <Text fontSize="xs" color="lmFg.muted">
                                 {given.working}
                               </Text>
                             )}
@@ -240,7 +240,7 @@ export default function LabResults() {
                   <Text fontSize="sm" fontWeight="700">
                     Conclusion
                   </Text>
-                  <Text fontSize="sm" color="gray.700" whiteSpace="pre-wrap">
+                  <Text fontSize="sm" color="lmFg.body" whiteSpace="pre-wrap">
                     {open.attempt.conclusion}
                   </Text>
                 </Box>
@@ -258,17 +258,17 @@ export default function LabResults() {
                   .slice()
                   .reverse()
                   .map((run) => (
-                    <Box key={run._id} borderWidth="1px" borderColor="gray.200" borderRadius="md" p={2}>
+                    <Box key={run._id} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" p={2}>
                       <HStack justify="space-between">
                         <HStack>
                           <Badge>{run.analysis?.toUpperCase()}</Badge>
                           {run.frequency ? (
-                            <Text fontSize="10px" color="gray.500">
+                            <Text fontSize="10px" color="lmFg.muted">
                               {run.frequency} Hz
                             </Text>
                           ) : null}
                         </HStack>
-                        <Text fontSize="10px" color="gray.500">
+                        <Text fontSize="10px" color="lmFg.muted">
                           {new Date(run.at).toLocaleTimeString()}
                         </Text>
                       </HStack>
@@ -277,7 +277,7 @@ export default function LabResults() {
                           {run.error}
                         </Text>
                       ) : (
-                        <Text fontSize="xs" color="gray.700" mt={1}>
+                        <Text fontSize="xs" color="lmFg.body" mt={1}>
                           {(run.instruments || [])
                             .map((meter) => `${meter.label} ${eng(meter.magnitude, meter.unit)}`)
                             .join(' · ') || 'no meters on the bench'}
@@ -286,7 +286,7 @@ export default function LabResults() {
                     </Box>
                   ))}
                 {!(open.attempt.runs || []).length && (
-                  <Text fontSize="sm" color="gray.500">
+                  <Text fontSize="sm" color="lmFg.muted">
                     They never pressed Run.
                   </Text>
                 )}
@@ -298,7 +298,7 @@ export default function LabResults() {
 
           <Flex gap={3} align="flex-end" wrap="wrap">
             <Box>
-              <Text fontSize="xs" color="gray.600">
+              <Text fontSize="xs" color="lmFg.subtle">
                 Marks
               </Text>
               <Input
@@ -310,7 +310,7 @@ export default function LabResults() {
               />
             </Box>
             <Box flex="1" minW="240px">
-              <Text fontSize="xs" color="gray.600">
+              <Text fontSize="xs" color="lmFg.subtle">
                 Feedback
               </Text>
               <Textarea

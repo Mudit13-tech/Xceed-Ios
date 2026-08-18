@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Badge,
   Box,
@@ -54,10 +54,10 @@ function PaletteTile({ part, onPlace }) {
         onClick={() => onPlace(part.type)}
         cursor="grab"
         borderWidth="1px"
-        borderColor="gray.200"
+        borderColor="lmBorder.base"
         borderRadius="md"
         p={2}
-        bg="white"
+        bg="lmBg.surface"
         _hover={{ borderColor: 'teal.400', bg: 'teal.50' }}
         textAlign="center"
       >
@@ -66,11 +66,11 @@ function PaletteTile({ part, onPlace }) {
           viewBox={`${-w / 2 - pad} ${-h / 2 - pad} ${w + pad * 2} ${h + pad * 2}`}
           width="100%"
           height="34px"
-          color="gray.700"
+          color="lmFg.body"
         >
           {symbol.draw({ type: part.type, values: part.defaults })}
         </Box>
-        <Text fontSize="10px" color="gray.600" noOfLines={1} mt={1}>
+        <Text fontSize="10px" color="lmFg.subtle" noOfLines={1} mt={1}>
           {part.name}
         </Text>
       </Box>
@@ -100,7 +100,7 @@ export function Palette({ parts = [], onPlace }) {
         if (!available.length) return null;
         return (
           <Box key={group.label}>
-            <Text fontSize="xs" fontWeight="700" color="gray.500" mb={1} textTransform="uppercase">
+            <Text fontSize="xs" fontWeight="700" color="lmFg.muted" mb={1} textTransform="uppercase">
               {group.label}
             </Text>
             <Box display="grid" gridTemplateColumns="repeat(3, 1fr)" gap={2}>
@@ -118,6 +118,92 @@ export function Palette({ parts = [], onPlace }) {
 /* ─────────────────────────── the selected part ────────────────────────── */
 
 /**
+ * One value, typed rather than nudged.
+ *
+ * `type="number"` looks like the right control for a number and is not, because of
+ * the browser's own value sanitisation: an input whose text is not a *valid*
+ * floating-point number reports its value as empty, and every intermediate state a
+ * decimal passes through is invalid — "0.", "-", "1e". A controlled input that maps
+ * each keystroke straight through `Number()` therefore fights the person typing,
+ * and the field snaps back to the old number as the decimal point is entered.
+ *
+ * A transformer is where this bites hardest, because every setting on one is
+ * fractional — a turns ratio of 0.5, a coupling of 0.99 — so "the rating will not
+ * change" is the honest description of what a teacher sees.
+ *
+ * So the text stays text while it is being edited, and a number is committed only
+ * when the text parses as one. Leaving the field puts the component's own value
+ * back, so a half-typed entry that never parsed cannot masquerade as a setting —
+ * and an empty string is never written into `values`, where the solver would read
+ * it as zero and quietly substitute a default.
+ */
+function NumberField({ field, value, disabled, onCommit }) {
+  // Null except while this field is being edited, so a value changed from
+  // somewhere else — a rheostat's slider, a circuit loaded from the server —
+  // still appears here.
+  const [draft, setDraft] = useState(null);
+
+  const clamp = (number) => {
+    const low = field.min !== undefined ? Math.max(number, field.min) : number;
+    return field.max !== undefined ? Math.min(low, field.max) : low;
+  };
+
+  return (
+    <Box opacity={field.advanced ? 0.75 : 1}>
+      <Flex justify="space-between" align="baseline" gap={2}>
+        <Text fontSize="xs" color="lmFg.subtle">
+          {field.label}
+          {field.unit ? ` (${field.unit})` : ''}
+          {field.advanced && (
+            <Badge ml={1} fontSize="9px" colorScheme="gray">
+              advanced
+            </Badge>
+          )}
+        </Text>
+        {/* The range, said out loud. It is enforced on the way out of the field,
+            and a value that silently became something else on blur would be the
+            second way this panel could look as though it ignored what was
+            typed. */}
+        {field.min !== undefined && field.max !== undefined && (
+          <Text fontSize="9px" color="lmFg.muted" whiteSpace="nowrap">
+            {eng(field.min)}–{eng(field.max)}
+          </Text>
+        )}
+      </Flex>
+      <Input
+        size="sm"
+        // Text, deliberately. `inputMode` still brings up a numeric keypad on a
+        // phone, without the sanitisation that makes a decimal untypeable.
+        type="text"
+        inputMode="decimal"
+        value={draft ?? (value ?? '')}
+        isDisabled={disabled}
+        onChange={(event) => {
+          const raw = event.target.value;
+          setDraft(raw);
+          // Committed as it is typed, so the canvas label and a following Run
+          // both see the new value without anyone having to leave the field.
+          // Anything that does not parse is simply not committed yet.
+          const parsed = Number(raw);
+          if (raw.trim() !== '' && Number.isFinite(parsed)) onCommit(parsed);
+        }}
+        onBlur={() => {
+          const raw = draft;
+          setDraft(null);
+          if (raw === null) return;
+          const parsed = Number(raw);
+          // Unparseable or empty: the field goes back to what the component is
+          // actually set to, rather than leaving the part valueless.
+          if (raw.trim() === '' || !Number.isFinite(parsed)) return;
+          const bounded = clamp(parsed);
+          if (bounded !== parsed) onCommit(bounded);
+        }}
+      />
+    </Box>
+  );
+}
+
+/**
  * The values of whatever is selected.
  *
  * `live` fields — a rheostat's setting — get a slider, because that is a knob a
@@ -129,14 +215,13 @@ export function Palette({ parts = [], onPlace }) {
 export function PartInspector({ component, part, onChange, onDelete, onRotate, readOnly }) {
   if (!component) {
     return (
-      <Text fontSize="sm" color="gray.500">
+      <Text fontSize="sm" color="lmFg.muted">
         Select a component on the bench to change its value, or drop a new one from the palette.
       </Text>
     );
   }
 
-  const setValue = (key, raw) => {
-    const value = raw === '' ? '' : Number(raw);
+  const setValue = (key, value) => {
     onChange({ ...component, values: { ...component.values, [key]: value } });
   };
 
@@ -145,7 +230,7 @@ export function PartInspector({ component, part, onChange, onDelete, onRotate, r
       <Flex justify="space-between" align="center">
         <Box>
           <Heading size="sm">{part?.name || component.type}</Heading>
-          <Text fontSize="xs" color="gray.500">
+          <Text fontSize="xs" color="lmFg.muted">
             {component.label || component.id}
           </Text>
         </Box>
@@ -156,9 +241,23 @@ export function PartInspector({ component, part, onChange, onDelete, onRotate, r
                 ⟳
               </Button>
             </Tooltip>
-            <Tooltip label="Remove from the bench">
-              <Button size="xs" variant="ghost" colorScheme="red" onClick={onDelete}>
-                ✕
+            {/* Named, and told which component to remove.
+                ────────────────────────────────────────
+                The id goes out with the click rather than being read from
+                whatever the page currently calls "selected". Those are the same
+                thing right up until they are not — a click that lands on the
+                canvas on the way to this button clears the selection, and a
+                delete keyed to the selection then removes nothing while the part
+                it is captioned with sits there. Handing over the id of the part
+                this panel is showing makes that impossible. */}
+            <Tooltip label={`Remove ${component.label || component.id} and its wires`}>
+              <Button
+                size="xs"
+                variant="outline"
+                colorScheme="red"
+                onClick={() => onDelete(component.id)}
+              >
+                ✕ Delete
               </Button>
             </Tooltip>
           </HStack>
@@ -166,14 +265,14 @@ export function PartInspector({ component, part, onChange, onDelete, onRotate, r
       </Flex>
 
       {part?.hint && (
-        <Text fontSize="xs" color="gray.600" bg="gray.50" p={2} borderRadius="md">
+        <Text fontSize="xs" color="lmFg.subtle" bg="lmBg.sunken" p={2} borderRadius="md">
           {part.hint}
         </Text>
       )}
 
       {!readOnly && (
         <Box>
-          <Text fontSize="xs" color="gray.500">
+          <Text fontSize="xs" color="lmFg.muted">
             Label
           </Text>
           <Input
@@ -192,7 +291,7 @@ export function PartInspector({ component, part, onChange, onDelete, onRotate, r
           return (
             <Box key={field.key}>
               <Flex justify="space-between">
-                <Text fontSize="xs" color="gray.600">
+                <Text fontSize="xs" color="lmFg.subtle">
                   {field.label}
                 </Text>
                 <Text fontSize="xs" fontWeight="700">
@@ -217,29 +316,22 @@ export function PartInspector({ component, part, onChange, onDelete, onRotate, r
         }
 
         return (
-          <Box key={field.key} opacity={field.advanced ? 0.75 : 1}>
-            <Text fontSize="xs" color="gray.600">
-              {field.label}
-              {field.unit ? ` (${field.unit})` : ''}
-              {field.advanced && (
-                <Badge ml={1} fontSize="9px" colorScheme="gray">
-                  advanced
-                </Badge>
-              )}
-            </Text>
-            <Input
-              size="sm"
-              type="number"
-              value={value ?? ''}
-              isDisabled={readOnly}
-              onChange={(event) => setValue(field.key, event.target.value)}
-            />
-          </Box>
+          <NumberField
+            // Keyed by the component as well as the field: selecting a different
+            // part of the same type reuses these inputs, and a draft left behind
+            // in one of them would show the previous component's half-typed text
+            // against the new component's value.
+            key={`${component.id}:${field.key}`}
+            field={field}
+            value={value}
+            disabled={readOnly}
+            onCommit={(next) => setValue(field.key, next)}
+          />
         );
       })}
 
       {!(part?.fields || []).length && (
-        <Text fontSize="xs" color="gray.500">
+        <Text fontSize="xs" color="lmFg.muted">
           Nothing to set — wire it in and run.
         </Text>
       )}
@@ -259,7 +351,7 @@ export function PartInspector({ component, part, onChange, onDelete, onRotate, r
 export function InstrumentReadings({ result }) {
   if (!result) {
     return (
-      <Text fontSize="sm" color="gray.500">
+      <Text fontSize="sm" color="lmFg.muted">
         Press Run to solve the circuit and read the instruments.
       </Text>
     );
@@ -267,11 +359,11 @@ export function InstrumentReadings({ result }) {
 
   if (!result.ok) {
     return (
-      <Box bg="red.50" borderWidth="1px" borderColor="red.200" borderRadius="md" p={3}>
-        <Text fontSize="sm" fontWeight="600" color="red.700">
+      <Box bg="lmHue.red50" borderWidth="1px" borderColor="lmHue.red200" borderRadius="md" p={3}>
+        <Text fontSize="sm" fontWeight="600" color="lmHue.red700">
           The circuit did not solve
         </Text>
-        <Text fontSize="sm" color="red.700" mt={1}>
+        <Text fontSize="sm" color="lmHue.red700" mt={1}>
           {result.message}
         </Text>
       </Box>
@@ -283,13 +375,13 @@ export function InstrumentReadings({ result }) {
   return (
     <VStack align="stretch" spacing={3}>
       {(result.warnings || []).map((warning) => (
-        <Text key={warning} fontSize="xs" color="orange.700" bg="orange.50" p={2} borderRadius="md">
+        <Text key={warning} fontSize="xs" color="lmHue.orange700" bg="lmHue.orange50" p={2} borderRadius="md">
           {warning}
         </Text>
       ))}
 
       {!meters.length ? (
-        <Text fontSize="sm" color="gray.500">
+        <Text fontSize="sm" color="lmFg.muted">
           The circuit solved, but there are no meters on the bench. Add an ammeter, a voltmeter or a
           wattmeter to measure something.
         </Text>
@@ -310,7 +402,7 @@ export function InstrumentReadings({ result }) {
                   <Text fontSize="sm" fontWeight="600">
                     {meter.label}
                   </Text>
-                  <Text fontSize="10px" color="gray.500" textTransform="uppercase">
+                  <Text fontSize="10px" color="lmFg.muted" textTransform="uppercase">
                     {meter.type}
                   </Text>
                 </Td>
@@ -319,16 +411,16 @@ export function InstrumentReadings({ result }) {
                     {eng(meter.magnitude, meter.unit)}
                   </Text>
                   {meter.type !== 'wattmeter' && result.analysis === 'ac' && (
-                    <Text fontSize="10px" color="gray.500">
+                    <Text fontSize="10px" color="lmFg.muted">
                       {phase(meter.phase)}
                     </Text>
                   )}
                   {meter.type === 'wattmeter' && (
                     <>
-                      <Text fontSize="10px" color="gray.600">
+                      <Text fontSize="10px" color="lmFg.subtle">
                         {eng(meter.apparent, 'VA')} apparent · {eng(meter.reactive, 'VAr')} reactive
                       </Text>
-                      <Text fontSize="10px" color="gray.600">
+                      <Text fontSize="10px" color="lmFg.subtle">
                         PF {Number(meter.powerFactor).toFixed(3)}
                       </Text>
                     </>
@@ -341,7 +433,7 @@ export function InstrumentReadings({ result }) {
       )}
 
       <Divider />
-      <Text fontSize="10px" color="gray.500">
+      <Text fontSize="10px" color="lmFg.muted">
         {result.analysis === 'ac'
           ? `Steady-state AC at ${result.frequency} Hz. Amplitudes are peak values.`
           : result.analysis === 'dc'
@@ -374,7 +466,7 @@ export function DeviceReadings({ result }) {
 
   if (result.analysis === 'transient') {
     return (
-      <Text fontSize="xs" color="gray.500">
+      <Text fontSize="xs" color="lmFg.muted">
         A transient run gives a waveform rather than a single number, so the values are on the scope
         below. Switch to DC or AC for a table of voltage, current and power.
       </Text>
@@ -387,7 +479,7 @@ export function DeviceReadings({ result }) {
   const devices = (result.devices || []).filter((device) => !device.instrument);
   if (!devices.length) {
     return (
-      <Text fontSize="xs" color="gray.500">
+      <Text fontSize="xs" color="lmFg.muted">
         Nothing to report — put a component on the bench and run again.
       </Text>
     );
@@ -426,7 +518,7 @@ export function DeviceReadings({ result }) {
                       {row.label}
                     </Text>
                     {result.analysis === 'ac' && row.currentPhase !== null && row.currentPhase !== undefined && (
-                      <Text fontSize="10px" color="gray.500">
+                      <Text fontSize="10px" color="lmFg.muted">
                         {phase(row.currentPhase)}
                       </Text>
                     )}
@@ -457,7 +549,7 @@ export function DeviceReadings({ result }) {
         </Tbody>
       </Table>
 
-      <Text fontSize="10px" color="gray.500">
+      <Text fontSize="10px" color="lmFg.muted">
         Voltage is across the part, current through it, power in it.
         {result.analysis === 'ac'
           ? ' At AC these are magnitudes of peak values, and P is real power — the part a wattmeter reads.'

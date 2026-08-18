@@ -66,7 +66,7 @@ function ClassCard({ klass, onOpen }) {
       transition="all 0.15s"
       _hover={{ boxShadow: 'md', transform: 'translateY(-2px)' }}
     >
-      <Box bg={klass.coverColor || '#1967d2'} px={5} pt={5} pb={4} color="white" position="relative">
+      <Box bg={klass.coverColor || '#1967d2'} px={5} pt={5} pb={4} color="lmFg.onAccent" position="relative">
         <Heading size="md" noOfLines={2} pr={16}>
           {klass.name}
         </Heading>
@@ -116,7 +116,7 @@ function ClassCard({ klass, onOpen }) {
                     </Text>
                   ))}
                   {klass.myBadgeCount > klass.myBadges.length && (
-                    <Text as="span" fontSize="xs" color="gray.500">
+                    <Text as="span" fontSize="xs" color="lmFg.muted">
                       +{klass.myBadgeCount - klass.myBadges.length}
                     </Text>
                   )}
@@ -151,7 +151,7 @@ function ClassCard({ klass, onOpen }) {
 // timetable module already holds that catalogue — so the form picks from it
 // rather than asking the teacher to retype names and codes. Everything else
 // (room, description, meeting link) is left to class settings.
-function CreateClassModal({ isOpen, onClose, onCreated }) {
+function CreateClassModal({ isOpen, onClose, onCreated, me }) {
   const [branches, setBranches] = useState([]);
   const [semesters, setSemesters] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -194,9 +194,15 @@ function CreateClassModal({ isOpen, onClose, onCreated }) {
       .ttBranches()
       .then((list) => {
         if (cancelled) return;
-        setBranches(list);
-        // Nothing to choose between when the department runs a single branch.
-        if (list.length === 1) setBranchCode(list[0].code);
+        let finalBranches = me?.dept ? list.filter(b => b.dept === me.dept) : [];
+        if (finalBranches.length === 0) {
+          const basicScience = list.filter(b => b.dept?.toLowerCase().includes('basic science'));
+          finalBranches = basicScience.length > 0 ? basicScience : list;
+        }
+        setBranches(finalBranches);
+        if (finalBranches.length > 0) {
+          setBranchCode(finalBranches[0].code);
+        }
       })
       .catch((error) => !cancelled && setCatalogueError(error))
       .finally(() => !cancelled && setLoadingBranches(false));
@@ -295,7 +301,7 @@ function CreateClassModal({ isOpen, onClose, onCreated }) {
                 value={branchCode}
                 onChange={(event) => setBranchCode(event.target.value)}
                 placeholder={loadingBranches ? 'Loading…' : 'Select branch'}
-                isDisabled={loadingBranches || branches.length === 0}
+                isDisabled={true}
                 autoFocus
               >
                 {branches.map((item) => (
@@ -367,7 +373,7 @@ function CreateClassModal({ isOpen, onClose, onCreated }) {
           </FormControl>
 
           <Box>
-            <Text fontSize="xs" color="gray.500" mb={2}>
+            <Text fontSize="xs" color="lmFg.muted" mb={2}>
               Preview
             </Text>
             <ClassCardPreview
@@ -470,10 +476,10 @@ function JoinClassModal({ isOpen, onClose, onJoined }) {
           {preview && (
             <Box mt={4} p={3} borderWidth="1px" borderRadius="md" borderLeftWidth="4px" borderLeftColor={preview.coverColor}>
               <Text fontWeight="600">{preview.name}</Text>
-              <Text fontSize="sm" color="gray.600">
+              <Text fontSize="sm" color="lmFg.subtle">
                 {[preview.section, preview.subject].filter(Boolean).join(' · ')}
               </Text>
-              <Text fontSize="xs" color="gray.500">
+              <Text fontSize="xs" color="lmFg.muted">
                 Taught by {preview.ownerName}
               </Text>
             </Box>
@@ -676,7 +682,7 @@ export default function Dashboard() {
         </Tabs>
       )}
 
-      <CreateClassModal isOpen={showCreate} onClose={closeModals} onCreated={afterChange} />
+      <CreateClassModal isOpen={showCreate} onClose={closeModals} onCreated={afterChange} me={me} />
       <JoinClassModal isOpen={showJoin} onClose={closeModals} onJoined={afterChange} />
     </Box>
   );

@@ -63,10 +63,16 @@ export function openQuizStage(options = {}) {
   document.body.style.overflow = 'hidden';
   // Arriving from a link click still carries that click's transient activation,
   // so this normally lands without the student doing anything.
+  //
+  // `autoFullscreen: false` only withholds the request — it never *exits*. A
+  // mounted stage leaving fullscreen on its own is what broke the handover: the
+  // sitting mounts in its loading state, which is not yet a live paper, so the
+  // flag was false for a beat and threw away the fullscreen the brief had been
+  // granted. Re-requesting it a fetch later has no gesture behind it, the
+  // browser refuses, and the student lands on the "Fullscreen required" gate for
+  // a screen they never actually left. Only closing the stage drops fullscreen.
   if (openCount === 1 && autoFullscreen) {
     requestQuizFullscreen();
-  } else if (!autoFullscreen && document.fullscreenElement) {
-    document.exitFullscreen().catch(() => {});
   }
 
   return () => {

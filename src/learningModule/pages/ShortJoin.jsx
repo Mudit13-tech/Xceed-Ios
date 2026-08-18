@@ -148,7 +148,7 @@ export default function ShortJoin() {
             h="72px"
             bg={inputBg}
             borderWidth="2px"
-            borderColor="purple.200"
+            borderColor="lmHue.purple200"
             color="purple.600"
             _dark={{ color: 'purple.200', borderColor: 'purple.500' }}
             _hover={{ borderColor: 'purple.400' }}
@@ -181,7 +181,7 @@ export default function ShortJoin() {
             isLoading={busy}
             isDisabled={needsName && !name.trim()}
             bgGradient="linear(to-r, purple.500, pink.500)"
-            color="white"
+            color="lmFg.onAccent"
             _hover={{ bgGradient: 'linear(to-r, purple.600, pink.600)' }}
             _active={{ bgGradient: 'linear(to-r, purple.700, pink.700)' }}
             // The gradient would otherwise stay bright on a button that does

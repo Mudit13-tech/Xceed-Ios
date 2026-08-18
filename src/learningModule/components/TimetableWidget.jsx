@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Spinner, Text, VStack } from '@chakra-ui/react';
 import getEnvironment from '../../getenvironment';
-import lmApi from '../api/lmApi';
 import ViewTimetable from '../../timetableadmin/viewtt';
-import { isStudentOnly } from '../roles';
 
 const generateInitialTimetableData = (fetchedData, type) => {
   const initialData = {};
@@ -70,7 +68,6 @@ export default function TimetableWidget({ me }) {
       setLoading(true);
       setError(null);
       try {
-        const isStudent = isStudentOnly(me?.roles);
         const apiUrl = getEnvironment();
 
         const fetchWithAuth = async (url, options = {}) => {
@@ -82,66 +79,48 @@ export default function TimetableWidget({ me }) {
           return fetch(url, { ...options, headers, credentials: 'include' });
         };
 
-        if (isStudent) {
-          const classes = await lmApi.listClasses();
-          if (!classes || classes.length === 0) {
-            setTimetableData(null);
-            return;
-          }
-          // Assuming the first class has the required department code and semester
-          const { dept: code, semester: sem } = classes[0];
-          if (!code || !sem) {
-            setTimetableData(null);
-            return;
-          }
+        // The faculty timetable: name -> current session -> weekly grid. The
+        // student path that used to sit alongside this passed a department where
+        // the endpoint wanted a session code, so it fetched nothing; students now
+        // go through learningModule/pages/Timetable instead, and this component is
+        // only rendered for faculty.
+        const facultyRes = await fetchWithAuth(`${apiUrl}/timetablemodule/faculty`);
+        if (!facultyRes.ok) throw new Error('Could not fetch faculties');
+        const faculties = await facultyRes.json();
+        const currentFaculty = faculties.find((f) => f.email && f.email.toLowerCase() === me?.email?.toLowerCase());
 
-          const response = await fetchWithAuth(`${apiUrl}/timetablemodule/tt/viewclasstt/${code}/${sem}`);
-          if (response.ok) {
-            const data = await response.json();
-            setTimetableData(generateInitialTimetableData(data, 'sem'));
-          } else {
-            setError('Could not fetch student timetable.');
-          }
+        if (!currentFaculty) {
+          setError('No timetable found for your email address.');
+          setTimetableData(null);
+          return;
+        }
+
+        const { name: facultyName } = currentFaculty;
+        if (!facultyName) {
+          setError('Missing faculty name.');
+          setTimetableData(null);
+          return;
+        }
+
+        const sessionRes = await fetchWithAuth(`${apiUrl}/timetablemodule/timetable/get-current-session`, { method: 'POST' });
+        if (!sessionRes.ok) throw new Error('Could not fetch current session');
+        const sessionData = await sessionRes.json();
+        const codes = sessionData.codes || [];
+        if (codes.length === 0) {
+          setError('No active timetable session found.');
+          setTimetableData(null);
+          return;
+        }
+        
+        const sessionCode = codes[0];
+
+        const response = await fetchWithAuth(`${apiUrl}/timetablemodule/tt/viewfacultytt/${sessionCode}/${encodeURIComponent(facultyName)}`);
+        if (response.ok) {
+          const result = await response.json();
+          const data = result.timetableData || result; // API might wrap it depending on endpoint
+          setTimetableData(generateInitialTimetableData(data, 'faculty'));
         } else {
-          // Faculty mapping logic
-          const facultyRes = await fetchWithAuth(`${apiUrl}/timetablemodule/faculty`);
-          if (!facultyRes.ok) throw new Error('Could not fetch faculties');
-          const faculties = await facultyRes.json();
-          const currentFaculty = faculties.find((f) => f.email && f.email.toLowerCase() === me?.email?.toLowerCase());
-
-          if (!currentFaculty) {
-            setError('No timetable found for your email address.');
-            setTimetableData(null);
-            return;
-          }
-
-          const { name: facultyName } = currentFaculty;
-          if (!facultyName) {
-            setError('Missing faculty name.');
-            setTimetableData(null);
-            return;
-          }
-
-          const sessionRes = await fetchWithAuth(`${apiUrl}/timetablemodule/timetable/get-current-session`, { method: 'POST' });
-          if (!sessionRes.ok) throw new Error('Could not fetch current session');
-          const sessionData = await sessionRes.json();
-          const codes = sessionData.codes || [];
-          if (codes.length === 0) {
-            setError('No active timetable session found.');
-            setTimetableData(null);
-            return;
-          }
-          
-          const sessionCode = codes[0];
-
-          const response = await fetchWithAuth(`${apiUrl}/timetablemodule/tt/viewfacultytt/${sessionCode}/${encodeURIComponent(facultyName)}`);
-          if (response.ok) {
-            const result = await response.json();
-            const data = result.timetableData || result; // API might wrap it depending on endpoint
-            setTimetableData(generateInitialTimetableData(data, 'faculty'));
-          } else {
-            setError('Could not fetch faculty timetable.');
-          }
+          setError('Could not fetch faculty timetable.');
         }
       } catch (err) {
         console.error(err);
@@ -162,14 +141,14 @@ export default function TimetableWidget({ me }) {
     return (
       <VStack p={6} spacing={4}>
         <Spinner color="purple.500" />
-        <Text color="gray.500">Loading your timetable...</Text>
+        <Text color="lmFg.muted">Loading your timetable...</Text>
       </VStack>
     );
   }
 
   if (error) {
     return (
-      <Box p={4} bg="red.50" borderRadius="md" color="red.600">
+      <Box p={4} bg="lmHue.red50" borderRadius="md" color="red.600">
         <Text fontSize="sm">{error}</Text>
       </Box>
     );
@@ -177,7 +156,7 @@ export default function TimetableWidget({ me }) {
 
   if (!timetableData || Object.keys(timetableData).length === 0) {
     return (
-      <Box p={4} bg="gray.50" borderRadius="md" color="gray.500">
+      <Box p={4} bg="lmBg.sunken" borderRadius="md" color="lmFg.muted">
         <Text fontSize="sm">No timetable available.</Text>
       </Box>
     );

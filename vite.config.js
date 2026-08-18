@@ -41,6 +41,41 @@ function consoleBufferPlugin() {
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), consoleBufferPlugin()],
+  build: {
+    // Writes dist/.vite/manifest.json: every chunk with the chunks it pulls in.
+    // Kept on so the cost of a route can be measured rather than guessed at —
+    // see scripts/routeWeight.js. Costs a few KB that is never served.
+    manifest: true,
+    rollupOptions: {
+      output: {
+        /**
+         * Pull the libraries that never change out of the app's own chunk.
+         *
+         * Not about total bytes — those are the same either way. It is about what
+         * a *returning* visitor has to fetch after a deploy. React, the router and
+         * Chakra move a few times a year; the app moves several times a week. In
+         * one chunk, every deploy invalidates all of it and everyone re-downloads
+         * the framework they already had.
+         *
+         * Only the three that are genuinely on every page. The heavy occasional
+         * libraries — the PDF writers, xlsx, CodeMirror, recharts, Quill — are
+         * deliberately *not* named here: naming them would pull them back into a
+         * chunk fetched up front, undoing the route splitting that keeps them out
+         * of the hands of people who never export a PDF.
+         */
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('react-router')) return 'vendor-router';
+          if (id.includes('@chakra-ui') || id.includes('@emotion')) return 'vendor-chakra';
+          // React itself is deliberately not named. A rule for it produced a
+          // 0.19 kB chunk — the bundler already places react and react-dom well
+          // on their own, and a near-empty chunk called `vendor-react` would
+          // suggest the framework lives there when it does not.
+          return undefined;
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       '/api': {

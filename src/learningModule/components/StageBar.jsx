@@ -21,9 +21,9 @@ export default function StageBar({ label = 'Assessment', subject, faculty, title
       gap={3}
       px={{ base: 3, md: 6 }}
       py={3}
-      bg="white"
+      bg="lmBg.surface"
       borderBottomWidth="1px"
-      borderColor="gray.200"
+      borderColor="lmBorder.base"
       wrap="wrap"
     >
       <HStack spacing={2} flexShrink={0}>
@@ -31,10 +31,10 @@ export default function StageBar({ label = 'Assessment', subject, faculty, title
           🎓
         </Text>
         <Box>
-          <Heading size="sm" color="gray.800" lineHeight="1.1">
+          <Heading size="sm" color="lmFg.heading" lineHeight="1.1">
             XCEED Learning
           </Heading>
-          <Text fontSize="xs" color="gray.500">
+          <Text fontSize="xs" color="lmFg.muted">
             {label}
           </Text>
         </Box>
@@ -45,15 +45,15 @@ export default function StageBar({ label = 'Assessment', subject, faculty, title
           way on a narrow screen, not whose subject this is. */}
       {(subject || faculty) && (
         <>
-          <Box w="1px" alignSelf="stretch" bg="gray.200" display={{ base: 'none', sm: 'block' }} />
+          <Box w="1px" alignSelf="stretch" bg="lmBorder.base" display={{ base: 'none', sm: 'block' }} />
           <Box flexShrink={0}>
             {subject && (
-              <Text fontSize="sm" fontWeight="600" color="gray.800">
+              <Text fontSize="sm" fontWeight="600" color="lmFg.heading">
                 {subject}
               </Text>
             )}
             {faculty && (
-              <Text fontSize="xs" color="gray.500">
+              <Text fontSize="xs" color="lmFg.muted">
                 👤 {faculty}
               </Text>
             )}
@@ -70,7 +70,7 @@ export default function StageBar({ label = 'Assessment', subject, faculty, title
         <Text
           fontSize="sm"
           fontWeight="600"
-          color="gray.700"
+          color="lmFg.body"
           noOfLines={1}
           minW={0}
           maxW={{ base: '100%', md: '340px' }}

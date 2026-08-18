@@ -164,16 +164,33 @@ async function init(indexURL, packages, sources) {
 
   if (packages && packages.length) {
     post({ type: 'status', phase: 'loading', detail: `Installing ${packages.join(', ')}…` });
+    const failed = [];
     try {
       // loadPackage handles anything with a prebuilt wasm wheel (numpy, pandas,
       // matplotlib, scipy…); micropip covers pure-Python packages from PyPI.
       await pyodide.loadPackage('micropip');
       const micropip = pyodide.pyimport('micropip');
-      await micropip.install(packages);
+      // One at a time on purpose. A single `install(packages)` is one
+      // transaction, so a notebook listing `tensorflow, numpy` got neither —
+      // TensorFlow has no wheel that can ever exist here, and it took numpy
+      // down with it. Installed separately, the possible ones land and only
+      // the impossible ones are named.
+      for (const name of packages) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await micropip.install(name);
+        } catch (error) {
+          failed.push(`${name} (${error.message})`);
+        }
+      }
     } catch (error) {
+      // micropip itself did not load, so nothing in the list was attempted.
+      failed.push(...packages, error.message);
+    }
+    if (failed.length) {
       // A missing package is not fatal — the notebook may still be most of the
       // way usable, and the student should see which one failed.
-      post({ type: 'status', phase: 'warning', detail: `Could not install: ${error.message}` });
+      post({ type: 'status', phase: 'warning', detail: `Could not install: ${failed.join('; ')}` });
     }
   }
 

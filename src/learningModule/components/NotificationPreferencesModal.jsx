@@ -133,11 +133,11 @@ export default function NotificationPreferencesModal({
       <ModalOverlay />
       <ModalContent borderRadius="xl">
         <ModalHeader borderBottomWidth="1px" pb={3}>
-          <Text fontSize="lg" fontWeight="700" color="gray.800">
+          <Text fontSize="lg" fontWeight="700" color="lmFg.heading">
             Notification Settings
           </Text>
           {activeClassName && (
-            <Text fontSize="xs" fontWeight="normal" color="gray.500" mt={0.5}>
+            <Text fontSize="xs" fontWeight="normal" color="lmFg.muted" mt={0.5}>
               {activeClassName}
             </Text>
           )}
@@ -147,7 +147,7 @@ export default function NotificationPreferencesModal({
         <ModalBody py={4}>
           {!initialClassId && classes.length > 0 && (
             <FormControl mb={4}>
-              <FormLabel fontSize="xs" fontWeight="700" textTransform="uppercase" color="gray.500">
+              <FormLabel fontSize="xs" fontWeight="700" textTransform="uppercase" color="lmFg.muted">
                 Select Class
               </FormLabel>
               <Select
@@ -170,12 +170,12 @@ export default function NotificationPreferencesModal({
             </Flex>
           ) : (
             <Stack spacing={4}>
-              <FormControl display="flex" alignItems="center" justifyContent="space-between" bg="gray.50" p={3} borderRadius="lg">
+              <FormControl display="flex" alignItems="center" justifyContent="space-between" bg="lmBg.sunken" p={3} borderRadius="lg">
                 <Box>
                   <FormLabel htmlFor="mute-class" mb="0" fontSize="sm" fontWeight="600">
                     Mute all notifications for this class
                   </FormLabel>
-                  <FormHelperText mt={0} fontSize="xs" color="gray.500">
+                  <FormHelperText mt={0} fontSize="xs" color="lmFg.muted">
                     Silence both in-app notifications and email digests for this class
                   </FormHelperText>
                 </Box>
@@ -189,7 +189,7 @@ export default function NotificationPreferencesModal({
 
               <Divider />
 
-              <Text fontSize="xs" fontWeight="700" textTransform="uppercase" letterSpacing="wider" color="gray.500">
+              <Text fontSize="xs" fontWeight="700" textTransform="uppercase" letterSpacing="wider" color="lmFg.muted">
                 Choose what triggers notifications & emails
               </Text>
 
@@ -199,7 +199,7 @@ export default function NotificationPreferencesModal({
                     <FormLabel mb="0" fontSize="sm" fontWeight="600">
                       Faculty Posts & Announcements
                     </FormLabel>
-                    <FormHelperText mt={0} fontSize="xs" color="gray.500">
+                    <FormHelperText mt={0} fontSize="xs" color="lmFg.muted">
                       Updates, stream posts, and announcements created by teachers
                     </FormHelperText>
                   </Box>
@@ -215,7 +215,7 @@ export default function NotificationPreferencesModal({
                     <FormLabel mb="0" fontSize="sm" fontWeight="600">
                       Coursework, Quizzes & Materials
                     </FormLabel>
-                    <FormHelperText mt={0} fontSize="xs" color="gray.500">
+                    <FormHelperText mt={0} fontSize="xs" color="lmFg.muted">
                       New assignments, quizzes, and learning materials published
                     </FormHelperText>
                   </Box>
@@ -231,7 +231,7 @@ export default function NotificationPreferencesModal({
                     <FormLabel mb="0" fontSize="sm" fontWeight="600">
                       Grades & Returned Work
                     </FormLabel>
-                    <FormHelperText mt={0} fontSize="xs" color="gray.500">
+                    <FormHelperText mt={0} fontSize="xs" color="lmFg.muted">
                       Notifications when teachers grade or return your submitted work
                     </FormHelperText>
                   </Box>
@@ -247,7 +247,7 @@ export default function NotificationPreferencesModal({
                     <FormLabel mb="0" fontSize="sm" fontWeight="600">
                       Forum Replies & Comments
                     </FormLabel>
-                    <FormHelperText mt={0} fontSize="xs" color="gray.500">
+                    <FormHelperText mt={0} fontSize="xs" color="lmFg.muted">
                       Replies to your posts and discussion comments from classmates or teachers
                     </FormHelperText>
                   </Box>
@@ -263,7 +263,7 @@ export default function NotificationPreferencesModal({
                     <FormLabel mb="0" fontSize="sm" fontWeight="600">
                       Deadline Alerts
                     </FormLabel>
-                    <FormHelperText mt={0} fontSize="xs" color="gray.500">
+                    <FormHelperText mt={0} fontSize="xs" color="lmFg.muted">
                       Upcoming due date alerts for assignments and quizzes
                     </FormHelperText>
                   </Box>
@@ -280,7 +280,7 @@ export default function NotificationPreferencesModal({
                       <FormLabel mb="0" fontSize="sm" fontWeight="600">
                         Student Submissions
                       </FormLabel>
-                      <FormHelperText mt={0} fontSize="xs" color="gray.500">
+                      <FormHelperText mt={0} fontSize="xs" color="lmFg.muted">
                         Alerts when students turn in assignments or quizzes
                       </FormHelperText>
                     </Box>

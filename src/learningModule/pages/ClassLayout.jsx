@@ -33,7 +33,6 @@ const TABS = [
   { path: 'quizzes', label: 'Quizzes' },
   { path: 'tutorials', label: 'Tutorials' },
   { path: 'assignments', label: 'Assignments' },
-  { path: 'labs', label: 'Virtual Lab' },
   { path: 'notebooks', label: 'Coding' },
   { path: 'grades', label: 'Grades' },
   { path: 'studio', label: 'AI Studio' },
@@ -99,7 +98,7 @@ export default function ClassLayout() {
     <Box>
       <Box
         bg={klass.coverColor || '#1967d2'}
-        color="white"
+        color="lmFg.onAccent"
         borderRadius="lg"
         px={{ base: 4, md: 5 }}
         py={2}
@@ -246,10 +245,10 @@ export default function ClassLayout() {
       <Flex
         gap={1}
         borderBottomWidth="1px"
-        borderColor="gray.200"
+        borderColor="lmBorder.base"
         mb={5}
         overflowX="auto"
-        bg="white"
+        bg="lmBg.surface"
         borderTopRadius="lg"
         px={2}
       >

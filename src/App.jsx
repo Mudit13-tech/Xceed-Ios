@@ -1,5 +1,20 @@
 // client/src/App.jsx
+//
+// Every screen below is loaded on demand.
+//
+// These were static imports — some 160 of them — which put the timetable admin,
+// the conference and certificate modules, the attendance/ML consoles and the
+// learning module into one entry chunk that came to 17.8 MB. A student opening
+// a quiz downloaded all of it before the first pixel, and a batch of them
+// starting a test together downloaded it *simultaneously*, which is what took
+// the server down. `lazy` here means a route costs its own screen and nothing
+// else; Vite splits one chunk per import and shares what they have in common.
+//
+// The identifiers are unchanged, so the routing table below reads exactly as it
+// did. Only `Navbar` stays eager — it is on every page, and deferring it buys a
+// flash of missing chrome for no saving.
 
+import React, { lazy, Suspense } from 'react';
 import {
   BrowserRouter as Router,
   Routes,
@@ -10,215 +25,213 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import { App as CapacitorApp } from '@capacitor/app';
+const Timetable = lazy(() => import('./timetableadmin/timetable'));
+const Timetable2 = lazy(() => import('./timetableadmin/timetable2.jsx'));
+const CreateTimetable = lazy(() => import('./timetableadmin/creatett'));
+const MasterFaculty = lazy(() => import('./timetableadmin/masterfaculty'));
+const AddFaculty = lazy(() => import('./timetableadmin/addfaculty'));
+const MasterRoom = lazy(() => import('./timetableadmin/masterroom'));
+const MasterSem = lazy(() => import('./timetableadmin/mastersem'));
+const AddSem = lazy(() => import('./timetableadmin/addsemester'));
+const AddRoom = lazy(() => import('./timetableadmin/addroom'));
+const LockedSummary = lazy(() => import('./timetableadmin/lockedsummary'));
+const Login = lazy(() => import('./dashboard/login'));
+const Messages = lazy(() => import('./timetableadmin/messages'));
+const ForgotPassword = lazy(() => import('./dashboard/ForgotPassword'));
+const SuperAdminPage = lazy(() => import('./dashboard/superadmin'));
+const BugReportsAdmin = lazy(() => import('./dashboard/bugReports'));
+const DevTeamApplicationsAdmin = lazy(() => import('./dashboard/devTeamApplications'));
+const DeptAdminAssignPage = lazy(() => import('./dashboard/deptAdminAssign'));
+const CommonSlot = lazy(() => import('./timetableadmin/commonslot.jsx'));
+const Subjects = lazy(() => import('./timetableadmin/addsubjects'));
+const ImportTT = lazy(() => import('./timetableadmin/importt.jsx'));
 
-import Lottie from 'lottie-react';
-import Timetable from './timetableadmin/timetable';
-import Timetable2 from './timetableadmin/timetable2.jsx';
-import CreateTimetable from './timetableadmin/creatett';
-import MasterFaculty from './timetableadmin/masterfaculty';
-import AddFaculty from './timetableadmin/addfaculty';
-import MasterRoom from './timetableadmin/masterroom';
-import MasterSem from './timetableadmin/mastersem';
-import AddSem from './timetableadmin/addsemester';
-import AddRoom from './timetableadmin/addroom';
-import LockedSummary from './timetableadmin/lockedsummary';
-import Login from './dashboard/login';
-import Messages from './timetableadmin/messages';
-import ForgotPassword from './dashboard/ForgotPassword';
-import SuperAdminPage from './dashboard/superadmin';
-import BugReportsAdmin from './dashboard/bugReports';
-import DevTeamApplicationsAdmin from './dashboard/devTeamApplications';
-import DeptAdminAssignPage from './dashboard/deptAdminAssign';
-import CommonSlot from './timetableadmin/commonslot.jsx';
-import Subjects from './timetableadmin/addsubjects';
-import ImportTT from './timetableadmin/importt.jsx';
-
-import ViewMRooms from './timetableadmin/viewmrooms';
-import MessagesPage from './timetableadmin/viewMessages.jsx';
+const ViewMRooms = lazy(() => import('./timetableadmin/viewmrooms'));
+const MessagesPage = lazy(() => import('./timetableadmin/viewMessages.jsx'));
 
 // import LockedView from './timetableviewer/viewer';
-import Note from './timetableadmin/addnote';
+const Note = lazy(() => import('./timetableadmin/addnote'));
 import Navbar from './components/home/Navbar';
-import PrintSummary from './timetableadmin/printSummary';
-import LoadDistribution from './timetableadmin/loaddistribution';
-import RegistrationForm from './dashboard/register';
-import AllotmentForm from './timetableadmin/allotment';
-import MasterDelete from './timetableadmin/masterdelete';
-import AdminPage from './timetableadmin/admin';
-import ViewAllotmentPage from './timetableadmin/viewroomallotment';
-import CommonLoad from './timetableadmin/addcommonload';
-import MasterView from './timetableadmin/mastersearch';
-import View from './timetableadmin/masterview';
-import AllocatedRolesPage from './dashboard/allotedroles';
-import FirstYearLoad from './timetableadmin/firstyearload';
-import FirstYearFaculty from './timetableadmin/addfirstyearfaculty';
-import LunchLoad from './timetableadmin/addlunchload';
-import FacultyDeptHourLoad from './timetableadmin/viewdeptfacultyload.jsx';
+const PrintSummary = lazy(() => import('./timetableadmin/printSummary'));
+const LoadDistribution = lazy(() => import('./timetableadmin/loaddistribution'));
+const RegistrationForm = lazy(() => import('./dashboard/register'));
+const AllotmentForm = lazy(() => import('./timetableadmin/allotment'));
+const MasterDelete = lazy(() => import('./timetableadmin/masterdelete'));
+const AdminPage = lazy(() => import('./timetableadmin/admin'));
+const ViewAllotmentPage = lazy(() => import('./timetableadmin/viewroomallotment'));
+const CommonLoad = lazy(() => import('./timetableadmin/addcommonload'));
+const MasterView = lazy(() => import('./timetableadmin/mastersearch'));
+const View = lazy(() => import('./timetableadmin/masterview'));
+const AllocatedRolesPage = lazy(() => import('./dashboard/allotedroles'));
+const FirstYearLoad = lazy(() => import('./timetableadmin/firstyearload'));
+const FirstYearFaculty = lazy(() => import('./timetableadmin/addfirstyearfaculty'));
+const LunchLoad = lazy(() => import('./timetableadmin/addlunchload'));
+const FacultyDeptHourLoad = lazy(() => import('./timetableadmin/viewdeptfacultyload.jsx'));
 // import InstituteLoad from './timetableadmin/instituteload';
 // import ViewInstituteLoad from './timetableadmin/viewinstituteload';
-import EditMasterFaculty from './timetableadmin/editmasterfaculty';
-import ImportForm from './timetableadmin/importCentralRoom';
+const EditMasterFaculty = lazy(() => import('./timetableadmin/editmasterfaculty'));
+const ImportForm = lazy(() => import('./timetableadmin/importCentralRoom'));
 // import MergePDFComponent from './filedownload/mergepdfdocuments';
-import TimetableMasterView from './timetableadmin/masterview';
+const TimetableMasterView = lazy(() => import('./timetableadmin/masterview'));
 // import MasterDataTable from './timetableadmin/viewmasterclasstable.jsx';
-import FacultyLoadCalculation from './timetableadmin/facultyloadadmin.jsx';
-import MasterLoadDataTable from './timetableadmin/viewinstituteloadmaster.jsx';
-import Departmentloadallocation from './timetableadmin/departmentloadallocation.jsx';
-import FacultyHourLoad from './timetableadmin/facultyhourload.jsx';
-import FacultyLoadCOE from './timetableadmin/facultyloadcoe.jsx';
-import AdminClash from './timetableadmin/AdminClashes.jsx';
-import InstituteMergedDownload from './timetableadmin/instituteMergedDownload.jsx';
+const FacultyLoadCalculation = lazy(() => import('./timetableadmin/facultyloadadmin.jsx'));
+const MasterLoadDataTable = lazy(() => import('./timetableadmin/viewinstituteloadmaster.jsx'));
+const Departmentloadallocation = lazy(() => import('./timetableadmin/departmentloadallocation.jsx'));
+const FacultyHourLoad = lazy(() => import('./timetableadmin/facultyhourload.jsx'));
+const FacultyLoadCOE = lazy(() => import('./timetableadmin/facultyloadcoe.jsx'));
+const AdminClash = lazy(() => import('./timetableadmin/AdminClashes.jsx'));
+const InstituteMergedDownload = lazy(() => import('./timetableadmin/instituteMergedDownload.jsx'));
 
-import Home from './pages/Home';
-import GuidePage from './pages/GuidePage';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import ErrorPage from './pages/ErrorPage.jsx';
-import animation404 from '../src/assets/404.json';
-import { LogoAnimation } from './components/login/LogoAnimation.jsx';
-import EventRegistration from './certificatemodule/pages/eventregistration';
-import CMDashboard from './certificatemodule/pages/cmdashboard';
-import CertificateForm from './certificatemodule/pages/certificatedesign';
+const Home = lazy(() => import('./pages/Home'));
+const GuidePage = lazy(() => import('./pages/GuidePage'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const ErrorPage = lazy(() => import('./pages/ErrorPage.jsx'));
+const NotFound = lazy(() => import('./pages/NotFound.jsx'));
+const LogoAnimation = lazy(() => import('./components/login/LogoAnimation.jsx').then((m) => ({ default: m.LogoAnimation })));
+const EventRegistration = lazy(() => import('./certificatemodule/pages/eventregistration'));
+const CMDashboard = lazy(() => import('./certificatemodule/pages/cmdashboard'));
+const CertificateForm = lazy(() => import('./certificatemodule/pages/certificatedesign'));
 // import Certificate from './certificatemodule/pages/certificatetemplates/Certificate';
-import ServicePage from './pages/Service';
-import Participant from './certificatemodule/pages/participantdataupload';
-import UserEvents from './certificatemodule/pages/UserEvents';
-import UserLogos from './certificatemodule/pages/UserLogo.jsx';
-import UserSignatures from './certificatemodule/pages/UserSignatures.jsx';
+const ServicePage = lazy(() => import('./pages/Service'));
+const Participant = lazy(() => import('./certificatemodule/pages/participantdataupload'));
+const UserEvents = lazy(() => import('./certificatemodule/pages/UserEvents'));
+const UserLogos = lazy(() => import('./certificatemodule/pages/UserLogo.jsx'));
+const UserSignatures = lazy(() => import('./certificatemodule/pages/UserSignatures.jsx'));
 
-import EODashboard from './conferencemodule/layout/eodashboard';
-import Accomodation from './conferencemodule/Tabs/Accomodation';
-import HomeConf from './conferencemodule/Tabs/HomeConf';
-import Sidebar from './conferencemodule/components/Sidebar';
-import Speaker from './conferencemodule/Tabs/Speaker';
-import Committees from './conferencemodule/Tabs/Committees';
-import Sponsors from './conferencemodule/Tabs/Sponsors';
-import Awards from './conferencemodule/Tabs/Awards';
-import Announcement from './conferencemodule/Tabs/Annoumcement';
-import Contacts from './conferencemodule/Tabs/Contacts';
-import Images from './conferencemodule/Tabs/Images';
-import EventDates from './conferencemodule/Tabs/EventDates';
-import Participants from './conferencemodule/Tabs/Participants';
-import NavbarConf from './conferencemodule/Tabs/NavbarConf';
-import NavMenu from './conferencemodule/Tabs/NavMenu';
-import HomeLayout from './conferencemodule/Tabs/HomeLayout';
-import SpeakerLayout from './conferencemodule/Tabs/SpeakerLayout';
-import Customisation from './conferencemodule/Tabs/Customisation';
-import Location from './conferencemodule/Tabs/Location';
-import CommonTemplate from './conferencemodule/Tabs/CommonTemplate';
-import ConferencePage from './conferencemodule/Tabs/ConferencePage';
+const EODashboard = lazy(() => import('./conferencemodule/layout/eodashboard'));
+const Accomodation = lazy(() => import('./conferencemodule/Tabs/Accomodation'));
+const HomeConf = lazy(() => import('./conferencemodule/Tabs/HomeConf'));
+const Sidebar = lazy(() => import('./conferencemodule/components/Sidebar'));
+const Speaker = lazy(() => import('./conferencemodule/Tabs/Speaker'));
+const Committees = lazy(() => import('./conferencemodule/Tabs/Committees'));
+const Sponsors = lazy(() => import('./conferencemodule/Tabs/Sponsors'));
+const Awards = lazy(() => import('./conferencemodule/Tabs/Awards'));
+const Announcement = lazy(() => import('./conferencemodule/Tabs/Annoumcement'));
+const Contacts = lazy(() => import('./conferencemodule/Tabs/Contacts'));
+const Images = lazy(() => import('./conferencemodule/Tabs/Images'));
+const EventDates = lazy(() => import('./conferencemodule/Tabs/EventDates'));
+const Participants = lazy(() => import('./conferencemodule/Tabs/Participants'));
+const NavbarConf = lazy(() => import('./conferencemodule/Tabs/NavbarConf'));
+const NavMenu = lazy(() => import('./conferencemodule/Tabs/NavMenu'));
+const HomeLayout = lazy(() => import('./conferencemodule/Tabs/HomeLayout'));
+const SpeakerLayout = lazy(() => import('./conferencemodule/Tabs/SpeakerLayout'));
+const Customisation = lazy(() => import('./conferencemodule/Tabs/Customisation'));
+const Location = lazy(() => import('./conferencemodule/Tabs/Location'));
+const CommonTemplate = lazy(() => import('./conferencemodule/Tabs/CommonTemplate'));
+const ConferencePage = lazy(() => import('./conferencemodule/Tabs/ConferencePage'));
 
-import Template01 from './certificatemodule/pages/certificatetemplates/akleem';
+const Template01 = lazy(() => import('./certificatemodule/pages/certificatetemplates/akleem'));
 // import ViewCertificate from './certificatemodule/pages/participantCerti';
-import Template03 from './certificatemodule/pages/certificatetemplates/03_sarthak';
+const Template03 = lazy(() => import('./certificatemodule/pages/certificatetemplates/03_sarthak'));
 
-import SponsorshipRate from './conferencemodule/Tabs/SponsorshipRates';
-import Event from './conferencemodule/Tabs/Events';
-import Souvenir from './conferencemodule/Tabs/Souvenir';
+const SponsorshipRate = lazy(() => import('./conferencemodule/Tabs/SponsorshipRates'));
+const Event = lazy(() => import('./conferencemodule/Tabs/Events'));
+const Souvenir = lazy(() => import('./conferencemodule/Tabs/Souvenir'));
 
-import NirfRanking from './nirf/rankings';
+const NirfRanking = lazy(() => import('./nirf/rankings'));
 
 // imports for Quiz Module
-import CreateQuiz from './quizModule/creator/createQuiz/CreateQuiz';
-import AddQuestionHome from './quizModule/creator/addQuestion/AddQuestionHome';
-import AddInstruction from './quizModule/creator/addQuestion/AddInstruction';
-import PreviewInstructions from './quizModule/creator/addQuestion/PreviewInstructions';
-import Settings from './quizModule/creator/addQuestion/settings';
-import Quizzing from './quizModule/student/quizzing/Quizzing';
+const CreateQuiz = lazy(() => import('./quizModule/creator/createQuiz/CreateQuiz'));
+const AddQuestionHome = lazy(() => import('./quizModule/creator/addQuestion/AddQuestionHome'));
+const AddInstruction = lazy(() => import('./quizModule/creator/addQuestion/AddInstruction'));
+const PreviewInstructions = lazy(() => import('./quizModule/creator/addQuestion/PreviewInstructions'));
+const Settings = lazy(() => import('./quizModule/creator/addQuestion/settings'));
+const Quizzing = lazy(() => import('./quizModule/student/quizzing/Quizzing'));
 // import Instructions from './quizModule/student/Instructions';
-import QuizFeedback from './quizModule/student/quizFeedback/QuizFeedback';
-import UserManagement from './dashboard/userManagement';
-import UserEventRegistration from './certificatemodule/pages/addEvent';
+const QuizFeedback = lazy(() => import('./quizModule/student/quizFeedback/QuizFeedback'));
+const UserManagement = lazy(() => import('./dashboard/userManagement'));
+const UserEventRegistration = lazy(() => import('./certificatemodule/pages/addEvent'));
 
-import Form from './platform/Form.jsx';
-import PlatformLayout from './platform/PlatformLayout.jsx';
-import PlatformDashboard from './platform/PlatformDashboard.jsx';
-import PlatformConfig from './platform/PlatformConfig.jsx';
-import PlatformModules from './platform/PlatformModules.jsx';
-import PlatformData from './platform/PlatformData.jsx';
+const Form = lazy(() => import('./platform/Form.jsx'));
+const PlatformLayout = lazy(() => import('./platform/PlatformLayout.jsx'));
+const PlatformDashboard = lazy(() => import('./platform/PlatformDashboard.jsx'));
+const PlatformConfig = lazy(() => import('./platform/PlatformConfig.jsx'));
+const PlatformModules = lazy(() => import('./platform/PlatformModules.jsx'));
+const PlatformData = lazy(() => import('./platform/PlatformData.jsx'));
 
 // import fileUpload
-import FileUpload from './fileUpload/fileUploads.jsx';
-import PaymentPortal from './conferencemodule/pages/PaymentPortal.jsx';
+const FileUpload = lazy(() => import('./fileUpload/fileUploads.jsx'));
+const PaymentPortal = lazy(() => import('./conferencemodule/pages/PaymentPortal.jsx'));
 
 //import machine learning modules
-import LinearRegression from './mlcoursemodule/linearregression.jsx';
+const LinearRegression = lazy(() => import('./mlcoursemodule/linearregression.jsx'));
 
 //import for ml project of face recognition and attendance system
-import MLDashboard from './ml/MLDashboard';
+const MLDashboard = lazy(() => import('./ml/MLDashboard'));
 
 //import faculty rankings
-import FacultyDashboard from './instituterankings/facultydashboard.jsx';
-import Logs from './timetableadmin/logs.jsx';
+const FacultyDashboard = lazy(() => import('./instituterankings/facultydashboard.jsx'));
+const Logs = lazy(() => import('./timetableadmin/logs.jsx'));
 
 // ─── Attendance Module Imports ────────────────────────────────────
-import EditGroundTruth from './attendancemodule/editgroundtruth';
-import RollAssign from './attendancemodule/rollassign';
+const EditGroundTruth = lazy(() => import('./attendancemodule/editgroundtruth'));
+const RollAssign = lazy(() => import('./attendancemodule/rollassign'));
 // import FlaggedAssign from './attendancemodule/flaggedassign';
-import Attendancedoc from './attendancemodule/Attendancedoc';
-import ModelPerformance from './attendancemodule/modelperformance';
-import ModelAnalytics from './attendancemodule/ModelAnalytics';
-import AttendanceReport from './attendancemodule/AttendanceReport';
-import GroundTruthRTSP from './attendancemodule/groundtruthgen_rtsp';
-import GroundTruthUpload from './attendancemodule/groundtruthupload';
-import EmbeddingGeneration from './attendancemodule/EmbeddingGeneration';
-import ERPSync from './attendancemodule/ERPSync';
-import Camera from './attendancemodule/camera';
-import CameraPreview from './attendancemodule/cameraPreview';
-import FrameVerification from './attendancemodule/FrameVerification';
-import UnknownFaces from './attendancemodule/UnknownFaces';
-import SchedulerPage from './attendancemodule/SchedulerPage';
-import SchedulerLedgerPage from './attendancemodule/SchedulerLedgerPage';
-import { ExtraClassPage, AlterClassPage } from './attendancemodule/extraAlterClasses';
-import LiveReportPage from './attendancemodule/LiveReportPage';
-import RecordStream from './attendancemodule/RecordStream';
-import ErpOverrides from './attendancemodule/ErpOverrides';
-import AttendanceDisputes from './attendancemodule/AttendanceDisputes';
-import ErpOverrideAnalysis from './attendancemodule/ErpOverrideAnalysis';
-import StudentPhotoUpdate from './attendancemodule/StudentPhotoUpdate';
-import PhotoSwapBatchSendPage from './platform/PhotoSwapBatchSendPage';
+const Attendancedoc = lazy(() => import('./attendancemodule/Attendancedoc'));
+const ModelPerformance = lazy(() => import('./attendancemodule/modelperformance'));
+const ModelAnalytics = lazy(() => import('./attendancemodule/ModelAnalytics'));
+const AttendanceReport = lazy(() => import('./attendancemodule/AttendanceReport'));
+const GroundTruthRTSP = lazy(() => import('./attendancemodule/groundtruthgen_rtsp'));
+const GroundTruthUpload = lazy(() => import('./attendancemodule/groundtruthupload'));
+const EmbeddingGeneration = lazy(() => import('./attendancemodule/EmbeddingGeneration'));
+const ERPSync = lazy(() => import('./attendancemodule/ERPSync'));
+const Camera = lazy(() => import('./attendancemodule/camera'));
+const CameraPreview = lazy(() => import('./attendancemodule/cameraPreview'));
+const FrameVerification = lazy(() => import('./attendancemodule/FrameVerification'));
+const UnknownFaces = lazy(() => import('./attendancemodule/UnknownFaces'));
+const SchedulerPage = lazy(() => import('./attendancemodule/SchedulerPage'));
+const SchedulerLedgerPage = lazy(() => import('./attendancemodule/SchedulerLedgerPage'));
+const ExtraClassPage = lazy(() => import('./attendancemodule/extraAlterClasses').then((m) => ({ default: m.ExtraClassPage })));
+const AlterClassPage = lazy(() => import('./attendancemodule/extraAlterClasses').then((m) => ({ default: m.AlterClassPage })));
+const LiveReportPage = lazy(() => import('./attendancemodule/LiveReportPage'));
+const RecordStream = lazy(() => import('./attendancemodule/RecordStream'));
+const ErpOverrides = lazy(() => import('./attendancemodule/ErpOverrides'));
+const AttendanceDisputes = lazy(() => import('./attendancemodule/AttendanceDisputes'));
+const ErpOverrideAnalysis = lazy(() => import('./attendancemodule/ErpOverrideAnalysis'));
+const StudentPhotoUpdate = lazy(() => import('./attendancemodule/StudentPhotoUpdate'));
+const PhotoSwapBatchSendPage = lazy(() => import('./platform/PhotoSwapBatchSendPage'));
 
-import AMSDashboard from './attendancemodule/AMSDashboard';
-import AMSLayout from './attendancemodule/AMSLayout';
-import CameraRegistry from './attendancemodule/camera';
-import InstituteIdentification from './attendancemodule/InstituteIdentification';
-import EditSessionDates from './attendancemodule/editSessionDates'; // 1. Added explicit file import string logic here
-import GpuMetrics from './attendancemodule/GpuMetrics';
-import NodeConsole from './attendancemodule/NodeConsole';
-import ReactConsole from './attendancemodule/ReactConsole';
-import DeployConsole from './dashboard/DeployConsole';
-import AMSManual from './attendancemodule/manual';
-import TTManual from './timetableadmin/TTManual';
-import CertManual from './certificatemodule/CertManual';
-import ConfManual from './conferencemodule/ConfManual';
+const AMSDashboard = lazy(() => import('./attendancemodule/AMSDashboard'));
+const AMSLayout = lazy(() => import('./attendancemodule/AMSLayout'));
+const CameraRegistry = lazy(() => import('./attendancemodule/camera'));
+const InstituteIdentification = lazy(() => import('./attendancemodule/InstituteIdentification'));
+const EditSessionDates = lazy(() => import('./attendancemodule/editSessionDates'));
+const GpuMetrics = lazy(() => import('./attendancemodule/GpuMetrics'));
+const NodeConsole = lazy(() => import('./attendancemodule/NodeConsole'));
+const ReactConsole = lazy(() => import('./attendancemodule/ReactConsole'));
+const DeployConsole = lazy(() => import('./dashboard/DeployConsole'));
+const AMSManual = lazy(() => import('./attendancemodule/manual'));
+const TTManual = lazy(() => import('./timetableadmin/TTManual'));
+const CertManual = lazy(() => import('./certificatemodule/CertManual'));
+const ConfManual = lazy(() => import('./conferencemodule/ConfManual'));
 
 // ─── Department Admin Module Imports ────────────────────────────
-import DeptAdminLayout from './deptadmin/DeptAdminLayout';
-import DeptDashboard from './deptadmin/DeptDashboard';
-import DeptReports from './deptadmin/DeptReports';
-import DeptBugReports from './deptadmin/DeptBugReports';
-import DeptDisputes from './deptadmin/DeptDisputes';
-import {
-    DeptAssignRolls,
-    DeptLiveRTSP,
-    DeptGroundTruthUpload,
-    DeptAttendanceReport,
-    DeptClassVerification,
-    DeptSubjectEmbeddings,
-    DeptConfidenceMonitor,
-} from './deptadmin/DeptAdminTools';
-import DeptMenuConfig from './attendancemodule/DeptMenuConfig';
+const DeptAdminLayout = lazy(() => import('./deptadmin/DeptAdminLayout'));
+const DeptDashboard = lazy(() => import('./deptadmin/DeptDashboard'));
+const DeptReports = lazy(() => import('./deptadmin/DeptReports'));
+const DeptBugReports = lazy(() => import('./deptadmin/DeptBugReports'));
+const DeptDisputes = lazy(() => import('./deptadmin/DeptDisputes'));
+const DeptAssignRolls = lazy(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptAssignRolls })));
+const DeptLiveRTSP = lazy(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptLiveRTSP })));
+const DeptGroundTruthUpload = lazy(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptGroundTruthUpload })));
+const DeptAttendanceReport = lazy(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptAttendanceReport })));
+const DeptClassVerification = lazy(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptClassVerification })));
+const DeptSubjectEmbeddings = lazy(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptSubjectEmbeddings })));
+const DeptConfidenceMonitor = lazy(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptConfidenceMonitor })));
+const DeptMenuConfig = lazy(() => import('./attendancemodule/DeptMenuConfig'));
 
 // Learning module — self-contained under src/learningModule; every screen
 // hangs off the single /learning/* route below.
-import LearningRoutes from './learningModule/LearningRoutes.jsx';
+const LearningRoutes = lazy(() => import('./learningModule/LearningRoutes.jsx'));
 
 //confifence monitor
-import ConfidenceMonitor from './attendancemodule/confidenceMonitor';
-import { MLDataFolder } from './attendancemodule/MLDataFolder.jsx';
-import MLFineTuning from './attendancemodule/MLFineTuning';
 import { setupOtaUpdater } from './utils/otaUpdater';
 import { initializePushNotifications } from './utils/pushNotifications';
 import { useEffect } from 'react';
+
+const ConfidenceMonitor = lazy(() => import('./attendancemodule/confidenceMonitor'));
+const MLDataFolder = lazy(() => import('./attendancemodule/MLDataFolder.jsx').then((m) => ({ default: m.MLDataFolder })));
+const MLFineTuning = lazy(() => import('./attendancemodule/MLFineTuning'));
 
 const HardwareBackButton = () => {
   const location = useLocation();
@@ -256,6 +269,21 @@ const HardwareBackButton = () => {
   return null;
 };
 
+/**
+ * What fills the page while a route's chunk is in flight.
+ *
+ * Inline styles and no component library on purpose: this is the one thing that
+ * has to render before anything else has loaded, on the slow connection that
+ * made splitting worth doing in the first place.
+ */
+function RouteFallback() {
+  return (
+    <div style={{ padding: 48, textAlign: 'center', color: '#666' }} role="status" aria-live="polite">
+      Loading…
+    </div>
+  );
+}
+
 function App() {
   useEffect(() => {
     setupOtaUpdater();
@@ -269,6 +297,12 @@ function App() {
       {/* <h1>XCEED-Timetable Module</h1>  */}
       {!window.location.pathname.startsWith('/photo-update') && <Navbar />}
 
+      {/* One boundary around the whole table rather than per route: a lazy
+          element with no Suspense above it throws, and a single boundary here
+          cannot be forgotten when a route is added. The fallback is deliberately
+          plain — it shows for the length of one chunk fetch, and anything
+          heavier would need its own bytes to render. */}
+      <Suspense fallback={<RouteFallback />}>
       <Routes>
         {/* Landing Page */}
         <Route path="/" element={<Navigate to="/login" replace />} />
@@ -504,22 +538,9 @@ function App() {
             />
           }
         ></Route>
-        <Route
-          path="*"
-          element={
-            <ErrorPage
-              message="The page you are looking for does not exist..."
-              destination="/"
-              destinationName="Home"
-              animation={
-                <Lottie
-                  animationData={animation404}
-                  style={{ opacity: '15%' }}
-                />
-              }
-            />
-          }
-        ></Route>
+        {/* Its own module now — it carried `lottie-react` and the animation JSON,
+            which the entry chunk was paying for on every page load. */}
+        <Route path="*" element={<NotFound />}></Route>
 
         {/* Platform Routes with Sidebar */}
         <Route path="/platform" element={<PlatformLayout />}>
@@ -634,6 +655,7 @@ function App() {
           <Route path="preview" element={<CameraPreview />} />
         </Route>
       </Routes>
+      </Suspense>
       {/* <Footer/> */}
       {/* </div> */}
     </Router>
