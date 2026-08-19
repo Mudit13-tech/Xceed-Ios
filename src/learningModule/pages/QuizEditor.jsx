@@ -29,6 +29,7 @@ import {
   Text,
   Textarea,
   Tooltip,
+  useClipboard,
   useDisclosure,
   useToast,
 } from '@chakra-ui/react';
@@ -385,6 +386,15 @@ export default function QuizEditor() {
   const publishDialog = useDisclosure();
   const importDialog = useDisclosure();
   const [wentLive, setWentLive] = useState(false);
+  // Safe Exam Browser authoring. Kept local rather than folded into `quiz`:
+  // the file itself and the once-shown bypass code are never part of the
+  // settings object the big Save button persists — both go to the server
+  // immediately, through their own endpoints, the moment they are set.
+  const [sebFile, setSebFile] = useState(null);
+  const [sebUploading, setSebUploading] = useState(false);
+  const [sebCodeBusy, setSebCodeBusy] = useState(false);
+  const [sebGeneratedCode, setSebGeneratedCode] = useState('');
+  const sebCodeClip = useClipboard(sebGeneratedCode);
 
   const load = useCallback(async () => {
     setError(null);
@@ -470,6 +480,48 @@ export default function QuizEditor() {
   if (!quiz) return null;
 
   const set = (changes) => setQuiz((prev) => ({ ...prev, ...changes }));
+  const uploadSebFile = async () => {
+    if (!sebFile) return;
+    setSebUploading(true);
+    try {
+      const { settings } = await lmApi.uploadSebConfig(classId, quizId, sebFile);
+      set({ settings });
+      setSebFile(null);
+      toast({ status: 'success', title: 'Safe Exam Browser file uploaded.', duration: 4000 });
+    } catch (err) {
+      toast({ status: 'error', title: err.message, duration: 6000 });
+    } finally {
+      setSebUploading(false);
+    }
+  };
+
+  const generateSebCode = async () => {
+    setSebCodeBusy(true);
+    try {
+      const { code, settings } = await lmApi.setSebBypassCode(classId, quizId, {});
+      set({ settings });
+      // Shown once, here, and never again — only its hash is kept server-side.
+      setSebGeneratedCode(code);
+    } catch (err) {
+      toast({ status: 'error', title: err.message, duration: 6000 });
+    } finally {
+      setSebCodeBusy(false);
+    }
+  };
+
+  const clearSebCode = async () => {
+    setSebCodeBusy(true);
+    try {
+      const { settings } = await lmApi.setSebBypassCode(classId, quizId, { clear: true });
+      set({ settings });
+      setSebGeneratedCode('');
+    } catch (err) {
+      toast({ status: 'error', title: err.message, duration: 6000 });
+    } finally {
+      setSebCodeBusy(false);
+    }
+  };
+
   const setSetting = (key, value) => set({ settings: { ...quiz.settings, [key]: value } });
   const setSettings = (changes) => set({ settings: { ...quiz.settings, ...changes } });
   const settings = quiz.settings;
@@ -1021,6 +1073,158 @@ export default function QuizEditor() {
                 <Text fontSize="xs" color="lmFg.muted" pl={6} mt={-1}>
                   Turn this off for a paper where the arithmetic is the point.
                 </Text>
+
+                <Divider />
+
+                {/* Safe Exam Browser. A different kind of control from
+                    everything above: those raise the cost of cheating from
+                    inside an ordinary tab; this replaces the tab, so it closes
+                    what nothing above can reach — a desktop AI assistant that
+                    overlays the browser without ever touching it (no blur, no
+                    visibility change, no fullscreen exit — see the long
+                    comment on lmQuiz's `requireSafeExamBrowser`). */}
+                <Checkbox
+                  size="sm"
+                  isChecked={Boolean(settings.requireSafeExamBrowser)}
+                  onChange={(e) => setSetting('requireSafeExamBrowser', e.target.checked)}
+                >
+                  Require Safe Exam Browser
+                </Checkbox>
+                <Text fontSize="xs" color="lmFg.muted" pl={6} mt={-1}>
+                  Highly secure. The test can only be opened inside Safe Exam Browser (SEB) — a
+                  locked-down browser students install beforehand — which shuts every other
+                  application out for the duration. Without it, a student cannot start this test
+                  at all, unless you enable the access-code fallback below.
+                </Text>
+
+                {settings.requireSafeExamBrowser && (
+                  <Box pl={6} mt={2}>
+                    <Stack spacing={4} borderLeftWidth="2px" borderColor="lmBorder.base" pl={4}>
+                      <Box>
+                        <Text fontSize="sm" fontWeight="600" mb={1}>
+                          1. Exam settings file
+                        </Text>
+                        <Text fontSize="xs" color="lmFg.muted" mb={2}>
+                          Build this once in SEB&apos;s own free Configuration Tool — set the Start
+                          URL to this test&apos;s link and a quit password if you want one — then
+                          upload the <code>.seb</code> file it produces. The tool also shows a{' '}
+                          <b>Config Key</b>: paste that into the field below. Both have to match the
+                          same saved file, or the check below will refuse every student, including
+                          ones who did everything right.
+                        </Text>
+                        <HStack mb={1}>
+                          <Input
+                            size="sm"
+                            type="file"
+                            accept=".seb"
+                            onChange={(e) => setSebFile(e.target.files?.[0] || null)}
+                            maxW="280px"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={uploadSebFile}
+                            isDisabled={!sebFile}
+                            isLoading={sebUploading}
+                          >
+                            Upload
+                          </Button>
+                        </HStack>
+                        <Text fontSize="xs" color={settings.sebConfigFileName ? 'lmHue.green700' : 'lmFg.faint'}>
+                          {settings.sebConfigFileName
+                            ? `Current file: ${settings.sebConfigFileName}`
+                            : 'No file uploaded yet.'}
+                        </Text>
+                      </Box>
+
+                      <FormControl>
+                        <FormLabel fontSize="xs">Config Key</FormLabel>
+                        <Input
+                          size="sm"
+                          fontFamily="mono"
+                          placeholder="Pasted from the SEB Configuration Tool"
+                          value={settings.sebConfigKey || ''}
+                          onChange={(e) => setSetting('sebConfigKey', e.target.value)}
+                        />
+                      </FormControl>
+
+                      {/* Three states, not two. The middle one is the common case
+                          now: the institution has a file on the server, so this
+                          paper is ready without anybody uploading anything, and
+                          telling a teacher "not ready" there sends them to build a
+                          file they do not need. */}
+                      {settings.sebConfigSource === 'shared' ? (
+                        <Alert status="success" borderRadius="md" fontSize="xs" py={2}>
+                          <AlertIcon />
+                          <Box>
+                            Ready — using the institution&apos;s shared configuration
+                            {settings.sebSharedFileName ? ` (${settings.sebSharedFileName})` : ''}. Upload a
+                            file above only if this paper needs a lockdown of its own.
+                          </Box>
+                        </Alert>
+                      ) : settings.sebConfigSource === 'quiz' ? (
+                        <Alert status="success" borderRadius="md" fontSize="xs" py={2}>
+                          <AlertIcon />
+                          Ready — this paper uses its own file and key.
+                        </Alert>
+                      ) : (
+                        <Alert status="warning" borderRadius="md" fontSize="xs" py={2}>
+                          <AlertIcon />
+                          <Box>
+                            Not ready yet — this paper has no file of its own and no shared
+                            configuration has been set up for the institution. Either upload both
+                            above, or ask an administrator to set the shared one once for everybody.
+                          </Box>
+                        </Alert>
+                      )}
+
+                      <Box>
+                        <Text fontSize="sm" fontWeight="600" mb={1}>
+                          2. Access code, for a student without Safe Exam Browser
+                        </Text>
+                        <Text fontSize="xs" color="lmFg.muted" mb={2}>
+                          SEB only runs on Windows and macOS, and has to be installed beforehand —
+                          real, known reasons a student cannot use it. One shared code lets you get
+                          a specific student into the test from an ordinary browser when that
+                          happens; hand it out yourself, to whoever actually needs it. Every use is
+                          still recorded on the attempt it unlocks.
+                        </Text>
+                        {sebGeneratedCode ? (
+                          <Alert status="success" borderRadius="md" fontSize="xs" flexDirection="column" alignItems="flex-start" py={2}>
+                            <HStack>
+                              <AlertIcon />
+                              <Text fontWeight="600">Copy this now — it will not be shown again.</Text>
+                            </HStack>
+                            <HStack mt={2}>
+                              <Text fontFamily="mono" fontSize="md" fontWeight="700" letterSpacing="0.1em">
+                                {sebGeneratedCode}
+                              </Text>
+                              <Button size="xs" onClick={sebCodeClip.onCopy}>
+                                {sebCodeClip.hasCopied ? 'Copied' : 'Copy'}
+                              </Button>
+                            </HStack>
+                          </Alert>
+                        ) : (
+                          <HStack>
+                            <Button size="sm" onClick={generateSebCode} isLoading={sebCodeBusy}>
+                              {settings.sebBypassEnabled ? 'Generate a new code' : 'Enable and generate a code'}
+                            </Button>
+                            {settings.sebBypassEnabled && (
+                              <Button size="sm" variant="outline" colorScheme="red" onClick={clearSebCode} isLoading={sebCodeBusy}>
+                                Turn off the access code
+                              </Button>
+                            )}
+                          </HStack>
+                        )}
+                        {settings.sebBypassEnabled && !sebGeneratedCode && (
+                          <Text fontSize="xs" color="lmFg.muted" mt={1}>
+                            A code is active. Generating a new one replaces it — the old code stops
+                            working the moment you do.
+                          </Text>
+                        )}
+                      </Box>
+                    </Stack>
+                  </Box>
+                )}
               </Stack>
             </SectionCard>
           </TabPanel>

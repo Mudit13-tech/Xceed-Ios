@@ -309,11 +309,20 @@ function AttemptAnswersModal({ attempt, classId, onClose }) {
  * passed — which is precisely the situation being fixed — so both would expire
  * the moment the student clicked back in.
  */
-function AttemptActionModal({ state, onClose, onDone, classId, toast }) {
+function AttemptActionModal({ state, onClose, onDone, classId, quiz, toast }) {
   const [minutes, setMinutes] = useState(30);
+  const [sebExempt, setSebExempt] = useState(false);
   const [busy, setBusy] = useState(false);
   const meta = state ? ACTIONS[state.action] : null;
   const timed = state?.action !== 'delete';
+  const sebRequired = Boolean(quiz?.settings?.requireSafeExamBrowser);
+
+  useEffect(() => {
+    // Off by default on every fresh confirmation — this waives a security
+    // check, so it has to be a decision made for this reopen, never one that
+    // silently carries over from the last student a teacher let back in.
+    if (state) setSebExempt(false);
+  }, [state]);
 
   const run = async () => {
     setBusy(true);
@@ -325,6 +334,7 @@ function AttemptActionModal({ state, onClose, onDone, classId, toast }) {
         await lmApi.reopenQuizAttempt(classId, state.attempt._id, {
           mode: state.action === 'restart' ? 'restart' : 'continue',
           minutes: Number(minutes) || 30,
+          ...(sebRequired ? { sebExempt } : {}),
         });
         toast({
           title: state.action === 'restart' ? 'Test reset for the student' : 'Test reopened',
@@ -377,6 +387,24 @@ function AttemptActionModal({ state, onClose, onDone, classId, toast }) {
               <AlertIcon />
               Their previous answers cannot be recovered afterwards.
             </Alert>
+          )}
+
+          {timed && sebRequired && (
+            <FormControl mt={4}>
+              <Checkbox
+                size="sm"
+                isChecked={sebExempt}
+                onChange={(e) => setSebExempt(e.target.checked)}
+              >
+                Let them in without Safe Exam Browser
+              </Checkbox>
+              <FormHelperText fontSize="xs">
+                This quiz requires Safe Exam Browser, so without this the reopened sitting will be
+                shut down again the moment it makes its next request — check it if that is what
+                terminated them (a toggle changed mid-test, a replaced exam file) rather than
+                something they did.
+              </FormHelperText>
+            </FormControl>
           )}
         </ModalBody>
         <ModalFooter gap={2}>
@@ -1858,6 +1886,7 @@ export default function QuizResults() {
       <AttemptActionModal
         state={action}
         classId={classId}
+        quiz={quiz}
         toast={toast}
         onClose={() => setAction(null)}
         onDone={load}

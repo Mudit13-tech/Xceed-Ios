@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { Box } from '@chakra-ui/react';
 import DOMPurify from 'dompurify';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 
 /**
  * Small GitHub-flavoured-Markdown subset renderer.
@@ -14,6 +16,74 @@ import DOMPurify from 'dompurify';
 
 const escapeHtml = (text) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/**
+ * LaTeX math is pulled out of the source before the line-based Markdown
+ * parser ever sees it, rendered to HTML with KaTeX, and dropped back in as an
+ * opaque placeholder. Doing this first means an underscore or asterisk inside
+ * an expression (`x_i`, `a*b`) never gets mistaken for Markdown emphasis, and
+ * the LaTeX source never gets HTML-escaped by renderInline.
+ *
+ * Both delimiter styles are supported, since different generators emit
+ * different ones:
+ *   - Dollar style:   $$ ... $$   (block)   and   $ ... $   (inline)
+ *   - Bracket style:  \[ ... \]   (block)   and   \( ... \) (inline)
+ * Block-style patterns are always matched before inline-style ones so a
+ * multi-line $$...$$ isn't chopped up by the single-line $...$ regex first.
+ *
+ * Placeholders use \0, a byte that never appears in authored text and that
+ * none of the Markdown regexes below match, so they pass through the parser
+ * inert and get swapped for the real KaTeX HTML afterwards.
+ *
+ * Known limitation: a lone "$" (e.g. "costs $5") is left alone since the
+ * regex requires a closing "$" to treat something as math — but "$5 and $10"
+ * on the same line *would* look like a valid inline-math pair to a naive
+ * regex. To guard against that, a $...$ match is only treated as math if its
+ * contents look LaTeX-ish (contain a backslash, ^, _, or {}); otherwise it's
+ * left as plain text. Teachers hitting an edge case here can still escape as
+ * "\$5" or switch to \( \) delimiters for real inline formulas near currency.
+ */
+function extractMath(source) {
+  const mathBlocks = [];
+
+  const renderMath = (expr, displayMode) => {
+    try {
+      return katex.renderToString(expr.trim(), { displayMode, throwOnError: false, output: 'html' });
+    } catch {
+      // throwOnError: false means KaTeX itself won't throw for bad syntax —
+      // this only catches truly unexpected failures, so we never let one
+      // formula take down the whole render.
+      return escapeHtml(displayMode ? `$$${expr}$$` : `$${expr}$`);
+    }
+  };
+
+  const withPlaceholder = (html) => {
+    mathBlocks.push(html);
+    return `\0MATH${mathBlocks.length - 1}\0`;
+  };
+
+  // Looks like actual LaTeX rather than plain text / currency figures.
+  const looksLikeMath = (expr) => /[\\^_{}]/.test(expr);
+
+  let text = source;
+
+  // --- Block math (must run before inline math) ---
+  text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, expr) => withPlaceholder(renderMath(expr, true)));
+  text = text.replace(/\\\[([\s\S]+?)\\\]/g, (_, expr) => withPlaceholder(renderMath(expr, true)));
+
+  // --- Inline math ---
+  text = text.replace(/(?<!\$)\$([^$\n]+?)\$(?!\$)/g, (match, expr) => {
+    if (!looksLikeMath(expr)) return match; // e.g. "$5 and $10" — leave as plain text
+    return withPlaceholder(renderMath(expr, false));
+  });
+  text = text.replace(/\\\(([\s\S]+?)\\\)/g, (_, expr) => withPlaceholder(renderMath(expr, false)));
+
+  return { text, mathBlocks };
+}
+
+function restoreMath(html, mathBlocks) {
+  return html.replace(/\0MATH(\d+)\0/g, (_, i) => mathBlocks[Number(i)]);
+}
 
 function renderInline(text) {
   return escapeHtml(text)
@@ -158,13 +228,13 @@ function markdownToHtml(markdown) {
 }
 
 export default function Markdown({ children, ...rest }) {
-  const html = useMemo(
-    () =>
-      DOMPurify.sanitize(markdownToHtml(children), {
-        ADD_ATTR: ['target', 'rel'],
-      }),
-    [children],
-  );
+  const html = useMemo(() => {
+    const { text, mathBlocks } = extractMath(String(children || ''));
+    const rendered = restoreMath(markdownToHtml(text), mathBlocks);
+    return DOMPurify.sanitize(rendered, {
+      ADD_ATTR: ['target', 'rel'],
+    });
+  }, [children]);
 
   return (
     <Box
@@ -211,6 +281,7 @@ export default function Markdown({ children, ...rest }) {
         'th, td': { borderWidth: '1px', borderColor: 'gray.200', px: 3, py: 2, textAlign: 'left', fontSize: 'sm' },
         th: { bg: 'gray.50', fontWeight: 600 },
         hr: { my: 5, borderColor: 'gray.200' },
+        '.katex-display': { my: 3, overflowX: 'auto', overflowY: 'hidden' },
       }}
       // Content is sanitised by DOMPurify immediately above.
       dangerouslySetInnerHTML={{ __html: html }}

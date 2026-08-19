@@ -10,6 +10,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import LearningLayout from './components/LearningLayout';
 import RequireTeacher from './components/RequireTeacher';
 import ClassLayout from './pages/ClassLayout';
+const SebExit = lazy(() => import('./pages/SebExit'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Stream = lazy(() => import('./pages/Stream'));
 const Material = lazy(() => import('./pages/Material'));
@@ -81,6 +82,12 @@ export default function LearningRoutes() {
       <Route path="short/join" element={<ShortJoin />} />
       <Route path="short/join/:code" element={<ShortJoin />} />
       <Route path="short/live/:sessionId" element={<ShortPlay />} />
+
+      {/* Where Safe Exam Browser is sent to quit — the `quitURL` in the settings
+          file. Outside LearningLayout on purpose: the layout fetches the signed-in
+          user and would bounce to a login page, and a student being shown "you may
+          close this" has nothing left to sign in for. */}
+      <Route path="seb-exit" element={<SebExit />} />
 
       <Route element={<LearningLayout />}>
         <Route index element={<Dashboard />} />

@@ -1,5 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Badge, Box, Flex, Link as RouterLinkStyle, SimpleGrid, Text, VStack } from '@chakra-ui/react';
+import {
+  Alert,
+  AlertIcon,
+  Badge,
+  Box,
+  Button,
+  Flex,
+  Input,
+  Link as RouterLinkStyle,
+  SimpleGrid,
+  Stack,
+  Text,
+  VStack,
+} from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import lmApi from '../api/lmApi';
@@ -41,6 +54,188 @@ function CountBadges({ counts, styles }) {
         </Badge>
       ))}
     </Flex>
+  );
+}
+
+/**
+ * The institution's Safe Exam Browser setup, in one place.
+ *
+ * It used to be per quiz: every SEB exam meant another trip through SEB's
+ * Configuration Tool for a file that was the same every time. One file here
+ * serves every paper — the hash SEB and the server compare is over the
+ * *request's* URL plus the Config Key, so one key is valid for every quiz under
+ * it (see services/sebGate.js).
+ *
+ * The Config Key is asked for alongside the file and never shown back. It is the
+ * secret half of the check for every exam at once, so it goes in and does not
+ * come out.
+ */
+/** One line of the shared-configuration status: present, or not, and why it matters. */
+function SebStatusRow({ ok, label, detail }) {
+  return (
+    <Flex align="center" gap={2} py={1}>
+      <Text fontSize="sm" color={ok ? 'green.500' : 'red.500'} fontWeight="700" w="16px">
+        {ok ? '✓' : '✗'}
+      </Text>
+      <Text fontSize="sm" fontWeight="600" minW="190px">
+        {label}
+      </Text>
+      <Text fontSize="sm" color="lmFg.subtle">
+        {detail}
+      </Text>
+    </Flex>
+  );
+}
+
+function SharedSebCard() {
+  const [state, setState] = useState(null);
+  const [file, setFile] = useState(null);
+  const [configKey, setConfigKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  // The address students will open. Defaults to wherever this page is being
+  // viewed from, which is right in production and wrong on a developer's laptop
+  // - and getting it wrong is not cosmetic: SEB computes the Config Key over the
+  // settings, Start URL included.
+  const [origin, setOrigin] = useState(() => window.location.origin);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setState(await lmApi.getSharedSebConfig());
+    } catch {
+      // A failure here is not worth a red page on a dashboard: the card simply
+      // shows nothing configured, which is also the state it would be in.
+      setState({ ready: false });
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const upload = async () => {
+    setBusy(true);
+    setError('');
+    setSaved(false);
+    try {
+      setState(await lmApi.setSharedSebConfig(file, configKey.trim()));
+      setFile(null);
+      setConfigKey('');
+      setSaved(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <SectionCard
+      title="Safe Exam Browser — shared configuration"
+      subtitle="One .seb file and its Config Key for every exam in the institution. A quiz that uploads its own still uses its own."
+    >
+      {state === null ? (
+        <Loading label="Checking…" />
+      ) : (
+        <>
+          {/* Itemised, because "not working" has two causes and an administrator
+              needs to know which one they are looking at: a missing file is an
+              upload, a missing key is a trip through SEB's Configuration Tool. */}
+          <Box borderWidth="1px" borderColor="lmBorder.default" borderRadius="md" p={3} mb={4}>
+            <SebStatusRow
+              ok={state.hasFile}
+              label="Settings file on the server"
+              detail={state.hasFile ? state.fileName : 'Not uploaded'}
+            />
+            <SebStatusRow
+              ok={state.hasKey}
+              label="Config Key on the server"
+              detail={state.hasKey ? 'Stored (never shown again)' : 'Not set'}
+            />
+            <Text fontSize="xs" color="lmFg.subtle" mt={2}>
+              {state.ready
+                ? `Safe Exam Browser exams are ready to run.${state.uploadedByName ? ` Set by ${state.uploadedByName}.` : ''}`
+                : 'Until both are present, a quiz requiring Safe Exam Browser can only run if it carries a file of its own.'}
+            </Text>
+          </Box>
+
+          <Text fontSize="sm" fontWeight="600" mb={1}>
+            1. Start from the sample
+          </Text>
+          <Text fontSize="xs" color="lmFg.subtle" mb={2}>
+            Built for this installation with the lockdown at maximum — no other applications, no
+            keyboard route out, no reload or downloads, one screen, and a URL filter that admits
+            only this server. Open it in SEB&apos;s Configuration Tool: that is where the Config Key
+            comes from, and where to set a quit password.
+          </Text>
+          <Stack direction={{ base: 'column', md: 'row' }} spacing={2} mb={2} maxW="520px">
+            <Input
+              size="sm"
+              value={origin}
+              onChange={(event) => setOrigin(event.target.value)}
+              placeholder="https://xceed.nitj.ac.in"
+            />
+            <Button as="a" href={lmApi.sampleSebUrl(origin)} size="sm" flexShrink={0}>
+              &#11015; Download sample .seb
+            </Button>
+          </Stack>
+          <Alert status="warning" borderRadius="md" mb={4} py={2} fontSize="xs">
+            <AlertIcon boxSize={3} />
+            <Box>
+              This must be the address students actually open. SEB computes the Config Key over the
+              settings, Start URL included, so a file built for localhost carries a key that will
+              refuse every student on the real site.
+            </Box>
+          </Alert>
+
+          <Text fontSize="sm" fontWeight="600" mb={1}>
+            2. Upload the file and its key
+          </Text>
+          <Text fontSize="xs" color="lmFg.subtle" mb={2}>
+            Both together — a key that does not belong to the file beside it fails every request, and
+            would take every SEB exam down at once.
+          </Text>
+          <Stack spacing={2} maxW="520px">
+            <Input
+              type="file"
+              accept=".seb"
+              size="sm"
+              p={1}
+              onChange={(event) => setFile(event.target.files?.[0] || null)}
+            />
+            <Input
+              size="sm"
+              fontFamily="mono"
+              placeholder="Config Key, from the SEB Configuration Tool"
+              value={configKey}
+              onChange={(event) => setConfigKey(event.target.value)}
+            />
+            <Box>
+              <Button
+                size="sm"
+                colorScheme="purple"
+                onClick={upload}
+                isLoading={busy}
+                isDisabled={!file || !configKey.trim()}
+              >
+                {state.ready ? 'Replace the shared configuration' : 'Save the shared configuration'}
+              </Button>
+            </Box>
+            {error && (
+              <Text fontSize="xs" color="red.500">
+                {error}
+              </Text>
+            )}
+            {saved && (
+              <Text fontSize="xs" color="green.600">
+                Saved. Every SEB exam uses it from now on.
+              </Text>
+            )}
+          </Stack>
+        </>
+      )}
+    </SectionCard>
   );
 }
 
@@ -98,6 +293,8 @@ export default function LmAdmin() {
           accent="purple.500"
         />
       </SimpleGrid>
+
+      <SharedSebCard />
 
       <SectionCard
         title="Bugs & suggestions"

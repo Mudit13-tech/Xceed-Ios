@@ -55,7 +55,26 @@ export default function ClassSettings() {
   const [saving, setSaving] = useState(false);
   const [lockedRooms, setLockedRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
+  
+  const [semesters, setSemesters] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [loadingSemesters, setLoadingSemesters] = useState(false);
+  const [loadingSubjects, setLoadingSubjects] = useState(false);
+  const [branchCode, setBranchCode] = useState(null);
+
   const { onCopy, hasCopied } = useClipboard(code);
+
+  // Resolve branch code from dept name
+  useEffect(() => {
+    if (!klass.dept) return;
+    let cancelled = false;
+    lmApi.ttBranches().then(branches => {
+      if (cancelled) return;
+      const branch = branches.find(b => b.dept === klass.dept);
+      if (branch) setBranchCode(branch.code);
+    }).catch(console.error);
+    return () => { cancelled = true; };
+  }, [klass.dept]);
 
   useEffect(() => {
     if (!klass.dept || !klass.semester || !klass.subject) return;
@@ -117,6 +136,37 @@ export default function ClassSettings() {
     fetchRooms();
     return () => { isMounted = false; };
   }, [klass.dept, klass.semester, klass.subject]);
+
+  useEffect(() => {
+    if (!branchCode) return undefined;
+    let cancelled = false;
+    setLoadingSemesters(true);
+    lmApi
+      .ttSemesters(branchCode)
+      .then((list) => !cancelled && setSemesters(list))
+      .catch(() => !cancelled && setSemesters([]))
+      .finally(() => !cancelled && setLoadingSemesters(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [branchCode]);
+
+  useEffect(() => {
+    if (!branchCode || !form.semester) {
+      setSubjects([]);
+      return undefined;
+    }
+    let cancelled = false;
+    setLoadingSubjects(true);
+    lmApi
+      .ttSubjects(branchCode, form.semester)
+      .then((list) => !cancelled && setSubjects(list))
+      .catch(() => !cancelled && setSubjects([]))
+      .finally(() => !cancelled && setLoadingSubjects(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [branchCode, form.semester]);
 
   const set = (field) => (event) => setForm((prev) => ({ ...prev, [field]: event.target.value }));
   const setSetting = (field, value) => setSettings((prev) => ({ ...prev, [field]: value }));
@@ -199,12 +249,29 @@ export default function ClassSettings() {
             <Input value={form.section} onChange={set('section')} />
           </FormControl>
           <FormControl>
-            <FormLabel fontSize="sm">Subject abbreviation</FormLabel>
-            <Input value={form.subject} onChange={set('subject')} />
-          </FormControl>
-          <FormControl>
-            <FormLabel fontSize="sm">Subject code</FormLabel>
-            <Input value={form.subjectCode} onChange={set('subjectCode')} />
+            <FormLabel fontSize="sm">Subject</FormLabel>
+            <Select
+              value={subjects.find(s => s.subCode === form.subjectCode)?.id || ''}
+              onChange={(event) => {
+                const selected = subjects.find(s => s.id === event.target.value);
+                if (selected) {
+                  setForm(prev => ({
+                    ...prev,
+                    subject: selected.subName || selected.name,
+                    subjectCode: selected.subCode
+                  }));
+                }
+              }}
+              placeholder={loadingSubjects ? 'Loading…' : 'Select subject'}
+              isDisabled={!form.semester || loadingSubjects}
+            >
+              {subjects.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {[item.subCode, item.subName || item.name].filter(Boolean).join(' — ')}
+                  {item.type ? ` (${item.type})` : ''}
+                </option>
+              ))}
+            </Select>
           </FormControl>
           <FormControl>
             <FormLabel fontSize="sm">Room</FormLabel>
@@ -216,12 +283,29 @@ export default function ClassSettings() {
             />
           </FormControl>
           <FormControl>
+            <FormLabel fontSize="sm">Department</FormLabel>
+            <Input value={klass.dept || ''} isReadOnly bg="lmBg.sunken" placeholder="No department set" />
+          </FormControl>
+          <FormControl>
             <FormLabel fontSize="sm">Academic year</FormLabel>
             <Input value={form.academicYear} onChange={set('academicYear')} placeholder="2025-26" />
           </FormControl>
           <FormControl>
             <FormLabel fontSize="sm">Semester</FormLabel>
-            <Input value={form.semester} onChange={set('semester')} placeholder="6" />
+            <Select
+              value={form.semester}
+              onChange={(event) => {
+                setForm(prev => ({ ...prev, semester: event.target.value, subject: '', subjectCode: '' }));
+              }}
+              placeholder={loadingSemesters ? 'Loading…' : 'Select semester'}
+              isDisabled={loadingSemesters}
+            >
+              {semesters.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </Select>
           </FormControl>
         </SimpleGrid>
         <FormControl mb={4}>

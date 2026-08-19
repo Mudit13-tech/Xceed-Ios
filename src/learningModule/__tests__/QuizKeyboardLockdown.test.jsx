@@ -74,6 +74,33 @@ describe('keyboard lockdown', () => {
     expect(violation.mock.calls[0][2]).toBe('Alt');
   });
 
+  it('closes the paper on the Option press, before the hotkey completes', async () => {
+    /* The attack, as the browser actually experiences it.
+     *
+     * A macOS global hotkey matches on the *non-modifier* key going down while the
+     * modifiers are held — so Option+Space is consumed by the operating system at
+     * the Space, and the page never sees it. What the page does see is the Option
+     * press that had to come first: a bare modifier is not a hotkey, so it is
+     * dispatched to the frontmost application like any other key, and every browser
+     * turns it into a `keydown`.
+     *
+     * That is the whole basis of this rule working against a shortcut it cannot
+     * intercept. By the time Space would have arrived, the paper is already closed.
+     */
+    render(<Harness onViolation={violation} />);
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'Alt', altKey: true });
+    });
+
+    expect(violation).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('departed').textContent).toBe('true');
+
+    // Space never arrives — the OS took it. Nothing depends on it.
+    await act(async () => {});
+    expect(violation).toHaveBeenCalledTimes(1);
+  });
+
   it('names a combination when one does reach us', async () => {
     render(<Harness onViolation={violation} />);
 

@@ -352,3 +352,59 @@ describe('learningModule useProctoring', () => {
     });
   });
 });
+
+/**
+ * The keyboard on the pre-test screen.
+ *
+ * `keyboardLockdown` binds `keydown` on `window` in the capture phase and calls
+ * `preventDefault`, so nothing can be typed anywhere on the page. That is right
+ * for a paper answered by clicking, and wrong for the brief in front of it: the
+ * brief carries the Safe Exam Browser access-code field, and the students who
+ * need that field are exactly the ones who could not type into it.
+ */
+describe('keyboardLockdown and the brief', () => {
+  const press = () => {
+    const event = new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true });
+    act(() => {
+      window.dispatchEvent(event);
+    });
+    return event;
+  };
+
+  it('swallows a keypress during the sitting', () => {
+    renderHook(() =>
+      useProctoring({ settings: { keyboardLockdown: true }, active: true, onViolation: vi.fn() }),
+    );
+    expect(press().defaultPrevented).toBe(true);
+  });
+
+  it('lets the brief keep its keyboard, so the access code can be typed', () => {
+    renderHook(() =>
+      useProctoring({
+        settings: { keyboardLockdown: true },
+        active: true,
+        lockKeyboard: false,
+        onViolation: vi.fn(),
+      }),
+    );
+    expect(press().defaultPrevented).toBe(false);
+  });
+
+  it('reports nothing for a key the brief allowed', () => {
+    // The report and the block are separate decisions; letting the key through
+    // must not also file a proctoring flag against a student typing a code they
+    // were told to type.
+    const onViolation = vi.fn();
+    renderHook(() =>
+      useProctoring({
+        settings: { keyboardLockdown: true },
+        active: true,
+        lockKeyboard: false,
+        attemptId: 'a1',
+        onViolation,
+      }),
+    );
+    press();
+    expect(onViolation).not.toHaveBeenCalled();
+  });
+});

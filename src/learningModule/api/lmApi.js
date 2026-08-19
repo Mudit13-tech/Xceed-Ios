@@ -356,10 +356,14 @@ const lmApi = {
   quizBrief: (classId, quizId) => request(`/classes/${classId}/quizzes/${quizId}/brief`),
   // The only call that mints a session token, so it is also the only one that
   // stores it. Everything else on the attempt picks it up from `request`.
-  startAttempt: async (classId, quizId) => {
+  // `sebBypassCode` is only ever sent for a quiz that requires Safe Exam
+  // Browser and could not be opened in it — see QuizBrief for where a student
+  // enters one. Sending it on every other quiz is harmless: the server only
+  // looks at it when `requireSafeExamBrowser` is on.
+  startAttempt: async (classId, quizId, sebBypassCode) => {
     const result = await request(`/classes/${classId}/quizzes/${quizId}/attempts`, {
       method: 'POST',
-      body: {},
+      body: sebBypassCode ? { sebBypassCode } : {},
     });
     quizSession.save(result?.attempt?._id, result?.sessionToken);
     return result;
@@ -370,6 +374,24 @@ const lmApi = {
   // the paper already lets them walk forward and back; 403 when the quiz does
   // not allow prefetching at all, which the caller treats as "just don't".
   getNextQuestion: (classId, attemptId) => request(`/classes/${classId}/attempts/${attemptId}/next`),
+
+  /* The institution's shared Safe Exam Browser setup. Module-level, not
+     class-scoped: one file and one Config Key serve every exam. */
+  getSharedSebConfig: () => request('/seb-config'),
+  // `origin` is the address students will actually open. It is written into the
+  // file as the Start URL, and SEB computes the Config Key over the settings —
+  // so a sample built for the wrong host carries a key that is invalid for the
+  // right one. Defaults server-side to wherever the request came from.
+  sampleSebUrl: (origin) => `${BASE()}/seb-config/sample${origin ? `?origin=${encodeURIComponent(origin)}` : ''}`,
+  setSharedSebConfig: (file, configKey) => {
+    const body = new FormData();
+    body.append('file', file);
+    // Sent with the file rather than separately: a key that does not belong to
+    // the file beside it fails every request hash, so they are only ever written
+    // as a pair.
+    body.append('configKey', configKey);
+    return request('/seb-config', { method: 'POST', body });
+  },
   answerAndAdvance: (classId, attemptId, body) =>
     request(`/classes/${classId}/attempts/${attemptId}/answer`, { method: 'POST', body }),
   saveAttemptDraft: (classId, attemptId, answers) =>
@@ -760,6 +782,64 @@ const lmApi = {
 
   /* analytics + uploads */
   analytics: (classId) => request(`/classes/${classId}/analytics`),
+
+  /* Safe Exam Browser. `sebConfigUrl` is a plain link, not a `request()` call:
+     it is meant to be clicked or downloaded, not fetched and parsed, and a
+     browser navigation to it authenticates the same way any other file link in
+     this module does — see lmApi.fileUrl and Attachments.jsx for the existing
+     pattern this follows rather than reinvents. */
+  sebConfigUrl: (classId, quizId) =>
+    lmApi.fileUrl(`/api/v1/learningmodule/classes/${classId}/quizzes/${quizId}/seb-config`),
+
+  /**
+   * The same settings file as a quick-launch link.
+   *
+   * SEB registers the `seb://` and `sebs://` schemes: following one makes it
+   * fetch the settings at that address, apply them, and open its own Start URL —
+   * so a student clicks once instead of downloading a file and hunting for
+   * wherever the browser put it. `sebs` for an https site, `seb` for http, which
+   * is how SEB decides what to fetch the settings over.
+   *
+   * It lands on the module home rather than on this quiz, and deliberately: the
+   * page SEB opens is the Start URL *inside the settings file*, and giving each
+   * paper its own would change the file, which changes the Config Key, which is
+   * the per-quiz trip through the Configuration Tool this whole arrangement
+   * exists to remove.
+   */
+  /**
+   * A one-click Safe Exam Browser launch, as a `seb://` address.
+   *
+   * Built from a short-lived token rather than from the ordinary config URL,
+   * because of who does the fetching: following a `seb://` link hands it to
+   * **SEB**, which has its own network stack and none of the student's session
+   * in it. Pointed at the authenticated endpoint it got a 401 — the file
+   * downloaded fine in the browser and the link did nothing, which is a
+   * confusing pair of symptoms for one cause.
+   *
+   * The token is minted by the server for this student and this quiz and lasts
+   * minutes, so the settings stay behind a check without requiring SEB to hold
+   * a session it cannot have.
+   *
+   * `sebs` for an https site, `seb` for http — that is how SEB decides what to
+   * fetch the settings over.
+   */
+  sebLaunchToken: (classId, quizId) =>
+    request(`/classes/${classId}/quizzes/${quizId}/seb-launch-token`),
+
+  sebLaunchUrlFromToken: (token) =>
+    lmApi
+      .fileUrl(`/api/v1/learningmodule/seb-launch/${encodeURIComponent(token)}`)
+      .replace(/^https:/, 'sebs:')
+      .replace(/^http:/, 'seb:'),
+
+  uploadSebConfig: (classId, quizId, file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request(`/classes/${classId}/quizzes/${quizId}/seb-config`, { method: 'POST', body: form });
+  },
+  setSebBypassCode: (classId, quizId, body) =>
+    request(`/classes/${classId}/quizzes/${quizId}/seb-bypass-code`, { method: 'POST', body }),
+
   uploadFiles: (files) => {
     const form = new FormData();
     Array.from(files).forEach((file) => form.append('files', file));

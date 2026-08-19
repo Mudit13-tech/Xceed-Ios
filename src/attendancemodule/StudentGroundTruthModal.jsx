@@ -177,6 +177,7 @@ export default function StudentGroundTruthModal({ batch, rollNo, student, onClos
             setNotice(`Deleted ${filename}.`);
             // Removing from state
             setPhotos((current) => current.filter((p) => p.filename !== filename));
+            setDirty(true);
         } catch (err) {
             setError(err.message || 'Could not delete photo');
         } finally {
