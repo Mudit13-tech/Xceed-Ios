@@ -115,6 +115,9 @@ const writeQueue = (key, items) => {
 export default function useProctoring({
   settings = {},
   active,
+  // Whether `keyboardLockdown` is in force right now. The sitting leaves it at
+  // its default; the pre-test brief turns it off so the access code can be typed.
+  lockKeyboard = true,
   attemptId,
   onViolation,
   onTerminated,
@@ -409,13 +412,20 @@ export default function useProctoring({
      input, but a page that swallows one of the three and not the others gives a
      student a way to tell which keys are watched.
 
-     Not gated on `active`: the brief is sat on the same locked screen, and a
-     student who discovers the keyboard is dead while reading the rules has
-     learned it for free rather than at the cost of their paper. Only the *report*
-     is gated, because the brief has no attempt to end — the same split the
-     fullscreen watcher below uses. */
+     `lockKeyboard` decides *when*, and the pre-test brief turns it off. It ran
+     there too at first, on the reasoning that a student who finds the keyboard
+     dead while reading the rules has learned it for free rather than at the cost
+     of their paper. True, and it cost more than it bought: the brief carries the
+     Safe Exam Browser access-code field, and a student without SEB - the whole
+     reason that field exists - could not type into it. A swallowed keystroke on
+     the one screen where typing is legitimate is not a deterrent, it is a locked
+     door. The rules on the brief say the keyboard will be locked, which is the
+     warning that behaviour was standing in for.
+
+     The *report* stays gated on `active` separately, because the brief has no
+     attempt to end - the same split the fullscreen watcher below uses. */
   useEffect(() => {
-    if (!settings.keyboardLockdown) return undefined;
+    if (!settings.keyboardLockdown || !lockKeyboard) return undefined;
 
     const swallow = (event) => {
       event.preventDefault();
@@ -451,7 +461,7 @@ export default function useProctoring({
       window.removeEventListener('keyup', swallow, true);
       window.removeEventListener('keypress', swallow, true);
     };
-  }, [active, settings.keyboardLockdown, report]);
+  }, [active, settings.keyboardLockdown, lockKeyboard, report]);
 
   /* ---- copy / paste ---- */
   useEffect(() => {

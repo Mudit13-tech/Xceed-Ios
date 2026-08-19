@@ -100,6 +100,13 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
 
   const url = link && typeof window !== 'undefined' ? new URL(link, window.location.origin).href : '';
   const { onCopy, hasCopied } = useClipboard(url);
+  /* No Safe Exam Browser link here, deliberately.
+     A `seb://` launch has to carry a token, because SEB fetches the settings
+     itself with none of the student's session — and a token is minted for one
+     student and lasts minutes, which is the opposite of a link a teacher pastes
+     into a notice board. Students get the launch button on the test page, where
+     their own token is minted when they open it. The link above is the one to
+     hand out, and it works for everybody. */
 
   // Hydrates once per opening, not on every new `quiz` object.
   //

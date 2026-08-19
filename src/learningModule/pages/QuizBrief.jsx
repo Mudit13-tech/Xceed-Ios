@@ -13,6 +13,7 @@ import {
   List,
   ListIcon,
   ListItem,
+  Input,
   Table,
   Tbody,
   Td,
@@ -126,6 +127,17 @@ export default function QuizBrief() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [starting, setStarting] = useState(false);
+  // Why the last Start was refused. Cleared on the next attempt, so a stale
+  // reason never sits under a fresh click.
+  const [startError, setStartError] = useState('');
+  // The `seb://` address for this student, once the server has minted a token
+  // for it. Empty until then, and empty for good on a paper that does not use SEB.
+  const [sebLaunch, setSebLaunch] = useState('');
+  // The Safe Exam Browser fallback. Kept local, not sent anywhere until the
+  // student actually presses Start — a code typed and abandoned should not be
+  // reported the way a wrong guess would.
+  const [sebCode, setSebCode] = useState('');
+  const [showSebCode, setShowSebCode] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -142,6 +154,28 @@ export default function QuizBrief() {
     load();
   }, [load]);
 
+  /* The launch address, once the brief says this paper uses SEB and is ready.
+     Not assembled client-side: it carries a short-lived token minted for this
+     student, because SEB fetches the settings with its own network stack and
+     none of this session — which is why pointing the link at the ordinary
+     endpoint produced a 401 while the file download beside it worked. */
+  useEffect(() => {
+    const settings = brief?.settings;
+    if (!settings?.requireSafeExamBrowser || !settings?.sebReady || isTeacher) return undefined;
+    let cancelled = false;
+    lmApi
+      .sebLaunchToken(classId, quizId)
+      .then((result) => {
+        if (!cancelled && result?.token) setSebLaunch(lmApi.sebLaunchUrlFromToken(result.token));
+      })
+      // A token we could not mint costs the one-click launch and nothing else;
+      // the download beneath it is the same file by the longer road.
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [brief?.settings, classId, quizId, isTeacher]);
+
   const opensIn = useCountdown(brief?.window?.notYetOpen ? brief.window.opensAt : null);
   const startDeadlineIn = useCountdown(
     brief?.window?.canStart && brief?.window?.startDeadline ? brief.window.startDeadline : null,
@@ -157,19 +191,39 @@ export default function QuizBrief() {
   // test" as far as the student can tell — and a right-click menu or a copy
   // that works here reads as the lockdown not being on. No `onViolation`: the
   // restrictions hold, but there is no attempt yet to record them against.
-  useProctoring({ settings: brief?.settings || {}, active: Boolean(brief) && !isTeacher });
+  /* The pre-test screen runs the same lockdown as the paper, with one exception:
+     the keyboard. This page carries the Safe Exam Browser access-code field, and
+     a student without SEB has to be able to type into it. Everything else — the
+     right-click block, copy and paste, the fullscreen watcher — applies here as
+     it does on the paper. */
+  useProctoring({
+    settings: brief?.settings || {},
+    active: Boolean(brief) && !isTeacher,
+    lockKeyboard: false,
+  });
 
   const start = async () => {
     setStarting(true);
+    setStartError('');
     try {
-      const result = await lmApi.startAttempt(classId, quizId);
+      // Upper-cased before it leaves: the codes are generated from an
+      // uppercase alphabet, and the server compares them exactly. It normalises
+      // too, so this is belt and braces — but it also keeps what was typed and
+      // what was sent the same thing, which matters when a student reads the
+      // field back to a teacher over the phone.
+      const result = await lmApi.startAttempt(classId, quizId, sebCode.trim().toUpperCase() || undefined);
       navigate(`/learning/class/${classId}/quiz/${quizId}/attempt/${result.attempt._id}`);
     } catch (err) {
-      toast({
-        status: 'error',
-        title: err.message,
-        duration: 8000,
-      });
+      /* Inline, not a toast.
+         Chakra toasts portal to `document.body`, which is outside the quiz
+         stage - so on a fullscreened brief the message rendered behind the very
+         screen the student is looking at, and a wrong access code looked exactly
+         like a button that did nothing. QuizAttempt already routes every message
+         inline for this reason; this page was still using the toast. */
+      setStartError(err.message);
+      // SEB_REQUIRED means the code field is the thing to look at, if there is
+      // one — surfacing it beats a toast the student has already read once.
+      if (err.payload?.code === 'SEB_REQUIRED' && err.payload?.sebBypassEnabled) setShowSebCode(true);
       // A blocked start usually changes the window state; refresh to show why.
       load();
     } finally {
@@ -194,6 +248,12 @@ export default function QuizBrief() {
   else {
     const { settings, window: state } = brief;
     const mobileBlocked = settings.preventMobile && isMobileDevice();
+    // A teacher who has switched this on but not finished uploading the file
+    // and pasting the Config Key has not made a paper anyone can sit yet — not
+    // even in Safe Exam Browser, since there is nothing to check its header
+    // against. Blocked the same way a mobile-blocked device is: explained, not
+    // just disabled.
+    const sebNotReady = settings.requireSafeExamBrowser && !settings.sebReady;
     // One sitting per student, so a used attempt is the end of it.
     const attemptUsed = brief.attemptsUsed > 0;
     const hasInstructions = brief.instructions?.length > 0;
@@ -205,7 +265,8 @@ export default function QuizBrief() {
     // paper whose window has *already* closed, so a closed window must not be
     // what turns them away at the door.
     const canStart =
-      !mobileBlocked && !isTeacher && (brief.hasInProgress || (state.canStart && !attemptUsed));
+      !mobileBlocked && !sebNotReady && !isTeacher
+      && (brief.hasInProgress || (state.canStart && !attemptUsed));
 
     body = (
       <>
@@ -492,7 +553,111 @@ export default function QuizBrief() {
           </SectionCard>
         )}
 
-        <Flex gap={3} align="center" wrap="wrap">
+        {settings.requireSafeExamBrowser && !isTeacher && (
+          <Box mb={4} p={4} borderWidth="1px" borderColor="lmHue.purple200" bg="lmHue.purple50" borderRadius="lg">
+            <Text fontSize="sm" fontWeight="700" mb={1}>
+              🔒 This test requires Safe Exam Browser
+            </Text>
+            {sebNotReady ? (
+              <Text fontSize="xs" color="lmFg.subtle">
+                Your teacher has not finished setting this up yet. Check back closer to the start
+                time, or ask them directly.
+              </Text>
+            ) : (
+              <>
+                <Text fontSize="xs" color="lmFg.subtle" mb={3}>
+                  Safe Exam Browser has to be installed on this computer first. Open the test in it
+                  below, and nothing else you have open will be reachable while the test runs.
+                </Text>
+                {/* One click, if SEB is installed: following a `seb://` link hands
+                    the settings straight to it. The download beneath is the same
+                    file the long way round, for a browser that will not follow an
+                    unknown scheme - which many do silently, so the fallback is
+                    offered rather than left to be discovered after a failure. */}
+                {sebLaunch && (
+                  <Button as="a" href={sebLaunch} size="sm" colorScheme="purple" mb={2}>
+                    Open this test in Safe Exam Browser
+                  </Button>
+                )}
+                <Text fontSize="xs" color="lmFg.subtle" mb={1}>
+                  <Box
+                    as="a"
+                    href={lmApi.sebConfigUrl(classId, quizId)}
+                    textDecoration="underline"
+                  >
+                    Nothing happened? Download the exam file instead
+                  </Box>
+                </Text>
+                <Text
+                  fontSize="xs"
+                  color="lmFg.subtle"
+                  mb={showSebCode || settings.sebBypassEnabled ? 3 : 0}
+                >
+                  Safe Exam Browser opens on the learning home; your test is listed there, and the
+                  clock does not start until you press Start.
+                </Text>
+
+                {settings.sebBypassEnabled && (
+                  <Box borderTopWidth="1px" borderColor="lmHue.purple200" pt={3}>
+                    {showSebCode ? (
+                      <>
+                        <Text fontSize="xs" fontWeight="600" mb={1}>
+                          Access code
+                        </Text>
+                        <Text fontSize="xs" color="lmFg.muted" mb={2}>
+                          For starting without Safe Exam Browser. Your teacher gives this out
+                          directly — ask them if you do not have it.
+                        </Text>
+                        <Input
+                          size="sm"
+                          maxW="200px"
+                          fontFamily="mono"
+                          placeholder="Access code"
+                          value={sebCode}
+                          onChange={(e) => setSebCode(e.target.value.toUpperCase())}
+                          /* The codes are uppercase, so the field is too: a
+                             student never sees what they typed differ from what
+                             is checked. autoCapitalize/autoCorrect are for
+                             phones, which otherwise "help" with a code. */
+                          textTransform="uppercase"
+                          autoCapitalize="characters"
+                          autoCorrect="off"
+                          spellCheck={false}
+                        />
+                      </>
+                    ) : (
+                      <Text
+                        as="button"
+                        type="button"
+                        fontSize="xs"
+                        color="lmHue.purple700"
+                        textDecoration="underline"
+                        onClick={() => setShowSebCode(true)}
+                      >
+                        Don&apos;t have Safe Exam Browser installed?
+                      </Text>
+                    )}
+                  </Box>
+                )}
+              </>
+            )}
+          </Box>
+        )}
+
+        {/* Directly above Start, because that is where the student is looking
+            when it is refused. A wrong access code is the common case and it has
+            to look like a wrong code, not like a dead button. */}
+        {startError && (
+          <Alert status="error" borderRadius="md" mb={4}>
+            <AlertIcon />
+            <Box>
+              <Text fontWeight="600">Could not start the test</Text>
+              <Text fontSize="sm">{startError}</Text>
+            </Box>
+          </Alert>
+        )}
+
+                <Flex gap={3} align="center" wrap="wrap">
           {/* `hasInProgress` overrides the used attempt for the same reason it
               overrides the window in `canStart`: a reopened or extended sitting
               still counts against `attemptsUsed`, and on that alone the student

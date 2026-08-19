@@ -160,6 +160,10 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
   // hold the next question. Defaults off: the safe answer for a paper whose
   // conditions nobody has told us about yet.
   const [proctored, setProctored] = useState(false);
+  // Recorded here, finished in the editor: the .seb file cannot be built until
+  // the quiz has a URL, which it does not have until it exists.
+  const [requireSeb, setRequireSeb] = useState(false);
+  const [sebBypass, setSebBypass] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [timeLimit, setTimeLimit] = useState('');
@@ -173,6 +177,8 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
     setMethod('quiz');
     setAllowBack(false);
     setProctored(false);
+    setRequireSeb(false);
+    setSebBypass(false);
     setTitle('');
     setDescription('');
     setTimeLimit('');
@@ -204,6 +210,8 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
           // Only meaningful one question at a time; on a one-page paper the whole
           // thing is already in the browser and there is nothing to fetch ahead.
           prefetchQuestions: chosen.settings.deliveryMode === 'one_at_a_time' && proctored,
+          requireSafeExamBrowser: requireSeb,
+          sebBypassEnabled: requireSeb && sebBypass,
         },
       });
       reset();
@@ -326,6 +334,59 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
             <FormHelperText>
               Only one clock ever runs, and every one of these settings stays editable afterwards.
             </FormHelperText>
+          </FormControl>
+
+          {/* ---- Safe Exam Browser ----
+              Decided here because it is a property of how the paper is *sat*,
+              which is the question this dialog exists to ask. What cannot happen
+              here is the setup itself: the .seb file is built in SEB's own
+              Configuration Tool against the exam's URL, and that URL does not
+              exist until this quiz does. So this records the intent and the
+              editor finishes the job — with the paper refusing to be sat until
+              it is finished, rather than letting a class arrive at a locked
+              door. */}
+          <FormControl mt={5}>
+            <FormLabel fontSize="sm">Safe Exam Browser</FormLabel>
+            <Checkbox
+              size="sm"
+              alignItems="flex-start"
+              isChecked={requireSeb}
+              onChange={(event) => setRequireSeb(event.target.checked)}
+            >
+              <Text fontSize="sm">Require Safe Exam Browser to sit this paper</Text>
+              <Text fontSize="xs" color="lmFg.subtle">
+                A locked-down kiosk browser that refuses to run alongside anything else — the
+                strongest lockdown available, and the only one a second application cannot sit on
+                top of.
+              </Text>
+            </Checkbox>
+
+            {requireSeb && (
+              <Box mt={2} pl={6}>
+                <Checkbox
+                  size="sm"
+                  alignItems="flex-start"
+                  isChecked={sebBypass}
+                  onChange={(event) => setSebBypass(event.target.checked)}
+                >
+                  <Text fontSize="sm">Also allow starting with an access code</Text>
+                  <Text fontSize="xs" color="lmFg.subtle">
+                    A normal browser link plus a code you hand out yourself, for the student whose
+                    laptop cannot run SEB on the day. Every use is recorded on the attempt. You
+                    generate the code in the editor.
+                  </Text>
+                </Checkbox>
+
+                <Alert status="info" borderRadius="md" mt={3} py={2} fontSize="xs">
+                  <AlertIcon boxSize={3} />
+                  <Box>
+                    <b>One more step after this.</b> Open the quiz editor → Proctoring, and upload
+                    the <code>.seb</code> file from SEB&apos;s Configuration Tool along with the
+                    Config Key it shows you. Students cannot start until both are in.
+                  </Box>
+                </Alert>
+              </Box>
+            )}
           </FormControl>
 
           {/* ---- how much the browser may hold ----

@@ -194,14 +194,9 @@ function CreateClassModal({ isOpen, onClose, onCreated, me }) {
       .ttBranches()
       .then((list) => {
         if (cancelled) return;
-        let finalBranches = me?.dept ? list.filter(b => b.dept === me.dept) : [];
-        if (finalBranches.length === 0) {
-          const basicScience = list.filter(b => b.dept?.toLowerCase().includes('basic science'));
-          finalBranches = basicScience.length > 0 ? basicScience : list;
-        }
-        setBranches(finalBranches);
-        if (finalBranches.length > 0) {
-          setBranchCode(finalBranches[0].code);
+        setBranches(list);
+        if (list.length > 0) {
+          setBranchCode(list[0].code);
         }
       })
       .catch((error) => !cancelled && setCatalogueError(error))
@@ -301,7 +296,7 @@ function CreateClassModal({ isOpen, onClose, onCreated, me }) {
                 value={branchCode}
                 onChange={(event) => setBranchCode(event.target.value)}
                 placeholder={loadingBranches ? 'Loading…' : 'Select branch'}
-                isDisabled={true}
+                isDisabled={loadingBranches}
                 autoFocus
               >
                 {branches.map((item) => (
