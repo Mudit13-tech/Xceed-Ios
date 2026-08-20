@@ -120,8 +120,37 @@ function TimeLeft({ deadline, skewMs }) {
 /** The proctoring badges shown against an attempt, in monitor and in results. */
 function AttemptFlags({ attempt }) {
   const fullscreen = (attempt.violations || []).filter((v) => v.type === 'fullscreen_exit').length;
+  /* Worth its own badge now that a keypress no longer ends the paper on sight.
+     Under the allowance a sitting can carry two of these and finish normally, so
+     without this the only record of them is the violation list a teacher has to
+     open the attempt to read — and two warned keypresses on an otherwise clean
+     paper is exactly the thing worth noticing from the list. */
+  const keys = (attempt.violations || []).filter((v) => v.type === 'key_press').length;
   return (
     <>
+      {/* Only one of these can be set, and only on a paper that asked for SEB,
+          so an ordinary quiz shows neither badge. The "no SEB" case is the one
+          worth the loud colour: that sitting is running in a browser the
+          lockdown does not cover. */}
+      {attempt.sebBypassed ? (
+        <Tooltip
+          label={`Sitting outside Safe Exam Browser${
+            attempt.sebBypassAt ? ` since ${relativeTime(attempt.sebBypassAt)}` : ''
+          }`}
+        >
+          <Badge colorScheme="red" fontSize="0.6rem" mr={1}>
+            no SEB
+          </Badge>
+        </Tooltip>
+      ) : (
+        attempt.sebVerified && (
+          <Tooltip label="Verified Safe Exam Browser session">
+            <Badge colorScheme="green" fontSize="0.6rem" mr={1}>
+              SEB
+            </Badge>
+          </Tooltip>
+        )
+      )}
       {attempt.tabSwitches > 0 && (
         <Badge colorScheme="orange" fontSize="0.6rem" mr={1}>
           {attempt.tabSwitches}× away
@@ -131,6 +160,13 @@ function AttemptFlags({ attempt }) {
         <Tooltip label={`Left fullscreen ${fullscreen} time(s)`}>
           <Badge colorScheme="purple" fontSize="0.6rem" mr={1}>
             fs {fullscreen}
+          </Badge>
+        </Tooltip>
+      )}
+      {keys > 0 && (
+        <Tooltip label={`Pressed a key ${keys} time(s) with the keyboard locked`}>
+          <Badge colorScheme="orange" fontSize="0.6rem" mr={1}>
+            keys {keys}
           </Badge>
         </Tooltip>
       )}
@@ -919,6 +955,13 @@ function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto
 
   const closedEarly = stopped.filter((attempt) => attempt.status !== 'submitted');
 
+  // Live SEB standing, counted over the students writing right now rather than
+  // over every attempt ever started: an invigilator walking the hall wants to
+  // know which machines in front of them are outside the lockdown.
+  const sebRequired = Boolean(quiz.settings?.requireSafeExamBrowser);
+  const offSeb = writing.filter((attempt) => attempt.sebBypassed);
+  const onSeb = writing.filter((attempt) => attempt.sebVerified && !attempt.sebBypassed).length;
+
   return (
     <Box>
       <Flex justify="space-between" align="center" mb={3} gap={3} wrap="wrap">
@@ -955,6 +998,28 @@ function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto
               Use <b>Let back in</b> below to hand the paper back with their answers intact — they
               carry on from the question they were on.
             </Text>
+          </Box>
+        </Alert>
+      )}
+
+      {sebRequired && writing.length > 0 && (
+        <Alert
+          status={offSeb.length > 0 ? 'warning' : 'success'}
+          borderRadius="md"
+          mb={4}
+          fontSize="sm"
+        >
+          <AlertIcon />
+          <Box>
+            <Text fontWeight="600">
+              {onSeb} of {writing.length} writing now are on Safe Exam Browser
+            </Text>
+            {offSeb.length > 0 && (
+              <Text fontSize="xs">
+                Not on SEB: {offSeb.map((attempt) => nameOf(attempt)).join(', ')} — their progress is
+                listed below with a <b>no SEB</b> flag.
+              </Text>
+            )}
           </Box>
         </Alert>
       )}
@@ -1213,6 +1278,306 @@ function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto
   );
 }
 
+/**
+ * How many minutes a shut-out student should get back.
+ *
+ * The time they lost is the time that was still on their clock when the paper
+ * was taken off them — `submittedAt` is stamped at that moment for a
+ * terminated sitting, and `durationSec` is how much of the limit they had
+ * already used. Anything after that is time the invigilator spends finding
+ * them, which is not the student's fault, so it is added on top.
+ *
+ * A paper with no whole-paper limit (untimed, or timed per question) has no
+ * remainder to compute, so it falls back to the wait alone with a floor worth
+ * handing back at all.
+ */
+function minutesLostSinceTermination(quiz, attempt, now = new Date()) {
+  const endedAt = attempt.submittedAt ? new Date(attempt.submittedAt) : null;
+  const waitedMin = endedAt ? Math.max(0, Math.round((now - endedAt) / 60000)) : 0;
+
+  const limitMin = quiz?.settings?.timeLimitMinutes || 0;
+  if (limitMin > 0) {
+    const usedSec =
+      attempt.durationSec ||
+      (endedAt ? Math.max(0, (endedAt - new Date(attempt.startedAt)) / 1000) : 0);
+    const leftMin = Math.ceil((limitMin * 60 - usedSec) / 60);
+    if (leftMin >= 1) return leftMin + waitedMin;
+  }
+  return Math.max(10, waitedMin);
+}
+
+/**
+ * The one panel an invigilator keeps open while the exam runs.
+ *
+ * Everything here answers a question that is only asked mid-exam — who is
+ * outside the lockdown, and who has been thrown out and needs letting back in
+ * — which is why it is a modal over the page rather than another tab: it stays
+ * up while the results page underneath keeps polling, and it closes when the
+ * hall does.
+ *
+ * Letting a student back in is a single click on purpose. The minutes are
+ * computed from when their paper was taken off them, so nobody does arithmetic
+ * under pressure, and the number stays editable for what the clock cannot know.
+ */
+function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast }) {
+  const { quiz, attempts = [] } = data || { quiz: null };
+  const [minutesById, setMinutesById] = useState({});
+  const [busyId, setBusyId] = useState(null);
+  const [sebExempt, setSebExempt] = useState(false);
+  useSecondTick(isOpen);
+
+  useEffect(() => {
+    // Same reasoning as the reopen dialog: waiving SEB is a decision made for
+    // the students in front of you now, never one left ticked from last time.
+    if (isOpen) setSebExempt(false);
+  }, [isOpen]);
+
+  const sebRequired = Boolean(quiz?.settings?.requireSafeExamBrowser);
+  const now = new Date();
+
+  const writing = attempts.filter((attempt) => attempt.status === 'in_progress');
+  const offSeb = writing.filter((attempt) => attempt.sebBypassed);
+  const onSeb = writing.filter((attempt) => attempt.sebVerified && !attempt.sebBypassed);
+  // Expired sittings sit alongside terminated ones: from the student's side
+  // both are "the test vanished", and both are put right the same way.
+  const lockedOut = attempts
+    .filter((attempt) => attempt.status === 'terminated' || attempt.status === 'expired')
+    .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
+
+  const letIn = async (attempt) => {
+    const minutes =
+      Number(minutesById[attempt._id] ?? minutesLostSinceTermination(quiz, attempt, now)) || 30;
+    setBusyId(attempt._id);
+    try {
+      await lmApi.reopenQuizAttempt(classId, attempt._id, {
+        mode: 'continue',
+        minutes,
+        ...(sebRequired ? { sebExempt } : {}),
+      });
+      toast({
+        title: `${nameOf(attempt)} let back in`,
+        description: `They have ${minutes} minutes from now, with their answers intact.`,
+        status: 'success',
+        duration: 5000,
+      });
+      onDone();
+    } catch (err) {
+      toast({ title: err.message || 'Could not let them back in', status: 'error', duration: 6000 });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (!quiz) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} size="3xl" scrollBehavior="inside">
+      <ModalOverlay />
+      <ModalContent>
+        <ModalHeader>
+          Live exam control
+          <Text fontSize="sm" fontWeight="400" color="lmFg.muted">
+            {writing.length} writing now · {lockedOut.length} shut out · refreshes every{' '}
+            {LIVE_POLL_MS / 1000}s
+          </Text>
+        </ModalHeader>
+        <ModalCloseButton />
+        <ModalBody pb={6}>
+          {/* ---- who is on SEB ---- */}
+          <SectionCard
+            title={
+              sebRequired
+                ? `Safe Exam Browser (${onSeb.length}/${writing.length})`
+                : 'Safe Exam Browser'
+            }
+            subtitle={
+              sebRequired
+                ? 'Counted over the students writing at this moment.'
+                : 'This quiz does not require Safe Exam Browser.'
+            }
+            mb={4}
+          >
+            {!sebRequired ? (
+              <Text fontSize="sm" color="lmFg.muted">
+                Nothing to watch — every student may sit it in an ordinary browser.
+              </Text>
+            ) : writing.length === 0 ? (
+              <Text fontSize="sm" color="lmFg.muted">
+                Nobody is sitting the test at the moment.
+              </Text>
+            ) : offSeb.length === 0 ? (
+              <Alert status="success" borderRadius="md" fontSize="sm">
+                <AlertIcon />
+                All {writing.length} students writing now are inside Safe Exam Browser.
+              </Alert>
+            ) : (
+              <>
+                <Alert status="warning" borderRadius="md" fontSize="sm" mb={3}>
+                  <AlertIcon />
+                  {offSeb.length} of {writing.length} are writing outside Safe Exam Browser.
+                </Alert>
+                <Box overflowX="auto">
+                  <Table size="sm">
+                    <Thead>
+                      <Tr>
+                        <Th>Student</Th>
+                        <Th>Email</Th>
+                        <Th w="160px">Progress</Th>
+                        <Th>Since</Th>
+                      </Tr>
+                    </Thead>
+                    <Tbody>
+                      {offSeb.map((attempt) => {
+                        const total = attempt.questionCount || quiz.questions.length || 1;
+                        const percent = Math.round((attempt.answeredCount / total) * 100);
+                        return (
+                          <Tr key={attempt._id}>
+                            <Td>
+                              {nameOf(attempt)}
+                              <Badge colorScheme="red" fontSize="0.6rem" ml={2}>
+                                no SEB
+                              </Badge>
+                            </Td>
+                            <Td fontSize="xs">{attempt.studentEmail || '—'}</Td>
+                            <Td>
+                              <Progress
+                                value={percent}
+                                size="sm"
+                                borderRadius="full"
+                                colorScheme="green"
+                              />
+                              <Text fontSize="xs" color="lmFg.muted">
+                                {attempt.answeredCount}/{total} answered
+                              </Text>
+                            </Td>
+                            <Td fontSize="xs" color="lmFg.subtle">
+                              {attempt.sebBypassAt ? relativeTime(attempt.sebBypassAt) : '—'}
+                            </Td>
+                          </Tr>
+                        );
+                      })}
+                    </Tbody>
+                  </Table>
+                </Box>
+              </>
+            )}
+          </SectionCard>
+
+          {/* ---- who has been shut out ---- */}
+          <SectionCard
+            title={`Shut out (${lockedOut.length})`}
+            subtitle="Terminated or expired sittings. Letting one back in returns their paper with every answer intact."
+          >
+            {lockedOut.length === 0 ? (
+              <Text fontSize="sm" color="lmFg.muted">
+                Nobody has lost the paper. Anyone terminated mid-exam appears here.
+              </Text>
+            ) : (
+              <>
+                {sebRequired && (
+                  <FormControl mb={3}>
+                    <Checkbox
+                      size="sm"
+                      isChecked={sebExempt}
+                      onChange={(event) => setSebExempt(event.target.checked)}
+                    >
+                      Let them back in without Safe Exam Browser
+                    </Checkbox>
+                    <FormHelperText fontSize="xs">
+                      Applies to every student you let in from this panel. Leave it off unless SEB
+                      itself is what threw them out — otherwise the reopened sitting is shut down
+                      again on its next request.
+                    </FormHelperText>
+                  </FormControl>
+                )}
+                <Stack spacing={3}>
+                  {lockedOut.map((attempt) => {
+                    const auto = minutesLostSinceTermination(quiz, attempt, now);
+                    const minutes = minutesById[attempt._id] ?? String(auto);
+                    return (
+                      <Flex
+                        key={attempt._id}
+                        gap={3}
+                        align={{ base: 'stretch', md: 'center' }}
+                        direction={{ base: 'column', md: 'row' }}
+                        borderWidth="1px"
+                        borderRadius="md"
+                        p={3}
+                      >
+                        <Box flex="1" minW={0}>
+                          <Flex align="center" gap={2} wrap="wrap">
+                            <Text fontSize="sm" fontWeight="600">
+                              {nameOf(attempt)}
+                            </Text>
+                            <Badge
+                              colorScheme={attempt.status === 'terminated' ? 'red' : 'orange'}
+                              fontSize="0.6rem"
+                            >
+                              {attempt.status}
+                            </Badge>
+                            <AttemptFlags attempt={attempt} />
+                          </Flex>
+                          <Text fontSize="xs" color="lmFg.subtle">
+                            {attempt.studentEmail || 'no email on file'}
+                          </Text>
+                          <Text fontSize="xs" color="lmFg.muted">
+                            {attempt.submittedAt
+                              ? `Ended ${relativeTime(attempt.submittedAt)} · ${formatDateTime(
+                                  attempt.submittedAt,
+                                )}`
+                              : 'End time unknown'}
+                            {attempt.terminationReason ? ` · ${attempt.terminationReason}` : ''}
+                          </Text>
+                        </Box>
+
+                        <HStack spacing={2} align="flex-end">
+                          <FormControl w="110px">
+                            <FormLabel fontSize="xs" mb={1}>
+                              Minutes
+                            </FormLabel>
+                            <NumberInput
+                              size="sm"
+                              min={1}
+                              max={600}
+                              value={minutes}
+                              onChange={(value) =>
+                                setMinutesById((current) => ({ ...current, [attempt._id]: value }))
+                              }
+                            >
+                              <NumberInputField />
+                            </NumberInput>
+                          </FormControl>
+                          <Tooltip
+                            label={`Time left when it ended, plus the wait since — ${auto} min`}
+                          >
+                            <Button
+                              size="sm"
+                              colorScheme="purple"
+                              onClick={() => letIn(attempt)}
+                              isLoading={busyId === attempt._id}
+                            >
+                              Let in
+                            </Button>
+                          </Tooltip>
+                        </HStack>
+                      </Flex>
+                    );
+                  })}
+                </Stack>
+              </>
+            )}
+          </SectionCard>
+        </ModalBody>
+        <ModalFooter>
+          <Button size="sm" variant="ghost" onClick={onClose}>
+            Close
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
+
 export default function QuizResults() {
   const outlet = useOutletContext();
   const params = useParams();
@@ -1225,6 +1590,8 @@ export default function QuizResults() {
   // `{ attempt, action }` while a fix is being confirmed.
   const [action, setAction] = useState(null);
   const [keyOpen, setKeyOpen] = useState(false);
+  // The mid-exam control panel, opened from the header while the hall is sitting.
+  const [liveOpen, setLiveOpen] = useState(false);
   const [regrading, setRegrading] = useState(false);
   const [tab, setTab] = useState(0);
   const [auto, setAuto] = useState(true);
@@ -1380,6 +1747,14 @@ export default function QuizResults() {
   if (!data) return null;
 
   const notStartedStudents = data.notStartedStudents || [];
+  // What the live panel would show as needing a decision: students shut out of
+  // the paper, plus anyone writing outside the lockdown.
+  const liveAlerts = (attempts || []).filter(
+    (attempt) =>
+      attempt.status === 'terminated' ||
+      attempt.status === 'expired' ||
+      (attempt.status === 'in_progress' && attempt.sebBypassed),
+  ).length;
   const maxBand = Math.max(1, ...distribution.map((band) => band.count));
 
   return (
@@ -1407,6 +1782,22 @@ export default function QuizResults() {
           </Text>
         </Box>
         <HStack>
+          {/* Live control comes first while the exam is on: mid-exam it is the
+              only button on this page anybody wants, and it counts what needs
+              attention so staff can see trouble without opening it. */}
+          <Button
+            size="sm"
+            colorScheme={liveAlerts > 0 ? 'red' : 'gray'}
+            variant={summary.inProgress > 0 || liveAlerts > 0 ? 'solid' : 'outline'}
+            onClick={() => setLiveOpen(true)}
+          >
+            🎥 Live exam control
+            {liveAlerts > 0 && (
+              <Badge ml={2} colorScheme="red" fontSize="0.6rem">
+                {liveAlerts}
+              </Badge>
+            )}
+          </Button>
           {/* The override, sitting where a teacher looks when they have just
               finished checking the marks — not buried back in the publish
               dialog, which is about setting the paper rather than closing it. */}
@@ -1486,14 +1877,40 @@ export default function QuizResults() {
         </Alert>
       )}
 
-      <Grid templateColumns={{ base: '1fr 1fr', md: 'repeat(6, 1fr)' }} gap={3} mb={4}>
+      <Grid
+        templateColumns={{ base: '1fr 1fr', md: `repeat(${summary.seb?.required ? 7 : 6}, 1fr)` }}
+        gap={3}
+        mb={4}
+      >
         <StatTile label="Submitted" value={`${summary.submitted}/${summary.enrolled}`} />
         <StatTile label="In progress" value={summary.inProgress} accent="orange.500" />
         <StatTile label="Not started" value={summary.notStarted} accent="gray.500" />
         <StatTile label="Average" value={summary.average === null ? '—' : `${summary.average}%`} accent="blue.500" />
         <StatTile label="Pass rate" value={summary.passRate === null ? '—' : `${summary.passRate}%`} accent="green.500" />
         <StatTile label="Avg time" value={duration(summary.avgDurationSec)} />
+        {summary.seb?.required && (
+          <StatTile
+            label="On SEB"
+            value={`${summary.seb.verified}/${summary.started}`}
+            accent={summary.seb.bypassed > 0 ? 'red.500' : 'green.500'}
+          />
+        )}
       </Grid>
+
+      {summary.seb?.required && summary.seb.bypassed > 0 && (
+        <Alert status="warning" borderRadius="md" mb={4} fontSize="sm">
+          <AlertIcon />
+          <Box>
+            <Text fontWeight="600">
+              {summary.seb.bypassed} of {summary.started} sitting(s) are not on Safe Exam Browser
+            </Text>
+            <Text fontSize="xs">
+              They were let in with the bypass code or waived on a reopen, and are marked{' '}
+              <b>no SEB</b> in the lists below. The lockdown does not apply to them.
+            </Text>
+          </Box>
+        </Alert>
+      )}
 
       {(summary.flagged > 0 || summary.terminated > 0) && (
         <Alert status="warning" borderRadius="md" mb={4} fontSize="sm">
@@ -1898,6 +2315,15 @@ export default function QuizResults() {
         classId={classId}
         toast={toast}
         onClose={() => setKeyOpen(false)}
+        onDone={load}
+      />
+
+      <LiveExamModal
+        isOpen={liveOpen}
+        data={data}
+        classId={classId}
+        toast={toast}
+        onClose={() => setLiveOpen(false)}
         onDone={load}
       />
 

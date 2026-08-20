@@ -18,6 +18,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
 import { relativeTime } from '../format';
+import { sebDiagnosis } from '../sebDiagnosis';
 
 /**
  * The lm-admin dashboard: what the module looks like right now, platform-wide.
@@ -99,6 +100,11 @@ function SharedSebCard() {
   const [origin, setOrigin] = useState(() => window.location.origin);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+  /* The verdict from a real request, and whether one is in flight. Null until
+     the button is pressed: an unrun check must never look like a failed one,
+     which is the whole reason two green ticks above are not an answer. */
+  const [check, setCheck] = useState(null);
+  const [checking, setChecking] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -114,6 +120,27 @@ function SharedSebCard() {
     load();
   }, [load]);
 
+  /**
+   * Ask the server whether this browser passes the gate.
+   *
+   * Everything above this is a description of what is *stored*. This is the only
+   * control on the page that can say whether it works, because a Config Key
+   * cannot be checked by looking at it — only by a real Safe Exam Browser making
+   * a real request, which is what pressing this from inside SEB does.
+   */
+  const runCheck = async () => {
+    setChecking(true);
+    try {
+      setCheck(await lmApi.checkSharedSebConfig());
+    } catch (err) {
+      setCheck({ verified: false, reason: 'unknown', error: err.message });
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  // A new file or key makes any earlier verdict a statement about something that
+  // is no longer there, and a stale green tick is worse than none.
   const upload = async () => {
     setBusy(true);
     setError('');
@@ -123,6 +150,7 @@ function SharedSebCard() {
       setFile(null);
       setConfigKey('');
       setSaved(true);
+      setCheck(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -233,6 +261,73 @@ function SharedSebCard() {
               </Text>
             )}
           </Stack>
+
+          {/* ---- step 3 ----
+              The only control on this card that reports whether the setup
+              *works*. The two ticks at the top say a file and a key are stored;
+              nothing about them says the key belongs to the file, and nothing
+              can, because a Config Key is a value pasted from another
+              application and is only ever proved by a real Safe Exam Browser
+              making a real request. Before this existed, that request was the
+              first student of the exam. */}
+          <Box borderTopWidth="1px" borderColor="lmBorder.default" mt={5} pt={4}>
+            <Text fontSize="sm" fontWeight="600" mb={1}>
+              3. Check it actually works
+            </Text>
+            <Text fontSize="xs" color="lmFg.subtle" mb={2}>
+              Open <strong>this page inside Safe Exam Browser</strong> and press the button. It runs
+              the same check a student&apos;s Start does, against the key stored above — so a pass here
+              is the real thing. Run from an ordinary browser it can only tell you there are no SEB
+              headers, which says nothing either way.
+            </Text>
+            <Button size="sm" onClick={runCheck} isLoading={checking} isDisabled={!state.hasFile}>
+              Run the check from this browser
+            </Button>
+
+            {check && (
+              <Alert
+                status={check.verified ? 'success' : 'warning'}
+                borderRadius="md"
+                mt={3}
+                py={2}
+                fontSize="xs"
+                alignItems="flex-start"
+              >
+                <AlertIcon boxSize={3} mt={1} />
+                <Box>
+                  {check.verified ? (
+                    <>
+                      <Text fontWeight="600" mb={1}>
+                        Verified — Safe Exam Browser matched the stored Config Key.
+                      </Text>
+                      <Text>
+                        This is the check every student&apos;s Start will run. Nothing further to do;
+                        re-run it after any change to the file or the key.
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text fontWeight="600" mb={1}>
+                        Not verified{check.reason ? ` — ${check.reason}` : ''}
+                      </Text>
+                      <Text mb={check.seenHost ? 1 : 0}>{sebDiagnosis(check.reason)}</Text>
+                      {/* The one fact an administrator cannot see from their own
+                          side. The Config Key is computed over the settings, Start
+                          URL included, so a file built for the wrong address fails
+                          with nothing else to point at — and a sample downloaded
+                          from a laptop points at localhost. */}
+                      {check.seenHost && (
+                        <Text color="lmFg.muted">
+                          This request arrived on <strong>{check.seenHost}</strong>. The settings
+                          file&apos;s Start URL must be this address.
+                        </Text>
+                      )}
+                    </>
+                  )}
+                </Box>
+              </Alert>
+            )}
+          </Box>
         </>
       )}
     </SectionCard>

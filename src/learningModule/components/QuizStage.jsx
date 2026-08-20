@@ -1,7 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Box, Button } from '@chakra-ui/react';
-import { getQuizStageHost, openQuizStage, requestQuizFullscreen } from '../quizStage';
+import {
+  fullscreenSupported,
+  getQuizStageHost,
+  isInFullscreen,
+  onFullscreenChange,
+  openQuizStage,
+  requestQuizFullscreen,
+} from '../quizStage';
 import StageBar from './StageBar';
 
 /**
@@ -15,13 +22,13 @@ import StageBar from './StageBar';
  */
 export default function QuizStage({ subject, faculty, title, children, autoFullscreen = true }) {
   const [host] = useState(getQuizStageHost);
-  const [isFullscreen, setIsFullscreen] = useState(() => Boolean(document.fullscreenElement));
+  // Through `quizStage`'s helpers, never `document.fullscreenElement` directly:
+  // WebKit before Safari 16.4 spells all of this with a `webkit` prefix, and a
+  // screen that reads the unprefixed name alone decides it is never in
+  // fullscreen. See the note on `onFullscreenChange`.
+  const [isFullscreen, setIsFullscreen] = useState(isInFullscreen);
 
-  useEffect(() => {
-    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
-  }, []);
+  useEffect(() => onFullscreenChange(() => setIsFullscreen(isInFullscreen())), []);
 
   useEffect(() => openQuizStage({ autoFullscreen }), [autoFullscreen]);
 
@@ -59,8 +66,11 @@ export default function QuizStage({ subject, faculty, title, children, autoFulls
         title={title}
         action={
           /* Only shown when the browser refused the automatic request, or the
-             student pressed Escape — one press away from putting it back. */
-          !isFullscreen && (
+             student pressed Escape — one press away from putting it back. A
+             browser with no Fullscreen API at all is not offered it: a button
+             that cannot work reads as the test being broken, and the sitting
+             lets that browser through rather than gating on it. */
+          !isFullscreen && fullscreenSupported() && (
             <Button size="xs" variant="outline" onClick={enter} leftIcon={<span aria-hidden="true">⛶</span>}>
               Fullscreen
             </Button>

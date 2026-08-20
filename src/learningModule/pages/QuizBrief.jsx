@@ -24,6 +24,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
+import { sebDiagnosis } from '../sebDiagnosis';
 import QuizStage from '../components/QuizStage';
 import RichText from '../components/RichText';
 import { ErrorState, Loading, SectionCard, StatTile } from '../components/common';
@@ -254,6 +255,14 @@ export default function QuizBrief() {
     // against. Blocked the same way a mobile-blocked device is: explained, not
     // just disabled.
     const sebNotReady = settings.requireSafeExamBrowser && !settings.sebReady;
+    /* Safe Exam Browser is running and the server still could not match this
+       test to it. The student cannot fix that and cannot try harder at it, so
+       the code is opened for them rather than left behind a link that reads
+       "Don't have Safe Exam Browser installed?" — which is the one thing that is
+       definitely not their problem. */
+    const sebRunningUnverified =
+      brief.sebReason === 'hash-mismatch' || brief.sebReason === 'config-key-header-missing';
+    const sebCodeOpen = showSebCode || sebRunningUnverified;
     // One sitting per student, so a used attempt is the end of it.
     const attemptUsed = brief.attemptsUsed > 0;
     const hasInstructions = brief.instructions?.length > 0;
@@ -490,6 +499,18 @@ export default function QuizBrief() {
                   • Switching to another tab, window or application does the same. Close everything
                   else before you start, and turn off anything that can pop up over the screen.
                 </ListItem>
+                {/* Not a monitored condition, and deliberately worded as a rule
+                    rather than a threat: a voice assistant is summoned by
+                    speaking, which no web page can observe. Stating it makes
+                    using one misconduct rather than a grey area a student can
+                    argue was never forbidden — which is the only thing this
+                    line can honestly buy. Unconditional, because it does not
+                    depend on any setting being on. */}
+                <ListItem>
+                  • Voice assistants — Siri, or any other — must not be used during the test, whether
+                  you open one by speaking or with a shortcut. Turn the assistant off before you
+                  start.
+                </ListItem>
                 <ListItem>• Every one of these events is recorded on your attempt for your teacher.</ListItem>
                 <ListItem>
                   • The clock is kept by the server. Closing the tab does not pause it, and the test
@@ -499,8 +520,9 @@ export default function QuizBrief() {
                   // Said before they start, because it is the one rule a student
                   // would otherwise discover by breaking it.
                   <ListItem>
-                    • <strong>The keyboard is disabled.</strong> Pressing any key submits your test
-                    immediately. Answer by clicking, and use the on-screen keypad for numbers.
+                    • <strong>The keyboard is disabled.</strong> Nothing you type reaches the paper.
+                    You will be warned twice; the third key pressed submits your test. Answer by
+                    clicking, and use the on-screen keypad for numbers.
                   </ListItem>
                 )}
                 {settings.disableCopyPaste && <ListItem>• Copy and paste are disabled.</ListItem>}
@@ -553,6 +575,57 @@ export default function QuizBrief() {
           </SectionCard>
         )}
 
+        {/* ---- staff pre-flight ----
+            The one screen that can answer "did I set this up correctly" before
+            an exam rather than during it. A teacher opening this page *inside*
+            Safe Exam Browser makes exactly the request a student will make, over
+            the same URL, carrying the same header, checked against the same
+            Config Key — so a pass here is the real thing and not a simulation of
+            it. Staff were shown nothing at all before, which left the file and
+            its key unverifiable until a hall full of students could not start.
+
+            Deliberately not the student block below: staff never need the
+            launch button, the download or the access code, and a teacher reading
+            instructions meant for a candidate is how a teacher comes to believe
+            the paper is broken. */}
+        {settings.requireSafeExamBrowser && isTeacher && (
+          <Box
+            mb={4}
+            p={4}
+            borderWidth="1px"
+            borderRadius="lg"
+            borderColor={brief.sebVerified ? 'lmHue.green200' : 'lmBorder.base'}
+            bg={brief.sebVerified ? 'lmHue.green50' : 'lmBg.subtle'}
+          >
+            <Text fontSize="sm" fontWeight="700" mb={1}>
+              🔒 Safe Exam Browser — setup check
+            </Text>
+            {sebNotReady ? (
+              <Text fontSize="xs" color="lmFg.subtle">
+                No settings file and Config Key yet. Until both are uploaded, nobody can sit this
+                paper — not even in Safe Exam Browser, since there is nothing to check against.
+              </Text>
+            ) : brief.sebVerified ? (
+              <Text fontSize="xs" color="lmHue.green700">
+                ✅ Verified. This page was opened in Safe Exam Browser and matched to the uploaded
+                Config Key — the check a student will pass is the check that just passed. Nothing
+                further to do.
+              </Text>
+            ) : (
+              <>
+                <Text fontSize="xs" color="lmFg.subtle" mb={2}>
+                  {sebDiagnosis(brief.sebReason)}
+                </Text>
+                <Text fontSize="xs" color="lmFg.muted">
+                  To test the setup, open this page inside Safe Exam Browser. Checked from an
+                  ordinary browser this will always say the headers are missing, which tells you
+                  nothing about whether the file and key agree.
+                </Text>
+              </>
+            )}
+          </Box>
+        )}
+
         {settings.requireSafeExamBrowser && !isTeacher && (
           <Box mb={4} p={4} borderWidth="1px" borderColor="lmHue.purple200" bg="lmHue.purple50" borderRadius="lg">
             <Text fontSize="sm" fontWeight="700" mb={1}>
@@ -563,43 +636,75 @@ export default function QuizBrief() {
                 Your teacher has not finished setting this up yet. Check back closer to the start
                 time, or ask them directly.
               </Text>
+            ) : brief.sebVerified ? (
+              /* Already in it, and the server says so. Everything below - the
+                 launch button, the download fallback, the access code - answers
+                 a question this student no longer has, and showing it to them
+                 reads as the check having failed. All they need now is Start. */
+              <Text fontSize="xs" color="lmFg.subtle">
+                ✅ Safe Exam Browser is active and this test has been matched to it. Press Start
+                test when you are ready — the clock does not start until you do.
+              </Text>
             ) : (
               <>
-                <Text fontSize="xs" color="lmFg.subtle" mb={3}>
-                  Safe Exam Browser has to be installed on this computer first. Open the test in it
-                  below, and nothing else you have open will be reachable while the test runs.
-                </Text>
-                {/* One click, if SEB is installed: following a `seb://` link hands
-                    the settings straight to it. The download beneath is the same
-                    file the long way round, for a browser that will not follow an
-                    unknown scheme - which many do silently, so the fallback is
-                    offered rather than left to be discovered after a failure. */}
-                {sebLaunch && (
-                  <Button as="a" href={sebLaunch} size="sm" colorScheme="purple" mb={2}>
-                    Open this test in Safe Exam Browser
-                  </Button>
-                )}
-                <Text fontSize="xs" color="lmFg.subtle" mb={1}>
-                  <Box
-                    as="a"
-                    href={lmApi.sebConfigUrl(classId, quizId)}
-                    textDecoration="underline"
+                {sebRunningUnverified ? (
+                  /* Safe Exam Browser is demonstrably running — only SEB sends the
+                     header that got this far — and the check still failed, which
+                     makes it a teacher-side fault every time: the exam file and
+                     the Config Key uploaded beside it describe different
+                     settings. Repeating the launch button here would be telling
+                     this student to do the thing they have visibly already done,
+                     so the instructions are replaced rather than added to. The
+                     access code below stays, because it is now the only way on
+                     and it is exactly what it exists for. */
+                  <Text
+                    fontSize="xs"
+                    color="lmHue.red700"
+                    mb={settings.sebBypassEnabled ? 3 : 0}
                   >
-                    Nothing happened? Download the exam file instead
-                  </Box>
-                </Text>
-                <Text
-                  fontSize="xs"
-                  color="lmFg.subtle"
-                  mb={showSebCode || settings.sebBypassEnabled ? 3 : 0}
-                >
-                  Safe Exam Browser opens on the learning home; your test is listed there, and the
-                  clock does not start until you press Start.
-                </Text>
+                    Safe Exam Browser is running, but this test could not be matched to it — the
+                    exam file and its Config Key do not agree. Tell your invigilator.
+                    {settings.sebBypassEnabled && ' They can let you in with the access code below.'}
+                  </Text>
+                ) : (
+                  <>
+                    <Text fontSize="xs" color="lmFg.subtle" mb={3}>
+                      Safe Exam Browser has to be installed on this computer first. Open the test in
+                      it below, and nothing else you have open will be reachable while the test runs.
+                    </Text>
+                    {/* One click, if SEB is installed: following a `seb://` link hands
+                        the settings straight to it. The download beneath is the same
+                        file the long way round, for a browser that will not follow an
+                        unknown scheme - which many do silently, so the fallback is
+                        offered rather than left to be discovered after a failure. */}
+                    {sebLaunch && (
+                      <Button as="a" href={sebLaunch} size="sm" colorScheme="purple" mb={2}>
+                        Open this test in Safe Exam Browser
+                      </Button>
+                    )}
+                    <Text fontSize="xs" color="lmFg.subtle" mb={1}>
+                      <Box
+                        as="a"
+                        href={lmApi.sebConfigUrl(classId, quizId)}
+                        textDecoration="underline"
+                      >
+                        Nothing happened? Download the exam file instead
+                      </Box>
+                    </Text>
+                    <Text
+                      fontSize="xs"
+                      color="lmFg.subtle"
+                      mb={sebCodeOpen || settings.sebBypassEnabled ? 3 : 0}
+                    >
+                      Safe Exam Browser opens on the learning home; your test is listed there, and
+                      the clock does not start until you press Start.
+                    </Text>
+                  </>
+                )}
 
                 {settings.sebBypassEnabled && (
                   <Box borderTopWidth="1px" borderColor="lmHue.purple200" pt={3}>
-                    {showSebCode ? (
+                    {sebCodeOpen ? (
                       <>
                         <Text fontSize="xs" fontWeight="600" mb={1}>
                           Access code

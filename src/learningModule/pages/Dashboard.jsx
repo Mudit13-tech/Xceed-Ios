@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -493,6 +493,95 @@ function JoinClassModal({ isOpen, onClose, onJoined }) {
   );
 }
 
+/**
+ * The banner for a paper that is open, or about to be.
+ *
+ * Its own component because of the countdown: a ticking clock re-renders every
+ * second, and left inline it would re-render the whole dashboard — every class
+ * card, every list — sixty times a minute.
+ *
+ * This is the screen Safe Exam Browser lands on. The settings file's Start URL
+ * is the module home and cannot be a single paper, so a student arrives here
+ * inside a kiosk with no address bar, no reload and a locked keyboard. Whatever
+ * gets them into their exam has to be on this row.
+ */
+function OpenExamBanner({ exam, muted }) {
+  const [now, setNow] = useState(() => Date.now());
+  const [sebLaunch, setSebLaunch] = useState('');
+
+  const opensAt = exam.opensAt ? new Date(exam.opensAt).getTime() : 0;
+  const waiting = exam.notYetOpen && opensAt > now;
+
+  useEffect(() => {
+    if (!waiting) return undefined;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [waiting]);
+
+  /* The launch address, if this paper is sat in Safe Exam Browser.
+     Fetched rather than assembled: it carries a short-lived token, because SEB
+     follows the link with its own network stack and none of this session. It
+     opens SEB on this same dashboard — the Start URL is fixed in the settings
+     file — from where the button below is one click away, this time inside the
+     kiosk. */
+  useEffect(() => {
+    if (!exam.requiresSeb) return undefined;
+    let cancelled = false;
+    lmApi
+      .sebLaunchToken(exam.classId, exam._id)
+      .then((result) => {
+        if (!cancelled && result?.token) setSebLaunch(lmApi.sebLaunchUrlFromToken(result.token));
+      })
+      // No token, no button. The test page still offers both the launch and the
+      // file download, so nothing here is the only way through.
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [exam.requiresSeb, exam.classId, exam._id]);
+
+  const left = Math.max(0, Math.round((opensAt - now) / 1000));
+  const countdown = [Math.floor(left / 3600), Math.floor((left % 3600) / 60), left % 60]
+    .map((part) => String(part).padStart(2, '0'))
+    .join(':');
+
+  return (
+    <Alert status={waiting ? 'info' : 'success'} borderRadius="lg" mb={4} py={3}>
+      <AlertIcon />
+      <Box flex="1" minW={0}>
+        <Text fontWeight="700">
+          {exam.inProgress
+            ? 'You have a test in progress'
+            : waiting
+              ? `Starts in ${countdown}`
+              : 'A test is open now'}
+          {exam.className ? ` — ${exam.className}` : ''}
+        </Text>
+        <Text fontSize="sm" color={muted}>
+          {exam.title}
+          {exam.requiresSeb ? ' · Safe Exam Browser' : ''}
+        </Text>
+      </Box>
+      <HStack flexShrink={0} spacing={2}>
+        {sebLaunch && (
+          <Button as="a" href={sebLaunch} size="sm" colorScheme="purple" variant="outline">
+            Open Safe Exam Browser
+          </Button>
+        )}
+        <Button
+          as={RouterLink}
+          to={`/learning/class/${exam.classId}/quiz/${exam._id}`}
+          colorScheme={waiting ? 'blue' : 'green'}
+          size="sm"
+        >
+          {exam.inProgress ? 'Continue' : waiting ? 'View details' : 'Open the test'}
+        </Button>
+      </HStack>
+    </Alert>
+  );
+}
+
+
 export default function Dashboard() {
   const { me, overview, reloadOverview } = useOutletContext() || {};
   const [searchParams, setSearchParams] = useSearchParams();
@@ -560,6 +649,19 @@ export default function Dashboard() {
 
   return (
     <Box>
+      {/* An exam that is open right now, above everything else on the page.
+
+          This is the screen Safe Exam Browser lands on: the settings file's Start
+          URL is the module home and cannot be a single paper, so a student
+          arrives here inside a kiosk with no address bar, no reload and a locked
+          keyboard. Anything that is not on this page is unreachable to them. It
+          matters outside SEB too — an exam that has started is the only thing on
+          this dashboard anybody needs in that moment — but SEB is what makes its
+          absence a dead end rather than an inconvenience. */}
+      {(overview?.openExams || []).map((exam) => (
+        <OpenExamBanner key={exam._id} exam={exam} muted={secondaryTextColor} />
+      ))}
+
       <Flex justify="space-between" align="center" mb={5} wrap="wrap" gap={3}>
         <Box>
           <Heading size="lg" color={headingColor}>

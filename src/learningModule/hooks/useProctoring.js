@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { isInFullscreen, onFullscreenChange } from '../quizStage';
 
 /**
  * Client half of the quiz proctoring options.
@@ -62,10 +63,28 @@ const QUEUE_MAX = 50;
  * for — a client that blocks on a different set than the server terminates on is
  * the inconsistency that caused this bug, whichever way round it disagrees.
  *
+ * A keypress is not one of them, and the server's `countsAsLeaving` agrees: it is
+ * blocked and reported, but it is warned about twice before it ends anything, so
+ * the paper stays open and the student keeps working. When the allowance does run
+ * out the server says `terminated` in its reply, and that closes the sitting
+ * through `applyResult` like any other termination.
+ *
  * Module scope, so `report` closes over one array rather than a fresh one per
  * render.
  */
-const LEAVING = ['fullscreen_exit', 'tab_switch', 'blur', 'key_press'];
+const LEAVING = ['fullscreen_exit', 'tab_switch', 'blur'];
+
+/**
+ * What a blocked keypress says on screen before the server answers.
+ *
+ * The server's reply carries the real one — it knows which warning this is and
+ * how many are left — but it arrives a round trip later, and on a dropped
+ * connection it does not arrive at all. A key that appears to do nothing at all
+ * is the thing that gets pressed again, so something has to say why immediately.
+ */
+const KEYBOARD_BLOCKED_WARNING =
+  'The keyboard is not allowed during this test — that keypress was blocked and recorded. '
+  + 'Answer by clicking, and use the on-screen keypad for numbers.';
 
 /**
  * How long a window blur is given to prove itself before it ends a paper.
@@ -129,7 +148,12 @@ export default function useProctoring({
   // Seeded from the document rather than `false`: the quiz stage is already
   // fullscreen by the time a sitting mounts, and starting at false would flash
   // the "fullscreen required" gate for a frame before the watcher corrected it.
-  const [isFullscreen, setIsFullscreen] = useState(() => Boolean(document.fullscreenElement));
+  //
+  // Read through `quizStage`, which knows both spellings of the Fullscreen API.
+  // Asking `document.fullscreenElement` directly is what made this permanently
+  // false on WebKit before Safari 16.4 — including inside Safe Exam Browser for
+  // macOS — and a permanently-false answer here is a gate no student can pass.
+  const [isFullscreen, setIsFullscreen] = useState(isInFullscreen);
   /**
    * The student has left the test screen, as observed *locally*.
    *
@@ -398,8 +422,11 @@ export default function useProctoring({
   }, [active, report]);
 
   /* ---- the keyboard ----
-     Blocked outright, and the first key ends the paper. See lmQuiz's
-     `keyboardLockdown` for why a keypress is treated as leaving.
+     Blocked outright, warned about twice, and ending the paper on the third key.
+     See lmQuiz's `keyboardLockdown` for why the keyboard is watched at all, and
+     the server's `KEY_PRESS_ALLOWANCE` for why it is not the first key that ends
+     it: a hand resting on a key and a reach for a hotkey look identical at the
+     first event, and a paper lost to the former is a mark lost to nothing.
 
      Three things about how this is bound matter:
 
@@ -412,6 +439,10 @@ export default function useProctoring({
      input, but a page that swallows one of the three and not the others gives a
      student a way to tell which keys are watched.
 
+     The counting is the *server's*, off the violations already on the attempt.
+     Nothing here keeps a tally: a reload would reset a client-side one, which
+     would hand back the allowance for free.
+
      `lockKeyboard` decides *when*, and the pre-test brief turns it off. It ran
      there too at first, on the reasoning that a student who finds the keyboard
      dead while reading the rules has learned it for free rather than at the cost
@@ -423,7 +454,17 @@ export default function useProctoring({
      warning that behaviour was standing in for.
 
      The *report* stays gated on `active` separately, because the brief has no
-     attempt to end - the same split the fullscreen watcher below uses. */
+     attempt to record against - the same split the fullscreen watcher below
+     uses.
+
+     What this cannot reach, before anyone tries to make it: an assistant opened
+     by *voice*. The rule works on a hotkey because a hotkey has a keystroke —
+     the modifier, pressed first, which the OS does hand to the page. "Hey Siri"
+     has none, and produces no blur, no visibility change and no fullscreen exit
+     either, so there is no event here to bind to and no cleverness with these
+     three listeners that finds one. See `keyboardLockdown` and
+     `requireSafeExamBrowser` in lmQuiz: it is closed in the SEB config file or
+     it is not closed. */
   useEffect(() => {
     if (!settings.keyboardLockdown || !lockKeyboard) return undefined;
 
@@ -450,6 +491,10 @@ export default function useProctoring({
       ].filter(Boolean);
       const named = event.key === 'Unidentified' ? event.code : event.key;
       const detail = held.length && !held.includes(named) ? `${held.join('+')}+${named}` : named;
+      // Ahead of the report, not after it: the reply carries the numbered version
+      // and overwrites this one, and if the connection is down this is the only
+      // thing the student is ever told about a key that did nothing.
+      setWarning(KEYBOARD_BLOCKED_WARNING);
       report('key_press', undefined, detail);
     };
 
@@ -501,13 +546,13 @@ export default function useProctoring({
      Only the report is gated, on `active` — the brief has no attempt to end. */
   useEffect(() => {
     const onChange = () => {
-      const inFullscreen = Boolean(document.fullscreenElement);
+      const inFullscreen = isInFullscreen();
       setIsFullscreen(inFullscreen);
       if (!inFullscreen && active) report('fullscreen_exit');
     };
-    document.addEventListener('fullscreenchange', onChange);
-    setIsFullscreen(Boolean(document.fullscreenElement));
-    return () => document.removeEventListener('fullscreenchange', onChange);
+    const stop = onFullscreenChange(onChange);
+    setIsFullscreen(isInFullscreen());
+    return stop;
   }, [active, report]);
 
   // Entering and leaving fullscreen belongs to the quiz stage, not here: it

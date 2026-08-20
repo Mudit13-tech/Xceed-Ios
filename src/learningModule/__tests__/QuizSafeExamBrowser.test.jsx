@@ -270,3 +270,111 @@ describe('a refused start', () => {
     expect(await screen.findByText(/that access code is not right/i)).toBeTruthy();
   });
 });
+
+/**
+ * What the brief says to a student who is already inside Safe Exam Browser.
+ *
+ * This panel used to be drawn from `requireSafeExamBrowser` alone, so it said
+ * the identical thing either side of the one event it was describing: a student
+ * who had launched SEB, watched the kiosk take over the screen and navigated to
+ * their paper was still being told to open the test in Safe Exam Browser, with
+ * an access-code field underneath as the only apparent way on. Read from that
+ * chair it does not look like instructions — it looks like the check failed.
+ *
+ * The server now answers the question on the brief itself, with the same
+ * function `startAttempt` judges by, so the panel can say which of the three
+ * situations this actually is.
+ */
+describe('the panel reflects whether Safe Exam Browser has actually been verified', () => {
+  const sebSettings = (extra = {}) => ({
+    deliveryMode: 'all_at_once',
+    requireSafeExamBrowser: true,
+    sebReady: true,
+    ...extra,
+  });
+
+  it('stops telling a verified student to open what they have already opened', async () => {
+    quizBrief.mockResolvedValue(brief({ settings: sebSettings(), sebVerified: true, sebReason: null }));
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    expect(await screen.findByText(/safe exam browser is active/i)).toBeTruthy();
+    // The launch button and the download fallback both answer a question this
+    // student no longer has, and leaving them up is what read as a failure.
+    expect(screen.queryByRole('link', { name: /download the exam file/i })).toBeNull();
+    expect(screen.queryByRole('link', { name: /open this test in safe exam browser/i })).toBeNull();
+  });
+
+  it('does not offer a verified student the access code either', async () => {
+    // The code exists for the student who could not use SEB. Offering it to one
+    // who is demonstrably inside SEB invites them to take the weaker route.
+    quizBrief.mockResolvedValue(
+      brief({ settings: sebSettings({ sebBypassEnabled: true }), sebVerified: true, sebReason: null }),
+    );
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    await screen.findByText(/safe exam browser is active/i);
+    expect(screen.queryByPlaceholderText('Access code')).toBeNull();
+    expect(screen.queryByText(/don't have safe exam browser/i)).toBeNull();
+  });
+
+  it('leaves Start enabled for a verified student', async () => {
+    quizBrief.mockResolvedValue(brief({ settings: sebSettings(), sebVerified: true, sebReason: null }));
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    expect(await screen.findByRole('button', { name: /start test/i })).not.toBeDisabled();
+  });
+
+  it('names the setup fault when SEB is running and the check still failed', async () => {
+    // `hash-mismatch` is only reachable from a real SEB: the header it needs is
+    // one nothing else sends. So the fault is at the teacher's end every time,
+    // and saying so is the difference between a student retrying forever and a
+    // student fetching the invigilator.
+    quizBrief.mockResolvedValue(
+      brief({ settings: sebSettings({ sebBypassEnabled: true }), sebVerified: false, sebReason: 'hash-mismatch' }),
+    );
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    expect(await screen.findByText(/could not be matched to it/i)).toBeTruthy();
+    expect(screen.getByText(/tell your invigilator/i)).toBeTruthy();
+  });
+
+  it('opens the access code for them rather than hiding it behind the wrong question', async () => {
+    // The link reads "Don't have Safe Exam Browser installed?" — which is the
+    // one thing this student definitely does have.
+    quizBrief.mockResolvedValue(
+      brief({ settings: sebSettings({ sebBypassEnabled: true }), sebVerified: false, sebReason: 'hash-mismatch' }),
+    );
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    expect(await screen.findByPlaceholderText('Access code')).toBeTruthy();
+  });
+
+  it('still gives the ordinary instructions to a student who has not launched SEB', async () => {
+    // The unverified-and-no-SEB-headers case, which is most students most of
+    // the time: nothing has gone wrong, they simply have not started yet.
+    quizBrief.mockResolvedValue(
+      brief({ settings: sebSettings(), sebVerified: false, sebReason: 'no-seb-headers' }),
+    );
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    expect(await screen.findByRole('link', { name: /download the exam file/i })).toBeTruthy();
+    expect(screen.queryByText(/could not be matched to it/i)).toBeNull();
+  });
+
+  it('says nothing either way on a brief from a server that does not report it', async () => {
+    // An older server, or a cached response: absent `sebVerified` must fall back
+    // to the instructions, never to a claim that SEB is active.
+    quizBrief.mockResolvedValue(brief({ settings: sebSettings() }));
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    expect(await screen.findByRole('link', { name: /download the exam file/i })).toBeTruthy();
+    expect(screen.queryByText(/safe exam browser is active/i)).toBeNull();
+  });
+});

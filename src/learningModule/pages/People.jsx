@@ -6,7 +6,6 @@ import {
   Badge,
   Box,
   Button,
-  Checkbox,
   Divider,
   Flex,
   FormControl,
@@ -49,8 +48,6 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
       setRole(defaultRole);
     }
   }, [isOpen, defaultRole]);
-  const [createAccounts, setCreateAccounts] = useState(true);
-  const [grantRoleToExisting, setGrantRoleToExisting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState(null);
   // Mail for an invite goes out in the background after the membership rows
@@ -150,10 +147,7 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
     setMailProgress(null);
     stopPolling();
     try {
-      const result = await lmApi.inviteMembers(classId, list, role, {
-        createAccounts,
-        grantRoleToExisting,
-      });
+      const result = await lmApi.inviteMembers(classId, list, role);
       setReport(result.results);
       // Membership rows are already written — the roster and counts are
       // correct now, regardless of how long the mail queue below takes.
@@ -198,41 +192,12 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
           </FormControl>
 
           <Box mt={5} p={4} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" bg="lmBg.sunken">
-            <Checkbox
-              isChecked={createAccounts}
-              onChange={(event) => setCreateAccounts(event.target.checked)}
-            >
-              <Text fontSize="sm" fontWeight="600">
-                Create XCEED accounts for addresses that don&apos;t have one
-              </Text>
-            </Checkbox>
-            <Text fontSize="xs" color="lmFg.subtle" mt={2} ml={6}>
-              {createAccounts ? (
-                <>
-                  Each new person gets an account with the <Badge colorScheme="cyan">{platformRole}</Badge>{' '}
-                  role and is enrolled straight away. They receive an email inviting them to set their own
-                  password — no password is ever emailed, and the account cannot be signed into until they
-                  do.
-                </>
-              ) : (
-                <>
-                  Addresses without an account are stored as pending invites and enrolled automatically the
-                  first time that person signs in to XCEED.
-                </>
-              )}
-            </Text>
-
-            <Checkbox
-              mt={3}
-              size="sm"
-              isChecked={grantRoleToExisting}
-              onChange={(event) => setGrantRoleToExisting(event.target.checked)}
-            >
-              Also give the {platformRole} role to people who already have an account without it
-            </Checkbox>
-            <Text fontSize="xs" color="lmFg.muted" mt={1} ml={6}>
-              Off by default — changing an existing user&apos;s platform roles is usually an
-              administrator&apos;s decision.
+            <Text fontSize="xs" color="lmFg.subtle">
+              Addresses without an XCEED account get one with the{' '}
+              <Badge colorScheme="cyan">{platformRole}</Badge> role and are enrolled straight away. They
+              receive an email inviting them to set their own password — no password is ever emailed, and
+              the account cannot be signed into until they do. People who already have an account are given
+              the <Badge colorScheme="cyan">{platformRole}</Badge> role if they do not have it yet.
             </Text>
           </Box>
 
