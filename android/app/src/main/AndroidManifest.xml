@@ -19,6 +19,16 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="xceed.nitj.ac.in" />
+                <data android:scheme="http" android:host="xceed.nitj.ac.in" />
+                <data android:scheme="https" android:host="xceed.learning.app" />
+                <data android:scheme="http" android:host="xceed.learning.app" />
+            </intent-filter>
         </activity>
 
         <provider

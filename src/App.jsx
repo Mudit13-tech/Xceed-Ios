@@ -247,10 +247,11 @@ const HardwareBackButton = () => {
   }, [location.pathname, navigate]);
 
   React.useEffect(() => {
-    let listener = null;
+    let backButtonListener = null;
+    let appUrlListener = null;
 
     const registerListener = async () => {
-      listener = await CapacitorApp.addListener('backButton', (event) => {
+      backButtonListener = await CapacitorApp.addListener('backButton', (event) => {
         // Paths where pressing back should exit the app instead of navigating back
         const exitPaths = ['/', '/login', '/home', '/learning', '/learning/'];
         if (exitPaths.includes(locationRef.current)) {
@@ -261,6 +262,20 @@ const HardwareBackButton = () => {
           CapacitorApp.exitApp();
         }
       });
+
+      appUrlListener = await CapacitorApp.addListener('appUrlOpen', (event) => {
+        try {
+          const url = new URL(event.url);
+          if (url.hostname === 'xceed.nitj.ac.in' || url.hostname === 'xceed.learning.app') {
+            const path = url.pathname + url.search + url.hash;
+            if (path && path !== '/') {
+              navigateRef.current(path);
+            }
+          }
+        } catch (e) {
+          console.error('Invalid deep link URL:', e);
+        }
+      });
     };
 
     registerListener();
@@ -269,8 +284,11 @@ const HardwareBackButton = () => {
     initializePushNotifications((...args) => navigateRef.current(...args));
 
     return () => {
-      if (listener) {
-        listener.remove();
+      if (backButtonListener) {
+        backButtonListener.remove();
+      }
+      if (appUrlListener) {
+        appUrlListener.remove();
       }
     };
   }, []); // Empty dependency array ensures this runs exactly once!
