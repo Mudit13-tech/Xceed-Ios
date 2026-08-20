@@ -25,6 +25,22 @@ export const initializePushNotifications = async (navigate) => {
       return;
     }
 
+    // Register custom action types for interactive push notifications
+    await PushNotifications.registerActionTypes({
+      types: [
+        {
+          id: 'EXAM_TERMINATED_ACTIONS',
+          actions: [
+            {
+              id: 'let_back_in',
+              title: 'Let back in now',
+              foreground: true // Brings app to foreground to ensure cookies/network are active
+            }
+          ]
+        }
+      ]
+    });
+
     // Register with Apple / Google to receive push via APNS/FCM
     await PushNotifications.register();
 
@@ -59,10 +75,30 @@ export const initializePushNotifications = async (navigate) => {
     });
 
     // Method called when tapping on a notification
-    PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+    PushNotifications.addListener('pushNotificationActionPerformed', async (notification) => {
       console.log('Push action performed: ', JSON.stringify(notification));
       const data = notification.notification.data;
       
+      // Handle "Let back in" action button
+      if (notification.actionId === 'let_back_in') {
+        const { classId, attemptId, autoMinutes } = data;
+        if (classId && attemptId) {
+          try {
+             await axios.post(`${apiUrl}/api/v1/learningmodule/class/${classId}/quiz-attempt/${attemptId}/reopen`, {
+                 mode: 'continue',
+                 minutes: Number(autoMinutes) || 30,
+                 sebExempt: false
+             }, { withCredentials: true });
+             console.log('Successfully reopened exam from push action');
+             alert('Student has been let back into the exam.');
+          } catch(err) {
+             console.error('Failed to reopen exam from push action', err);
+             alert('Failed to let student back in. Please do it from the dashboard.');
+          }
+        }
+        return; // Stop further navigation
+      }
+
       // If the backend sent a link in the data payload, navigate to it
       if (data && data.link) {
         let route = data.link;

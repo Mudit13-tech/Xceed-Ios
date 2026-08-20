@@ -3,6 +3,7 @@ import { Share } from '@capacitor/share';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { Browser } from '@capacitor/browser';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 
 const Downloads = registerPlugin('Downloads');
 
@@ -62,6 +63,65 @@ export const downloadFileNative = async (url, fileName) => {
   } catch (error) {
     console.error('Native download failed', error);
     alert('Could not start the download. Please try again.');
+    throw error;
+  }
+};
+
+/**
+ * Saves a base64 string to a file on the device.
+ * On Android, attempts to save to the public Downloads folder via ExternalStorage.
+ * On iOS, saves to Cache and presents the Share sheet.
+ */
+export const downloadBase64Native = async (base64Data, fileName, mimeType = 'application/pdf') => {
+  if (!isNativeApp()) {
+    // Fallback for web
+    const a = document.createElement('a');
+    a.href = `data:${mimeType};base64,${base64Data}`;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    return;
+  }
+
+  try {
+    if (Capacitor.getPlatform() !== 'android') {
+      // iOS doesn't have a public Downloads folder accessible without the Share sheet
+      const result = await Filesystem.writeFile({
+        path: fileName,
+        data: base64Data,
+        directory: Directory.Cache,
+      });
+      return await Share.share({
+        title: fileName,
+        url: result.uri,
+        dialogTitle: 'Save file',
+      });
+    }
+
+    // Android: attempt to write to Downloads folder via ExternalStorage
+    try {
+      const result = await Filesystem.writeFile({
+        path: `Download/${fileName}`,
+        data: base64Data,
+        directory: Directory.ExternalStorage,
+        recursive: true
+      });
+      alert(`File saved to Downloads folder as ${fileName}`);
+      return result;
+    } catch (e) {
+      console.warn('Failed writing to Download/, falling back to Documents/', e);
+      const fallbackResult = await Filesystem.writeFile({
+        path: fileName,
+        data: base64Data,
+        directory: Directory.Documents,
+      });
+      alert(`File saved to Documents folder as ${fileName}`);
+      return fallbackResult;
+    }
+  } catch (error) {
+    console.error('Native base64 save failed', error);
+    alert('Could not save the file. Please try again.');
     throw error;
   }
 };

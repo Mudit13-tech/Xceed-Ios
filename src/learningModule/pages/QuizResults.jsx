@@ -1605,7 +1605,30 @@ export default function QuizResults() {
   const [studentSearch, setStudentSearch] = useState('');
   const [studentStatusFilter, setStudentStatusFilter] = useState('all');
   const skewRef = useRef(0);
+  const knownTerminatedRef = useRef(new Set());
   const toast = useToast();
+
+  const handleDirectLetIn = useCallback(async (attempt, currentQuiz, onCloseToast) => {
+    const autoMin = minutesLostSinceTermination(currentQuiz, attempt, new Date());
+    try {
+      await lmApi.reopenQuizAttempt(classId, attempt._id, {
+        mode: 'continue',
+        minutes: autoMin || 30,
+        sebExempt: false,
+      });
+      toast({
+        title: `${nameOf(attempt)} let back in`,
+        description: `They have ${autoMin || 30} minutes from now.`,
+        status: 'success',
+        duration: 5000,
+      });
+      if (onCloseToast) onCloseToast();
+      // We do not call load() here directly as it's already polling, but we could trigger a refresh:
+      // We will let the next poll catch it, or we can just call load(true)
+    } catch (err) {
+      toast({ title: err.message || 'Could not let them back in', status: 'error', duration: 6000 });
+    }
+  }, [classId, toast]);
 
   /**
    * `quiet` is what makes polling usable: a background refresh must not blank
@@ -1619,6 +1642,50 @@ export default function QuizResults() {
       try {
         const fetched = await lmApi.quizResults(classId, quizId);
         if (fetched.serverTime) skewRef.current = Date.now() - new Date(fetched.serverTime).getTime();
+
+        if (fetched.attempts) {
+          const currentTerminated = fetched.attempts.filter((a) => a.status === 'terminated');
+          
+          if (quiet) {
+            const newTerminated = currentTerminated.filter(
+              (a) => !knownTerminatedRef.current.has(a._id)
+            );
+            
+            newTerminated.forEach((attempt) => {
+              toast({
+                duration: null,
+                isClosable: true,
+                position: 'top-right',
+                render: ({ onClose }) => (
+                  <Alert status="error" variant="solid" borderRadius="md" boxShadow="lg" alignItems="start" pe={8}>
+                    <AlertIcon />
+                    <Box flex="1">
+                      <Text fontWeight="bold" fontSize="sm">Exam Terminated</Text>
+                      <Text fontSize="sm">{nameOf(attempt)}'s exam was terminated.</Text>
+                      <Button
+                        mt={2}
+                        size="xs"
+                        colorScheme="whiteAlpha"
+                        onClick={() => {
+                          handleDirectLetIn(attempt, fetched.quiz, onClose);
+                          // Trigger immediate refresh after action
+                          setTimeout(() => load(true), 1000);
+                        }}
+                      >
+                        Let back in now
+                      </Button>
+                    </Box>
+                    <ModalCloseButton position="absolute" right={1} top={1} onClick={onClose} />
+                  </Alert>
+                ),
+              });
+            });
+          }
+          
+          // Update known set
+          currentTerminated.forEach((a) => knownTerminatedRef.current.add(a._id));
+        }
+
         setData(fetched);
         setUpdatedAt(new Date());
       } catch (err) {
