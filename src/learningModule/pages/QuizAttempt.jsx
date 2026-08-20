@@ -29,7 +29,7 @@ import QuizReview from '../components/QuizReview';
 import QuizStage from '../components/QuizStage';
 import QuizCalculator from '../components/QuizCalculator';
 import NumericKeypad from '../components/NumericKeypad';
-import { requestQuizFullscreen, scrollStageToTop } from '../quizStage';
+import { fullscreenSupported, requestQuizFullscreen, scrollStageToTop } from '../quizStage';
 import { formatDateTime } from '../format';
 
 const clock = (seconds) => {
@@ -56,9 +56,37 @@ const clock = (seconds) => {
  */
 const SLOW_REQUEST_MS = 8000;
 
+/**
+ * What kind of answer a question wants, in the student's words.
+ *
+ * Worth saying on the question rather than leaving to the shape of the controls:
+ * radio buttons and checkboxes are a subtle distinction to spot under exam
+ * pressure, and a student who reads a multiple-answer question as single-answer
+ * stops at the first correct option and loses the mark. The type was already on
+ * the question; it just was not being shown.
+ */
+const TYPE_LABEL = {
+  mcq: 'Choose one',
+  msq: 'Choose all that apply',
+  truefalse: 'True or false',
+  numerical: 'Enter a number',
+};
+
 const LEAVING_COST =
   'Leaving fullscreen, or switching to another window, tab or application, submits your test ' +
   'immediately. There are no warnings and no allowance.';
+
+/**
+ * What the keyboard costs, which is not the same rule.
+ *
+ * Leaving the screen ends the paper on sight; a key does not, and saying so
+ * plainly matters more than the tidiness of one sentence covering both. A
+ * student who believes the first stray key has already ended their test spends
+ * the rest of the paper working under something that has not happened.
+ */
+const KEYBOARD_COST =
+  'The keyboard is disabled — nothing you type reaches the paper. You will be warned twice; '
+  + 'the third key pressed submits your test.';
 
 /** Answer widget shared by both delivery modes. */
 function AnswerInput({ question, value, onChange, isDisabled, keypadOnly }) {
@@ -576,6 +604,31 @@ export default function QuizAttempt() {
   const finished = Boolean(result) && Boolean(attempt) && attempt.status !== 'in_progress';
 
   /**
+   * When the paper is shown without the browser being in fullscreen.
+   *
+   * Two cases, and neither is a concession — in both, waiting for fullscreen
+   * withholds the paper without buying any enforcement:
+   *
+   *   **Inside Safe Exam Browser.** The machine is already a kiosk: no chrome,
+   *   no other application, no second window. There is nothing left for the
+   *   page's own fullscreen to add. SEB for macOS renders in a WKWebView that
+   *   may expose no Fullscreen API at all, so the gate could not be satisfied
+   *   from inside the very browser the exam demanded — which is how a student
+   *   who did everything right ended up on this screen with their clock running.
+   *
+   *   **A browser that cannot.** WebKit before Safari 16.4 has only the
+   *   prefixed API, and `quizStage` now speaks it; where not even that exists,
+   *   the request can never succeed and the button can never work.
+   *
+   * What is *not* relaxed: leaving the window, switching tab and — where it
+   * applies — the keyboard lockdown are all watched exactly as before, and still
+   * end the sitting. Those need no fullscreen to observe. `sebBypassed` is
+   * deliberately not here either: a student let in on the access code is in an
+   * ordinary browser, and the gate is the only thing holding that screen down.
+   */
+  const fullscreenExempt = Boolean(attempt?.sebVerified) || !fullscreenSupported();
+
+  /**
    * Whether the stage should be putting itself fullscreen.
    *
    * True from the first frame, loading included: the request has to go out while
@@ -765,12 +818,16 @@ export default function QuizAttempt() {
         )}
       </Box>
     );
-  } else if (!inFullscreen) {
+  } else if (!inFullscreen && !fullscreenExempt) {
     /* ---- entry gate ----
        Only for a student who has *not* left: the browser refused fullscreen with
        no user gesture behind it, or the tab was reloaded. They never got in, so
        there is nothing to hold against them and the button is the way in. A
-       departure is caught by the branch above, which has no button. */
+       departure is caught by the branch above, which has no button.
+
+       And only for a student the gate can actually be satisfied by — see
+       `fullscreenExempt`. It used to stand in front of everyone, including the
+       browsers where pressing the button did nothing at all. */
     content = (
       <SectionCard title="Fullscreen required">
         <Alert status="warning" borderRadius="md" mb={4}>
@@ -850,7 +907,11 @@ export default function QuizAttempt() {
             </Box>
             <HStack>
               <Badge colorScheme="red">Fullscreen only</Badge>
-              {remaining !== null && (
+              {/* An untimed paper says so rather than leaving a gap where a
+                  clock would be: "no timer" and "the timer failed to load" look
+                  identical when both are blank, and only one is worth worrying
+                  about five minutes into an exam. */}
+              {remaining !== null ? (
                 <Badge
                   colorScheme={remaining < 30 ? 'red' : remaining < 120 ? 'orange' : 'green'}
                   fontSize="md"
@@ -859,6 +920,10 @@ export default function QuizAttempt() {
                   borderRadius="md"
                 >
                   ⏱ {clock(remaining)}
+                </Badge>
+              ) : (
+                <Badge colorScheme="gray" px={3} py={1} borderRadius="md">
+                  No time limit
                 </Badge>
               )}
               {!sequential && (
@@ -928,10 +993,21 @@ export default function QuizAttempt() {
 
         {/* The rule that ends the paper without warning, kept on screen for the
             whole sitting rather than only in the brief: a student who is about
-            to reach for another window is the one person who needs it. */}
+            to reach for another window is the one person who needs it.
+
+            The keyboard line sits with it for the same reason, and is said
+            standing rather than only when a key is pressed — a student who never
+            touches the keyboard should still know why the field will not take
+            typing, and one who is about to should know what it costs before the
+            warnings start rather than after. */}
         <Alert status="warning" borderRadius="md" mb={4} py={2}>
           <AlertIcon />
-          <Text fontSize="sm">{LEAVING_COST}</Text>
+          <Box flex="1">
+            <Text fontSize="sm">{LEAVING_COST}</Text>
+            {settings.keyboardLockdown !== false && (
+              <Text fontSize="sm">{KEYBOARD_COST}</Text>
+            )}
+          </Box>
         </Alert>
 
         {/* Not dismissible, and no retry button: the request is still running,
@@ -1025,9 +1101,16 @@ export default function QuizAttempt() {
                 </Text>
                 <RichText>{current.question.question}</RichText>
               </Box>
-              <Badge colorScheme="gray" flexShrink={0}>
-                {current.question.marks} mark{current.question.marks === 1 ? '' : 's'}
-              </Badge>
+              <HStack flexShrink={0} align="start" spacing={2}>
+                {TYPE_LABEL[current.question.type] && (
+                  <Badge colorScheme="blue" variant="subtle">
+                    {TYPE_LABEL[current.question.type]}
+                  </Badge>
+                )}
+                <Badge colorScheme="gray">
+                  {current.question.marks} mark{current.question.marks === 1 ? '' : 's'}
+                </Badge>
+              </HStack>
             </Flex>
 
             {/* Only reachable by going back to a question whose own allowance
@@ -1128,9 +1211,16 @@ export default function QuizAttempt() {
                       </HStack>
                       <RichText>{question.question}</RichText>
                     </Box>
-                    <Badge colorScheme="gray" flexShrink={0} h="fit-content">
-                      {question.marks} mark{question.marks === 1 ? '' : 's'}
-                    </Badge>
+                    <HStack flexShrink={0} h="fit-content" spacing={2}>
+                      {TYPE_LABEL[question.type] && (
+                        <Badge colorScheme="blue" variant="subtle">
+                          {TYPE_LABEL[question.type]}
+                        </Badge>
+                      )}
+                      <Badge colorScheme="gray">
+                        {question.marks} mark{question.marks === 1 ? '' : 's'}
+                      </Badge>
+                    </HStack>
                   </Flex>
                   <AnswerInput
                     question={question}

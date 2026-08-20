@@ -165,12 +165,38 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
   // the quiz has a URL, which it does not have until it exists.
   const [requireSeb, setRequireSeb] = useState(false);
   const [sebBypass, setSebBypass] = useState(false);
+  // Whether the institution already has a shared .seb file and Config Key on the
+  // server. `null` while unknown: with one file serving every exam, telling a
+  // teacher to go and build one they do not need is the common case now, so the
+  // instruction below waits until the answer is in rather than defaulting to it.
+  const [sharedSebReady, setSharedSebReady] = useState(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [timeLimit, setTimeLimit] = useState('');
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
   const toast = useToast();
+
+  // Asked only when the box is ticked, and only once the dialog is open: it is
+  // a module-level fact, not worth a request from every teacher who never
+  // touches Safe Exam Browser.
+  useEffect(() => {
+    if (!isOpen || !requireSeb || sharedSebReady !== null) return undefined;
+    let cancelled = false;
+    lmApi
+      .getSharedSebConfig()
+      .then((res) => {
+        if (!cancelled) setSharedSebReady(Boolean(res?.ready));
+      })
+      .catch(() => {
+        // A failed lookup must not hide the instruction: unknown is treated as
+        // "not set up", which is the state that still needs the teacher.
+        if (!cancelled) setSharedSebReady(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, requireSeb, sharedSebReady]);
 
   const chosen = METHODS[method];
 
@@ -378,14 +404,26 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
                   </Text>
                 </Checkbox>
 
-                <Alert status="info" borderRadius="md" mt={3} py={2} fontSize="xs">
-                  <AlertIcon boxSize={3} />
-                  <Box>
-                    <b>One more step after this.</b> Open the quiz editor → Proctoring, and upload
-                    the <code>.seb</code> file from SEB&apos;s Configuration Tool along with the
-                    Config Key it shows you. Students cannot start until both are in.
-                  </Box>
-                </Alert>
+                {sharedSebReady === true ? (
+                  <Alert status="success" borderRadius="md" mt={3} py={2} fontSize="xs">
+                    <AlertIcon boxSize={3} />
+                    <Box>
+                      <b>Nothing else to set up.</b> This paper will use the institution&apos;s
+                      shared Safe Exam Browser configuration. Upload a file of its own in the quiz
+                      editor → Proctoring only if this paper needs a different lockdown.
+                    </Box>
+                  </Alert>
+                ) : sharedSebReady === false ? (
+                  <Alert status="info" borderRadius="md" mt={3} py={2} fontSize="xs">
+                    <AlertIcon boxSize={3} />
+                    <Box>
+                      <b>One more step after this.</b> Open the quiz editor → Proctoring, and upload
+                      the <code>.seb</code> file from SEB&apos;s Configuration Tool along with the
+                      Config Key it shows you — or ask an administrator to set the shared one up
+                      once for everybody. Students cannot start until that is done.
+                    </Box>
+                  </Alert>
+                ) : null}
               </Box>
             )}
           </FormControl>
@@ -554,6 +592,16 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
   const state = liveState(quiz, isTeacher);
   // A sitting to go back to. Only ever set for a student once results are released.
   const reviewable = !isTeacher && Boolean(quiz.lastAttemptId) && !quiz.resultsPending;
+  /* The paper as a PDF, offered only where the server will actually hand it over.
+   *
+   * This menu used to render for everyone on every row, which is where the quiz
+   * id and the export URL came from in the first place — a student had the link
+   * to an unsat paper sitting on their own quiz list. The server is the check
+   * (see exportQuestions); this stops the row advertising a download that is
+   * now a 403, and stops handing out the address of one. */
+  const canDownloadPaper = isTeacher || Boolean(quiz.lastAttemptId);
+  const canDownloadKey =
+    isTeacher || (canDownloadPaper && quiz.resultsReleased && quiz.settings?.showAnswersAfterSubmit);
 
   const isLive = Boolean(state.live || state.open);
   // A reopened paper is not a finished one. The attempt row survives a reopen,
@@ -701,31 +749,35 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
       </Box>
 
       <Flex gap={2} wrap="wrap" align="center" maxW="100%">
-        <Menu>
-          <MenuButton
-            as={Button}
-            size="sm"
-            variant="outline"
-            colorScheme="purple"
-            isLoading={Boolean(downloadingPdf)}
-          >
-            📄 PDF ▾
-          </MenuButton>
-          <MenuList zIndex={10}>
-            <MenuItem
-              isDisabled={downloadingPdf === 'questions'}
-              onClick={() => handleDownloadPdf(false)}
+        {canDownloadPaper && (
+          <Menu>
+            <MenuButton
+              as={Button}
+              size="sm"
+              variant="outline"
+              colorScheme="purple"
+              isLoading={Boolean(downloadingPdf)}
             >
-              📝 Questions Only
-            </MenuItem>
-            <MenuItem
-              isDisabled={downloadingPdf === 'answers'}
-              onClick={() => handleDownloadPdf(true)}
-            >
-              💡 Questions with Answers
-            </MenuItem>
-          </MenuList>
-        </Menu>
+              📄 PDF ▾
+            </MenuButton>
+            <MenuList zIndex={10}>
+              <MenuItem
+                isDisabled={downloadingPdf === 'questions'}
+                onClick={() => handleDownloadPdf(false)}
+              >
+                📝 Questions Only
+              </MenuItem>
+              {canDownloadKey && (
+                <MenuItem
+                  isDisabled={downloadingPdf === 'answers'}
+                  onClick={() => handleDownloadPdf(true)}
+                >
+                  💡 Questions with Answers
+                </MenuItem>
+              )}
+            </MenuList>
+          </Menu>
+        )}
 
         {isTeacher ? (
           <>

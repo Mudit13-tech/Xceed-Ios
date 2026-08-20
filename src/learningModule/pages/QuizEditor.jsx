@@ -1029,13 +1029,19 @@ export default function QuizEditor() {
                     isChecked={settings.keyboardLockdown !== false}
                     onChange={(e) => setSetting('keyboardLockdown', e.target.checked)}
                   >
-                    Block the keyboard, and submit on the first key pressed
+                    Block the keyboard, warn twice, then submit
                   </Checkbox>
                   <Text fontSize="xs" opacity={0.6} ml={6}>
-                    Closes the gap that a desktop AI assistant opens: on macOS one answers a global
-                    hotkey with a panel drawn over the browser, which fires none of the events that
-                    end a paper. Every answer here is clicked — a numerical answer gets an on-screen
-                    keypad — so during a sitting the keyboard has no legitimate use.
+                    Closes the gap a <b>hotkey-summoned</b> desktop AI assistant opens: on macOS one
+                    answers a global hotkey with a panel drawn over the browser, which fires none of
+                    the events that end a paper. The hotkey itself is consumed by the operating
+                    system, but the modifier held down first still reaches the page, and that is what
+                    this catches. Every answer here is clicked — a numerical answer gets an on-screen
+                    keypad — so during a sitting the keyboard has no legitimate use. Every key is
+                    swallowed and recorded on the attempt; the first two are answered with an
+                    on-screen warning, and the third submits the paper. Unlike leaving the screen
+                    this gets an allowance, because a hand resting on a key looks the same as a
+                    hotkey at the first event.
                   </Text>
                   {settings.keyboardLockdown === false && (
                     <Text fontSize="xs" color="lmHue.orange700" ml={6} mt={1}>
@@ -1043,6 +1049,18 @@ export default function QuizEditor() {
                       for a candidate who needs a keyboard for assistive input.
                     </Text>
                   )}
+                  {/* Said plainly and next to the setting, because the failure
+                      mode is a teacher reading "blocks AI assistants" and
+                      planning a paper around a guarantee that stops at the
+                      keyboard. Reported from a live sitting on macOS: a spoken
+                      "Hey Siri" reaches the assistant without touching the
+                      page. */}
+                  <Text fontSize="xs" color="lmHue.orange700" ml={6} mt={1}>
+                    Not covered: an assistant summoned <b>by voice</b>. Speaking to Siri produces no
+                    keystroke, no focus change and no fullscreen exit, so no web page can observe it.
+                    Require Safe Exam Browser below, with Siri and dictation turned off in the
+                    settings file, for a paper where that matters.
+                  </Text>
                 </Box>
                 <Checkbox
                   size="sm"
@@ -1103,14 +1121,33 @@ export default function QuizEditor() {
                       <Box>
                         <Text fontSize="sm" fontWeight="600" mb={1}>
                           1. Exam settings file
+                          {settings.sebConfigSource === 'shared' ? ' (optional for this paper)' : ''}
                         </Text>
+                        {/* With a shared file on the server this paper is already
+                            set up, so the build-it-yourself instructions are not
+                            an instruction any more — they are an option most
+                            teachers should ignore. Reading them as a to-do is
+                            what sent teachers to SEB's Configuration Tool for a
+                            file the institution had uploaded months ago. */}
                         <Text fontSize="xs" color="lmFg.muted" mb={2}>
-                          Build this once in SEB&apos;s own free Configuration Tool — set the Start
-                          URL to this test&apos;s link and a quit password if you want one — then
-                          upload the <code>.seb</code> file it produces. The tool also shows a{' '}
-                          <b>Config Key</b>: paste that into the field below. Both have to match the
-                          same saved file, or the check below will refuse every student, including
-                          ones who did everything right.
+                          {settings.sebConfigSource === 'shared' ? (
+                            <>
+                              Nothing to upload — the institution&apos;s shared configuration covers
+                              this paper. Use this only if it needs a lockdown of its own: build the{' '}
+                              <code>.seb</code> file in SEB&apos;s free Configuration Tool and paste
+                              the <b>Config Key</b> it shows below. Both have to match the same saved
+                              file.
+                            </>
+                          ) : (
+                            <>
+                              Build this once in SEB&apos;s own free Configuration Tool — set the
+                              Start URL to this test&apos;s link and a quit password if you want one
+                              — then upload the <code>.seb</code> file it produces. The tool also
+                              shows a <b>Config Key</b>: paste that into the field below. Both have
+                              to match the same saved file, or the check below will refuse every
+                              student, including ones who did everything right.
+                            </>
+                          )}
                         </Text>
                         <HStack mb={1}>
                           <Input
@@ -1135,6 +1172,34 @@ export default function QuizEditor() {
                             : 'No file uploaded yet.'}
                         </Text>
                       </Box>
+
+                      {/* Reported from a live sitting: a student said "Hey Siri"
+                          in an ordinary browser and read the answer off the
+                          panel. Nothing on the page can see that — a spoken
+                          trigger fires no event at all, so the keyboard rule
+                          above, which works by catching the modifier of a
+                          hotkey, has nothing to catch. SEB is the only place
+                          this can be stopped rather than recorded, and only if
+                          the file was built with the assistant switched off.
+                          A file built with the defaults leaves it on, so this
+                          says so where the file is chosen rather than in a
+                          release note nobody re-reads. It applies to the shared
+                          file just as much as to a per-paper one. */}
+                      <Alert status="warning" borderRadius="md" fontSize="xs" py={2} alignItems="flex-start">
+                        <AlertIcon />
+                        <Box>
+                          <Text fontWeight="600" mb={1}>
+                            Turn off Siri and dictation in the file
+                          </Text>
+                          In the Configuration Tool&apos;s macOS settings, clear{' '}
+                          <b>allowSiri</b> and <b>allowDictation</b> before saving. A student can
+                          summon a voice assistant by speaking, and a spoken trigger produces no
+                          keystroke, no focus change and no fullscreen exit — so nothing in this
+                          module can detect it, including the keyboard rule above. SEB refusing to
+                          run alongside it is the only thing that stops it, and only if the file
+                          says so.
+                        </Box>
+                      </Alert>
 
                       <FormControl>
                         <FormLabel fontSize="xs">Config Key</FormLabel>

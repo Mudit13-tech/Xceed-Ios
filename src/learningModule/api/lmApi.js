@@ -240,14 +240,17 @@ const lmApi = {
 
   /* people */
   listMembers: (classId) => request(`/classes/${classId}/members`),
-  inviteMembers: (classId, emails, role, options = {}) =>
+  // Accounts are always provisioned for addresses without one, and the platform
+  // role is always granted to people who already have an account without it —
+  // both were once modal checkboxes and are now the only supported behaviour.
+  inviteMembers: (classId, emails, role) =>
     request(`/classes/${classId}/members/invite`, {
       method: 'POST',
       body: {
         emails,
         role,
-        createAccounts: options.createAccounts !== false,
-        grantRoleToExisting: Boolean(options.grantRoleToExisting),
+        createAccounts: true,
+        grantRoleToExisting: true,
       },
     }),
   inviteStatus: (classId, batchId) => request(`/classes/${classId}/members/invite-status/${batchId}`),
@@ -378,6 +381,14 @@ const lmApi = {
   /* The institution's shared Safe Exam Browser setup. Module-level, not
      class-scoped: one file and one Config Key serve every exam. */
   getSharedSebConfig: () => request('/seb-config'),
+
+  /* Whether the stored file and key actually work, asked from this browser.
+     Only meaningful when the page is open inside Safe Exam Browser: the answer
+     is built from the SEB headers on this very request, so run from Chrome it
+     truthfully reports that there are none. An ordinary XHR on purpose — so is
+     `startAttempt`, and this has to test the path an exam takes, not an easier
+     one. */
+  checkSharedSebConfig: () => request('/seb-config/check'),
   // `origin` is the address students will actually open. It is written into the
   // file as the Start URL, and SEB computes the Config Key over the settings —
   // so a sample built for the wrong host carries a key that is invalid for the

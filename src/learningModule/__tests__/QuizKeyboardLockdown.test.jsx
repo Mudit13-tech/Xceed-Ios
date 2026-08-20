@@ -16,7 +16,10 @@ import { sync, now as serverNow, reset as resetClock, state as clockState } from
  * fullscreen intact — and every signal the proctoring watches for is one the
  * operating system never sends. The answer is not to detect the panel, which no
  * web API can do, but to make the keyboard itself illegitimate: every answer type
- * is clicked, so a keypress during a sitting has no innocent purpose.
+ * is clicked, so the keyboard is dead for the whole sitting. It is not, however,
+ * fatal on sight: the first two keys are warnings and the third submits the
+ * paper, because a stray key and a reach for a hotkey are the same event to the
+ * browser.
  *
  * The second: the countdown was wrong. It subtracted the *browser's* clock from a
  * deadline computed by the *server's*, so it was off by exactly the drift between
@@ -26,7 +29,7 @@ import { sync, now as serverNow, reset as resetClock, state as clockState } from
 /* ─────────────────────── the keyboard lockdown ────────────────────────── */
 
 function Harness({ onViolation, lockdown = true, active = true }) {
-  const { departed } = useProctoring({
+  const { departed, warning } = useProctoring({
     settings: { keyboardLockdown: lockdown },
     active,
     attemptId: 'a1',
@@ -35,6 +38,7 @@ function Harness({ onViolation, lockdown = true, active = true }) {
   return (
     <div>
       <span data-testid="departed">{String(departed)}</span>
+      <span data-testid="warning">{warning || ''}</span>
       <input data-testid="field" aria-label="typed answer" />
     </div>
   );
@@ -44,11 +48,20 @@ describe('keyboard lockdown', () => {
   let violation;
 
   beforeEach(() => {
-    violation = vi.fn().mockResolvedValue({ terminated: true, message: 'Submitted.' });
+    // What the server says to a keypress inside the allowance: recorded, warned
+    // about, paper still open. The termination is the third one, and it has its
+    // own test below.
+    violation = vi.fn().mockResolvedValue({ warning: 'Warning 1 of 2.' });
     sessionStorage.clear();
   });
 
-  it('ends the paper on the first key pressed', async () => {
+  it('reports the key and warns, without ending the paper', async () => {
+    /* The rule the first version of this got wrong. A keypress is not a
+       departure the browser observed — the student is still in fullscreen, on
+       the paper, and nothing was typed because the key was swallowed. A hand
+       resting on a key looks identical to a reach for a hotkey at the first
+       event, so the first two are warnings and the server ends it on the third.
+       See the server's `KEY_PRESS_ALLOWANCE`. */
     render(<Harness onViolation={violation} />);
 
     await act(async () => {
@@ -57,9 +70,47 @@ describe('keyboard lockdown', () => {
 
     expect(violation).toHaveBeenCalledTimes(1);
     expect(violation.mock.calls[0][0]).toBe('key_press');
-    // Latched locally, without waiting for the server to agree — the browser
-    // already saw it.
-    expect(screen.getByTestId('departed').textContent).toBe('true');
+    expect(screen.getByTestId('departed').textContent).toBe('false');
+  });
+
+  it('says the keyboard is not allowed before the server answers', async () => {
+    /* A key that appears to do nothing at all is the one that gets pressed
+       again. The server's reply carries the numbered warning, but it is a round
+       trip away and on a dropped connection it never comes — so the local text
+       goes up on the keypress itself. */
+    let settle;
+    const pending = vi.fn(() => new Promise((resolve) => { settle = resolve; }));
+    render(<Harness onViolation={pending} />);
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'a' });
+    });
+
+    expect(screen.getByTestId('warning').textContent).toMatch(/keyboard is not allowed/i);
+
+    // And the server's own wording, which knows which warning this is, replaces
+    // it once it lands.
+    await act(async () => {
+      settle({ warning: 'Warning 1 of 2.' });
+    });
+    expect(screen.getByTestId('warning').textContent).toBe('Warning 1 of 2.');
+  });
+
+  it('closes the paper when the server says the allowance is spent', async () => {
+    // The count lives on the attempt, server-side, so the reply is the only
+    // signal the client has that the third key has been reached — and it is
+    // enough: `applyResult` terminates on it like any other ending.
+    const terminating = vi.fn().mockResolvedValue({
+      terminated: true,
+      message: 'Submitted — the keyboard was used again after 2 warnings.',
+    });
+    render(<Harness onViolation={terminating} />);
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'a' });
+    });
+
+    expect(screen.getByTestId('warning').textContent).toMatch(/after 2 warnings/);
   });
 
   it('records the modifier, which is the only part of a global hotkey we ever see', async () => {
@@ -74,7 +125,7 @@ describe('keyboard lockdown', () => {
     expect(violation.mock.calls[0][2]).toBe('Alt');
   });
 
-  it('closes the paper on the Option press, before the hotkey completes', async () => {
+  it('catches the Option press, before the hotkey completes', async () => {
     /* The attack, as the browser actually experiences it.
      *
      * A macOS global hotkey matches on the *non-modifier* key going down while the
@@ -85,7 +136,8 @@ describe('keyboard lockdown', () => {
      * turns it into a `keydown`.
      *
      * That is the whole basis of this rule working against a shortcut it cannot
-     * intercept. By the time Space would have arrived, the paper is already closed.
+     * intercept: by the time Space would have arrived, the Option press is
+     * already on the record and counted against the allowance.
      */
     render(<Harness onViolation={violation} />);
 
@@ -94,7 +146,7 @@ describe('keyboard lockdown', () => {
     });
 
     expect(violation).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('departed').textContent).toBe('true');
+    expect(violation.mock.calls[0][2]).toBe('Alt');
 
     // Space never arrives — the OS took it. Nothing depends on it.
     await act(async () => {});
@@ -134,7 +186,7 @@ describe('keyboard lockdown', () => {
     field.removeEventListener('keydown', sawIt);
   });
 
-  it('reports one departure however many keys follow', async () => {
+  it('reports every key, because each one is counted', async () => {
     render(<Harness onViolation={violation} />);
 
     await act(async () => {
@@ -143,9 +195,11 @@ describe('keyboard lockdown', () => {
       fireEvent.keyDown(window, { key: 'c' });
     });
 
-    // A student whose hand is on the keyboard should not generate a report per
-    // key against an attempt that is already over.
-    expect(violation).toHaveBeenCalledTimes(1);
+    /* The counting is the server's, off the violations already on the attempt,
+       so the client's job is to report each key rather than to decide which of
+       them matter. Swallowing the second and third here would hand the allowance
+       back to anyone holding a key down. */
+    expect(violation).toHaveBeenCalledTimes(3);
   });
 
   it('blocks keys during the brief but reports nothing', async () => {
