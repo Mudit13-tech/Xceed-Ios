@@ -23,7 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
  *        comparison, so arriving at a question never saves it straight back.
  * @param {boolean} options.active   only while a paper is genuinely being sat
  * @param {(entries: Array) => Promise<any>} options.save
- * @returns {{status: 'idle'|'saving'|'saved'|'retrying', cancel: () => void}}
+ * @returns {{status: 'idle'|'saving'|'saved'|'retrying', cancel: () => Promise<void>}}
  */
 
 /** Long enough to not save every keystroke, short enough to lose nothing. */
@@ -68,6 +68,9 @@ export default function useAnswerAutosave({ payload, baseline, active, save }) {
   const saved = useRef(base);
   const timer = useRef(null);
   const running = useRef(false);
+  // The save that is on the wire right now, so `cancel` has something to wait
+  // for. `running` alone could only say that one existed, not when it ended.
+  const inFlight = useRef(null);
 
   // Read through refs so the effect below depends on the signature alone. With
   // `payload` or `save` in the dependency list a new object identity on every
@@ -81,27 +84,32 @@ export default function useAnswerAutosave({ payload, baseline, active, save }) {
     saved.current = base;
   }, [base]);
 
-  const flushNow = useCallback(async () => {
-    if (running.current) return;
+  const flushNow = useCallback(() => {
+    if (running.current) return inFlight.current || Promise.resolve();
     const sending = signature(payloadRef.current);
-    if (sending === saved.current) return;
+    if (sending === saved.current) return Promise.resolve();
 
     running.current = true;
     setStatus('saving');
-    try {
-      await saveRef.current(toEntries(payloadRef.current));
-      // What was sent, not what is on screen now: the student may have typed
-      // while it was in flight, and claiming that is saved would be a lie the
-      // next comparison would then believe.
-      saved.current = sending;
-      setStatus(signature(payloadRef.current) === sending ? 'saved' : 'saving');
-    } catch {
-      // Kept quiet on purpose — see the note at the top. The answer is still on
-      // screen and still travels with the next commit.
-      setStatus('retrying');
-    } finally {
-      running.current = false;
-    }
+    const request = (async () => {
+      try {
+        await saveRef.current(toEntries(payloadRef.current));
+        // What was sent, not what is on screen now: the student may have typed
+        // while it was in flight, and claiming that is saved would be a lie the
+        // next comparison would then believe.
+        saved.current = sending;
+        setStatus(signature(payloadRef.current) === sending ? 'saved' : 'saving');
+      } catch {
+        // Kept quiet on purpose — see the note at the top. The answer is still on
+        // screen and still travels with the next commit.
+        setStatus('retrying');
+      } finally {
+        running.current = false;
+        inFlight.current = null;
+      }
+    })();
+    inFlight.current = request;
+    return request;
   }, []);
 
   useEffect(() => {
@@ -121,16 +129,30 @@ export default function useAnswerAutosave({ payload, baseline, active, save }) {
   }, [current, active, status, flushNow]);
 
   /**
-   * Drops a pending save.
+   * Drops a pending save, and waits for one already on the wire.
    *
    * Called by the paths that commit the answer themselves — advancing, and
    * submitting. Their request is authoritative and carries the same answer, so
    * letting a debounced draft race it would be a second write for nothing, and
    * on a sequential paper a write aimed at a cursor that is about to move.
+   *
+   * Clearing the timer only ever handled the draft that had not left yet. A
+   * draft already in flight kept going and landed *beside* the commit — two
+   * requests loading, mutating and saving the same attempt document at once,
+   * which is what put Mongoose's "No matching document found for id … version
+   * 19" on top of a student's exam paper. Awaiting it is what makes the two
+   * writes sequential, and it costs the student nothing: it is the same answer
+   * they have already given, and it is normally not there at all.
+   *
+   * @returns {Promise<void>} settles once nothing of this hook's is in flight
    */
   const cancel = useCallback(() => {
     clearTimeout(timer.current);
-    setStatus('idle');
+    // Not while a save is running: its own completion will set the status, and
+    // saying "idle" over the top of it flickers the indicator to nothing and
+    // back for a save that did happen.
+    if (!running.current) setStatus('idle');
+    return inFlight.current || Promise.resolve();
   }, []);
 
   // Memoised so callers can put the whole hook result in a dependency list

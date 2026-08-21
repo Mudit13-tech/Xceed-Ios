@@ -119,9 +119,50 @@ describe('useAnswerAutosave', () => {
     const { rerender, result, save } = setup({ payload: {}, baseline: {}, active: true });
 
     rerender({ payload: { q1: answer(['0']) }, baseline: {}, active: true });
-    act(() => result.current.cancel());
+    // Braces, not a bare arrow: `cancel` returns a promise now, and an `act`
+    // callback that returns one puts `act` into its async form — which then has
+    // to be awaited or it leaves React mid-update for the next test.
+    act(() => { result.current.cancel(); });
 
     await tick(AUTOSAVE_DELAY_MS * 2);
     expect(save).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The other half of "drops a pending save", and the half that was missing.
+   *
+   * Clearing the timer only ever handled a draft that had not left yet. One
+   * already on the wire kept going and landed *beside* the commit that followed
+   * it - two requests loading, mutating and saving the same attempt document at
+   * once, which is what put Mongoose's "No matching document found for id ...
+   * version 19" across the top of a student's exam paper. So `cancel` has to be
+   * waitable, and has to actually wait.
+   */
+  it('waits for a save already on the wire, so the commit does not race it', async () => {
+    let land;
+    const save = vi.fn(() => new Promise((resolve) => { land = resolve; }));
+    const { rerender, result } = setup({ payload: {}, baseline: {}, active: true }, save);
+
+    rerender({ payload: { q1: answer(['0']) }, baseline: {}, active: true });
+    await tick(AUTOSAVE_DELAY_MS);
+    expect(save).toHaveBeenCalledTimes(1); // in flight, not finished
+
+    let settled = false;
+    let waiting;
+    act(() => { waiting = result.current.cancel().then(() => { settled = true; }); });
+
+    await tick(1000);
+    expect(settled).toBe(false); // still waiting on the request, as it must
+
+    await act(async () => { land({}); await waiting; });
+    expect(settled).toBe(true);
+  });
+
+  it('cancels without waiting when nothing is in flight', async () => {
+    // The ordinary case by far: `advance` awaits this on every question, and on
+    // a paper where the autosave has nothing to send it must cost nothing.
+    const { result } = setup({ payload: {}, baseline: {}, active: true });
+    await act(async () => { await result.current.cancel(); });
+    expect(result.current.status).toBe('idle');
   });
 });

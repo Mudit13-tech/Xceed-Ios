@@ -1370,8 +1370,16 @@ function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast }) {
 
   if (!quiz) return null;
 
+  // Full screen on a phone: this is the panel an invigilator holds in one hand
+  // while walking the hall, and a 3xl dialog there was a letterbox with margins
+  // down both sides.
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="3xl" scrollBehavior="inside">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size={{ base: 'full', md: '3xl' }}
+      scrollBehavior="inside"
+    >
       <ModalOverlay />
       <ModalContent>
         <ModalHeader>
@@ -1416,7 +1424,49 @@ function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast }) {
                   <AlertIcon />
                   {offSeb.length} of {writing.length} are writing outside Safe Exam Browser.
                 </Alert>
-                <Box overflowX="auto">
+                {/* Cards on a phone, the table from md up — the same split the
+                    monitor lists use. Four columns in a modal on a handset was a
+                    sideways scroll to read an email address. */}
+                <Stack spacing={3} display={{ base: 'flex', md: 'none' }}>
+                  {offSeb.map((attempt) => {
+                    const total = attempt.questionCount || quiz.questions.length || 1;
+                    const percent = Math.round((attempt.answeredCount / total) * 100);
+                    return (
+                      <MonitorCard key={attempt._id}>
+                        <Flex justify="space-between" gap={2} align="flex-start">
+                          <Box minW={0}>
+                            <Text fontSize="sm" fontWeight="600">
+                              {nameOf(attempt)}
+                            </Text>
+                            <Text fontSize="xs" color="lmFg.muted" wordBreak="break-all">
+                              {attempt.studentEmail || '—'}
+                            </Text>
+                          </Box>
+                          <Badge colorScheme="red" fontSize="0.6rem" flexShrink={0}>
+                            no SEB
+                          </Badge>
+                        </Flex>
+
+                        <Box mt={2}>
+                          <Progress value={percent} size="sm" borderRadius="full" colorScheme="green" />
+                          <Text fontSize="xs" color="lmFg.muted">
+                            {attempt.answeredCount}/{total} answered
+                          </Text>
+                        </Box>
+
+                        <Flex mt={2} gap={4} wrap="wrap">
+                          <CardFact label="Outside SEB since">
+                            <Text fontSize="xs" color="lmFg.subtle">
+                              {attempt.sebBypassAt ? relativeTime(attempt.sebBypassAt) : '—'}
+                            </Text>
+                          </CardFact>
+                        </Flex>
+                      </MonitorCard>
+                    );
+                  })}
+                </Stack>
+
+                <Box overflowX="auto" display={{ base: 'none', md: 'block' }}>
                   <Table size="sm">
                     <Thead>
                       <Tr>
@@ -1530,8 +1580,8 @@ function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast }) {
                           </Text>
                         </Box>
 
-                        <HStack spacing={2} align="flex-end">
-                          <FormControl w="110px">
+                        <HStack spacing={2} align="flex-end" w={{ base: '100%', md: 'auto' }}>
+                          <FormControl w="110px" flexShrink={0}>
                             <FormLabel fontSize="xs" mb={1}>
                               Minutes
                             </FormLabel>
@@ -1555,6 +1605,7 @@ function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast }) {
                               colorScheme="purple"
                               onClick={() => letIn(attempt)}
                               isLoading={busyId === attempt._id}
+                              flex={{ base: '1', md: 'none' }}
                             >
                               Let in
                             </Button>

@@ -13,6 +13,7 @@ import {
   FormLabel,
   HStack,
   Heading,
+  IconButton,
   Input,
   Menu,
   MenuButton,
@@ -39,6 +40,7 @@ import {
 // fails the whole module, which is a blank page rather than a missing
 // animation. Emotion is a declared dependency and Chakra's own styling engine.
 import { keyframes } from '@emotion/react';
+import { DeleteIcon } from '@chakra-ui/icons';
 import lmApi from '../api/lmApi';
 import { CopyLinkButton, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import PublishQuizModal from '../components/PublishQuizModal';
@@ -561,6 +563,7 @@ function liveState(quiz, isTeacher) {
 function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete }) {
   const [downloadingPdf, setDownloadingPdf] = useState(null);
   const toast = useToast();
+  const navigate = useNavigate();
 
   const handleDownloadPdf = async (withAnswers) => {
     setDownloadingPdf(withAnswers ? 'answers' : 'questions');
@@ -603,6 +606,10 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
     isTeacher || (canDownloadPaper && quiz.resultsReleased && quiz.settings?.showAnswersAfterSubmit);
 
   const isLive = Boolean(state.live || state.open);
+  // Where "this is running" leads: the monitor for staff, the paper for a student.
+  const liveTarget = isTeacher
+    ? `/learning/class/${classId}/quiz/${quiz._id}/results`
+    : `/learning/class/${classId}/quiz/${quiz._id}`;
   // A reopened paper is not a finished one. The attempt row survives a reopen,
   // so `attemptsUsed` still counts it, and on its own that would show a student
   // whose teacher just gave them more time a finished test with no way back
@@ -625,7 +632,17 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
       wrap="wrap"
       transition="all 0.2s ease"
     >
-      <Box flex="1" minW="220px">
+      {/* While it is running, the card is the way in: the whole body is the
+          link to the live page (teachers to the monitor, students to the
+          paper), not just the pill in its corner. Only the body — the action
+          buttons to the right keep their own destinations. */}
+      <Box
+        flex="1"
+        minW="220px"
+        onClick={isLive ? () => navigate(liveTarget) : undefined}
+        cursor={isLive ? 'pointer' : 'default'}
+        role={isLive ? 'link' : undefined}
+      >
         <HStack spacing={2} wrap="wrap">
           <Heading size="sm">{quiz.title}</Heading>
           <Badge colorScheme={isExam ? 'red' : 'blue'}>{isExam ? '🎓 Exam' : '📝 Quiz'}</Badge>
@@ -639,11 +656,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
           {isLive && !isCompleted && (
             <Button
               as={RouterLink}
-              to={
-                isTeacher
-                  ? `/learning/class/${classId}/quiz/${quiz._id}/results`
-                  : `/learning/class/${classId}/quiz/${quiz._id}`
-              }
+              to={liveTarget}
               size="xs"
               colorScheme="green"
               variant="solid"
@@ -784,24 +797,13 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
               Edit
             </Button>
 
-            {isLive ? (
-              <Button
-                as={RouterLink}
-                to={`/learning/class/${classId}/quiz/${quiz._id}/results`}
-                size="sm"
-                colorScheme="green"
-                sx={{
-                  animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`,
-                  fontWeight: 'bold',
-                }}
-              >
-                🟢 Results {quiz.sittingNow ? `(${quiz.sittingNow} live)` : ''}
-              </Button>
-            ) : (
-              <Button as={RouterLink} to={`/learning/class/${classId}/quiz/${quiz._id}/results`} size="sm" variant="outline">
-                Results
-              </Button>
-            )}
+            {/* Always the same quiet Results button. The live state already has
+                its own loud control — the LIVE pill in the card header, and the
+                card body itself — so pulsing this one too said "live" three
+                times and dressed up results as something they are not. */}
+            <Button as={RouterLink} to={`/learning/class/${classId}/quiz/${quiz._id}/results`} size="sm" variant="outline">
+              Results
+            </Button>
 
             {/* Only once published: the link resolves to the student brief, which
                 a draft quiz will not serve to anyone but its author. */}
@@ -820,9 +822,14 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
                 Publish
               </Button>
             )}
-            <Button size="sm" variant="ghost" colorScheme="red" onClick={onDelete} aria-label="Delete quiz">
-              ✕
-            </Button>
+            <IconButton
+              size="sm"
+              variant="ghost"
+              colorScheme="red"
+              onClick={onDelete}
+              aria-label="Delete quiz"
+              icon={<DeleteIcon />}
+            />
           </>
         ) : (
           <>

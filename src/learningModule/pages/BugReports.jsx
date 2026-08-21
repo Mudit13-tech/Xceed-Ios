@@ -123,10 +123,11 @@ function ReportForm({ classes, pointsPerReport, onSent }) {
         onChange={(event) => setPageUrl(event.target.value)}
       />
       <Select
-        placeholder="Was it in a particular class? (optional)"
+        placeholder={kind === 'bug' ? "Which class is this for? (required)" : "Was it in a particular class? (optional)"}
         value={classId}
         onChange={(event) => setClassId(event.target.value)}
         maxW="420px"
+        isRequired={kind === 'bug'}
       >
         {classes.map((klass) => (
           <option key={klass._id} value={klass._id}>
@@ -135,7 +136,7 @@ function ReportForm({ classes, pointsPerReport, onSent }) {
         ))}
       </Select>
       <Flex align="center" gap={3} wrap="wrap">
-        <Button colorScheme="purple" onClick={submit} isLoading={saving} isDisabled={!title.trim()}>
+        <Button colorScheme="purple" onClick={submit} isLoading={saving} isDisabled={!title.trim() || (kind === 'bug' && !classId)}>
           Send
         </Button>
         {/* No route to GitHub from this form, for anybody. Filing here is the

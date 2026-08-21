@@ -77,6 +77,16 @@ export default defineConfig({
     },
   },
   server: {
+    /* Listen on both IP stacks, not just the one Node picks.
+       Vite's default binds `localhost`, which on Windows resolves to IPv6 and
+       leaves `127.0.0.1:5173` refusing connections outright. An ordinary browser
+       hides that — it resolves both and retries — but a client that picks IPv4
+       and does not fall back simply cannot reach the dev server, which is how
+       this surfaced: Safe Exam Browser reporting the site as unreachable, with
+       nothing wrong on SEB's side at all.
+
+       Note this also makes the dev server reachable from the local network. */
+    host: true,
     proxy: {
       '/api': {
         target: 'http://localhost:8010',

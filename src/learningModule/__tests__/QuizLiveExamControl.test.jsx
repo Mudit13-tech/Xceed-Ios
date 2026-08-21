@@ -191,8 +191,10 @@ describe('the live exam control panel', () => {
     );
 
     expect(within(dialog).getByText(/1 of 1 are writing outside safe exam browser/i)).toBeTruthy();
-    expect(within(dialog).getByText('vikram@example.com')).toBeTruthy();
-    expect(within(dialog).getByText('1/2 answered')).toBeTruthy();
+    // Twice over: the panel renders the narrow-screen cards and the wide-screen
+    // table together and picks between them in CSS, which jsdom does not apply.
+    expect(within(dialog).getAllByText('vikram@example.com').length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText('1/2 answered').length).toBeGreaterThan(0);
   });
 
   it('waives SEB on a let-in only when asked, and never by default', async () => {

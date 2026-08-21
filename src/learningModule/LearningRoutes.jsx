@@ -65,6 +65,7 @@ const Profile = lazy(() => import('./pages/Profile'));
 const BugReports = lazy(() => import('./pages/BugReports'));
 const DevTeam = lazy(() => import('./pages/DevTeam'));
 const LmAdmin = lazy(() => import('./pages/LmAdmin'));
+const LmAdminFaculty = lazy(() => import('./pages/LmAdminFaculty'));
 
 /**
  * The whole learning module hangs off one route in App.jsx (`/learning/*`),
@@ -89,6 +90,15 @@ export default function LearningRoutes() {
           close this" has nothing left to sign in for. */}
       <Route path="seb-exit" element={<SebExit />} />
 
+      {/* `seb-check` is deliberately NOT a route here. It is served as plain HTML
+          by the server, above the app's catch-all — see
+          learningModule/services/sebCheckPage.js. It lived here first and did not
+          survive a kiosk: reaching it needed the app to boot, match a route, load
+          a lazy chunk and not trip the layout's redirect, and when any of that
+          went wrong the page rendered blank and bounced to the sign-in screen
+          with no way to find out why. A check has to answer when other things do
+          not. */}
+
       <Route element={<LearningLayout />}>
         <Route index element={<Dashboard />} />
         <Route path="todo" element={<Todo />} />
@@ -102,6 +112,10 @@ export default function LearningRoutes() {
         <Route path="bugs" element={<BugReports />} />
         <Route path="dev-team" element={<DevTeam />} />
         <Route path="lm-admin" element={<LmAdmin />} />
+        {/* Not behind a client-side admin guard: every route here relies on the
+            server for authorisation, and this one 403s into the same
+            ErrorState as the dashboard it sits under. */}
+        <Route path="lm-admin/faculty" element={<LmAdminFaculty />} />
 
         <Route path="class/:classId" element={<ClassLayout />}>
           <Route index element={<Stream />} />
@@ -144,6 +158,10 @@ export default function LearningRoutes() {
             <Route path="insights" element={<Insights />} />
             <Route path="settings" element={<ClassSettings />} />
             <Route path="quiz/:quizId/edit" element={<QuizEditor />} />
+            {/* The same editor in its settings half — delivery, marking,
+                proctoring, instructions and access, off the questions page's
+                gear rather than crowding its tab bar. */}
+            <Route path="quiz/:quizId/settings" element={<QuizEditor mode="settings" />} />
             <Route path="quiz/:quizId/results" element={<QuizResults />} />
             <Route path="notebook/:notebookId/edit" element={<NotebookEditor />} />
             <Route path="notebook/:notebookId/submissions" element={<NotebookSubmissions />} />

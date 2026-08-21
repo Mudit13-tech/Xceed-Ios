@@ -150,23 +150,30 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
   // cut-off that has passed before either, or marks announced while students
   // are still writing. Caught here as well as on the server so the teacher sees
   // it while they are still looking at the fields.
+  const isAlreadyPublished = Boolean(quiz?.published);
   const cutOff = limitEntry ? startDeadline : '';
   const releaseAt = resultsMode === 'scheduled' ? resultReleaseAt : '';
-  const effectivePublishTime = publishAt ? new Date(publishAt) : new Date();
-  const publishInPast = Boolean(publishAt && new Date(publishAt) < new Date());
+  const effectivePublishTime = isAlreadyPublished
+    ? (quiz?.publishAt || quiz?.announcedAt || quiz?.createdAt
+        ? new Date(quiz.publishAt || quiz.announcedAt || quiz.createdAt)
+        : null)
+    : publishAt
+      ? new Date(publishAt)
+      : new Date();
+  const publishInPast = Boolean(!isAlreadyPublished && publishAt && new Date(publishAt) < new Date());
   const startsBeforePublished = Boolean(
-    availableFrom && new Date(availableFrom) < effectivePublishTime,
+    !isAlreadyPublished && availableFrom && effectivePublishTime && new Date(availableFrom) < effectivePublishTime,
   );
   const closesTooEarly = Boolean(
     cutOff &&
       ((availableFrom && new Date(cutOff) < new Date(availableFrom)) ||
-        new Date(cutOff) < effectivePublishTime),
+        (effectivePublishTime && new Date(cutOff) < effectivePublishTime)),
   );
   const testClosesTooEarly = Boolean(
     availableTo &&
       ((availableFrom && new Date(availableTo) < new Date(availableFrom)) ||
         (cutOff && new Date(availableTo) < new Date(cutOff)) ||
-        new Date(availableTo) < effectivePublishTime),
+        (effectivePublishTime && new Date(availableTo) < effectivePublishTime)),
   );
   const missingCutOff = limitEntry && !startDeadline;
   const resultsBeforeClose = Boolean(
@@ -186,18 +193,25 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
   const submit = async () => {
     setSaving(true);
     try {
-      const result = await lmApi.publishQuiz(classId, quiz._id, {
+      const payload = {
         publish: true,
-        publishAt: publishAt || null,
         availableFrom: availableFrom || null,
         availableTo: availableTo || null,
         startDeadline: cutOff || null,
         resultReleaseAt: releaseAt || null,
-      });
+      };
+      if (!isAlreadyPublished) {
+        payload.publishAt = publishAt || null;
+      }
+      const result = await lmApi.publishQuiz(classId, quiz._id, payload);
       setLink(result.link);
       await onPublished?.();
     } catch (error) {
-      toast({ status: 'error', title: 'Could not publish', description: error.message });
+      toast({
+        status: 'error',
+        title: isAlreadyPublished ? 'Could not save schedule' : 'Could not publish',
+        description: error.message,
+      });
     } finally {
       setSaving(false);
     }
@@ -209,7 +223,15 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
     <Modal isOpen={isOpen} onClose={onClose} size="lg" scrollBehavior="inside">
       <ModalOverlay />
       <ModalContent mt="100px" mb="50px" pt={6} pb={4}>
-        <ModalHeader>{link ? 'Published' : `Publish "${quiz.title}"`}</ModalHeader>
+        <ModalHeader>
+          {link
+            ? isAlreadyPublished
+              ? 'Schedule updated'
+              : 'Published'
+            : isAlreadyPublished
+              ? `Schedule for "${quiz.title}"`
+              : `Publish "${quiz.title}"`}
+        </ModalHeader>
         <ModalCloseButton top={8} />
         <ModalBody>
           {link ? (
@@ -254,38 +276,40 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
             </>
           ) : (
             <>
-              <ClockRow
-                step="1"
-                title="Link goes live"
-                subtitle="When the quiz appears in the class and the link starts answering. Nothing starts yet."
-                isInvalid={publishInPast}
-                action={
-                  publishAt ? (
-                    <Button size="xs" variant="outline" onClick={() => setPublishAt('')}>
-                      Publish now instead
-                    </Button>
-                  ) : (
-                    <Badge colorScheme="green" borderRadius="full" px={2}>
-                      ✓ Publishing now
-                    </Badge>
-                  )
-                }
-              >
-                <Input
-                  type="datetime-local"
-                  maxW="260px"
-                  value={publishAt}
-                  onChange={(event) => setPublishAt(event.target.value)}
-                />
-                <FormHelperText fontSize="xs">
-                  {publishAt
-                    ? 'Scheduled. Clear this box — or press "Publish now instead" — to put it up the moment you publish.'
-                    : 'Empty means now: the class sees it as soon as you press Publish.'}
-                </FormHelperText>
-              </ClockRow>
+              {!isAlreadyPublished && (
+                <ClockRow
+                  step="1"
+                  title="Link goes live"
+                  subtitle="When the quiz appears in the class and the link starts answering. Nothing starts yet."
+                  isInvalid={publishInPast}
+                  action={
+                    publishAt ? (
+                      <Button size="xs" variant="outline" onClick={() => setPublishAt('')}>
+                        Publish now instead
+                      </Button>
+                    ) : (
+                      <Badge colorScheme="green" borderRadius="full" px={2}>
+                        ✓ Publishing now
+                      </Badge>
+                    )
+                  }
+                >
+                  <Input
+                    type="datetime-local"
+                    maxW="260px"
+                    value={publishAt}
+                    onChange={(event) => setPublishAt(event.target.value)}
+                  />
+                  <FormHelperText fontSize="xs">
+                    {publishAt
+                      ? 'Scheduled. Clear this box — or press "Publish now instead" — to put it up the moment you publish.'
+                      : 'Empty means now: the class sees it as soon as you press Publish.'}
+                  </FormHelperText>
+                </ClockRow>
+              )}
 
               <ClockRow
-                step="2"
+                step={isAlreadyPublished ? '1' : '2'}
                 title="Students can start"
                 subtitle="When the Start button unlocks. Before this the link shows the instructions and a countdown."
                 isInvalid={startsBeforePublished}
@@ -306,7 +330,7 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
                   the room shut" — and reading them side by side is the only way
                   the difference is obvious. */}
               <ClockRow
-                step="3"
+                step={isAlreadyPublished ? '2' : '3'}
                 title="Last time to start (latecomers turned away)"
                 subtitle="Nobody may begin after this. Students already sitting the paper keep their full time and finish normally."
                 isInvalid={closesTooEarly || missingCutOff}
@@ -335,7 +359,7 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
               </ClockRow>
 
               <ClockRow
-                step="4"
+                step={isAlreadyPublished ? '3' : '4'}
                 title="Test closes (paper ends for everyone)"
                 subtitle="After this nobody can open the paper, and any sitting still running is submitted. It is also the due date on the class stream."
                 isInvalid={testClosesTooEarly}
@@ -354,7 +378,7 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
               <Divider mb={5} />
 
               <ClockRow
-                step="5"
+                step={isAlreadyPublished ? '4' : '5'}
                 title="Results announced"
                 subtitle="When students see their score and the answers. They are notified, and the subject stays marked on their class card until they have read it."
                 isInvalid={resultsBeforeClose || missingRelease || unanswered}
@@ -458,7 +482,7 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
               {unanswered && (
                 <Alert status="warning" borderRadius="md" mt={4} fontSize="sm">
                   <AlertIcon />
-                  Choose when results are announced (step 5) before publishing. Everything else on
+                  Choose when results are announced ({isAlreadyPublished ? 'step 4' : 'step 5'}) before publishing. Everything else on
                   this paper can be changed afterwards; when a class first sees its marks cannot.
                 </Alert>
               )}
@@ -471,7 +495,11 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
           </Button>
           {!link && (
             <Button colorScheme="green" onClick={submit} isLoading={saving} isDisabled={outOfOrder}>
-              {publishAt ? 'Schedule & get link' : 'Publish now & get link'}
+              {isAlreadyPublished
+                ? 'Save changes'
+                : publishAt
+                ? 'Schedule & get link'
+                : 'Publish now & get link'}
             </Button>
           )}
         </ModalFooter>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, NavLink, Outlet, useMatch } from 'react-router-dom';
 import {
   Avatar,
@@ -35,6 +35,10 @@ import useStableNavigate from '../hooks/useStableNavigate';
 import { canCreateClass, isStudentOnly } from '../roles';
 import NotificationBell from './NotificationBell';
 import { buttonTextStyles } from './common';
+
+// Split out of the shell: every student sees it exactly once, and nobody else
+// ever does, so it has no business in the bundle that loads on every page.
+const CompleteProfile = lazy(() => import('../pages/CompleteProfile'));
 
 // Shared look for the header's square action buttons (theme toggle, logout) so
 // they read as one pair. Mirrors the attendance shell's SQUARE_BTN.
@@ -426,6 +430,23 @@ export default function LearningLayout() {
   const mayCreateClass = canCreateClass(me?.roles);
   // Students have no platform navbar above this header, so it owns the page.
   const studentOnly = isStudentOnly(me?.roles);
+
+  /**
+   * A student who has not yet given their name and roll number gets that form
+   * and nothing else.
+   *
+   * Rendered *instead of* the shell rather than over it: it is mandatory, and
+   * anything that still draws the nav, the class list and the page underneath
+   * is inviting a way around it. `needsIdentity` is decided server-side, on the
+   * user document, so it cannot be waved away from the client.
+   */
+  if (me?.needsIdentity) {
+    return (
+      <Suspense fallback={<Box minH="100vh" bg={pageBg} />}>
+        <CompleteProfile onDone={load} />
+      </Suspense>
+    );
+  }
 
   return (
     <Box minH={studentOnly ? '100vh' : 'calc(100vh - 64px)'} bg={pageBg}>

@@ -31,6 +31,7 @@ import QuizCalculator from '../components/QuizCalculator';
 import NumericKeypad from '../components/NumericKeypad';
 import { fullscreenSupported, requestQuizFullscreen, scrollStageToTop } from '../quizStage';
 import { formatDateTime } from '../format';
+import { saveFailureMessage } from '../saveFailure';
 
 const clock = (seconds) => {
   const safe = Math.max(0, Math.round(seconds || 0));
@@ -376,8 +377,9 @@ export default function QuizAttempt() {
       if (finishedRef.current) return;
       finishedRef.current = true;
       // The submit carries every answer itself, so a debounced draft racing it
-      // is a write for nothing.
-      autosave.cancel();
+      // is a write for nothing — and awaited, because one already on the wire is
+      // a second writer on the same attempt document rather than no writer.
+      await autosave.cancel();
       setBusy('submit');
       try {
         const submitted = await slowAware(() =>
@@ -388,7 +390,7 @@ export default function QuizAttempt() {
         if (expired) notify({ status: 'warning', title: 'Time is up — your answers were submitted.' });
       } catch (err) {
         finishedRef.current = false;
-        notify({ status: 'error', title: err.message });
+        notify({ status: 'error', title: saveFailureMessage(err) });
       } finally {
         setBusy('');
       }
@@ -490,7 +492,7 @@ export default function QuizAttempt() {
       const value = current.questionClosed ? {} : answers[current.question._id] || {};
       // Same reason as in `finish`, plus one of its own: the cursor is about to
       // move, and a draft in flight is aimed at where it used to be.
-      autosave.cancel();
+      await autosave.cancel();
       setBusy('advance');
       try {
         const served = await slowAware(() =>
@@ -540,7 +542,7 @@ export default function QuizAttempt() {
             return;
           }
         }
-        notify({ status: 'error', title: err.message });
+        notify({ status: 'error', title: saveFailureMessage(err) });
       } finally {
         setBusy('');
       }
@@ -932,12 +934,15 @@ export default function QuizAttempt() {
                   variant="outline"
                   isLoading={busy === 'save'}
                   onClick={async () => {
+                    // The autosave writes the same attempt document; two of
+                    // these at once is the version clash all over again.
+                    await autosave.cancel();
                     setBusy('save');
                     try {
                       await lmApi.saveAttemptDraft(classId, attemptId, payload());
                       notify({ status: 'success', title: 'Progress saved', duration: 1500 });
                     } catch (err) {
-                      notify({ status: 'error', title: err.message });
+                      notify({ status: 'error', title: saveFailureMessage(err) });
                     } finally {
                       setBusy('');
                     }
