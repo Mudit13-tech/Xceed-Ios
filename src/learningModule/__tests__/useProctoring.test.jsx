@@ -351,6 +351,142 @@ describe('learningModule useProctoring', () => {
       expect(JSON.parse(sessionStorage.getItem(`lmProctorQueue:${attemptId}`))).toHaveLength(1);
     });
   });
+
+  /**
+   * The answer sitting in a debounced autosave when a departure fires.
+   *
+   * `answerAndAdvance`/`saveAttemptDraft` both refuse a write against an
+   * attempt that is no longer `in_progress` — so once the violation report
+   * lands and ends the sitting, whatever the autosave still had queued is
+   * refused, permanently. `beforeLeave` exists to get it out first.
+   */
+  describe('flushing an answer before a departure ends the attempt', () => {
+    beforeEach(() => setFullscreen(true));
+
+    it('awaits beforeLeave before the violation report is sent', async () => {
+      const order = [];
+      const onViolation = vi.fn().mockImplementation(async (type) => {
+        order.push(`reported:${type}`);
+        return {};
+      });
+      let releaseFlush;
+      const beforeLeave = vi.fn().mockImplementation(
+        () => new Promise((resolve) => { releaseFlush = () => { order.push('flushed'); resolve(); }; }),
+      );
+
+      renderHook(() => useProctoring({ settings: {}, active: true, onViolation, beforeLeave }));
+
+      setFullscreen(false);
+      // The report must not have gone out yet — it is waiting on the flush.
+      await act(async () => {});
+      expect(onViolation).not.toHaveBeenCalled();
+
+      await act(async () => {
+        releaseFlush();
+        await Promise.resolve();
+      });
+
+      expect(order).toEqual(['flushed', 'reported:fullscreen_exit']);
+    });
+
+    it('does not call beforeLeave for a report that is not a departure', () => {
+      const onViolation = vi.fn().mockResolvedValue({});
+      const beforeLeave = vi.fn().mockResolvedValue(undefined);
+      renderHook(() =>
+        useProctoring({
+          settings: { disableRightClick: true },
+          active: true,
+          onViolation,
+          beforeLeave,
+        }),
+      );
+
+      rightClick();
+      expect(onViolation).toHaveBeenCalledWith('right_click', expect.any(String));
+      expect(beforeLeave).not.toHaveBeenCalled();
+    });
+
+    it('still ends the attempt when the flush itself fails', async () => {
+      // `beforeLeave` is documented to never throw (the autosave's own flush
+      // never rejects), but the departure must not be held hostage by one that
+      // does — a caller's bug in the callback must not read as "leaving no
+      // longer works".
+      const onViolation = vi.fn().mockResolvedValue({ terminated: true });
+      const beforeLeave = vi.fn().mockRejectedValue(new Error('boom'));
+      const onTerminated = vi.fn();
+
+      renderHook(() =>
+        useProctoring({ settings: {}, active: true, onViolation, beforeLeave, onTerminated }),
+      );
+
+      setFullscreen(false);
+      await act(async () => {});
+
+      expect(onViolation).toHaveBeenCalledWith('fullscreen_exit', expect.any(String));
+      expect(onTerminated).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  /**
+   * A second screen taking over the sitting mid-heartbeat — the losing side of
+   * the very rebind that rescues a genuine crash. The attempt is not over, so
+   * this must not be folded into `onTerminated`, and retrying buys nothing:
+   * every request from here on gets the same refusal.
+   */
+  describe('a session taken over by another browser', () => {
+    const conflict = () =>
+      Object.assign(new Error('taken over'), { status: 409, payload: { code: 'SESSION_CONFLICT' } });
+
+    it('calls onSessionConflict rather than onTerminated', async () => {
+      const onHeartbeat = vi.fn().mockRejectedValue(conflict());
+      const onTerminated = vi.fn();
+      const onSessionConflict = vi.fn();
+
+      renderHook(() =>
+        useProctoring({ settings: {}, active: true, onHeartbeat, onTerminated, onSessionConflict }),
+      );
+      await act(async () => {});
+
+      expect(onSessionConflict).toHaveBeenCalledTimes(1);
+      expect(onSessionConflict.mock.calls[0][0]).toMatchObject({ status: 409 });
+      expect(onTerminated).not.toHaveBeenCalled();
+    });
+
+    it('stops heartbeating once the session is known to be gone', async () => {
+      vi.useFakeTimers();
+      const onHeartbeat = vi.fn().mockRejectedValue(conflict());
+      const onSessionConflict = vi.fn();
+
+      renderHook(() => useProctoring({ settings: {}, active: true, onHeartbeat, onSessionConflict }));
+      await act(async () => {});
+      expect(onHeartbeat).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120000);
+      });
+
+      // Not two, three, or four more — the loop noticed and stopped.
+      expect(onHeartbeat).toHaveBeenCalledTimes(1);
+      vi.useRealTimers();
+    });
+
+    it('leaves a plain network failure alone — still no report, still retried on the next beat', async () => {
+      vi.useFakeTimers();
+      const onHeartbeat = vi.fn().mockRejectedValue(new Error('offline'));
+      const onSessionConflict = vi.fn();
+
+      renderHook(() => useProctoring({ settings: {}, active: true, onHeartbeat, onSessionConflict }));
+      await act(async () => {});
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(35000);
+      });
+
+      expect(onSessionConflict).not.toHaveBeenCalled();
+      expect(onHeartbeat.mock.calls.length).toBeGreaterThan(1);
+      vi.useRealTimers();
+    });
+  });
 });
 
 /**

@@ -29,6 +29,22 @@ import { isInFullscreen, onFullscreenChange } from '../quizStage';
  *        has been blocked in devtools stops sending it, and the server records
  *        the silence. It also lets the server end a paper whose time ran out
  *        while the student sat looking at it.
+ * @param {() => Promise<any>} [options.beforeLeave]
+ *        awaited before a leaving event is reported to the server. The report
+ *        ends the attempt on arrival, and once it has, the server refuses any
+ *        answer that was still sitting in a debounced autosave — "already
+ *        finished" is exactly correct, and exactly too late for whatever the
+ *        student had just written down. This is the one chance to get it out
+ *        first. Best-effort: never lets a stuck save hold the departure report
+ *        itself hostage, so it must not throw (the caller's flush already
+ *        promises this).
+ * @param {(err: object) => void} [options.onSessionConflict]
+ *        called when the heartbeat learns, mid-sitting, that this browser is
+ *        no longer the one driving the attempt — a second screen was allowed
+ *        to take over after this one went quiet past the grace window. Unlike
+ *        `onTerminated`, the attempt itself is not over; it is just not this
+ *        tab's to finish, which is why it gets its own callback rather than
+ *        being folded into termination.
  */
 // Three of these may be missed before the server notes the silence, so a brief
 // hiccup costs nothing while a blocked client is visible within a couple of
@@ -141,6 +157,8 @@ export default function useProctoring({
   onViolation,
   onTerminated,
   onHeartbeat,
+  beforeLeave,
+  onSessionConflict,
 }) {
   const [tabSwitches, setTabSwitches] = useState(0);
   const [warning, setWarning] = useState(null);
@@ -199,8 +217,8 @@ export default function useProctoring({
    * Same shape as `useQuizCountdown`'s `expire` ref, for the same reason: latest
    * callback, stable identity.
    */
-  const handlers = useRef({ onViolation, onTerminated, onHeartbeat });
-  handlers.current = { onViolation, onTerminated, onHeartbeat };
+  const handlers = useRef({ onViolation, onTerminated, onHeartbeat, beforeLeave, onSessionConflict });
+  handlers.current = { onViolation, onTerminated, onHeartbeat, beforeLeave, onSessionConflict };
 
   const queueKey = attemptId ? QUEUE_KEY(attemptId) : null;
 
@@ -275,12 +293,33 @@ export default function useProctoring({
     async (type, happenedAt, detail) => {
       // Latched before the request, not after it. The paper closes because the
       // browser saw the student leave, not because a POST came back.
-      if (LEAVING.includes(type)) {
+      const leaving = LEAVING.includes(type);
+      if (leaving) {
         setDeparted(true);
         departedRef.current = true;
       }
-      const { onViolation: send } = handlers.current;
+      const { onViolation: send, beforeLeave } = handlers.current;
       if (terminatedRef.current || !send) return;
+      /* Whatever was still sitting in a debounced autosave has to reach the
+         server before this report does — once it lands, the attempt is over,
+         and an answer arriving after that is refused as belonging to an
+         attempt that has already finished. `departed` is already latched
+         above regardless, so the student sees the "you left" screen at the
+         same instant either way; only the network order underneath it
+         changes. Only for a genuine departure, and only when there is a flush
+         to run at all — `await` on nothing still costs a tick, which a caller
+         with no answers to protect (or a test with no `beforeLeave`) has no
+         reason to pay. */
+      if (leaving && beforeLeave) {
+        try {
+          await beforeLeave();
+        } catch {
+          // Contractually this never throws — see the doc above — but the
+          // departure itself must outrank a caller's bug in the callback: a
+          // flush that misbehaves must not read as "leaving no longer ends
+          // the attempt".
+        }
+      }
       // Stamped by the caller or here, never on arrival: the whole point of the
       // queue is that these two moments can be minutes apart.
       const at = happenedAt || new Date().toISOString();
@@ -320,9 +359,19 @@ export default function useProctoring({
           handlers.current.onTerminated?.();
           return;
         }
-      } catch {
-        // Offline, or the request was blocked. Either way the server sees the
-        // gap, and anything we could not report is already queued.
+      } catch (err) {
+        /* A second screen was allowed to take this attempt over — the rebind
+           the grace window exists for, but from the losing side. Every request
+           this tab makes from here on gets the same 409, forever: unlike an
+           offline blip, waiting does not fix it, and unlike `finished`, the
+           attempt itself is not over — it is just not this tab's to finish
+           any more. Told apart from a plain network failure, which is still
+           left to fall through in silence exactly as before: the server sees
+           that gap too, and anything unreported is already queued. */
+        if (err?.status === 409 && err?.payload?.code === 'SESSION_CONFLICT') {
+          terminatedRef.current = true;
+          handlers.current.onSessionConflict?.(err);
+        }
         return;
       }
       // A heartbeat got through, so the connection is back: this is the first

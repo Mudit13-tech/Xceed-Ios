@@ -143,8 +143,8 @@ export default function Navbar() {
       isAuthenticated &&
       !isPublicPath &&
       !location.pathname.startsWith('/learning') &&
-      userDetails?.user?.role?.includes('student') &&
-      !userDetails?.user?.role?.includes('admin')
+      userDetails?.user?.role?.some(r => r?.toLowerCase() === 'student') &&
+      !userDetails?.user?.role?.some(r => r?.toLowerCase() === 'admin')
     ) {
       navigate('/learning', { replace: true });
     }
@@ -273,9 +273,14 @@ export default function Navbar() {
                       </Text>
 
                       <Button
-                        colorScheme="white"
                         variant={'outline'}
                         size="sm"
+                        color="white"
+                        borderColor="cyan.300"
+                        fontWeight="semibold"
+                        _hover={{ bg: 'cyan.400', color: 'gray.900', borderColor: 'cyan.300' }}
+                        _active={{ bg: 'cyan.500', color: 'gray.900', borderColor: 'cyan.400' }}
+                        _focusVisible={{ boxShadow: '0 0 0 3px rgba(34, 211, 238, 0.45)' }}
                         onClick={handleLogout}
                       >
                         Logout

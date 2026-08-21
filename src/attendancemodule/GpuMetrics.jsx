@@ -74,21 +74,41 @@ function formatAxisDate(timestamp) {
 function normalizeSample(sample) {
   const timestamp = new Date(sample?.timestamp).getTime();
   if (!Number.isFinite(timestamp)) return null;
+  const utilPercent = asNumber(sample.utilPercent);
   return {
     timestamp,
-    utilPercent: asNumber(sample.utilPercent),
+    utilPercent,
+    utilPeakPercent: asNumber(sample.utilPeakPercent),
+    utilSource: sample.utilSource || '',
     memPercent: asNumber(sample.memPercent),
     memUsedMiB: asNumber(sample.memUsedMiB),
     memTotalMiB: asNumber(sample.memTotalMiB),
     tempC: asNumber(sample.tempC),
     powerW: asNumber(sample.powerW),
+    gpuIndex: asNumber(sample.gpuIndex),
+    gpuName: sample.gpuName || '',
+    gpuUuid: sample.gpuUuid || '',
+    // Older samples predate the flag — infer so they do not all read "N/A".
+    utilAvailable: sample.utilAvailable !== undefined && sample.utilAvailable !== null
+      ? sample.utilAvailable !== false
+      : utilPercent !== null,
+    utilUnavailableReason: sample.utilUnavailableReason || '',
     available: sample.available !== false,
     error: sample.error || '',
   };
 }
 
+function describeGpu(sample) {
+  if (!sample) return '';
+  const index = asNumber(sample.gpuIndex);
+  if (index === null && !sample.gpuName) return '';
+  const label = index === null ? sample.gpuName : `GPU ${index}`;
+  return sample.gpuName && index !== null ? `${label} — ${sample.gpuName}` : label;
+}
+
 export default function GpuMetrics() {
   const [samples, setSamples] = useState([]);
+  const [collector, setCollector] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState('live');
@@ -130,7 +150,14 @@ export default function GpuMetrics() {
       const history = response.data.samples
         .map(normalizeSample)
         .filter(Boolean);
-      if (!cancelled) setSamples(history.slice(-HISTORY_LIMIT));
+      if (!cancelled) {
+        setSamples(history.slice(-HISTORY_LIMIT));
+        // Collector state travels with the history payload. Without it an
+        // empty graph is ambiguous: the backend sampler may be down, or its
+        // database writes may be failing, and the live cards look healthy
+        // either way because they come from memory rather than Mongo.
+        setCollector(response.data);
+      }
     }
 
     async function fetchLatestMetric() {
@@ -182,6 +209,7 @@ export default function GpuMetrics() {
   }, []);
 
   const latest = samples[samples.length - 1];
+  const gpuLabel = useMemo(() => describeGpu(latest), [latest]);
   const chartSamples = useMemo(() => {
     if (range === 'live') return samples;
 
@@ -190,6 +218,25 @@ export default function GpuMetrics() {
     return samples.filter((sample) => sample.timestamp >= startMs && sample.timestamp <= endMs);
   }, [customEnd, customStart, range, samples]);
   const chartWidth = Math.max(980, chartSamples.length * 34);
+
+  // Auto-scale the Y axis to what is actually plotted. A bursty workload
+  // averages into the low single digits, which is invisible against a fixed
+  // 0-100 axis. The floor stays pinned at zero deliberately — these are
+  // percentages, and a floating baseline would exaggerate small movements.
+  // Single pass rather than Math.max(...values): history runs to 5000 points.
+  const yAxisMax = useMemo(() => {
+    let max = 0;
+    for (const sample of chartSamples) {
+      if (sample.utilPercent !== null && sample.utilPercent > max) max = sample.utilPercent;
+      if (sample.utilPeakPercent !== null && sample.utilPeakPercent > max) max = sample.utilPeakPercent;
+      if (sample.memPercent !== null && sample.memPercent > max) max = sample.memPercent;
+    }
+    if (max <= 0) return 5;
+
+    const target = max * 1.15;
+    const step = target <= 5 ? 1 : target <= 20 ? 5 : target <= 50 ? 10 : 20;
+    return Math.min(100, Math.ceil(target / step) * step);
+  }, [chartSamples]);
 
   const vramText = useMemo(() => {
     if (!latest?.memUsedMiB || !latest?.memTotalMiB) return '--';
@@ -220,6 +267,9 @@ export default function GpuMetrics() {
       <header style={styles.header}>
         <div>
           <h1 style={styles.title}>GPU Metrics</h1>
+          {/* The scheduler can hand this job a different card on each
+              submission, so name the GPU actually being charted. */}
+          {gpuLabel && <p style={styles.subtitle}>{gpuLabel}</p>}
         </div>
         <span
           style={{
@@ -234,7 +284,23 @@ export default function GpuMetrics() {
       </header>
 
       <section style={styles.statsGrid}>
-        <MetricCard label="GPU utilization" value={formatValue(latest?.utilPercent, '%')} accent="#0891b2" />
+        {/* A partitioned board publishes no board-level utilization. Say so
+            explicitly — a bare "--" reads as a broken feed. Otherwise show the
+            windowed mean with its peak, since this workload is bursty enough
+            that the mean alone reads as "idle". */}
+        <MetricCard
+          label="GPU utilization"
+          value={latest && !latest.utilAvailable ? 'N/A' : formatValue(latest?.utilPercent, '%')}
+          detail={
+            latest && !latest.utilAvailable
+              ? 'Not reported for this GPU'
+              : (asNumber(latest?.utilPeakPercent) !== null
+                ? `peak ${formatValue(latest.utilPeakPercent, '%')}`
+                : undefined)
+          }
+          title={latest?.utilUnavailableReason || undefined}
+          accent="#0891b2"
+        />
         <MetricCard label="VRAM" value={formatValue(latest?.memPercent, '%')} detail={vramText} accent="#7c3aed" />
         <MetricCard label="Temperature" value={formatValue(latest?.tempC, ' deg C')} accent="#ea580c" />
         <MetricCard label="Power draw" value={formatValue(latest?.powerW, ' W')} accent="#16a34a" />
@@ -258,6 +324,7 @@ export default function GpuMetrics() {
             </button>
           ))}
         </div>
+        {collector && <CollectorStatus collector={collector} />}
         {range === 'custom' && (
           <div style={styles.customControls}>
             <label style={styles.inputLabel}>
@@ -296,8 +363,25 @@ export default function GpuMetrics() {
                       minTickGap={34}
                       tick={<DateTimeTick />}
                     />
-                    <YAxis domain={[0, 100]} unit="%" tick={{ fontSize: 11, fill: T.textMuted }} />
+                    <YAxis
+                      domain={[0, yAxisMax]}
+                      unit="%"
+                      allowDecimals={false}
+                      tick={{ fontSize: 11, fill: T.textMuted }}
+                    />
                     <Tooltip labelFormatter={(_, payload) => formatDateTime(payload?.[0]?.payload?.timestamp)} />
+                    {/* Peak sits behind the mean: without it a bursty workload
+                        looks idle, since ~2.6s of saturation averaged over the
+                        sampling window is a single-digit mean. */}
+                    <Line
+                      type="monotone"
+                      dataKey="utilPeakPercent"
+                      name="GPU utilization (peak)"
+                      stroke="#67e8f9"
+                      strokeWidth={1.5}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
                     <Line
                       type="monotone"
                       dataKey="utilPercent"
@@ -326,6 +410,10 @@ export default function GpuMetrics() {
                 GPU utilization
               </span>
               <span style={styles.legendItem}>
+                <span style={{ ...styles.legendLine, background: '#67e8f9' }} />
+                Peak
+              </span>
+              <span style={styles.legendItem}>
                 <span style={{ ...styles.legendLine, background: '#7c3aed' }} />
                 VRAM
               </span>
@@ -346,9 +434,31 @@ export default function GpuMetrics() {
   );
 }
 
-function MetricCard({ label, value, detail, accent }) {
+// Distinguishes "the GPU is idle" from "nothing is being recorded" — the graph
+// looks the same in both cases, but only one of them is a fault.
+function CollectorStatus({ collector }) {
+  const stored = asNumber(collector.persistedCount);
+  const failures = asNumber(collector.persistFailureCount);
+
+  let tone = T.textMuted;
+  let text;
+  if (collector.running === false) {
+    tone = T.danger;
+    text = 'Background collection is NOT running — the graph only covers this page visit.';
+  } else if (collector.lastPersistError) {
+    tone = T.danger;
+    text = `Background collection is running but database writes are failing (${failures || 0} failed): ${collector.lastPersistError}`;
+  } else {
+    const since = collector.startedAt ? ` since ${formatClock(collector.startedAt)}` : '';
+    text = `Background collection active${since} — ${stored ?? 0} samples stored, polling every ${Math.round((collector.pollMs || 0) / 1000)}s.`;
+  }
+
+  return <span style={{ ...styles.collectorNote, color: tone }}>{text}</span>;
+}
+
+function MetricCard({ label, value, detail, accent, title }) {
   return (
-    <div style={{ ...styles.card, borderTopColor: accent }}>
+    <div style={{ ...styles.card, borderTopColor: accent }} title={title}>
       <div style={{ ...styles.value, color: accent }}>{value}</div>
       <div style={styles.label}>{label}</div>
       {detail && <div style={styles.detail}>{detail}</div>}
@@ -460,6 +570,11 @@ const styles = {
     background: '#ffffff',
     color: T.accent,
     boxShadow: '0 1px 4px rgba(26,31,60,0.12)',
+  },
+  collectorNote: {
+    fontSize: 12,
+    fontWeight: 600,
+    flex: '1 1 240px',
   },
   customControls: {
     display: 'flex',
