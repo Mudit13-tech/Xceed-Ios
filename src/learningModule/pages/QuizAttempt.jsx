@@ -205,6 +205,9 @@ export default function QuizAttempt() {
   // The proctoring hook's queue drain, held in a ref because the paths that bank
   // work are declared above the hook that owns it. See `finish` and `advance`.
   const flushRef = useRef(null);
+  // The autosave hook's forced flush, same reason: read by the pagehide/unmount
+  // effect declared below the hook that owns it.
+  const autosaveFlushRef = useRef(null);
   // Question card nodes, so the navigator can jump straight to one.
   const questionRefs = useRef({});
 
@@ -254,6 +257,36 @@ export default function QuizAttempt() {
     setBaseline(map);
   }, []);
 
+  /**
+   * What to do once something outside a click has decided this browser is no
+   * longer driving the attempt — a permanent autosave failure, or the
+   * heartbeat learning a second screen took over.
+   *
+   * Two different endings share this because they are told apart by the same
+   * one thing everywhere else in this file already checks: whether the
+   * server still considers *this* browser the one sitting the paper.
+   * `SESSION_CONFLICT` says no, someone else is — the attempt lives on, just
+   * not here, so the screen has to say that rather than "finished". Every
+   * other fatal code (`FINISHED`, `TERMINATED`, `EXPIRED`) says the attempt
+   * itself is over, so the paper's own result is what belongs on screen.
+   */
+  const reconcile = useCallback(
+    async (err) => {
+      if (finishedRef.current) return;
+      finishedRef.current = true;
+      if (err?.payload?.code === 'SESSION_CONFLICT') {
+        setError(err);
+        return;
+      }
+      const finished = await lmApi.getAttempt(classId, attemptId).catch(() => null);
+      if (finished) {
+        setAttempt(finished.attempt);
+        setResult(finished);
+      }
+    },
+    [classId, attemptId],
+  );
+
   /* ------------------------------ autosave -----------------------------
      Banking answers as they are given, rather than only when the student moves.
 
@@ -278,10 +311,26 @@ export default function QuizAttempt() {
     payload: draft,
     baseline: draftBaseline,
     // Never on a question whose own clock has gone: its answer is fixed, and a
-    // save there would be an answer arriving after its deadline.
-    active: Boolean(current || paper) && !result && !current?.questionClosed,
-    save: (entries) => lmApi.saveAttemptDraft(classId, attemptId, entries),
+    // save there would be an answer arriving after its deadline. Nor once
+    // something has already ended the sitting from outside a click — see
+    // `reconcile` — since every subsequent save would just repeat the same
+    // fatal response.
+    active: Boolean(current || paper) && !result && !current?.questionClosed && !finishedRef.current,
+    // `keepalive`, always — not only for the forced flush on a departure or a
+    // closing tab. The same request is what an ordinary debounced save sends
+    // too, and there is no version of "the page might go away before this
+    // resolves" that is safe to skip: the whole point of autosaving is to get
+    // an answer out from under a screen that will not be there long enough to
+    // watch its own request finish.
+    save: (entries) => lmApi.saveAttemptDraft(classId, attemptId, entries, { keepalive: true }),
   });
+
+  // A permanent autosave failure reached outside a click — the connection was
+  // fine right up until the moment it wasn't. Same reconciliation as every
+  // other way this attempt can end from under the student.
+  useEffect(() => {
+    if (autosave.status === 'blocked') reconcile(autosave.fatalError);
+  }, [autosave.status, autosave.fatalError, reconcile]);
 
   const loadSequential = useCallback(async () => {
     try {
@@ -421,17 +470,47 @@ export default function QuizAttempt() {
     attemptId,
     onViolation: (type, at, detail) => lmApi.recordViolation(classId, attemptId, type, at, detail),
     onHeartbeat: () => lmApi.heartbeat(classId, attemptId),
-    onTerminated: async () => {
-      finishedRef.current = true;
-      const finished = await lmApi.getAttempt(classId, attemptId).catch(() => null);
-      if (finished) {
-        setAttempt(finished.attempt);
-        setResult(finished);
-      }
-    },
+    onTerminated: () => reconcile(),
+    // Gets whatever autosave is still holding onto the wire before the
+    // violation report ends the sitting — see the note on `report` in
+    // useProctoring for why this has to run first, not just soon.
+    beforeLeave: () => autosave.flush(),
+    // The losing side of a rebind: the heartbeat found out this browser is no
+    // longer the one driving the attempt.
+    onSessionConflict: reconcile,
   });
 
   flushRef.current = proctoring.flushViolations;
+  // Same reason as `flushRef` above: read through a ref so the effect below
+  // does not have to depend on `autosave` itself, whose identity changes with
+  // every status change and would tear the listener down and rebuild it on
+  // every "saving" → "saved" flicker.
+  autosaveFlushRef.current = autosave.flush;
+
+  /**
+   * The one departure `useProctoring` cannot see: this screen going away for a
+   * reason that is not the browser leaving at all — an in-app route change,
+   * in particular, fires none of the events that watches for. `pagehide`
+   * covers the tab actually closing or navigating away; the cleanup covers
+   * everything else, including that one, since React always runs it on
+   * unmount regardless of why.
+   *
+   * Skipped when the attempt already ended through a path that flushed or
+   * cancelled the draft on purpose (`finish`, `reconcile`, a proctoring
+   * termination) — `finishedRef` is already true by the time any of those
+   * lets `sitting` go false, so this only ever fires for the case it exists
+   * for: something ending the sitting on screen without this file's own
+   * knowledge that it was happening.
+   */
+  useEffect(() => {
+    if (!sitting) return undefined;
+    const onPageHide = () => autosaveFlushRef.current();
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      if (!finishedRef.current) autosaveFlushRef.current();
+    };
+  }, [sitting]);
 
   /**
    * The student has left the test screen, seen locally rather than confirmed by

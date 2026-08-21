@@ -952,7 +952,6 @@ export function ExtraClassForm({ onAdd, allRooms }) {
             {sortedFaculty.map((f) => (
               <option key={f._id} value={f.name}>
                 {f.name}
-                {f.dept ? ` — ${f.dept}` : ''}
               </option>
             ))}
           </select>

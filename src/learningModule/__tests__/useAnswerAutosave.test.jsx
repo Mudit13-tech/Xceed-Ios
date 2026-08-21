@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 
-import useAnswerAutosave, { AUTOSAVE_DELAY_MS, RETRY_DELAY_MS } from '../hooks/useAnswerAutosave';
+import useAnswerAutosave, { AUTOSAVE_DELAY_MS, RETRY_DELAY_MS, isFatalSaveError } from '../hooks/useAnswerAutosave';
 
 /**
  * Banking answers while the student works.
@@ -164,5 +164,128 @@ describe('useAnswerAutosave', () => {
     const { result } = setup({ payload: {}, baseline: {}, active: true });
     await act(async () => { await result.current.cancel(); });
     expect(result.current.status).toBe('idle');
+  });
+
+  /* ------------------------------ blocked -------------------------------
+     What a permanent failure — the server saying this attempt will never
+     accept another write from this browser — has to do differently from an
+     ordinary dropped connection: stop, rather than retry forever while
+     reading to the student as "still trying". */
+
+  const conflict = () => Object.assign(new Error('taken over'), { status: 409, payload: { code: 'SESSION_CONFLICT' } });
+
+  describe('isFatalSaveError', () => {
+    it('recognises every code that means this attempt will never take another write', () => {
+      ['FINISHED', 'TERMINATED', 'EXPIRED', 'SESSION_CONFLICT'].forEach((code) => {
+        expect(isFatalSaveError({ payload: { code } })).toBe(true);
+      });
+    });
+
+    it('treats anything else — including a plain network error — as transient', () => {
+      expect(isFatalSaveError(new Error('offline'))).toBe(false);
+      expect(isFatalSaveError({ payload: { code: 'NOT_FOUND' } })).toBe(false);
+      expect(isFatalSaveError(undefined)).toBe(false);
+    });
+  });
+
+  it('goes to blocked, not retrying, on a permanent failure', async () => {
+    const err = conflict();
+    const save = vi.fn().mockRejectedValue(err);
+    const { rerender, result } = setup({ payload: {}, baseline: {}, active: true }, save);
+
+    rerender({ payload: { q1: answer(['0']) }, baseline: {}, active: true });
+    await tick(AUTOSAVE_DELAY_MS);
+
+    expect(result.current.status).toBe('blocked');
+    expect(result.current.fatalError).toBe(err);
+  });
+
+  it('stops scheduling further attempts once blocked — retrying a session that is gone is pure noise', async () => {
+    const save = vi.fn().mockRejectedValue(conflict());
+    const { rerender, result } = setup({ payload: {}, baseline: {}, active: true }, save);
+
+    rerender({ payload: { q1: answer(['0']) }, baseline: {}, active: true });
+    await tick(AUTOSAVE_DELAY_MS);
+    expect(save).toHaveBeenCalledTimes(1);
+
+    // Long enough for several retry cycles, and for further edits to arrive.
+    rerender({ payload: { q1: answer(['1']) }, baseline: {}, active: true });
+    await tick(RETRY_DELAY_MS * 3);
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(result.current.status).toBe('blocked');
+  });
+
+  it('does not fall back to idle on cancel once blocked — a caller may be watching for the notice', async () => {
+    const save = vi.fn().mockRejectedValue(conflict());
+    const { rerender, result } = setup({ payload: {}, baseline: {}, active: true }, save);
+
+    rerender({ payload: { q1: answer(['0']) }, baseline: {}, active: true });
+    await tick(AUTOSAVE_DELAY_MS);
+    expect(result.current.status).toBe('blocked');
+
+    // Braces, not a bare arrow: `cancel` returns a promise now (see the note
+    // above, on "drops a pending save"), and leaving it unawaited here would
+    // leak a pending update into whichever test runs next.
+    act(() => { result.current.cancel(); });
+    expect(result.current.status).toBe('blocked');
+  });
+
+  /* -------------------------------- flush --------------------------------
+     The forced send, for callers that cannot wait out the debounce: a
+     departure about to end the attempt, and the page unloading. */
+
+  it('flush sends immediately, without waiting for the debounce', async () => {
+    const { rerender, result, save } = setup({ payload: {}, baseline: {}, active: true });
+
+    rerender({ payload: { q1: answer(['0']) }, baseline: {}, active: true });
+    expect(save).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.flush();
+    });
+    expect(save).toHaveBeenCalledWith([{ questionId: 'q1', selected: ['0'], text: '' }]);
+  });
+
+  it('flush is a no-op — and resolves — when there is nothing pending', async () => {
+    const { result, save } = setup({ payload: {}, baseline: {}, active: true });
+    await expect(result.current.flush()).resolves.toBeUndefined();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('flush never rejects, even when the save itself fails', async () => {
+    const save = vi.fn().mockRejectedValue(new Error('offline'));
+    const { rerender, result } = setup({ payload: {}, baseline: {}, active: true }, save);
+
+    rerender({ payload: { q1: answer(['0']) }, baseline: {}, active: true });
+    await act(async () => {
+      await expect(result.current.flush()).resolves.toBeUndefined();
+    });
+    expect(result.current.status).toBe('retrying');
+  });
+
+  it('flush joins an already in-flight save rather than sending a second one', async () => {
+    // The case a naive implementation gets wrong: a departure firing in the
+    // same tick the debounce timer does must not race ahead of a save that
+    // has already left the browser — it has to wait for that exact write.
+    let resolveSave;
+    const save = vi.fn().mockReturnValue(new Promise((resolve) => { resolveSave = resolve; }));
+    const { rerender, result } = setup({ payload: {}, baseline: {}, active: true }, save);
+
+    rerender({ payload: { q1: answer(['0']) }, baseline: {}, active: true });
+    await tick(AUTOSAVE_DELAY_MS); // the debounce fires, save() is now pending
+    expect(save).toHaveBeenCalledTimes(1);
+
+    let flushed = false;
+    const flushPromise = result.current.flush().then(() => { flushed = true; });
+    // Still pending: flush must not have started a second, independent save.
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(flushed).toBe(false);
+
+    await act(async () => {
+      resolveSave({});
+      await flushPromise;
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(flushed).toBe(true);
   });
 });

@@ -94,12 +94,19 @@ export const quizSession = {
 /** `/classes/:classId/attempts/:attemptId/...` → the attempt id, or null. */
 const attemptIdIn = (path) => path.match(/\/attempts\/([a-f\d]{24})(?:\/|$)/i)?.[1] || null;
 
-async function request(path, { method = 'GET', body, raw = false, signal } = {}) {
+async function request(path, { method = 'GET', body, raw = false, signal, keepalive = false } = {}) {
   const options = {
     method,
     credentials: 'include',
     headers: {},
     signal,
+    // For a request that has to survive the page tearing down under it — the
+    // tab closing, or navigating away — while it is still in flight. An
+    // ordinary fetch is aborted the moment the document unloads; a keepalive
+    // one is handed to the browser to finish on its own. Chrome caps the total
+    // body of all in-flight keepalive requests at 64KB, which a quiz answer is
+    // nowhere near.
+    keepalive,
   };
 
   const token = localStorage.getItem('token');
@@ -411,8 +418,12 @@ const lmApi = {
   },
   answerAndAdvance: (classId, attemptId, body) =>
     request(`/classes/${classId}/attempts/${attemptId}/answer`, { method: 'POST', body }),
-  saveAttemptDraft: (classId, attemptId, answers) =>
-    request(`/classes/${classId}/attempts/${attemptId}/save`, { method: 'POST', body: { answers } }),
+  saveAttemptDraft: (classId, attemptId, answers, { keepalive = false } = {}) =>
+    request(`/classes/${classId}/attempts/${attemptId}/save`, {
+      method: 'POST',
+      body: { answers },
+      keepalive,
+    }),
   // `at` is when the event happened, which is not always when it is sent: a
   // report that failed offline is queued and replayed, and the server judges it
   // by this timestamp rather than by its arrival. Clamped server-side, so a
