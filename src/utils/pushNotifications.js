@@ -79,10 +79,20 @@ export const initializePushNotifications = async (navigate) => {
       console.log('Push action performed: ', JSON.stringify(notification));
       const data = notification.notification.data;
       
-      // Handle "Let back in" action button
-      if (notification.actionId === 'let_back_in') {
-        const { classId, attemptId, autoMinutes } = data;
-        if (classId && attemptId) {
+      // Handle "Let back in" action button or a direct tap on the notification body
+      if (notification.actionId === 'let_back_in' || notification.actionId === 'tap') {
+        const { classId, attemptId, autoMinutes, studentName } = data;
+        
+        // If it's a direct tap, show the dialog first
+        let shouldReopen = false;
+        if (notification.actionId === 'tap' && classId && attemptId && autoMinutes) {
+          const name = studentName || 'this student';
+          shouldReopen = window.confirm(`Do you want to let ${name} back into the exam for ${autoMinutes} minutes?`);
+        } else if (notification.actionId === 'let_back_in') {
+          shouldReopen = true; // Quick action button tapped, proceed immediately
+        }
+
+        if (shouldReopen && classId && attemptId) {
           try {
              await axios.post(`${apiUrl}/api/v1/learningmodule/class/${classId}/quiz-attempt/${attemptId}/reopen`, {
                  mode: 'continue',
@@ -95,8 +105,8 @@ export const initializePushNotifications = async (navigate) => {
              console.error('Failed to reopen exam from push action', err);
              alert('Failed to let student back in. Please do it from the dashboard.');
           }
+          return; // Stop further navigation since we handled the action
         }
-        return; // Stop further navigation
       }
 
       // If the backend sent a link in the data payload, navigate to it
