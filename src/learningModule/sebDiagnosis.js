@@ -9,6 +9,10 @@
  * that simply is not SEB are indistinguishable. Naming which is the difference
  * between a fix that takes a minute and an exam that is abandoned.
  *
+ * Also home to the one-line "is this SEB" test, because the two are always
+ * wanted together: something has to decide whether to offer a check before it
+ * decides what the check's answer means.
+ *
  * One copy, read by both screens that show a verdict — the shared-configuration
  * card where the key is pasted in, and a quiz's own brief. Two copies of advice
  * this specific drift, and the half that drifts is always the one nobody read
@@ -42,3 +46,18 @@ export const SEB_DIAGNOSIS = {
 
 /** The advice for a reason, never undefined — an unknown code still says something. */
 export const sebDiagnosis = (reason) => SEB_DIAGNOSIS[reason] || SEB_DIAGNOSIS.unknown;
+
+/**
+ * Whether this browser is Safe Exam Browser.
+ *
+ * A user-agent test, with everything that implies: it is a claim the client
+ * makes about itself and proves nothing. It is used only to decide whether to
+ * *offer* the setup check — a link no ordinary visitor needs, on a sign-in page
+ * every ordinary visitor sees. The check's actual verdict rests on the request
+ * hash and not on this, so a browser lying here gets a link and then an honest
+ * answer.
+ *
+ * Both spellings, because SEB's builds have not been consistent about the space.
+ */
+export const isSafeExamBrowser = () =>
+  /SEB[/ ]|SafeExamBrowser/i.test(typeof navigator === 'undefined' ? '' : navigator.userAgent);

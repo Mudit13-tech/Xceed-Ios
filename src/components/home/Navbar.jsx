@@ -146,8 +146,17 @@ export default function Navbar() {
       // shouldn't sit in their history between the page they wanted and wherever
       // they came from.
       navigate(loginPathFor(location), { replace: true });
+    } else if (
+      !isEvaluatingAuth &&
+      isAuthenticated &&
+      !isPublicPath &&
+      !location.pathname.startsWith('/learning') &&
+      userDetails?.user?.role?.includes('student') &&
+      !userDetails?.user?.role?.includes('admin')
+    ) {
+      navigate('/learning', { replace: true });
     }
-  }, [isEvaluatingAuth, isAuthenticated, navigate, location]);
+  }, [isEvaluatingAuth, isAuthenticated, navigate, location, userDetails]);
 
   const excludedRoutes = ['/login', '/cm/c'];
 

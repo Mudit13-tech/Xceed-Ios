@@ -567,24 +567,29 @@ export default function Leaderboard() {
     queryFn: () => lmApi.leaderboard(classId, 'week'),
   });
 
-  const { data: all, isLoading: loadingAll, error: allError, refetch: loadAll } = useQuery({
-    queryKey: ['learning', 'leaderboard', classId, 'all'],
-    queryFn: () => lmApi.leaderboard(classId, 'all'),
+  const { data: classScope, isLoading: loadingClass, error: classError, refetch: loadClass } = useQuery({
+    queryKey: ['learning', 'leaderboard', classId, 'class'],
+    queryFn: () => lmApi.leaderboard(classId, 'class'),
   });
 
-  const loading = loadingWeek || loadingAll;
-  const error = weekError || allError;
+  const { data: full, isLoading: loadingFull, error: fullError, refetch: loadFull } = useQuery({
+    queryKey: ['learning', 'leaderboard', classId, 'full'],
+    queryFn: () => lmApi.leaderboard(classId, 'full'),
+  });
+
+  const loading = loadingWeek || loadingClass || loadingFull;
+  const error = weekError || classError || fullError;
 
   const load = useCallback(async () => {
-    await Promise.all([loadWeek(), loadAll()]);
-  }, [loadWeek, loadAll]);
+    await Promise.all([loadWeek(), loadClass(), loadFull()]);
+  }, [loadWeek, loadClass, loadFull]);
 
   if (loading) return <Loading label="Counting up…" />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   // Staff earn nothing and appear on neither table, so showing them "where you
   // stand" was showing them a game they are not playing. They get the class.
-  if (week?.isTeacher) return <TeacherView week={week} all={all} classId={classId} />;
+  if (week?.isTeacher) return <TeacherView week={week} all={classScope} classId={classId} />;
 
   const me = week?.me;
   const earned = new Set((me?.badges || []).map((badge) => badge.id));
@@ -680,7 +685,8 @@ export default function Leaderboard() {
                 </Text>
               )}
             </Tab>
-            <Tab>All time</Tab>
+            <Tab>This Class</Tab>
+            <Tab>Full</Tab>
           </TabList>
           <TabPanels>
             <TabPanel px={0}>
@@ -690,7 +696,10 @@ export default function Leaderboard() {
               <Board data={week} onOpenStudent={setOpened} />
             </TabPanel>
             <TabPanel px={0}>
-              <Board data={all} onOpenStudent={setOpened} />
+              <Board data={classScope} onOpenStudent={setOpened} />
+            </TabPanel>
+            <TabPanel px={0}>
+              <Board data={full} onOpenStudent={setOpened} />
             </TabPanel>
           </TabPanels>
         </Tabs>

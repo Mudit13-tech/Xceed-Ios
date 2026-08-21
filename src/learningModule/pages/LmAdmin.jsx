@@ -280,9 +280,26 @@ function SharedSebCard() {
               is the real thing. Run from an ordinary browser it can only tell you there are no SEB
               headers, which says nothing either way.
             </Text>
-            <Button size="sm" onClick={runCheck} isLoading={checking} isDisabled={!state.hasFile}>
-              Run the check from this browser
-            </Button>
+            <Stack direction={{ base: 'column', md: 'row' }} spacing={2}>
+              <Button size="sm" onClick={runCheck} isLoading={checking} isDisabled={!state.hasFile}>
+                Run the check from this browser
+              </Button>
+              {/* The same verdict without a sign-in, for the machine in the hall.
+                  An invigilator launches SEB there and follows the link on the
+                  sign-in page it lands on — see `SebCheck`. Offered here because
+                  this is where somebody setting SEB up is standing, and the page
+                  is otherwise reachable only from inside SEB itself. */}
+              <Button
+                as="a"
+                href="/learning/seb-check"
+                target="_blank"
+                rel="noreferrer"
+                size="sm"
+                variant="outline"
+              >
+                Open the sign-in-free check page
+              </Button>
+            </Stack>
 
             {check && (
               <Alert
@@ -374,6 +391,9 @@ export default function LmAdmin() {
       <SimpleGrid columns={{ base: 2, md: 5 }} spacing={4}>
         <StatTile label="Courses" value={courses.total} hint={`${courses.active} active`} accent="blue.500" />
         <StatTile label="Students enrolled" value={people.students} accent="teal.500" />
+        {/* Teaching *memberships*, not accounts: somebody teaching four classes
+            is four of this. The faculty page counts accounts, which is the
+            other question and the one an administrator adding staff is asking. */}
         <StatTile label="Teaching staff" value={people.teachers} accent="orange.500" />
         <StatTile
           label="Bugs & suggestions"
@@ -388,6 +408,21 @@ export default function LmAdmin() {
           accent="purple.500"
         />
       </SimpleGrid>
+
+      <SectionCard
+        title="Faculty accounts"
+        subtitle="Create an account for a new faculty member, and see how many there are."
+        action={
+          <RouterLinkStyle as={RouterLink} to="/learning/lm-admin/faculty" fontSize="sm" color="blue.600">
+            Open faculty →
+          </RouterLinkStyle>
+        }
+      >
+        <Text fontSize="sm" color="lmFg.muted">
+          FACULTY is the only role that can open a class, set a paper or read an answer key, so
+          handing it out lives on its own page rather than in this summary.
+        </Text>
+      </SectionCard>
 
       <SharedSebCard />
 

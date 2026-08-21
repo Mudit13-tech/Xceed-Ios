@@ -33,6 +33,7 @@ import {
   useDisclosure,
   useToast,
 } from '@chakra-ui/react';
+import { DeleteIcon, SettingsIcon } from '@chakra-ui/icons';
 import lmApi from '../api/lmApi';
 import PublishQuizModal from '../components/PublishQuizModal';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
@@ -306,7 +307,8 @@ function QuestionCard({ question, index, sections, onChange, onRemove, onDuplica
                   size="xs"
                   variant="ghost"
                   aria-label="Remove option"
-                  icon={<span>✕</span>}
+                  colorScheme="red"
+                  icon={<DeleteIcon />}
                   onClick={() => {
                     set('options', question.options.filter((_, i) => i !== optionIndex));
                     set(
@@ -372,7 +374,19 @@ function QuestionCard({ question, index, sections, onChange, onRemove, onDuplica
   );
 }
 
-export default function QuizEditor() {
+/**
+ * The paper and everything about how it runs, over two pages.
+ *
+ * Seven tabs in one bar buried the two a teacher opens the editor to use —
+ * writing questions and grouping them — behind five they set once and rarely
+ * touch again. So the settings tabs moved to their own page, reached by the
+ * gear in the header, and this component renders one half or the other
+ * (`mode`). Both halves are the same component on purpose: the load, the
+ * unsaved `quiz` state and the single Save all stay in one place, and moving
+ * between the two pages saves first so nothing typed is lost to the reload.
+ */
+export default function QuizEditor({ mode = 'questions' }) {
+  const isSettings = mode === 'settings';
   const { classId } = useOutletContext();
   const { quizId } = useParams();
   const navigate = useNavigate();
@@ -458,6 +472,13 @@ export default function QuizEditor() {
   const openImport = async () => {
     if (!(await save())) return;
     importDialog.onOpen();
+  };
+
+  // Same reason as the import: the other page reloads the quiz from the
+  // server, so anything typed here has to be persisted before we leave.
+  const goto = async (path) => {
+    if (!(await save())) return;
+    navigate(path);
   };
 
   // Save first — the dialog publishes what is on the server, not what is on
@@ -572,9 +593,20 @@ export default function QuizEditor() {
     <Box>
       <Flex justify="space-between" align="center" mb={4} gap={3} wrap="wrap">
         <Box>
-          <Button size="sm" variant="ghost" onClick={() => navigate(`/learning/class/${classId}/quizzes`)}>
-            ← Back to quizzes
-          </Button>
+          {isSettings ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => goto(`/learning/class/${classId}/quiz/${quizId}/edit`)}
+              isLoading={saving}
+            >
+              ← Back to questions
+            </Button>
+          ) : (
+            <Button size="sm" variant="ghost" onClick={() => navigate(`/learning/class/${classId}/quizzes`)}>
+              ← Back to quizzes
+            </Button>
+          )}
           <Heading size="md" mt={1}>
             {quiz.title}
           </Heading>
@@ -586,6 +618,19 @@ export default function QuizEditor() {
         </Box>
         <HStack>
           {quiz.published && <CopyLinkButton to={`/learning/class/${classId}/quiz/${quizId}`} />}
+          {!isSettings && (
+            <Tooltip label="Delivery, marking, proctoring, instructions and access">
+              <Button
+                size="sm"
+                variant="outline"
+                leftIcon={<SettingsIcon />}
+                onClick={() => goto(`/learning/class/${classId}/quiz/${quizId}/settings`)}
+                isLoading={saving}
+              >
+                Settings
+              </Button>
+            </Tooltip>
+          )}
           <Button size="sm" variant="outline" onClick={save} isLoading={saving}>
             Save
           </Button>
@@ -595,821 +640,830 @@ export default function QuizEditor() {
         </HStack>
       </Flex>
 
-      <Tabs colorScheme="purple" variant="enclosed">
-        <TabList>
-          <Tab fontSize="sm">Questions ({quiz.questions.length})</Tab>
-          <Tab fontSize="sm">Sections ({quiz.sections.length})</Tab>
-          <Tab fontSize="sm">Delivery &amp; timing</Tab>
-          <Tab fontSize="sm">Marking</Tab>
-          <Tab fontSize="sm">Proctoring</Tab>
-          <Tab fontSize="sm">Instructions</Tab>
-          <Tab fontSize="sm">Access</Tab>
-        </TabList>
+      {isSettings ? (
+        <Tabs colorScheme="purple" variant="enclosed">
+          <TabList>
+            <Tab fontSize="sm">Delivery &amp; timing</Tab>
+            <Tab fontSize="sm">Marking</Tab>
+            <Tab fontSize="sm">Proctoring</Tab>
+            <Tab fontSize="sm">Instructions</Tab>
+            <Tab fontSize="sm">Access</Tab>
+          </TabList>
 
-        <TabPanels>
-          {/* ---------- questions ---------- */}
-          <TabPanel px={0}>
-            {quiz.questions.map((question, index) => (
-              <QuestionCard
-                key={question._id || index}
-                index={index}
-                question={question}
-                sections={quiz.sections}
-                perQuestionTiming={settings.perQuestionTiming}
-                onChange={(updated) =>
-                  set({ questions: quiz.questions.map((q, i) => (i === index ? updated : q)) })
-                }
-                onRemove={() => set({ questions: quiz.questions.filter((_, i) => i !== index) })}
-                onDuplicate={() => {
-                  const copy = JSON.parse(JSON.stringify(question));
-                  delete copy._id;
-                  const next = [...quiz.questions];
-                  next.splice(index + 1, 0, copy);
-                  set({ questions: next });
-                }}
-              />
-            ))}
-            <Flex gap={2} wrap="wrap">
-              <Button variant="outline" onClick={addQuestion}>
-                + Add question
-              </Button>
-              {/* Beside "Add question" rather than in the header: importing one
-                  is the same act as writing one, and this is where a teacher is
-                  looking when they decide they have written this before. */}
-              <Button variant="outline" onClick={openImport} isLoading={saving}>
-                📥 Import questions
-              </Button>
-            </Flex>
-
-            {/* The same two actions as the header. A long paper puts the header
-                pair a few screens up, and scrolling back to save is exactly the
-                moment a teacher loses the work they just typed. */}
-            <Flex justify="flex-end" gap={2} mt={6} pt={4} borderTopWidth="1px" borderColor="lmBorder.base">
-              <Button size="sm" variant="outline" onClick={save} isLoading={saving}>
-                Save
-              </Button>
-              <Button size="sm" colorScheme="green" onClick={publish} isDisabled={!quiz.questions.length}>
-                Save &amp; publish
-              </Button>
-            </Flex>
-          </TabPanel>
-
-          {/* ---------- sections ---------- */}
-          <TabPanel px={0}>
-            <SectionCard
-              title="Sections"
-              subtitle="Group questions into parts, e.g. Aptitude / Coding. Question order is only ever shuffled inside a section, never across them."
-            >
-              {quiz.sections.length === 0 && (
-                <Text fontSize="sm" color="lmFg.muted" mb={3}>
-                  No sections — every question sits in one flat list.
-                </Text>
-              )}
-              {quiz.sections.map((section, index) => (
-                <Flex key={section._id || index} gap={2} align="flex-end" mb={3} wrap="wrap">
-                  <FormControl maxW="200px">
-                    <FormLabel fontSize="xs">Name</FormLabel>
-                    <Input
-                      size="sm"
-                      value={section.name}
-                      onChange={(e) =>
-                        set({
-                          sections: quiz.sections.map((s, i) =>
-                            i === index ? { ...s, name: e.target.value } : s,
-                          ),
-                        })
-                      }
-                    />
-                  </FormControl>
-                  <FormControl flex="1" minW="220px">
-                    <FormLabel fontSize="xs">Notes shown on the brief</FormLabel>
-                    <Input
-                      size="sm"
-                      value={section.instructions}
-                      onChange={(e) =>
-                        set({
-                          sections: quiz.sections.map((s, i) =>
-                            i === index ? { ...s, instructions: e.target.value } : s,
-                          ),
-                        })
-                      }
-                    />
-                  </FormControl>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    colorScheme="red"
-                    onClick={() => set({ sections: quiz.sections.filter((_, i) => i !== index) })}
-                  >
-                    ✕
-                  </Button>
-                </Flex>
-              ))}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  set({
-                    sections: [
-                      ...quiz.sections,
-                      { name: `Section ${quiz.sections.length + 1}`, order: quiz.sections.length, instructions: '' },
-                    ],
-                  })
-                }
+          <TabPanels>
+            {/* ---------- delivery & timing ---------- */}
+            <TabPanel px={0}>
+              {/* Delivery, the clock and the going-back rule are one card because
+                  they are one decision: only three of the four delivery/timing
+                  combinations exist, and asked separately a teacher could set
+                  per-question times and then quietly lose them by changing
+                  delivery. Each methodology carries its own clock field and, where
+                  it means something, its own navigation choice. */}
+              <SectionCard
+                title="How this paper runs"
+                subtitle="One clock or one per question — never both, so there is no doubt about which countdown a student is watching."
+                mb={4}
               >
-                + Add section
-              </Button>
-              <Text fontSize="xs" color="lmFg.muted" mt={3}>
-                Save after adding a section, then assign questions to it from the Questions tab.
-              </Text>
-            </SectionCard>
-          </TabPanel>
+                <RadioGroup value={methodology} onChange={setMethodology}>
+                  <Stack spacing={4}>
+                    {METHODOLOGIES.map((option) => (
+                      <Box key={option.key}>
+                        <Radio value={option.key} alignItems="flex-start">
+                          <Box>
+                            <Text fontSize="sm" fontWeight="600">
+                              {option.icon} {option.label}
+                            </Text>
+                            <Text fontSize="xs" color="lmFg.muted">
+                              {option.hint}
+                            </Text>
+                          </Box>
+                        </Radio>
 
-          {/* ---------- delivery & timing ---------- */}
-          <TabPanel px={0}>
-            {/* Delivery, the clock and the going-back rule are one card because
-                they are one decision: only three of the four delivery/timing
-                combinations exist, and asked separately a teacher could set
-                per-question times and then quietly lose them by changing
-                delivery. Each methodology carries its own clock field and, where
-                it means something, its own navigation choice. */}
-            <SectionCard
-              title="How this paper runs"
-              subtitle="One clock or one per question — never both, so there is no doubt about which countdown a student is watching."
-              mb={4}
-            >
-              <RadioGroup value={methodology} onChange={setMethodology}>
-                <Stack spacing={4}>
-                  {METHODOLOGIES.map((option) => (
-                    <Box key={option.key}>
-                      <Radio value={option.key} alignItems="flex-start">
+                        {methodology === option.key && (
+                          <Stack spacing={3} mt={3} ml={6} pl={3} borderLeftWidth="2px" borderColor="lmHue.purple200">
+                            <FormControl maxW="260px">
+                              {option.perQuestionTiming ? (
+                                <>
+                                  <Tooltip label="Stamped on each question you add from now on. Existing questions keep their own time.">
+                                    <FormLabel fontSize="xs">Default time for new questions (seconds)</FormLabel>
+                                  </Tooltip>
+                                  <Input
+                                    size="sm"
+                                    type="number"
+                                    min={0}
+                                    value={settings.defaultQuestionSec ?? 60}
+                                    onChange={(e) => setSetting('defaultQuestionSec', Number(e.target.value) || 0)}
+                                  />
+                                </>
+                              ) : (
+                                <>
+                                  <FormLabel fontSize="xs">Overall time limit (minutes, 0 = none)</FormLabel>
+                                  <Input
+                                    size="sm"
+                                    type="number"
+                                    min={0}
+                                    value={settings.timeLimitMinutes}
+                                    onChange={(e) => setSetting('timeLimitMinutes', Number(e.target.value) || 0)}
+                                  />
+                                </>
+                              )}
+                            </FormControl>
+
+                            {/* Offered under both clocks. Under per-question
+                                timing a revisit resumes the question's remaining
+                                budget rather than restarting it, which is what
+                                makes the combination safe to offer. */}
+                            {option.canChooseBacktracking && (
+                              <Checkbox
+                                size="sm"
+                                alignItems="flex-start"
+                                isChecked={settings.allowBacktracking}
+                                onChange={(e) => setSetting('allowBacktracking', e.target.checked)}
+                              >
+                                <Text fontSize="sm">Let students go back and change earlier answers</Text>
+                                <Text fontSize="xs" color="lmFg.muted">
+                                  {option.perQuestionTiming
+                                    ? 'A revisited question resumes with the seconds it had left, and one whose time is gone is shown read-only — so going back cannot buy more time. Off is placement-test behaviour.'
+                                    : 'Off is placement-test behaviour: once a question is answered, it is closed.'}
+                                </Text>
+                              </Checkbox>
+                            )}
+
+                            {option.perQuestionTiming && (
+                              <Alert status={untimedCount ? 'warning' : 'info'} borderRadius="md" fontSize="xs">
+                                <AlertIcon />
+                                {untimedCount
+                                  ? `${untimedCount} question(s) still have no time set — publishing is blocked until every question has one.`
+                                  : 'Every question carries its own time, set in the Questions tab.'}
+                              </Alert>
+                            )}
+                          </Stack>
+                        )}
+                      </Box>
+                    ))}
+                  </Stack>
+                </RadioGroup>
+              </SectionCard>
+
+              <SectionCard title="When students may sit it" mb={4}>
+                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                  <FormControl>
+                    <Tooltip label="Students may still be sitting the test after this, but nobody new can begin">
+                      <FormLabel fontSize="xs">Late-entry window (minutes after opening)</FormLabel>
+                    </Tooltip>
+                    <Input
+                      size="sm"
+                      type="number"
+                      min={0}
+                      value={settings.marginMinutes}
+                      onChange={(e) => setSetting('marginMinutes', Number(e.target.value) || 0)}
+                    />
+                    <FormHelperText fontSize="xs">0 = anyone may start while the quiz is open.</FormHelperText>
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel fontSize="xs">Opens at</FormLabel>
+                    <Input
+                      size="sm"
+                      type="datetime-local"
+                      value={toLocalInput(settings.availableFrom)}
+                      onChange={(e) => setSetting('availableFrom', e.target.value || null)}
+                    />
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel fontSize="xs">Test closes at</FormLabel>
+                    <Input
+                      size="sm"
+                      type="datetime-local"
+                      value={toLocalInput(settings.availableTo)}
+                      onChange={(e) => setSetting('availableTo', e.target.value || null)}
+                    />
+                  </FormControl>
+                  <FormControl>
+                    <Tooltip label="Scores stay hidden until this moment, so a whole cohort sees them together. You can always announce them sooner from the results page.">
+                      <FormLabel fontSize="xs">Results announced at</FormLabel>
+                    </Tooltip>
+                    <Input
+                      size="sm"
+                      type="datetime-local"
+                      value={toLocalInput(settings.resultReleaseAt)}
+                      onChange={(e) => setSetting('resultReleaseAt', e.target.value || null)}
+                    />
+                    <FormHelperText fontSize="xs">
+                      Blank shows each student their result as they submit. Confirmed when you publish.
+                    </FormHelperText>
+                  </FormControl>
+                </SimpleGrid>
+              </SectionCard>
+            </TabPanel>
+
+            {/* ---------- marking ---------- */}
+            <TabPanel px={0}>
+              <SectionCard title="Marking and randomisation">
+                <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4}>
+                  <FormControl>
+                    <Tooltip label="Applied to any question that does not set its own. Unanswered questions are never penalised.">
+                      <FormLabel fontSize="xs">Negative marking (default)</FormLabel>
+                    </Tooltip>
+                    <Input
+                      size="sm"
+                      type="number"
+                      min={0}
+                      value={settings.negativeMarking}
+                      onChange={(e) => setSetting('negativeMarking', Number(e.target.value) || 0)}
+                    />
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel fontSize="xs">Pass mark (%)</FormLabel>
+                    <Input
+                      size="sm"
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={settings.passPercent}
+                      onChange={(e) => setSetting('passPercent', Number(e.target.value) || 0)}
+                    />
+                  </FormControl>
+                  <FormControl>
+                    <Tooltip label="Draw this many questions at random from the bank for each student. 0 = serve every question.">
+                      <FormLabel fontSize="xs">Questions per student</FormLabel>
+                    </Tooltip>
+                    <Input
+                      size="sm"
+                      type="number"
+                      min={0}
+                      max={quiz.questions.length}
+                      value={settings.questionsPerAttempt}
+                      onChange={(e) => setSetting('questionsPerAttempt', Number(e.target.value) || 0)}
+                    />
+                  </FormControl>
+                </SimpleGrid>
+
+                <Divider my={4} />
+                <Stack spacing={2}>
+                  <Checkbox
+                    size="sm"
+                    isChecked={settings.shuffleQuestions}
+                    onChange={(e) => setSetting('shuffleQuestions', e.target.checked)}
+                  >
+                    Shuffle question order per student
+                  </Checkbox>
+                  <Checkbox
+                    size="sm"
+                    isChecked={settings.shuffleOptions}
+                    onChange={(e) => setSetting('shuffleOptions', e.target.checked)}
+                  >
+                    Shuffle options per student (True/False is left alone)
+                  </Checkbox>
+                  <Checkbox
+                    size="sm"
+                    isChecked={settings.showAnswersAfterSubmit}
+                    onChange={(e) => setSetting('showAnswersAfterSubmit', e.target.checked)}
+                  >
+                    Show correct answers and explanations after submitting
+                  </Checkbox>
+                  <Checkbox
+                    size="sm"
+                    isChecked={settings.showScoreImmediately}
+                    onChange={(e) => setSetting('showScoreImmediately', e.target.checked)}
+                  >
+                    Show the score immediately (subject to the release time)
+                  </Checkbox>
+                </Stack>
+              </SectionCard>
+            </TabPanel>
+
+            {/* ---------- proctoring ---------- */}
+            <TabPanel px={0}>
+              <SectionCard
+                title="Proctoring"
+                subtitle="Deterrents, not guarantees — a determined student can defeat any of them. What makes them useful is that every event is recorded on the attempt for you to review."
+              >
+                <Stack spacing={3}>
+                  {/* Not a checkbox, because it is not a choice any more: every
+                      paper is sat in fullscreen and the first departure submits
+                      it. Stated here so a teacher setting the paper knows exactly
+                      what their class will be held to. */}
+                  <Box p={3} bg="lmHue.orange50" borderRadius="md" borderWidth="1px" borderColor="lmHue.orange200">
+                    <Text fontSize="sm" fontWeight="600" mb={1}>
+                      Always on: fullscreen lockdown
+                    </Text>
+                    <Text fontSize="xs" color="lmFg.body">
+                      Every test runs in fullscreen. Leaving fullscreen, or switching to another tab,
+                      window or application, submits the student&apos;s attempt immediately and records
+                      the reason on it. There is no allowance to configure — your students are told
+                      this on the pre-test screen before they can start.
+                    </Text>
+                  </Box>
+
+                  {/* Set at creation as "is this sitting watched?", and changeable
+                      here for the same reason everything else is. Only shown for
+                      one-at-a-time delivery: on a one-page paper every question is
+                      already in the browser, so there is nothing to fetch ahead
+                      and the setting would be a lie. */}
+                  {settings.deliveryMode === 'one_at_a_time' && (
+                    <Box p={3} borderRadius="md" borderWidth="1px" borderColor="lmBorder.base">
+                      <Checkbox
+                        size="sm"
+                        alignItems="flex-start"
+                        isChecked={Boolean(settings.prefetchQuestions)}
+                        onChange={(e) => setSetting('prefetchQuestions', e.target.checked)}
+                      >
+                        <Text fontSize="sm" fontWeight="600">
+                          Proctored — load the next question ahead
+                        </Text>
+                        <Text fontSize="xs" color="lmFg.subtle">
+                          Pressing Next is immediate, because the browser already has the question.
+                          Where this paper lets students go back it is sent plainly; otherwise it is
+                          encrypted and the key is only released when they reach it.
+                        </Text>
+                      </Checkbox>
+                      {!settings.prefetchQuestions && (
+                        <Alert status="warning" borderRadius="md" mt={2} py={2} fontSize="xs">
+                          <AlertIcon boxSize={3} />
+                          <Box>
+                            <b>High security:</b> nothing loads ahead. Students will see a pause on every
+                            Next — noticeable on a slow or busy connection, and worst when a whole batch
+                            starts at once.
+                          </Box>
+                        </Alert>
+                      )}
+                    </Box>
+                  )}
+
+                  {/* Named honestly. The check is on the User-Agent string, which
+                      a browser chooses for itself and any student can change from
+                      the devtools device toolbar in one click. It turns away the
+                      student who wandered in on a phone; it stops nobody who does
+                      not want to be stopped. Promising otherwise is worse than the
+                      gap, because a teacher plans around the promise. */}
+                  <Box>
+                    <Checkbox
+                      size="sm"
+                      isChecked={settings.preventMobile}
+                      onChange={(e) => setSetting('preventMobile', e.target.checked)}
+                    >
+                      Discourage mobile devices
+                    </Checkbox>
+                    <Text fontSize="xs" opacity={0.6} ml={6}>
+                      Turns away phones that identify themselves as phones. Trivially bypassed — treat it as a
+                      nudge, not a control.
+                    </Text>
+                  </Box>
+                  <Box>
+                    <Checkbox
+                      size="sm"
+                      isChecked={settings.keyboardLockdown !== false}
+                      onChange={(e) => setSetting('keyboardLockdown', e.target.checked)}
+                    >
+                      Block the keyboard, warn twice, then submit
+                    </Checkbox>
+                    <Text fontSize="xs" opacity={0.6} ml={6}>
+                      Closes the gap a <b>hotkey-summoned</b> desktop AI assistant opens: on macOS one
+                      answers a global hotkey with a panel drawn over the browser, which fires none of
+                      the events that end a paper. The hotkey itself is consumed by the operating
+                      system, but the modifier held down first still reaches the page, and that is what
+                      this catches. Every answer here is clicked — a numerical answer gets an on-screen
+                      keypad — so during a sitting the keyboard has no legitimate use. Every key is
+                      swallowed and recorded on the attempt; the first two are answered with an
+                      on-screen warning, and the third submits the paper. Unlike leaving the screen
+                      this gets an allowance, because a hand resting on a key looks the same as a
+                      hotkey at the first event.
+                    </Text>
+                    {settings.keyboardLockdown === false && (
+                      <Text fontSize="xs" color="lmHue.orange700" ml={6} mt={1}>
+                        Off: a student can reach a hotkey without ending their paper. Turn it off only
+                        for a candidate who needs a keyboard for assistive input.
+                      </Text>
+                    )}
+                    {/* Said plainly and next to the setting, because the failure
+                        mode is a teacher reading "blocks AI assistants" and
+                        planning a paper around a guarantee that stops at the
+                        keyboard. Reported from a live sitting on macOS: a spoken
+                        "Hey Siri" reaches the assistant without touching the
+                        page. */}
+                    <Text fontSize="xs" color="lmHue.orange700" ml={6} mt={1}>
+                      Not covered: an assistant summoned <b>by voice</b>. Speaking to Siri produces no
+                      keystroke, no focus change and no fullscreen exit, so no web page can observe it.
+                      Require Safe Exam Browser below, with Siri and dictation turned off in the
+                      settings file, for a paper where that matters.
+                    </Text>
+                  </Box>
+                  <Checkbox
+                    size="sm"
+                    isChecked={settings.disableCopyPaste}
+                    onChange={(e) => setSetting('disableCopyPaste', e.target.checked)}
+                  >
+                    Disable copy, cut and paste
+                  </Checkbox>
+                  <Checkbox
+                    size="sm"
+                    isChecked={settings.disableRightClick}
+                    onChange={(e) => setSetting('disableRightClick', e.target.checked)}
+                  >
+                    Disable right-click
+                  </Checkbox>
+
+                  <Divider />
+                  {/* An allowance rather than a deterrent, but it belongs next to
+                      them: it is the same decision about what a student may have
+                      on screen during the sitting. */}
+                  <Checkbox
+                    size="sm"
+                    isChecked={settings.allowCalculator !== false}
+                    onChange={(e) => setSetting('allowCalculator', e.target.checked)}
+                  >
+                    Offer an on-screen scientific calculator
+                  </Checkbox>
+                  <Text fontSize="xs" color="lmFg.muted" pl={6} mt={-1}>
+                    Turn this off for a paper where the arithmetic is the point.
+                  </Text>
+
+                  <Divider />
+
+                  {/* Safe Exam Browser. A different kind of control from
+                      everything above: those raise the cost of cheating from
+                      inside an ordinary tab; this replaces the tab, so it closes
+                      what nothing above can reach — a desktop AI assistant that
+                      overlays the browser without ever touching it (no blur, no
+                      visibility change, no fullscreen exit — see the long
+                      comment on lmQuiz's `requireSafeExamBrowser`). */}
+                  <Checkbox
+                    size="sm"
+                    isChecked={Boolean(settings.requireSafeExamBrowser)}
+                    onChange={(e) => setSetting('requireSafeExamBrowser', e.target.checked)}
+                  >
+                    Require Safe Exam Browser
+                  </Checkbox>
+                  <Text fontSize="xs" color="lmFg.muted" pl={6} mt={-1}>
+                    Highly secure. The test can only be opened inside Safe Exam Browser (SEB) — a
+                    locked-down browser students install beforehand — which shuts every other
+                    application out for the duration. Without it, a student cannot start this test
+                    at all, unless you enable the access-code fallback below.
+                  </Text>
+
+                  {settings.requireSafeExamBrowser && (
+                    <Box pl={6} mt={2}>
+                      <Stack spacing={4} borderLeftWidth="2px" borderColor="lmBorder.base" pl={4}>
                         <Box>
-                          <Text fontSize="sm" fontWeight="600">
-                            {option.icon} {option.label}
+                          <Text fontSize="sm" fontWeight="600" mb={1}>
+                            1. Exam settings file
+                            {settings.sebConfigSource === 'shared' ? ' (optional for this paper)' : ''}
                           </Text>
-                          <Text fontSize="xs" color="lmFg.muted">
-                            {option.hint}
-                          </Text>
-                        </Box>
-                      </Radio>
-
-                      {methodology === option.key && (
-                        <Stack spacing={3} mt={3} ml={6} pl={3} borderLeftWidth="2px" borderColor="lmHue.purple200">
-                          <FormControl maxW="260px">
-                            {option.perQuestionTiming ? (
+                          {/* With a shared file on the server this paper is already
+                              set up, so the build-it-yourself instructions are not
+                              an instruction any more — they are an option most
+                              teachers should ignore. Reading them as a to-do is
+                              what sent teachers to SEB's Configuration Tool for a
+                              file the institution had uploaded months ago. */}
+                          <Text fontSize="xs" color="lmFg.muted" mb={2}>
+                            {settings.sebConfigSource === 'shared' ? (
                               <>
-                                <Tooltip label="Stamped on each question you add from now on. Existing questions keep their own time.">
-                                  <FormLabel fontSize="xs">Default time for new questions (seconds)</FormLabel>
-                                </Tooltip>
-                                <Input
-                                  size="sm"
-                                  type="number"
-                                  min={0}
-                                  value={settings.defaultQuestionSec ?? 60}
-                                  onChange={(e) => setSetting('defaultQuestionSec', Number(e.target.value) || 0)}
-                                />
+                                Nothing to upload — the institution&apos;s shared configuration covers
+                                this paper. Use this only if it needs a lockdown of its own: build the{' '}
+                                <code>.seb</code> file in SEB&apos;s free Configuration Tool and paste
+                                the <b>Config Key</b> it shows below. Both have to match the same saved
+                                file.
                               </>
                             ) : (
                               <>
-                                <FormLabel fontSize="xs">Overall time limit (minutes, 0 = none)</FormLabel>
-                                <Input
-                                  size="sm"
-                                  type="number"
-                                  min={0}
-                                  value={settings.timeLimitMinutes}
-                                  onChange={(e) => setSetting('timeLimitMinutes', Number(e.target.value) || 0)}
-                                />
+                                Build this once in SEB&apos;s own free Configuration Tool — set the
+                                Start URL to this test&apos;s link and a quit password if you want one
+                                — then upload the <code>.seb</code> file it produces. The tool also
+                                shows a <b>Config Key</b>: paste that into the field below. Both have
+                                to match the same saved file, or the check below will refuse every
+                                student, including ones who did everything right.
                               </>
                             )}
-                          </FormControl>
-
-                          {/* Offered under both clocks. Under per-question
-                              timing a revisit resumes the question's remaining
-                              budget rather than restarting it, which is what
-                              makes the combination safe to offer. */}
-                          {option.canChooseBacktracking && (
-                            <Checkbox
+                          </Text>
+                          <HStack mb={1}>
+                            <Input
                               size="sm"
-                              alignItems="flex-start"
-                              isChecked={settings.allowBacktracking}
-                              onChange={(e) => setSetting('allowBacktracking', e.target.checked)}
+                              type="file"
+                              accept=".seb"
+                              onChange={(e) => setSebFile(e.target.files?.[0] || null)}
+                              maxW="280px"
+                            />
+                            <Button
+                              size="sm"
+                              onClick={uploadSebFile}
+                              isDisabled={!sebFile}
+                              isLoading={sebUploading}
                             >
-                              <Text fontSize="sm">Let students go back and change earlier answers</Text>
-                              <Text fontSize="xs" color="lmFg.muted">
-                                {option.perQuestionTiming
-                                  ? 'A revisited question resumes with the seconds it had left, and one whose time is gone is shown read-only — so going back cannot buy more time. Off is placement-test behaviour.'
-                                  : 'Off is placement-test behaviour: once a question is answered, it is closed.'}
-                              </Text>
-                            </Checkbox>
-                          )}
-
-                          {option.perQuestionTiming && (
-                            <Alert status={untimedCount ? 'warning' : 'info'} borderRadius="md" fontSize="xs">
-                              <AlertIcon />
-                              {untimedCount
-                                ? `${untimedCount} question(s) still have no time set — publishing is blocked until every question has one.`
-                                : 'Every question carries its own time, set in the Questions tab.'}
-                            </Alert>
-                          )}
-                        </Stack>
-                      )}
-                    </Box>
-                  ))}
-                </Stack>
-              </RadioGroup>
-            </SectionCard>
-
-            <SectionCard title="When students may sit it" mb={4}>
-              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
-                <FormControl>
-                  <Tooltip label="Students may still be sitting the test after this, but nobody new can begin">
-                    <FormLabel fontSize="xs">Late-entry window (minutes after opening)</FormLabel>
-                  </Tooltip>
-                  <Input
-                    size="sm"
-                    type="number"
-                    min={0}
-                    value={settings.marginMinutes}
-                    onChange={(e) => setSetting('marginMinutes', Number(e.target.value) || 0)}
-                  />
-                  <FormHelperText fontSize="xs">0 = anyone may start while the quiz is open.</FormHelperText>
-                </FormControl>
-                <FormControl>
-                  <FormLabel fontSize="xs">Opens at</FormLabel>
-                  <Input
-                    size="sm"
-                    type="datetime-local"
-                    value={toLocalInput(settings.availableFrom)}
-                    onChange={(e) => setSetting('availableFrom', e.target.value || null)}
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel fontSize="xs">Test closes at</FormLabel>
-                  <Input
-                    size="sm"
-                    type="datetime-local"
-                    value={toLocalInput(settings.availableTo)}
-                    onChange={(e) => setSetting('availableTo', e.target.value || null)}
-                  />
-                </FormControl>
-                <FormControl>
-                  <Tooltip label="Scores stay hidden until this moment, so a whole cohort sees them together. You can always announce them sooner from the results page.">
-                    <FormLabel fontSize="xs">Results announced at</FormLabel>
-                  </Tooltip>
-                  <Input
-                    size="sm"
-                    type="datetime-local"
-                    value={toLocalInput(settings.resultReleaseAt)}
-                    onChange={(e) => setSetting('resultReleaseAt', e.target.value || null)}
-                  />
-                  <FormHelperText fontSize="xs">
-                    Blank shows each student their result as they submit. Confirmed when you publish.
-                  </FormHelperText>
-                </FormControl>
-              </SimpleGrid>
-            </SectionCard>
-          </TabPanel>
-
-          {/* ---------- marking ---------- */}
-          <TabPanel px={0}>
-            <SectionCard title="Marking and randomisation">
-              <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4}>
-                <FormControl>
-                  <Tooltip label="Applied to any question that does not set its own. Unanswered questions are never penalised.">
-                    <FormLabel fontSize="xs">Negative marking (default)</FormLabel>
-                  </Tooltip>
-                  <Input
-                    size="sm"
-                    type="number"
-                    min={0}
-                    value={settings.negativeMarking}
-                    onChange={(e) => setSetting('negativeMarking', Number(e.target.value) || 0)}
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel fontSize="xs">Pass mark (%)</FormLabel>
-                  <Input
-                    size="sm"
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={settings.passPercent}
-                    onChange={(e) => setSetting('passPercent', Number(e.target.value) || 0)}
-                  />
-                </FormControl>
-                <FormControl>
-                  <Tooltip label="Draw this many questions at random from the bank for each student. 0 = serve every question.">
-                    <FormLabel fontSize="xs">Questions per student</FormLabel>
-                  </Tooltip>
-                  <Input
-                    size="sm"
-                    type="number"
-                    min={0}
-                    max={quiz.questions.length}
-                    value={settings.questionsPerAttempt}
-                    onChange={(e) => setSetting('questionsPerAttempt', Number(e.target.value) || 0)}
-                  />
-                </FormControl>
-              </SimpleGrid>
-
-              <Divider my={4} />
-              <Stack spacing={2}>
-                <Checkbox
-                  size="sm"
-                  isChecked={settings.shuffleQuestions}
-                  onChange={(e) => setSetting('shuffleQuestions', e.target.checked)}
-                >
-                  Shuffle question order per student
-                </Checkbox>
-                <Checkbox
-                  size="sm"
-                  isChecked={settings.shuffleOptions}
-                  onChange={(e) => setSetting('shuffleOptions', e.target.checked)}
-                >
-                  Shuffle options per student (True/False is left alone)
-                </Checkbox>
-                <Checkbox
-                  size="sm"
-                  isChecked={settings.showAnswersAfterSubmit}
-                  onChange={(e) => setSetting('showAnswersAfterSubmit', e.target.checked)}
-                >
-                  Show correct answers and explanations after submitting
-                </Checkbox>
-                <Checkbox
-                  size="sm"
-                  isChecked={settings.showScoreImmediately}
-                  onChange={(e) => setSetting('showScoreImmediately', e.target.checked)}
-                >
-                  Show the score immediately (subject to the release time)
-                </Checkbox>
-              </Stack>
-            </SectionCard>
-          </TabPanel>
-
-          {/* ---------- proctoring ---------- */}
-          <TabPanel px={0}>
-            <SectionCard
-              title="Proctoring"
-              subtitle="Deterrents, not guarantees — a determined student can defeat any of them. What makes them useful is that every event is recorded on the attempt for you to review."
-            >
-              <Stack spacing={3}>
-                {/* Not a checkbox, because it is not a choice any more: every
-                    paper is sat in fullscreen and the first departure submits
-                    it. Stated here so a teacher setting the paper knows exactly
-                    what their class will be held to. */}
-                <Box p={3} bg="lmHue.orange50" borderRadius="md" borderWidth="1px" borderColor="lmHue.orange200">
-                  <Text fontSize="sm" fontWeight="600" mb={1}>
-                    Always on: fullscreen lockdown
-                  </Text>
-                  <Text fontSize="xs" color="lmFg.body">
-                    Every test runs in fullscreen. Leaving fullscreen, or switching to another tab,
-                    window or application, submits the student&apos;s attempt immediately and records
-                    the reason on it. There is no allowance to configure — your students are told
-                    this on the pre-test screen before they can start.
-                  </Text>
-                </Box>
-
-                {/* Set at creation as "is this sitting watched?", and changeable
-                    here for the same reason everything else is. Only shown for
-                    one-at-a-time delivery: on a one-page paper every question is
-                    already in the browser, so there is nothing to fetch ahead
-                    and the setting would be a lie. */}
-                {settings.deliveryMode === 'one_at_a_time' && (
-                  <Box p={3} borderRadius="md" borderWidth="1px" borderColor="lmBorder.base">
-                    <Checkbox
-                      size="sm"
-                      alignItems="flex-start"
-                      isChecked={Boolean(settings.prefetchQuestions)}
-                      onChange={(e) => setSetting('prefetchQuestions', e.target.checked)}
-                    >
-                      <Text fontSize="sm" fontWeight="600">
-                        Proctored — load the next question ahead
-                      </Text>
-                      <Text fontSize="xs" color="lmFg.subtle">
-                        Pressing Next is immediate, because the browser already has the question.
-                        Where this paper lets students go back it is sent plainly; otherwise it is
-                        encrypted and the key is only released when they reach it.
-                      </Text>
-                    </Checkbox>
-                    {!settings.prefetchQuestions && (
-                      <Alert status="warning" borderRadius="md" mt={2} py={2} fontSize="xs">
-                        <AlertIcon boxSize={3} />
-                        <Box>
-                          <b>High security:</b> nothing loads ahead. Students will see a pause on every
-                          Next — noticeable on a slow or busy connection, and worst when a whole batch
-                          starts at once.
+                              Upload
+                            </Button>
+                          </HStack>
+                          <Text fontSize="xs" color={settings.sebConfigFileName ? 'lmHue.green700' : 'lmFg.faint'}>
+                            {settings.sebConfigFileName
+                              ? `Current file: ${settings.sebConfigFileName}`
+                              : 'No file uploaded yet.'}
+                          </Text>
                         </Box>
-                      </Alert>
-                    )}
-                  </Box>
-                )}
 
-                {/* Named honestly. The check is on the User-Agent string, which
-                    a browser chooses for itself and any student can change from
-                    the devtools device toolbar in one click. It turns away the
-                    student who wandered in on a phone; it stops nobody who does
-                    not want to be stopped. Promising otherwise is worse than the
-                    gap, because a teacher plans around the promise. */}
-                <Box>
-                  <Checkbox
-                    size="sm"
-                    isChecked={settings.preventMobile}
-                    onChange={(e) => setSetting('preventMobile', e.target.checked)}
-                  >
-                    Discourage mobile devices
-                  </Checkbox>
-                  <Text fontSize="xs" opacity={0.6} ml={6}>
-                    Turns away phones that identify themselves as phones. Trivially bypassed — treat it as a
-                    nudge, not a control.
-                  </Text>
-                </Box>
-                <Box>
-                  <Checkbox
-                    size="sm"
-                    isChecked={settings.keyboardLockdown !== false}
-                    onChange={(e) => setSetting('keyboardLockdown', e.target.checked)}
-                  >
-                    Block the keyboard, warn twice, then submit
-                  </Checkbox>
-                  <Text fontSize="xs" opacity={0.6} ml={6}>
-                    Closes the gap a <b>hotkey-summoned</b> desktop AI assistant opens: on macOS one
-                    answers a global hotkey with a panel drawn over the browser, which fires none of
-                    the events that end a paper. The hotkey itself is consumed by the operating
-                    system, but the modifier held down first still reaches the page, and that is what
-                    this catches. Every answer here is clicked — a numerical answer gets an on-screen
-                    keypad — so during a sitting the keyboard has no legitimate use. Every key is
-                    swallowed and recorded on the attempt; the first two are answered with an
-                    on-screen warning, and the third submits the paper. Unlike leaving the screen
-                    this gets an allowance, because a hand resting on a key looks the same as a
-                    hotkey at the first event.
-                  </Text>
-                  {settings.keyboardLockdown === false && (
-                    <Text fontSize="xs" color="lmHue.orange700" ml={6} mt={1}>
-                      Off: a student can reach a hotkey without ending their paper. Turn it off only
-                      for a candidate who needs a keyboard for assistive input.
-                    </Text>
-                  )}
-                  {/* Said plainly and next to the setting, because the failure
-                      mode is a teacher reading "blocks AI assistants" and
-                      planning a paper around a guarantee that stops at the
-                      keyboard. Reported from a live sitting on macOS: a spoken
-                      "Hey Siri" reaches the assistant without touching the
-                      page. */}
-                  <Text fontSize="xs" color="lmHue.orange700" ml={6} mt={1}>
-                    Not covered: an assistant summoned <b>by voice</b>. Speaking to Siri produces no
-                    keystroke, no focus change and no fullscreen exit, so no web page can observe it.
-                    Require Safe Exam Browser below, with Siri and dictation turned off in the
-                    settings file, for a paper where that matters.
-                  </Text>
-                </Box>
-                <Checkbox
-                  size="sm"
-                  isChecked={settings.disableCopyPaste}
-                  onChange={(e) => setSetting('disableCopyPaste', e.target.checked)}
-                >
-                  Disable copy, cut and paste
-                </Checkbox>
-                <Checkbox
-                  size="sm"
-                  isChecked={settings.disableRightClick}
-                  onChange={(e) => setSetting('disableRightClick', e.target.checked)}
-                >
-                  Disable right-click
-                </Checkbox>
+                        {/* Reported from a live sitting: a student said "Hey Siri"
+                            in an ordinary browser and read the answer off the
+                            panel. Nothing on the page can see that — a spoken
+                            trigger fires no event at all, so the keyboard rule
+                            above, which works by catching the modifier of a
+                            hotkey, has nothing to catch. SEB is the only place
+                            this can be stopped rather than recorded, and only if
+                            the file was built with the assistant switched off.
+                            A file built with the defaults leaves it on, so this
+                            says so where the file is chosen rather than in a
+                            release note nobody re-reads. It applies to the shared
+                            file just as much as to a per-paper one. */}
+                        <Alert status="warning" borderRadius="md" fontSize="xs" py={2} alignItems="flex-start">
+                          <AlertIcon />
+                          <Box>
+                            <Text fontWeight="600" mb={1}>
+                              Turn off Siri and dictation in the file
+                            </Text>
+                            In the Configuration Tool&apos;s macOS settings, clear{' '}
+                            <b>allowSiri</b> and <b>allowDictation</b> before saving. A student can
+                            summon a voice assistant by speaking, and a spoken trigger produces no
+                            keystroke, no focus change and no fullscreen exit — so nothing in this
+                            module can detect it, including the keyboard rule above. SEB refusing to
+                            run alongside it is the only thing that stops it, and only if the file
+                            says so.
+                          </Box>
+                        </Alert>
 
-                <Divider />
-                {/* An allowance rather than a deterrent, but it belongs next to
-                    them: it is the same decision about what a student may have
-                    on screen during the sitting. */}
-                <Checkbox
-                  size="sm"
-                  isChecked={settings.allowCalculator !== false}
-                  onChange={(e) => setSetting('allowCalculator', e.target.checked)}
-                >
-                  Offer an on-screen scientific calculator
-                </Checkbox>
-                <Text fontSize="xs" color="lmFg.muted" pl={6} mt={-1}>
-                  Turn this off for a paper where the arithmetic is the point.
-                </Text>
-
-                <Divider />
-
-                {/* Safe Exam Browser. A different kind of control from
-                    everything above: those raise the cost of cheating from
-                    inside an ordinary tab; this replaces the tab, so it closes
-                    what nothing above can reach — a desktop AI assistant that
-                    overlays the browser without ever touching it (no blur, no
-                    visibility change, no fullscreen exit — see the long
-                    comment on lmQuiz's `requireSafeExamBrowser`). */}
-                <Checkbox
-                  size="sm"
-                  isChecked={Boolean(settings.requireSafeExamBrowser)}
-                  onChange={(e) => setSetting('requireSafeExamBrowser', e.target.checked)}
-                >
-                  Require Safe Exam Browser
-                </Checkbox>
-                <Text fontSize="xs" color="lmFg.muted" pl={6} mt={-1}>
-                  Highly secure. The test can only be opened inside Safe Exam Browser (SEB) — a
-                  locked-down browser students install beforehand — which shuts every other
-                  application out for the duration. Without it, a student cannot start this test
-                  at all, unless you enable the access-code fallback below.
-                </Text>
-
-                {settings.requireSafeExamBrowser && (
-                  <Box pl={6} mt={2}>
-                    <Stack spacing={4} borderLeftWidth="2px" borderColor="lmBorder.base" pl={4}>
-                      <Box>
-                        <Text fontSize="sm" fontWeight="600" mb={1}>
-                          1. Exam settings file
-                          {settings.sebConfigSource === 'shared' ? ' (optional for this paper)' : ''}
-                        </Text>
-                        {/* With a shared file on the server this paper is already
-                            set up, so the build-it-yourself instructions are not
-                            an instruction any more — they are an option most
-                            teachers should ignore. Reading them as a to-do is
-                            what sent teachers to SEB's Configuration Tool for a
-                            file the institution had uploaded months ago. */}
-                        <Text fontSize="xs" color="lmFg.muted" mb={2}>
-                          {settings.sebConfigSource === 'shared' ? (
-                            <>
-                              Nothing to upload — the institution&apos;s shared configuration covers
-                              this paper. Use this only if it needs a lockdown of its own: build the{' '}
-                              <code>.seb</code> file in SEB&apos;s free Configuration Tool and paste
-                              the <b>Config Key</b> it shows below. Both have to match the same saved
-                              file.
-                            </>
-                          ) : (
-                            <>
-                              Build this once in SEB&apos;s own free Configuration Tool — set the
-                              Start URL to this test&apos;s link and a quit password if you want one
-                              — then upload the <code>.seb</code> file it produces. The tool also
-                              shows a <b>Config Key</b>: paste that into the field below. Both have
-                              to match the same saved file, or the check below will refuse every
-                              student, including ones who did everything right.
-                            </>
-                          )}
-                        </Text>
-                        <HStack mb={1}>
+                        <FormControl>
+                          <FormLabel fontSize="xs">Config Key</FormLabel>
                           <Input
                             size="sm"
-                            type="file"
-                            accept=".seb"
-                            onChange={(e) => setSebFile(e.target.files?.[0] || null)}
-                            maxW="280px"
+                            fontFamily="mono"
+                            placeholder="Pasted from the SEB Configuration Tool"
+                            value={settings.sebConfigKey || ''}
+                            onChange={(e) => setSetting('sebConfigKey', e.target.value)}
                           />
-                          <Button
-                            size="sm"
-                            onClick={uploadSebFile}
-                            isDisabled={!sebFile}
-                            isLoading={sebUploading}
-                          >
-                            Upload
-                          </Button>
-                        </HStack>
-                        <Text fontSize="xs" color={settings.sebConfigFileName ? 'lmHue.green700' : 'lmFg.faint'}>
-                          {settings.sebConfigFileName
-                            ? `Current file: ${settings.sebConfigFileName}`
-                            : 'No file uploaded yet.'}
-                        </Text>
-                      </Box>
+                        </FormControl>
 
-                      {/* Reported from a live sitting: a student said "Hey Siri"
-                          in an ordinary browser and read the answer off the
-                          panel. Nothing on the page can see that — a spoken
-                          trigger fires no event at all, so the keyboard rule
-                          above, which works by catching the modifier of a
-                          hotkey, has nothing to catch. SEB is the only place
-                          this can be stopped rather than recorded, and only if
-                          the file was built with the assistant switched off.
-                          A file built with the defaults leaves it on, so this
-                          says so where the file is chosen rather than in a
-                          release note nobody re-reads. It applies to the shared
-                          file just as much as to a per-paper one. */}
-                      <Alert status="warning" borderRadius="md" fontSize="xs" py={2} alignItems="flex-start">
-                        <AlertIcon />
-                        <Box>
-                          <Text fontWeight="600" mb={1}>
-                            Turn off Siri and dictation in the file
-                          </Text>
-                          In the Configuration Tool&apos;s macOS settings, clear{' '}
-                          <b>allowSiri</b> and <b>allowDictation</b> before saving. A student can
-                          summon a voice assistant by speaking, and a spoken trigger produces no
-                          keystroke, no focus change and no fullscreen exit — so nothing in this
-                          module can detect it, including the keyboard rule above. SEB refusing to
-                          run alongside it is the only thing that stops it, and only if the file
-                          says so.
-                        </Box>
-                      </Alert>
-
-                      <FormControl>
-                        <FormLabel fontSize="xs">Config Key</FormLabel>
-                        <Input
-                          size="sm"
-                          fontFamily="mono"
-                          placeholder="Pasted from the SEB Configuration Tool"
-                          value={settings.sebConfigKey || ''}
-                          onChange={(e) => setSetting('sebConfigKey', e.target.value)}
-                        />
-                      </FormControl>
-
-                      {/* Three states, not two. The middle one is the common case
-                          now: the institution has a file on the server, so this
-                          paper is ready without anybody uploading anything, and
-                          telling a teacher "not ready" there sends them to build a
-                          file they do not need. */}
-                      {settings.sebConfigSource === 'shared' ? (
-                        <Alert status="success" borderRadius="md" fontSize="xs" py={2}>
-                          <AlertIcon />
-                          <Box>
-                            Ready — using the institution&apos;s shared configuration
-                            {settings.sebSharedFileName ? ` (${settings.sebSharedFileName})` : ''}. Upload a
-                            file above only if this paper needs a lockdown of its own.
-                          </Box>
-                        </Alert>
-                      ) : settings.sebConfigSource === 'quiz' ? (
-                        <Alert status="success" borderRadius="md" fontSize="xs" py={2}>
-                          <AlertIcon />
-                          Ready — this paper uses its own file and key.
-                        </Alert>
-                      ) : (
-                        <Alert status="warning" borderRadius="md" fontSize="xs" py={2}>
-                          <AlertIcon />
-                          <Box>
-                            Not ready yet — this paper has no file of its own and no shared
-                            configuration has been set up for the institution. Either upload both
-                            above, or ask an administrator to set the shared one once for everybody.
-                          </Box>
-                        </Alert>
-                      )}
-
-                      <Box>
-                        <Text fontSize="sm" fontWeight="600" mb={1}>
-                          2. Access code, for a student without Safe Exam Browser
-                        </Text>
-                        <Text fontSize="xs" color="lmFg.muted" mb={2}>
-                          SEB only runs on Windows and macOS, and has to be installed beforehand —
-                          real, known reasons a student cannot use it. One shared code lets you get
-                          a specific student into the test from an ordinary browser when that
-                          happens; hand it out yourself, to whoever actually needs it. Every use is
-                          still recorded on the attempt it unlocks.
-                        </Text>
-                        {sebGeneratedCode ? (
-                          <Alert status="success" borderRadius="md" fontSize="xs" flexDirection="column" alignItems="flex-start" py={2}>
-                            <HStack>
-                              <AlertIcon />
-                              <Text fontWeight="600">Copy this now — it will not be shown again.</Text>
-                            </HStack>
-                            <HStack mt={2}>
-                              <Text fontFamily="mono" fontSize="md" fontWeight="700" letterSpacing="0.1em">
-                                {sebGeneratedCode}
-                              </Text>
-                              <Button size="xs" onClick={sebCodeClip.onCopy}>
-                                {sebCodeClip.hasCopied ? 'Copied' : 'Copy'}
-                              </Button>
-                            </HStack>
+                        {/* Three states, not two. The middle one is the common case
+                            now: the institution has a file on the server, so this
+                            paper is ready without anybody uploading anything, and
+                            telling a teacher "not ready" there sends them to build a
+                            file they do not need. */}
+                        {settings.sebConfigSource === 'shared' ? (
+                          <Alert status="success" borderRadius="md" fontSize="xs" py={2}>
+                            <AlertIcon />
+                            <Box>
+                              Ready — using the institution&apos;s shared configuration
+                              {settings.sebSharedFileName ? ` (${settings.sebSharedFileName})` : ''}. Upload a
+                              file above only if this paper needs a lockdown of its own.
+                            </Box>
+                          </Alert>
+                        ) : settings.sebConfigSource === 'quiz' ? (
+                          <Alert status="success" borderRadius="md" fontSize="xs" py={2}>
+                            <AlertIcon />
+                            Ready — this paper uses its own file and key.
                           </Alert>
                         ) : (
-                          <HStack>
-                            <Button size="sm" onClick={generateSebCode} isLoading={sebCodeBusy}>
-                              {settings.sebBypassEnabled ? 'Generate a new code' : 'Enable and generate a code'}
-                            </Button>
-                            {settings.sebBypassEnabled && (
-                              <Button size="sm" variant="outline" colorScheme="red" onClick={clearSebCode} isLoading={sebCodeBusy}>
-                                Turn off the access code
-                              </Button>
-                            )}
-                          </HStack>
+                          <Alert status="warning" borderRadius="md" fontSize="xs" py={2}>
+                            <AlertIcon />
+                            <Box>
+                              Not ready yet — this paper has no file of its own and no shared
+                              configuration has been set up for the institution. Either upload both
+                              above, or ask an administrator to set the shared one once for everybody.
+                            </Box>
+                          </Alert>
                         )}
-                        {settings.sebBypassEnabled && !sebGeneratedCode && (
-                          <Text fontSize="xs" color="lmFg.muted" mt={1}>
-                            A code is active. Generating a new one replaces it — the old code stops
-                            working the moment you do.
+
+                        <Box>
+                          <Text fontSize="sm" fontWeight="600" mb={1}>
+                            2. Access code, for a student without Safe Exam Browser
                           </Text>
-                        )}
-                      </Box>
-                    </Stack>
-                  </Box>
-                )}
-              </Stack>
-            </SectionCard>
-          </TabPanel>
+                          <Text fontSize="xs" color="lmFg.muted" mb={2}>
+                            SEB only runs on Windows and macOS, and has to be installed beforehand —
+                            real, known reasons a student cannot use it. One shared code lets you get
+                            a specific student into the test from an ordinary browser when that
+                            happens; hand it out yourself, to whoever actually needs it. Every use is
+                            still recorded on the attempt it unlocks.
+                          </Text>
+                          {sebGeneratedCode ? (
+                            <Alert status="success" borderRadius="md" fontSize="xs" flexDirection="column" alignItems="flex-start" py={2}>
+                              <HStack>
+                                <AlertIcon />
+                                <Text fontWeight="600">Copy this now — it will not be shown again.</Text>
+                              </HStack>
+                              <HStack mt={2}>
+                                <Text fontFamily="mono" fontSize="md" fontWeight="700" letterSpacing="0.1em">
+                                  {sebGeneratedCode}
+                                </Text>
+                                <Button size="xs" onClick={sebCodeClip.onCopy}>
+                                  {sebCodeClip.hasCopied ? 'Copied' : 'Copy'}
+                                </Button>
+                              </HStack>
+                            </Alert>
+                          ) : (
+                            <HStack>
+                              <Button size="sm" onClick={generateSebCode} isLoading={sebCodeBusy}>
+                                {settings.sebBypassEnabled ? 'Generate a new code' : 'Enable and generate a code'}
+                              </Button>
+                              {settings.sebBypassEnabled && (
+                                <Button size="sm" variant="outline" colorScheme="red" onClick={clearSebCode} isLoading={sebCodeBusy}>
+                                  Turn off the access code
+                                </Button>
+                              )}
+                            </HStack>
+                          )}
+                          {settings.sebBypassEnabled && !sebGeneratedCode && (
+                            <Text fontSize="xs" color="lmFg.muted" mt={1}>
+                              A code is active. Generating a new one replaces it — the old code stops
+                              working the moment you do.
+                            </Text>
+                          )}
+                        </Box>
+                      </Stack>
+                    </Box>
+                  )}
+                </Stack>
+              </SectionCard>
+            </TabPanel>
 
-          {/* ---------- instructions ---------- */}
-          <TabPanel px={0}>
-            <SectionCard
-              title="Instructions"
-              subtitle="Shown on the pre-test screen, before any question is handed out. One instruction per line."
-            >
-              <FormControl mb={4}>
-                <FormLabel fontSize="sm">Title</FormLabel>
-                <Input value={quiz.title} onChange={(e) => set({ title: e.target.value })} />
-              </FormControl>
-              <FormControl mb={4}>
-                <FormLabel fontSize="sm">Description</FormLabel>
-                <RichTextEditor
-                  compact
-                  value={quiz.description}
-                  onChange={(html) => set({ description: html })}
-                  placeholder="What this test covers"
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel fontSize="sm">Instruction lines</FormLabel>
-                <Textarea
-                  rows={8}
-                  value={(quiz.instructions || []).join('\n')}
-                  onChange={(e) => set({ instructions: e.target.value.split('\n') })}
-                  placeholder={'Keep your ID card on the desk\nUse of a calculator is not permitted\nRaise your hand if the page stops responding'}
-                />
-                <FormHelperText fontSize="xs">
-                  The delivery, timing and proctoring rules are described automatically — you only need to add
-                  anything specific to your test.
-                </FormHelperText>
-              </FormControl>
-            </SectionCard>
-          </TabPanel>
-
-          {/* ---------- access ---------- */}
-          <TabPanel px={0}>
-            <SectionCard
-              title="Collaborators"
-              subtitle="Give another member of staff edit access to this quiz without making them a class teacher."
-              mb={4}
-            >
-              <FormControl>
-                <FormLabel fontSize="sm">Emails</FormLabel>
-                <Textarea
-                  rows={3}
-                  value={collaboratorEmails}
-                  onChange={(e) => setCollaboratorEmails(e.target.value)}
-                  placeholder="colleague@nitj.ac.in, another@nitj.ac.in"
-                />
-              </FormControl>
-              <Button
-                size="sm"
-                mt={3}
-                variant="outline"
-                onClick={async () => {
-                  try {
-                    const result = await lmApi.setQuizCollaborators(
-                      classId,
-                      quizId,
-                      collaboratorEmails.split(/[\s,;]+/).filter(Boolean),
-                    );
-                    toast({ status: 'success', title: `${result.collaborators.length} collaborator(s) set` });
-                    load();
-                  } catch (err) {
-                    toast({ status: 'error', title: err.message });
-                  }
-                }}
+            {/* ---------- instructions ---------- */}
+            <TabPanel px={0}>
+              <SectionCard
+                title="Instructions"
+                subtitle="Shown on the pre-test screen, before any question is handed out. One instruction per line."
               >
-                Save collaborators
-              </Button>
-              {quiz.collaborators?.length > 0 && (
-                <HStack mt={3} wrap="wrap">
-                  {quiz.collaborators.map((collaborator) => (
-                    <Badge key={collaborator.email} colorScheme={collaborator.userId ? 'green' : 'orange'}>
-                      {collaborator.email}
-                      {collaborator.userId ? '' : ' (no account yet)'}
-                    </Badge>
-                  ))}
-                </HStack>
-              )}
-            </SectionCard>
+                <FormControl mb={4}>
+                  <FormLabel fontSize="sm">Title</FormLabel>
+                  <Input value={quiz.title} onChange={(e) => set({ title: e.target.value })} />
+                </FormControl>
+                <FormControl mb={4}>
+                  <FormLabel fontSize="sm">Description</FormLabel>
+                  <RichTextEditor
+                    compact
+                    value={quiz.description}
+                    onChange={(html) => set({ description: html })}
+                    placeholder="What this test covers"
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel fontSize="sm">Instruction lines</FormLabel>
+                  <Textarea
+                    rows={8}
+                    value={(quiz.instructions || []).join('\n')}
+                    onChange={(e) => set({ instructions: e.target.value.split('\n') })}
+                    placeholder={'Keep your ID card on the desk\nUse of a calculator is not permitted\nRaise your hand if the page stops responding'}
+                  />
+                  <FormHelperText fontSize="xs">
+                    The delivery, timing and proctoring rules are described automatically — you only need to add
+                    anything specific to your test.
+                  </FormHelperText>
+                </FormControl>
+              </SectionCard>
+            </TabPanel>
 
-            <SectionCard title="Danger zone" borderColor="lmHue.red200">
-              <Flex justify="space-between" align="center" gap={3} wrap="wrap" py={2}>
-                <Box>
-                  <Text fontSize="sm" fontWeight="600" color="red.600">
-                    Delete all responses
-                  </Text>
-                  <Text fontSize="xs" color="lmFg.muted">
-                    Clears every attempt so the same cohort can sit this test again. Their gradebook entries
-                    are reset too.
-                  </Text>
-                </Box>
+            {/* ---------- access ---------- */}
+            <TabPanel px={0}>
+              <SectionCard
+                title="Collaborators"
+                subtitle="Give another member of staff edit access to this quiz without making them a class teacher."
+                mb={4}
+              >
+                <FormControl>
+                  <FormLabel fontSize="sm">Emails</FormLabel>
+                  <Textarea
+                    rows={3}
+                    value={collaboratorEmails}
+                    onChange={(e) => setCollaboratorEmails(e.target.value)}
+                    placeholder="colleague@nitj.ac.in, another@nitj.ac.in"
+                  />
+                </FormControl>
                 <Button
                   size="sm"
-                  colorScheme="red"
+                  mt={3}
                   variant="outline"
                   onClick={async () => {
-                    // eslint-disable-next-line no-alert
-                    if (!window.confirm('Delete every attempt at this quiz? This cannot be undone.')) return;
                     try {
-                      const result = await lmApi.deleteQuizResponses(classId, quizId);
-                      toast({ status: 'success', title: `${result.deleted} attempt(s) deleted` });
+                      const result = await lmApi.setQuizCollaborators(
+                        classId,
+                        quizId,
+                        collaboratorEmails.split(/[\s,;]+/).filter(Boolean),
+                      );
+                      toast({ status: 'success', title: `${result.collaborators.length} collaborator(s) set` });
+                      load();
                     } catch (err) {
                       toast({ status: 'error', title: err.message });
                     }
                   }}
                 >
-                  Delete responses
+                  Save collaborators
+                </Button>
+                {quiz.collaborators?.length > 0 && (
+                  <HStack mt={3} wrap="wrap">
+                    {quiz.collaborators.map((collaborator) => (
+                      <Badge key={collaborator.email} colorScheme={collaborator.userId ? 'green' : 'orange'}>
+                        {collaborator.email}
+                        {collaborator.userId ? '' : ' (no account yet)'}
+                      </Badge>
+                    ))}
+                  </HStack>
+                )}
+              </SectionCard>
+
+              <SectionCard title="Danger zone" borderColor="lmHue.red200">
+                <Flex justify="space-between" align="center" gap={3} wrap="wrap" py={2}>
+                  <Box>
+                    <Text fontSize="sm" fontWeight="600" color="red.600">
+                      Delete all responses
+                    </Text>
+                    <Text fontSize="xs" color="lmFg.muted">
+                      Clears every attempt so the same cohort can sit this test again. Their gradebook entries
+                      are reset too.
+                    </Text>
+                  </Box>
+                  <Button
+                    size="sm"
+                    colorScheme="red"
+                    variant="outline"
+                    onClick={async () => {
+                      // eslint-disable-next-line no-alert
+                      if (!window.confirm('Delete every attempt at this quiz? This cannot be undone.')) return;
+                      try {
+                        const result = await lmApi.deleteQuizResponses(classId, quizId);
+                        toast({ status: 'success', title: `${result.deleted} attempt(s) deleted` });
+                      } catch (err) {
+                        toast({ status: 'error', title: err.message });
+                      }
+                    }}
+                  >
+                    Delete responses
+                  </Button>
+                </Flex>
+              </SectionCard>
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
+      ) : (
+        <Tabs colorScheme="purple" variant="enclosed">
+          <TabList>
+            <Tab fontSize="sm">Questions ({quiz.questions.length})</Tab>
+            <Tab fontSize="sm">Sections ({quiz.sections.length})</Tab>
+          </TabList>
+
+          <TabPanels>
+            {/* ---------- questions ---------- */}
+            <TabPanel px={0}>
+              {quiz.questions.map((question, index) => (
+                <QuestionCard
+                  key={question._id || index}
+                  index={index}
+                  question={question}
+                  sections={quiz.sections}
+                  perQuestionTiming={settings.perQuestionTiming}
+                  onChange={(updated) =>
+                    set({ questions: quiz.questions.map((q, i) => (i === index ? updated : q)) })
+                  }
+                  onRemove={() => set({ questions: quiz.questions.filter((_, i) => i !== index) })}
+                  onDuplicate={() => {
+                    const copy = JSON.parse(JSON.stringify(question));
+                    delete copy._id;
+                    const next = [...quiz.questions];
+                    next.splice(index + 1, 0, copy);
+                    set({ questions: next });
+                  }}
+                />
+              ))}
+              <Flex gap={2} wrap="wrap">
+                <Button variant="outline" onClick={addQuestion}>
+                  + Add question
+                </Button>
+                {/* Beside "Add question" rather than in the header: importing one
+                    is the same act as writing one, and this is where a teacher is
+                    looking when they decide they have written this before. */}
+                <Button variant="outline" onClick={openImport} isLoading={saving}>
+                  📥 Import questions
                 </Button>
               </Flex>
-            </SectionCard>
-          </TabPanel>
-        </TabPanels>
-      </Tabs>
+
+              {/* The same two actions as the header. A long paper puts the header
+                  pair a few screens up, and scrolling back to save is exactly the
+                  moment a teacher loses the work they just typed. */}
+              <Flex justify="flex-end" gap={2} mt={6} pt={4} borderTopWidth="1px" borderColor="lmBorder.base">
+                <Button size="sm" variant="outline" onClick={save} isLoading={saving}>
+                  Save
+                </Button>
+                <Button size="sm" colorScheme="green" onClick={publish} isDisabled={!quiz.questions.length}>
+                  Save &amp; publish
+                </Button>
+              </Flex>
+            </TabPanel>
+
+            {/* ---------- sections ---------- */}
+            <TabPanel px={0}>
+              <SectionCard
+                title="Sections"
+                subtitle="Group questions into parts, e.g. Aptitude / Coding. Question order is only ever shuffled inside a section, never across them."
+              >
+                {quiz.sections.length === 0 && (
+                  <Text fontSize="sm" color="lmFg.muted" mb={3}>
+                    No sections — every question sits in one flat list.
+                  </Text>
+                )}
+                {quiz.sections.map((section, index) => (
+                  <Flex key={section._id || index} gap={2} align="flex-end" mb={3} wrap="wrap">
+                    <FormControl maxW="200px">
+                      <FormLabel fontSize="xs">Name</FormLabel>
+                      <Input
+                        size="sm"
+                        value={section.name}
+                        onChange={(e) =>
+                          set({
+                            sections: quiz.sections.map((s, i) =>
+                              i === index ? { ...s, name: e.target.value } : s,
+                            ),
+                          })
+                        }
+                      />
+                    </FormControl>
+                    <FormControl flex="1" minW="220px">
+                      <FormLabel fontSize="xs">Notes shown on the brief</FormLabel>
+                      <Input
+                        size="sm"
+                        value={section.instructions}
+                        onChange={(e) =>
+                          set({
+                            sections: quiz.sections.map((s, i) =>
+                              i === index ? { ...s, instructions: e.target.value } : s,
+                            ),
+                          })
+                        }
+                      />
+                    </FormControl>
+                    <IconButton
+                      size="sm"
+                      variant="ghost"
+                      colorScheme="red"
+                      aria-label="Delete section"
+                      icon={<DeleteIcon />}
+                      onClick={() => set({ sections: quiz.sections.filter((_, i) => i !== index) })}
+                    />
+                  </Flex>
+                ))}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    set({
+                      sections: [
+                        ...quiz.sections,
+                        { name: `Section ${quiz.sections.length + 1}`, order: quiz.sections.length, instructions: '' },
+                      ],
+                    })
+                  }
+                >
+                  + Add section
+                </Button>
+                <Text fontSize="xs" color="lmFg.muted" mt={3}>
+                  Save after adding a section, then assign questions to it from the Questions tab.
+                </Text>
+              </SectionCard>
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
+      )}
 
       <ImportQuestionsModal
         isOpen={importDialog.isOpen}

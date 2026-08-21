@@ -188,6 +188,12 @@ const lmApi = {
   calendar: (params) => request(`/calendar${qs(params)}`),
   claimInvites: () => request('/claim-invites', { method: 'POST', body: {} }),
 
+  /* The one-time name + roll number a student gives before the module opens.
+     `myIdentity` is fetched only by that form — `me()` already carries the
+     `needsIdentity` flag that decides whether to show it. */
+  myIdentity: () => request('/me/identity'),
+  saveIdentity: (body) => request('/me/identity', { method: 'POST', body }),
+
   notifications: (params) => request(`/notifications${qs(params)}`),
   markNotificationsRead: async (ids, options = {}) => {
     const res = await request('/notifications/read', { method: 'POST', body: { ids } });
@@ -703,6 +709,9 @@ const lmApi = {
 
   /* lm-admin dashboard — platform-wide stats, 403 for anyone else */
   adminSummary: () => request('/admin/summary'),
+  /* lm-admin — faculty accounts. Same 403 for anyone who is not a platform admin. */
+  adminListFaculty: (q) => request(`/admin/faculty${qs({ q })}`),
+  adminCreateFaculty: (body) => request('/admin/faculty', { method: 'POST', body }),
 
   /* ---- discussion forum ---- */
   listDiscussions: (classId) => request(`/classes/${classId}/discussions`),

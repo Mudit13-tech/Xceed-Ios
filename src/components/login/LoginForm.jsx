@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useBiometricAuth } from '../../utils/useBiometricAuth';
 import { useQueryClient } from '@tanstack/react-query';
 import FormHeader from './FormHeader'
+import { isSafeExamBrowser } from '../../learningModule/sebDiagnosis'
 import getEnvironment from '../../getenvironment'
 import { redirectTargetFrom } from '../../authRedirect'
 import PinEntry from './PinEntry'
@@ -13,6 +14,7 @@ import {
   HStack,
   Image,
   Input,
+  Link,
   Text,
   VStack,
   Flex,
@@ -311,6 +313,25 @@ const LoginForm = () => {
       </form>
 
       {message && <Text mt={4}>{message}</Text>}
+
+      {/* Only inside Safe Exam Browser, and only there because of where SEB
+          lands. Verifying a Config Key means making a request from a real SEB,
+          and SEB opens on the learning module, which bounces anyone not signed
+          in to this page — with no address bar to type a different one into. So
+          this is the only screen from which an invigilator can reach the check
+          without first signing in to a kiosk that has a restricted keyboard and
+          no password manager.
+
+          Hidden from every ordinary visitor: the user-agent test is not a
+          security boundary and is not asked to be one — the check's verdict
+          rests on the request hash, not on this. */}
+      {isSafeExamBrowser() && (
+        <Text mt={6} fontSize="xs" textAlign="center">
+          <Link href="/learning/seb-check" color="blue.500">
+            Check this machine&apos;s Safe Exam Browser setup
+          </Link>
+        </Text>
+      )}
         </>
       )}
     </Flex>

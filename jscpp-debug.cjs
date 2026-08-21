@@ -1,0 +1,160 @@
+const JSCPP = require('JSCPP');
+
+const cases = {
+  'c99 for-init decl': [
+    '#include <stdio.h>',
+    'int main() {',
+    '    for (int i = 0; i < 3; i++) printf("%d ", i);',
+    '    return 0;',
+    '}',
+  ],
+  'multi declarator': [
+    '#include <stdio.h>',
+    'int main() {',
+    '    int a, b;',
+    '    a = 1; b = 2;',
+    '    printf("%d", a + b);',
+    '    return 0;',
+    '}',
+  ],
+  'scanf two ints': [
+    '#include <stdio.h>',
+    'int main() {',
+    '    int a;',
+    '    int b;',
+    '    scanf("%d %d", &a, &b);',
+    '    printf("sum=%d", a + b);',
+    '    return 0;',
+    '}',
+  ],
+  'malloc pointers': [
+    '#include <stdio.h>',
+    '#include <stdlib.h>',
+    'int main() {',
+    '    int *v = (int*)malloc(4 * sizeof(int));',
+    '    int i;',
+    '    for (i = 0; i < 4; i++) v[i] = i * 10;',
+    '    printf("%d %d", *(v + 2), v[3]);',
+    '    free(v);',
+    '    return 0;',
+    '}',
+  ],
+  'struct + strcpy': [
+    '#include <stdio.h>',
+    '#include <string.h>',
+    'struct Point { int x; int y; };',
+    'int main() {',
+    '    struct Point p;',
+    '    p.x = 2;',
+    '    p.y = 5;',
+    '    char buf[32];',
+    '    strcpy(buf, "hello");',
+    '    printf("%s %d %d", buf, p.x + p.y, (int)strlen(buf));',
+    '    return 0;',
+    '}',
+  ],
+  'recursion + sqrt': [
+    '#include <stdio.h>',
+    '#include <math.h>',
+    'int fact(int n) {',
+    '    if (n <= 1) return 1;',
+    '    return n * fact(n - 1);',
+    '}',
+    'int main() {',
+    '    printf("%d %.2f", fact(5), sqrt(2.0));',
+    '    return 0;',
+    '}',
+  ],
+  'ternary': [
+    '#include <stdio.h>',
+    'int f(int n) { return n <= 1 ? 1 : n * 2; }',
+    'int main() { printf("%d", f(5)); return 0; }',
+  ],
+  'syntax error': [
+    '#include <stdio.h>',
+    'int main() {',
+    '    int x = ;',
+    '    return 0;',
+    '}',
+  ],
+  '2D array': [
+    '#include <stdio.h>',
+    'int main() {',
+    '    int m[2][2];',
+    '    m[0][0] = 1; m[0][1] = 2; m[1][0] = 3; m[1][1] = 4;',
+    '    int i, j;',
+    '    for (i = 0; i < 2; i++) { for (j = 0; j < 2; j++) printf("%d ", m[i][j]); }',
+    '    return 0;',
+    '}',
+  ],
+  'char array loop / string': [
+    '#include <stdio.h>',
+    'int main() {',
+    '    char s[] = "abc";',
+    '    int i;',
+    '    for (i = 0; s[i] != 0; i++) printf("%c-", s[i]);',
+    '    return 0;',
+    '}',
+  ],
+  'while + do-while + switch': [
+    '#include <stdio.h>',
+    'int main() {',
+    '    int i = 0;',
+    '    while (i < 2) { printf("w%d", i); i++; }',
+    '    do { printf("d%d", i); i++; } while (i < 4);',
+    '    switch (i) { case 4: printf("four"); break; default: printf("other"); }',
+    '    return 0;',
+    '}',
+  ],
+  'float / double formatting': [
+    '#include <stdio.h>',
+    'int main() {',
+    '    double x = 3.14159;',
+    '    float y = 2.5f;',
+    '    printf("%.3f %.1f", x, y);',
+    '    return 0;',
+    '}',
+  ],
+  'divide by zero': [
+    '#include <stdio.h>',
+    'int main() {',
+    '    int a = 1;',
+    '    int b = 0;',
+    '    printf("%d", a / b);',
+    '    return 0;',
+    '}',
+  ],
+  'out of bounds read': [
+    '#include <stdio.h>',
+    'int main() {',
+    '    int a[2];',
+    '    a[0] = 1;',
+    '    printf("%d", a[9]);',
+    '    return 0;',
+    '}',
+  ],
+  'nonzero exit code': [
+    'int main() { return 3; }',
+  ],
+  'pointer swap function': [
+    '#include <stdio.h>',
+    'void swap(int *a, int *b) { int t = *a; *a = *b; *b = t; }',
+    'int main() {',
+    '    int x = 1, y = 2;',
+    '    swap(&x, &y);',
+    '    printf("%d %d", x, y);',
+    '    return 0;',
+    '}',
+  ],
+};
+
+for (const [name, lines] of Object.entries(cases)) {
+  const code = lines.join('\n') + '\n';
+  let out = '';
+  try {
+    const exit = JSCPP.run(code, '3 4', { stdio: { write: (s) => { out += s; } }, maxTimeout: 3000 });
+    console.log(`[OK ] ${name.padEnd(28)} exit=${exit} out=${JSON.stringify(out)}`);
+  } catch (e) {
+    console.log(`[ERR] ${name.padEnd(28)} ${String(e.message).replace(/\n/g, ' | ').slice(0, 160)}`);
+  }
+}

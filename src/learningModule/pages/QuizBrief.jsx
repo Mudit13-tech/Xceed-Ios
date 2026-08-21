@@ -181,12 +181,31 @@ export default function QuizBrief() {
   const startDeadlineIn = useCountdown(
     brief?.window?.canStart && brief?.window?.startDeadline ? brief.window.startDeadline : null,
   );
+  /* How long this paper has left to run — counted from the moment it opened,
+     not from the moment this student pressed Start.
+
+     The two countdowns above answer "when may I begin" and "how long may I dawdle
+     before I am locked out". Neither answers the one a student on this screen is
+     actually facing, and it is the one that costs marks: the paper closes at a
+     fixed time, `attemptDeadline` takes the earlier of that and any personal
+     limit, and every minute spent here — reading the rules, wrestling Safe Exam
+     Browser onto the machine — is a minute gone from the paper. That was
+     invisible, and the brief used to say the opposite in words. */
+  const closesIn = useCountdown(
+    brief?.window?.open && brief?.window?.closesAt ? brief.window.closesAt : null,
+  );
 
   // Refresh once the quiz opens so the Start button becomes live without a
   // manual reload.
   useEffect(() => {
     if (opensIn === 0) load();
   }, [opensIn, load]);
+
+  // And once it runs out, so the page turns itself over to the closed state
+  // rather than leaving a live-looking Start button on a paper that has ended.
+  useEffect(() => {
+    if (closesIn === 0) load();
+  }, [closesIn, load]);
 
   // The brief is already on the fullscreen stage, so it is already "in the
   // test" as far as the student can tell — and a right-click menu or a copy
@@ -248,6 +267,26 @@ export default function QuizBrief() {
   else if (!brief) body = null;
   else {
     const { settings, window: state } = brief;
+
+    /**
+     * What the clock actually does, said accurately.
+     *
+     * Both places below used to promise "the clock does not start until you
+     * press Start", and on a scheduled paper that is not true. The server takes
+     * the *earlier* of the student's own time limit and the paper's closing
+     * time — `attemptDeadline` is `min(startedAt + timeLimitMinutes,
+     * availableTo)` — so once a closing time exists the paper ends then whoever
+     * started when. Reading the rules slowly, or fighting Safe Exam Browser on
+     * the way in, comes straight out of the time available to answer.
+     *
+     * Telling a student otherwise is the worst kind of wrong: it is reassuring,
+     * it is on the screen where they decide how long to spend, and the cost of
+     * believing it is marks. So the sentence is derived from the paper in front
+     * of them rather than asserted about papers in general.
+     */
+    const clockNote = state.closesAt
+      ? `This test closes at ${formatDateTime(state.closesAt)} whether or not you have started, so start promptly.`
+      : 'Your time starts when you press Start test.';
     const mobileBlocked = settings.preventMobile && isMobileDevice();
     // A teacher who has switched this on but not finished uploading the file
     // and pasting the Config Key has not made a paper anyone can sit yet — not
@@ -310,6 +349,23 @@ export default function QuizBrief() {
             label="Starts in"
             seconds={opensIn}
             note={`Opens ${formatDateTime(state.opensAt)} — this page unlocks itself, so stay here.`}
+          />
+        )}
+
+        {/* Running right now. Shown whether or not this student has started —
+            that is the whole point: the clock belongs to the paper, not to them.
+            Red because it is the only one of the three that is actively costing
+            the reader something while they read it. */}
+        {state.open && closesIn !== null && (
+          <CountdownPanel
+            accent="red"
+            label={brief.hasInProgress ? 'Your test is running — closes in' : 'This test is running — closes in'}
+            seconds={closesIn}
+            note={
+              brief.hasInProgress
+                ? `Closes ${formatDateTime(state.closesAt)}. Your paper ends then even if you are still answering.`
+                : `Closes ${formatDateTime(state.closesAt)} whether or not you have started, so start promptly.`
+            }
           />
         )}
 
@@ -642,8 +698,7 @@ export default function QuizBrief() {
                  a question this student no longer has, and showing it to them
                  reads as the check having failed. All they need now is Start. */
               <Text fontSize="xs" color="lmFg.subtle">
-                ✅ Safe Exam Browser is active and this test has been matched to it. Press Start
-                test when you are ready — the clock does not start until you do.
+                ✅ Safe Exam Browser is active and this test has been matched to it. {clockNote}
               </Text>
             ) : (
               <>
@@ -696,8 +751,9 @@ export default function QuizBrief() {
                       color="lmFg.subtle"
                       mb={sebCodeOpen || settings.sebBypassEnabled ? 3 : 0}
                     >
-                      Safe Exam Browser opens on the learning home; your test is listed there, and
-                      the clock does not start until you press Start.
+                      Safe Exam Browser opens on the learning home; your test is listed there.
+                      {' '}
+                      {clockNote}
                     </Text>
                   </>
                 )}
