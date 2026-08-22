@@ -22,7 +22,7 @@
  *        `packages` are PyPI names installed with micropip; `sources` are the
  *        notebook's cells, scanned so anything Pyodide already ships a wheel
  *        for is fetched up front without being declared at all.
- *      { type: 'run', id, code }
+ *      { type: 'run', id, code, stdin }
  * out: { type: 'status', phase, detail }
  *      { type: 'stream', id, stream: 'stdout'|'stderr', text }
  *      { type: 'image', id, text }            base64 PNG
@@ -200,7 +200,7 @@ async function init(indexURL, packages, sources) {
   post({ type: 'status', phase: 'ready', detail: '' });
 }
 
-async function run(id, code) {
+async function run(id, code, stdin) {
   if (!ready) {
     post({ type: 'done', id, error: 'The Python kernel is still starting.', ms: 0 });
     return;
@@ -219,6 +219,21 @@ async function run(id, code) {
 
   pyodide.setStdout({ batched: (text) => stdout.write(`${text}\n`) });
   pyodide.setStderr({ batched: (text) => stderr.write(`${text}\n`) });
+
+  // `input()` reads the cell's stdin field — the same field C's `scanf` reads,
+  // so one concept covers both kernels. Without this Pyodide falls back to
+  // `window.prompt`, which does not exist in a worker, and an `input()` call
+  // died with an opaque error. Drains in one go and then reports EOF, so a
+  // read loop terminates rather than spinning on an empty string.
+  let remainingStdin = stdin || '';
+  pyodide.setStdin({
+    stdin: () => {
+      if (!remainingStdin) return null;
+      const chunk = remainingStdin;
+      remainingStdin = '';
+      return chunk;
+    },
+  });
 
   let result = null;
   let error = null;
@@ -270,7 +285,7 @@ self.onmessage = async (event) => {
   const { type } = event.data || {};
   try {
     if (type === 'init') await init(event.data.indexURL, event.data.packages, event.data.sources);
-    else if (type === 'run') await run(event.data.id, event.data.code);
+    else if (type === 'run') await run(event.data.id, event.data.code, event.data.stdin);
   } catch (error) {
     post({ type: 'status', phase: 'failed', detail: String(error.message || error) });
   }

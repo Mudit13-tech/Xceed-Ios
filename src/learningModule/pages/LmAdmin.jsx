@@ -351,6 +351,138 @@ function SharedSebCard() {
   );
 }
 
+/**
+ * Safe Exam Browser's own installer, one per platform.
+ *
+ * Separate from `SharedSebCard` above on purpose: that card holds the
+ * settings file and Config Key a paper's proctoring actually checks against.
+ * This is a plain convenience — the installer itself, so a student gets the
+ * exact build this installation was set up and tested against rather than
+ * whatever SEB's own site happens to be serving that week, which is what
+ * used to turn "which version did you install" into the reason an exam
+ * would not start.
+ */
+function SebInstallerRow({ platform, label, accept, info, onUploaded }) {
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  const upload = async () => {
+    setBusy(true);
+    setError('');
+    setSaved(false);
+    try {
+      await lmApi.uploadSebInstaller(platform, file);
+      setFile(null);
+      setSaved(true);
+      await onUploaded();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Box borderWidth="1px" borderColor="lmBorder.default" borderRadius="md" p={3}>
+      <Text fontSize="sm" fontWeight="600" mb={2}>
+        {label}
+      </Text>
+      <SebStatusRow
+        ok={info.available}
+        label="Installer on the server"
+        detail={
+          info.available
+            ? `${info.fileName}${info.uploadedByName ? ` — set by ${info.uploadedByName}` : ''}`
+            : 'Not uploaded'
+        }
+      />
+      <Stack direction={{ base: 'column', md: 'row' }} spacing={2} mt={2} maxW="480px">
+        <Input
+          type="file"
+          accept={accept}
+          size="sm"
+          p={1}
+          onChange={(event) => setFile(event.target.files?.[0] || null)}
+        />
+        <Button size="sm" colorScheme="purple" onClick={upload} isLoading={busy} isDisabled={!file} flexShrink={0}>
+          {info.available ? 'Replace' : 'Upload'}
+        </Button>
+      </Stack>
+      {info.available && (
+        <Button
+          as="a"
+          href={lmApi.sebInstallerDownloadUrl(platform)}
+          size="xs"
+          variant="link"
+          colorScheme="purple"
+          mt={2}
+        >
+          Download the file currently stored
+        </Button>
+      )}
+      {error && (
+        <Text fontSize="xs" color="red.500" mt={1}>
+          {error}
+        </Text>
+      )}
+      {saved && (
+        <Text fontSize="xs" color="green.600" mt={1}>
+          Saved. Students see the download on the quiz screen from now on.
+        </Text>
+      )}
+    </Box>
+  );
+}
+
+function SebInstallerCard() {
+  const [state, setState] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      setState(await lmApi.getSebInstallers());
+    } catch {
+      // Same reasoning as `SharedSebCard`: nothing here is worth a red page —
+      // the card simply shows neither platform uploaded yet.
+      setState({ windows: { available: false }, mac: { available: false } });
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return (
+    <SectionCard
+      title="Safe Exam Browser — the installer"
+      subtitle="A known-good Windows and Mac build, downloadable straight from the quiz screen — not the settings file above, the application itself."
+      data-testid="seb-installer-card"
+    >
+      {state === null ? (
+        <Loading label="Checking…" />
+      ) : (
+        <Stack spacing={3}>
+          <SebInstallerRow
+            platform="windows"
+            label="Windows (.exe or .msi)"
+            accept=".exe,.msi"
+            info={state.windows}
+            onUploaded={load}
+          />
+          <SebInstallerRow
+            platform="mac"
+            label="Mac (.dmg or .pkg)"
+            accept=".dmg,.pkg"
+            info={state.mac}
+            onUploaded={load}
+          />
+        </Stack>
+      )}
+    </SectionCard>
+  );
+}
+
 export default function LmAdmin() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -425,6 +557,8 @@ export default function LmAdmin() {
       </SectionCard>
 
       <SharedSebCard />
+
+      <SebInstallerCard />
 
       <SectionCard
         title="Bugs & suggestions"

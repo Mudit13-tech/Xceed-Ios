@@ -9,6 +9,7 @@ import {
   Image,
   Spinner,
   Text,
+  Textarea,
   useColorMode,
   useColorModeValue,
 } from '@chakra-ui/react';
@@ -22,11 +23,14 @@ import {
   FiLock,
   FiPlay,
   FiSquare,
+  FiTerminal,
   FiTrash2,
   FiXCircle,
 } from 'react-icons/fi';
-import CodeMirror from '@uiw/react-codemirror';
+import CodeMirror, { keymap } from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
+import { cpp } from '@codemirror/lang-cpp';
+import { Prec } from '@codemirror/state';
 
 import HintTooltip from './HintTooltip';
 import RichText from './RichText';
@@ -88,7 +92,6 @@ function OutputBlock({ outputs, onClear }) {
         fontSize="sm"
         maxH="480px"
         overflowY="auto"
-        // Wide output scrolls inside the cell rather than stretching the page.
         overflowX="auto"
       >
         {(outputs || []).map((output, index) =>
@@ -110,8 +113,6 @@ function OutputBlock({ outputs, onClear }) {
               whiteSpace="pre-wrap"
               wordBreak="break-word"
               color={OUTPUT_COLOUR[output.type] || 'inherit'}
-              // The repr of the last expression is the notebook's "return value";
-              // italics distinguish it from something the code printed itself.
               fontStyle={output.type === 'result' ? 'italic' : 'normal'}
               m={0}
             >
@@ -140,8 +141,6 @@ function MarkdownCell({ cell, index, total, locked, readOnly, onChange, onMove, 
   const border = useColorModeValue('gray.200', 'whiteAlpha.200');
   const gutter = useColorModeValue('gray.50', 'whiteAlpha.50');
 
-  // A cell with nothing in it has nothing to show, and the only reason it
-  // exists is that someone just added it to type into.
   const [editing, setEditing] = useState(() => !locked && !String(cell.source || '').trim());
 
   if (locked) {
@@ -249,6 +248,7 @@ export default function NotebookCell({
   cell,
   index,
   total,
+  language = 'python',
   readOnly = false,
   running = false,
   canRun = true,
@@ -262,8 +262,36 @@ export default function NotebookCell({
   const border = useColorModeValue('gray.200', 'whiteAlpha.200');
   const gutter = useColorModeValue('gray.50', 'whiteAlpha.50');
 
-  const extensions = useMemo(() => [python()], []);
+  const isC = language === 'c';
+
+  const runKeymap = useMemo(
+    () =>
+      Prec.highest(
+        keymap.of([
+          {
+            key: 'Shift-Enter',
+            run: () => {
+              if (canRun && !running) onRun();
+              return true;
+            },
+          },
+        ]),
+      ),
+    [canRun, running, onRun],
+  );
+
+  const extensions = useMemo(() => [isC ? cpp() : python(), runKeymap], [isC, runKeymap]);
   const locked = cell.locked || readOnly;
+
+  /**
+   * Whether the stdin box is showing.
+   *
+   * Open by default for C, where reading input with `scanf` is most of what a
+   * first-year exercise does, and for any cell that already has input saved —
+   * hiding a value the student typed would read as having lost it. Python cells
+   * start closed, because `input()` is the exception there rather than the rule.
+   */
+  const [showStdin, setShowStdin] = useState(() => isC || Boolean(cell.stdin));
 
   if (cell.type === 'markdown') {
     return (
@@ -296,8 +324,6 @@ export default function NotebookCell({
         </HintTooltip>
 
         <Text fontSize="xs" fontFamily="mono" opacity={0.55} minW="42px">
-          {/* The `In [n]` a notebook shows: how many times this cell has run,
-              which is the quickest way to spot a cell you forgot to re-run. */}
           [{cell.runCount || ' '}]
         </Text>
 
@@ -310,6 +336,23 @@ export default function NotebookCell({
             </Badge>
           </HintTooltip>
         )}
+
+        <HintTooltip
+          label={
+            isC
+              ? 'What this program reads with scanf or fgets'
+              : 'What input() reads in this cell'
+          }
+        >
+          <Button
+            size="xs"
+            variant="ghost"
+            leftIcon={<FiTerminal />}
+            onClick={() => setShowStdin((current) => !current)}
+          >
+            Input
+          </Button>
+        </HintTooltip>
 
         <Box flex="1" />
         <CellControls index={index} total={total} onMove={onMove} onDelete={onDelete} readOnly={readOnly || cell.locked} />
@@ -324,6 +367,26 @@ export default function NotebookCell({
         basicSetup={{ lineNumbers: true, foldGutter: false, autocompletion: false }}
         minHeight="72px"
       />
+
+      {/* Editable even when the cell is locked: the code is the teacher's, but
+          feeding a fixed program different input is usually the exercise. The
+          server agrees — `applyStudentCells` takes stdin regardless of lock. */}
+      {showStdin && (
+        <Box px={3} py={2} borderTopWidth="1px" borderColor={border}>
+          <Text fontSize="2xs" fontWeight="600" opacity={0.5} textTransform="uppercase" mb={1}>
+            Input (stdin)
+          </Text>
+          <Textarea
+            value={cell.stdin || ''}
+            onChange={(event) => onChange({ stdin: event.target.value })}
+            isDisabled={readOnly}
+            placeholder={isC ? 'Typed as if at a terminal, e.g. 3 4' : 'Read line by line by input()'}
+            rows={2}
+            fontFamily="mono"
+            fontSize="13px"
+          />
+        </Box>
+      )}
 
       <OutputBlock outputs={cell.outputs} onClear={() => onChange({ outputs: [] })} />
     </Box>

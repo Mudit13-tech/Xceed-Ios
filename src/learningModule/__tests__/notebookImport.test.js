@@ -308,3 +308,75 @@ describe('learningModule cellsFromFile', () => {
     expect(cellsFromFile('Lab.IPYNB', ipynb([{ cell_type: 'markdown', source: 'hi' }])).cells).toHaveLength(1);
   });
 });
+
+/**
+ * `.c` import.
+ *
+ * The rule that matters is that a plain C file becomes ONE cell. A C file is a
+ * single translation unit with a single `main`, and a cell in a C notebook is a
+ * whole program — splitting on blank lines or braces would produce a pile of
+ * cells that individually cannot compile.
+ */
+describe('learningModule notebookImport — .c files', () => {
+  const SOURCE = [
+    '#include <stdio.h>',
+    '',
+    'int main(void) {',
+    '    printf("hi\n");',
+    '    return 0;',
+    '}',
+    '',
+  ].join('\n');
+
+  it('imports a plain .c file as a single code cell', () => {
+    const { cells, marked, language } = cellsFromFile('lesson.c', SOURCE);
+    expect(cells).toHaveLength(1);
+    expect(cells[0].type).toBe('code');
+    expect(cells[0].source).toContain('#include <stdio.h>');
+    expect(cells[0].source).toContain('return 0;');
+    expect(marked).toBe(false);
+    expect(language).toBe('c');
+  });
+
+  it('reports the language so the editor can warn about the wrong kernel', () => {
+    expect(cellsFromFile('lesson.c', SOURCE).language).toBe('c');
+  });
+
+  it('splits on // %% when the file carries the markers', () => {
+    const marked = [
+      '// %%',
+      'int main(void) { return 0; }',
+      '// %%',
+      'int other(void) { return 1; }',
+    ].join('\n');
+    const result = cellsFromFile('split.c', marked);
+    expect(result.marked).toBe(true);
+    expect(result.cells).toHaveLength(2);
+    expect(result.cells[0].source).toContain('int main');
+    expect(result.cells[1].source).toContain('int other');
+  });
+
+  it('strips the comment slashes from a // %% [markdown] cell', () => {
+    // Otherwise the prose arrives with `//` down the left-hand side.
+    const marked = ['// %% [markdown]', '// ## Heading', '// Some prose.', '// %%', 'int main(void) {}'].join('\n');
+    const result = cellsFromFile('doc.c', marked);
+    expect(result.cells[0].type).toBe('markdown');
+    expect(result.cells[0].source).toBe('## Heading\nSome prose.');
+  });
+
+  it('takes .h as well, since a header is the other half of the same lesson', () => {
+    expect(cellsFromFile('shared.h', '#define N 5\n').cells).toHaveLength(1);
+  });
+
+  it('scans no packages — C has no installer to feed', () => {
+    expect(cellsFromFile('lesson.c', SOURCE).packages).toEqual([]);
+  });
+
+  it('still routes .py to the Python parser', () => {
+    // The dispatcher is a regex over the file name; a bad one here would send
+    // every Python import down the C path and quietly stop splitting on # %%.
+    const result = cellsFromFile('script.py', '# %%\nx = 1\n# %%\ny = 2\n');
+    expect(result.marked).toBe(true);
+    expect(result.cells).toHaveLength(2);
+  });
+});

@@ -7,10 +7,15 @@ import {
   Flex,
   HStack,
   Heading,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
   Text,
   VStack,
   useToast,
 } from '@chakra-ui/react';
+import { FiChevronDown } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
 import { DeadlineCountdown, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
@@ -30,15 +35,57 @@ const STATUS_META = {
   submitted: ['green', 'submitted'],
 };
 
-const STARTER_CELLS = [
-  {
-    type: 'markdown',
-    source: '## Getting started\n\nRun the cell below with the ▶ button, then change the numbers and run it again.',
-  },
-  { type: 'code', source: 'for i in range(5):\n    print(i, i ** 2)\n' },
-  { type: 'markdown', source: '### Your turn\n\nWrite a function that returns the mean of a list.' },
-  { type: 'code', source: 'def mean(values):\n    # your code here\n    pass\n\n\nmean([1, 2, 3, 4])\n' },
-];
+const STARTER_CELLS = {
+  python: [
+    {
+      type: 'markdown',
+      source: '## Getting started\n\nRun the cell below with the ▶ button, then change the numbers and run it again.',
+    },
+    { type: 'code', source: 'for i in range(5):\n    print(i, i ** 2)\n' },
+    { type: 'markdown', source: '### Your turn\n\nWrite a function that returns the mean of a list.' },
+    { type: 'code', source: 'def mean(values):\n    # your code here\n    pass\n\n\nmean([1, 2, 3, 4])\n' },
+  ],
+  // Every C cell is a complete program, so each one carries its own includes
+  // and its own main. The second exercise reads stdin, because that is the part
+  // a student cannot discover from the cell alone — the Input box under the
+  // editor is where it comes from.
+  c: [
+    {
+      type: 'markdown',
+      source:
+        '## Getting started\n\nEach cell is a whole program with its own `main()`.'
+        + '\n\nRun the cell below with the ▶ button, then change the numbers and run it again.',
+    },
+    {
+      type: 'code',
+      source:
+        '#include <stdio.h>\n\nint main(void) {\n'
+        + '    for (int i = 0; i < 5; i++) {\n'
+        + '        printf("%d squared is %d\\n", i, i * i);\n'
+        + '    }\n    return 0;\n}\n',
+    },
+    {
+      type: 'markdown',
+      source:
+        '### Your turn\n\nRead two integers and print their sum.'
+        + '\n\nPut the numbers in the **Input** box under the editor first — that is this program’s stdin.',
+    },
+    {
+      type: 'code',
+      source:
+        '#include <stdio.h>\n\nint main(void) {\n'
+        + '    int a, b;\n'
+        + '    /* your code here */\n'
+        + '    return 0;\n}\n',
+      stdin: '3 4\n',
+    },
+  ],
+};
+
+const LANGUAGE_META = {
+  python: ['green', 'Python'],
+  c: ['blue', 'C'],
+};
 
 export default function Notebooks() {
   const { classId, isTeacher } = useOutletContext();
@@ -64,12 +111,16 @@ export default function Notebooks() {
     load();
   }, [load]);
 
-  const create = async () => {
+  const create = async (language = 'python') => {
     setBusy('new');
     try {
       const created = await lmApi.createNotebook(classId, {
-        title: 'Untitled notebook',
-        cells: STARTER_CELLS,
+        title: language === 'c' ? 'Untitled C notebook' : 'Untitled notebook',
+        // Fixed at creation. The server refuses to change it once the notebook
+        // is published, because students' attempts hold code written for the
+        // kernel it had at the time.
+        language,
+        cells: STARTER_CELLS[language] || STARTER_CELLS.python,
       });
       navigate(`/learning/class/${classId}/notebook/${created._id}/edit`);
     } catch (err) {
@@ -114,14 +165,26 @@ export default function Notebooks() {
         <Box>
           <Heading size="md">Coding notebooks</Heading>
           <Text fontSize="sm" opacity={0.7}>
-            Python cells that run in the browser — nothing to install.
+            Python and C cells that run in the browser — nothing to install.
           </Text>
         </Box>
         <Box flex="1" />
         {isTeacher && (
-          <Button colorScheme="purple" size="sm" onClick={create} isLoading={busy === 'new'}>
-            New notebook
-          </Button>
+          <Menu>
+            <MenuButton
+              as={Button}
+              colorScheme="purple"
+              size="sm"
+              rightIcon={<FiChevronDown />}
+              isLoading={busy === 'new'}
+            >
+              New notebook
+            </MenuButton>
+            <MenuList>
+              <MenuItem onClick={() => create('python')}>Python notebook</MenuItem>
+              <MenuItem onClick={() => create('c')}>C notebook</MenuItem>
+            </MenuList>
+          </Menu>
         )}
       </Flex>
 
@@ -131,10 +194,21 @@ export default function Notebooks() {
           title="No notebooks yet"
           description={
             isTeacher
-              ? 'Write a worksheet of prose and Python cells. Students run it in their own browser — no setup, no server, no accounts anywhere else.'
+              ? 'Write a worksheet of prose and code cells, in Python or C. Students run it in their own browser — no setup, no server, no accounts anywhere else.'
               : 'Your teacher has not published any coding notebooks for this class yet.'
           }
-          action={isTeacher ? <Button colorScheme="purple" onClick={create}>New notebook</Button> : null}
+          action={
+            isTeacher ? (
+              <HStack>
+                <Button colorScheme="purple" onClick={() => create('python')}>
+                  New Python notebook
+                </Button>
+                <Button variant="outline" colorScheme="purple" onClick={() => create('c')}>
+                  New C notebook
+                </Button>
+              </HStack>
+            ) : null
+          }
         />
       ) : (
         <VStack align="stretch" spacing={3}>
@@ -152,6 +226,11 @@ export default function Notebooks() {
                   <Box flex="1" minW="220px">
                     <HStack spacing={2} mb={1} wrap="wrap">
                       <Text fontWeight="700">{notebook.title}</Text>
+                      {/* The language decides what a cell even means, so it sits
+                          with the title rather than in the small print. */}
+                      <Badge colorScheme={(LANGUAGE_META[notebook.language] || LANGUAGE_META.python)[0]}>
+                        {(LANGUAGE_META[notebook.language] || LANGUAGE_META.python)[1]}
+                      </Badge>
                       {isTeacher && !notebook.published && <Badge>draft</Badge>}
                       {!isTeacher && label && <Badge colorScheme={scheme}>{label}</Badge>}
                       {!isTeacher && notebook.myGraded && <Badge colorScheme="purple">graded</Badge>}

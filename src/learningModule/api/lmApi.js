@@ -416,6 +416,18 @@ const lmApi = {
     body.append('configKey', configKey);
     return request('/seb-config', { method: 'POST', body });
   },
+
+  /* Safe Exam Browser's own installer — separate from the settings-file setup
+     above, and from any quiz: a plain convenience so a student gets the exact
+     build this installation was tested against instead of whatever SEB's own
+     site is currently serving. */
+  getSebInstallers: () => request('/seb-installer'),
+  sebInstallerDownloadUrl: (platform) => `${BASE()}/seb-installer/${platform}/download`,
+  uploadSebInstaller: (platform, file) => {
+    const body = new FormData();
+    body.append('file', file);
+    return request(`/seb-installer/${platform}`, { method: 'POST', body });
+  },
   answerAndAdvance: (classId, attemptId, body) =>
     request(`/classes/${classId}/attempts/${attemptId}/answer`, { method: 'POST', body }),
   saveAttemptDraft: (classId, attemptId, answers, { keepalive = false } = {}) =>
@@ -682,7 +694,7 @@ const lmApi = {
   publishQuizDraft: (classId, sessionId, body) =>
     request(`/classes/${classId}/studio/sessions/${sessionId}/publish/quiz`, { method: 'POST', body: body || {} }),
 
-  /* coding notebooks — Python that runs in the student's browser */
+  /* coding notebooks — code that runs in the student's browser */
   listNotebooks: (classId) => request(`/classes/${classId}/notebooks`),
   createNotebook: (classId, body) => request(`/classes/${classId}/notebooks`, { method: 'POST', body }),
   getNotebook: (classId, notebookId) => request(`/classes/${classId}/notebooks/${notebookId}`),
@@ -739,14 +751,6 @@ const lmApi = {
     request(`/classes/${classId}/notebooks/${notebookId}/publish`, { method: 'POST', body: body || {} }),
   notebookAttempt: (classId, notebookId) =>
     request(`/classes/${classId}/notebooks/${notebookId}/attempt`),
-  // Runs the cells in a sandboxed container rather than the browser, for the
-  // libraries Pyodide has no WebAssembly build of. 503s when the deployment has
-  // not configured a runner, which is the default — see notebookRunner/README.md.
-  runNotebookOnServer: (classId, notebookId, cells) =>
-    request(`/classes/${classId}/notebooks/${notebookId}/run`, {
-      method: 'POST',
-      body: { cells },
-    }),
   listNotebookAttempts: (classId, notebookId) =>
     request(`/classes/${classId}/notebooks/${notebookId}/attempts`),
   getNotebookAttempt: (classId, attemptId) => request(`/classes/${classId}/notebook-attempts/${attemptId}`),
@@ -871,10 +875,13 @@ const lmApi = {
   setSebBypassCode: (classId, quizId, body) =>
     request(`/classes/${classId}/quizzes/${quizId}/seb-bypass-code`, { method: 'POST', body }),
 
-  uploadFiles: (files) => {
+  /* Attachments are filed under the class that owns them, so the upload is
+     class-scoped: the server writes into that class's folder and mints a URL
+     that names it. */
+  uploadFiles: (classId, files) => {
     const form = new FormData();
     Array.from(files).forEach((file) => form.append('files', file));
-    return request('/uploads', { method: 'POST', body: form });
+    return request(`/classes/${classId}/uploads`, { method: 'POST', body: form });
   },
 };
 

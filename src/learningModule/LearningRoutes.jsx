@@ -1,5 +1,6 @@
-import React, { lazy } from 'react';
+import React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { lazyWithPreload, registerRouteTree } from '../routePreload';
 
 // The three shells stay eager: they are on the path to every screen below, so
 // deferring them would only add a second round trip in front of each page. Every
@@ -10,69 +11,71 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import LearningLayout from './components/LearningLayout';
 import RequireTeacher from './components/RequireTeacher';
 import ClassLayout from './pages/ClassLayout';
-const SebExit = lazy(() => import('./pages/SebExit'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Stream = lazy(() => import('./pages/Stream'));
-const Material = lazy(() => import('./pages/Material'));
-const CourseworkDetail = lazy(() => import('./pages/CourseworkDetail'));
-const GradeWork = lazy(() => import('./pages/GradeWork'));
-const People = lazy(() => import('./pages/People'));
-const Grades = lazy(() => import('./pages/Grades'));
-const Leaderboard = lazy(() => import('./pages/Leaderboard'));
-const PointsGuide = lazy(() => import('./pages/PointsGuide'));
-const Discussions = lazy(() => import('./pages/Discussions'));
-const Feedback = lazy(() => import('./pages/Feedback'));
-const AiStudio = lazy(() => import('./pages/AiStudio'));
-const AiPlayground = lazy(() => import('./pages/AiPlayground'));
-const Insights = lazy(() => import('./pages/Insights'));
-const ClassSettings = lazy(() => import('./pages/ClassSettings'));
-const Quizzes = lazy(() => import('./pages/Quizzes'));
-const QuizBrief = lazy(() => import('./pages/QuizBrief'));
-const QuizAttempt = lazy(() => import('./pages/QuizAttempt'));
-const QuizEditor = lazy(() => import('./pages/QuizEditor'));
-const QuizResults = lazy(() => import('./pages/QuizResults'));
-const Notebooks = lazy(() => import('./pages/Notebooks'));
-const NotebookEditor = lazy(() => import('./pages/NotebookEditor'));
-const NotebookPlayer = lazy(() => import('./pages/NotebookPlayer'));
-const NotebookSubmissions = lazy(() => import('./pages/NotebookSubmissions'));
-const Shorts = lazy(() => import('./pages/Shorts'));
-const ShortEditor = lazy(() => import('./pages/ShortEditor'));
-const ShortPresent = lazy(() => import('./pages/ShortPresent'));
-const ShortSessions = lazy(() => import('./pages/ShortSessions'));
-const ShortReport = lazy(() => import('./pages/ShortReport'));
-const ShortJoin = lazy(() => import('./pages/ShortJoin'));
-const ShortPlay = lazy(() => import('./pages/ShortPlay'));
-const Tutorials = lazy(() => import('./pages/Tutorials'));
-const Assignments = lazy(() => import('./pages/Assignments'));
-const Labs = lazy(() => import('./pages/Labs'));
-const LabBench = lazy(() => import('./pages/LabBench'));
-const LabEditor = lazy(() => import('./pages/LabEditor'));
-const LabResults = lazy(() => import('./pages/LabResults'));
-const AssignmentImport = lazy(() => import('./pages/AssignmentImport'));
-const AssignmentEditor = lazy(() => import('./pages/AssignmentEditor'));
-const AssignmentPlayer = lazy(() => import('./pages/AssignmentPlayer'));
-const AssignmentResults = lazy(() => import('./pages/AssignmentResults'));
-const TutorialImport = lazy(() => import('./pages/TutorialImport'));
-const TutorialEditor = lazy(() => import('./pages/TutorialEditor'));
-const TutorialPlayer = lazy(() => import('./pages/TutorialPlayer'));
-const TutorialResults = lazy(() => import('./pages/TutorialResults'));
-const Todo = lazy(() => import('./pages/Todo'));
-const Calendar = lazy(() => import('./pages/Calendar'));
-const Timetable = lazy(() => import('./pages/Timetable'));
-const Notifications = lazy(() => import('./pages/Notifications'));
-const MyAttendance = lazy(() => import('./pages/MyAttendance'));
-const Profile = lazy(() => import('./pages/Profile'));
-const BugReports = lazy(() => import('./pages/BugReports'));
-const DevTeam = lazy(() => import('./pages/DevTeam'));
-const LmAdmin = lazy(() => import('./pages/LmAdmin'));
-const LmAdminFaculty = lazy(() => import('./pages/LmAdminFaculty'));
+const SebExit = lazyWithPreload(() => import('./pages/SebExit'));
+const Dashboard = lazyWithPreload(() => import('./pages/Dashboard'));
+const Stream = lazyWithPreload(() => import('./pages/Stream'));
+const Material = lazyWithPreload(() => import('./pages/Material'));
+const CourseworkDetail = lazyWithPreload(() => import('./pages/CourseworkDetail'));
+const GradeWork = lazyWithPreload(() => import('./pages/GradeWork'));
+const People = lazyWithPreload(() => import('./pages/People'));
+const Grades = lazyWithPreload(() => import('./pages/Grades'));
+const Leaderboard = lazyWithPreload(() => import('./pages/Leaderboard'));
+const PointsGuide = lazyWithPreload(() => import('./pages/PointsGuide'));
+const Discussions = lazyWithPreload(() => import('./pages/Discussions'));
+const Feedback = lazyWithPreload(() => import('./pages/Feedback'));
+const AiStudio = lazyWithPreload(() => import('./pages/AiStudio'));
+const AiPlayground = lazyWithPreload(() => import('./pages/AiPlayground'));
+const Insights = lazyWithPreload(() => import('./pages/Insights'));
+const ClassSettings = lazyWithPreload(() => import('./pages/ClassSettings'));
+const Quizzes = lazyWithPreload(() => import('./pages/Quizzes'));
+const QuizBrief = lazyWithPreload(() => import('./pages/QuizBrief'));
+const QuizAttempt = lazyWithPreload(() => import('./pages/QuizAttempt'));
+const QuizEditor = lazyWithPreload(() => import('./pages/QuizEditor'));
+const QuizResults = lazyWithPreload(() => import('./pages/QuizResults'));
+const Notebooks = lazyWithPreload(() => import('./pages/Notebooks'));
+const NotebookEditor = lazyWithPreload(() => import('./pages/NotebookEditor'));
+const NotebookPlayer = lazyWithPreload(() => import('./pages/NotebookPlayer'));
+const NotebookSubmissions = lazyWithPreload(() => import('./pages/NotebookSubmissions'));
+const Shorts = lazyWithPreload(() => import('./pages/Shorts'));
+const ShortEditor = lazyWithPreload(() => import('./pages/ShortEditor'));
+const ShortPresent = lazyWithPreload(() => import('./pages/ShortPresent'));
+const ShortSessions = lazyWithPreload(() => import('./pages/ShortSessions'));
+const ShortReport = lazyWithPreload(() => import('./pages/ShortReport'));
+const ShortJoin = lazyWithPreload(() => import('./pages/ShortJoin'));
+const ShortPlay = lazyWithPreload(() => import('./pages/ShortPlay'));
+const Tutorials = lazyWithPreload(() => import('./pages/Tutorials'));
+const Assignments = lazyWithPreload(() => import('./pages/Assignments'));
+const Labs = lazyWithPreload(() => import('./pages/Labs'));
+const LabBench = lazyWithPreload(() => import('./pages/LabBench'));
+const LabEditor = lazyWithPreload(() => import('./pages/LabEditor'));
+const LabResults = lazyWithPreload(() => import('./pages/LabResults'));
+const AssignmentImport = lazyWithPreload(() => import('./pages/AssignmentImport'));
+const AssignmentEditor = lazyWithPreload(() => import('./pages/AssignmentEditor'));
+const AssignmentPlayer = lazyWithPreload(() => import('./pages/AssignmentPlayer'));
+const AssignmentResults = lazyWithPreload(() => import('./pages/AssignmentResults'));
+const TutorialImport = lazyWithPreload(() => import('./pages/TutorialImport'));
+const TutorialEditor = lazyWithPreload(() => import('./pages/TutorialEditor'));
+const TutorialPlayer = lazyWithPreload(() => import('./pages/TutorialPlayer'));
+const TutorialResults = lazyWithPreload(() => import('./pages/TutorialResults'));
+const Todo = lazyWithPreload(() => import('./pages/Todo'));
+const Calendar = lazyWithPreload(() => import('./pages/Calendar'));
+const Timetable = lazyWithPreload(() => import('./pages/Timetable'));
+const Notifications = lazyWithPreload(() => import('./pages/Notifications'));
+const MyAttendance = lazyWithPreload(() => import('./pages/MyAttendance'));
+const Profile = lazyWithPreload(() => import('./pages/Profile'));
+const BugReports = lazyWithPreload(() => import('./pages/BugReports'));
+const DevTeam = lazyWithPreload(() => import('./pages/DevTeam'));
+const LmAdmin = lazyWithPreload(() => import('./pages/LmAdmin'));
+const LmAdminFaculty = lazyWithPreload(() => import('./pages/LmAdminFaculty'));
 
 /**
  * The whole learning module hangs off one route in App.jsx (`/learning/*`),
  * so adding a screen here never touches the app-wide router.
+ *
+ * Built once at module load rather than per render so the preloader can read
+ * the same patterns the router matches — see `registerRouteTree` below.
  */
-export default function LearningRoutes() {
-  return (
+const LEARNING_ROUTES = (
     <Routes>
       {/* Joining and answering a Short sit outside class/:classId — someone who
           scanned the QR at the front of the room has a code, not a class — and
@@ -190,5 +193,13 @@ export default function LearningRoutes() {
         <Route path="*" element={<Navigate to="/learning" replace />} />
       </Route>
     </Routes>
-  );
+);
+
+// Registered when this chunk loads, which is the first time anyone navigates
+// into the module — by which point the links these patterns serve are the ones
+// on screen. The base is where App.jsx mounts us.
+registerRouteTree(LEARNING_ROUTES, '/learning');
+
+export default function LearningRoutes() {
+  return LEARNING_ROUTES;
 }

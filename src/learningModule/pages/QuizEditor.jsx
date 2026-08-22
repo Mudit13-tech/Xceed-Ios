@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import {
   Alert,
   AlertIcon,
@@ -33,7 +33,7 @@ import {
   useDisclosure,
   useToast,
 } from '@chakra-ui/react';
-import { DeleteIcon, SettingsIcon } from '@chakra-ui/icons';
+import { DeleteIcon } from '@chakra-ui/icons';
 import lmApi from '../api/lmApi';
 import PublishQuizModal from '../components/PublishQuizModal';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
@@ -390,6 +390,7 @@ export default function QuizEditor({ mode = 'questions' }) {
   const { classId } = useOutletContext();
   const { quizId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
 
   const [quiz, setQuiz] = useState(null);
@@ -407,7 +408,10 @@ export default function QuizEditor({ mode = 'questions' }) {
   const [sebFile, setSebFile] = useState(null);
   const [sebUploading, setSebUploading] = useState(false);
   const [sebCodeBusy, setSebCodeBusy] = useState(false);
-  const [sebGeneratedCode, setSebGeneratedCode] = useState('');
+  // Carried straight from the create dialog when the paper was minted with an
+  // access code: the plaintext exists only in that one response, so this is the
+  // teacher's single chance to read it without generating a replacement.
+  const [sebGeneratedCode, setSebGeneratedCode] = useState(location.state?.sebBypassCode || '');
   const sebCodeClip = useClipboard(sebGeneratedCode);
 
   const load = useCallback(async () => {
@@ -618,19 +622,10 @@ export default function QuizEditor({ mode = 'questions' }) {
         </Box>
         <HStack>
           {quiz.published && <CopyLinkButton to={`/learning/class/${classId}/quiz/${quizId}`} />}
-          {!isSettings && (
-            <Tooltip label="Delivery, marking, proctoring, instructions and access">
-              <Button
-                size="sm"
-                variant="outline"
-                leftIcon={<SettingsIcon />}
-                onClick={() => goto(`/learning/class/${classId}/quiz/${quizId}/settings`)}
-                isLoading={saving}
-              >
-                Settings
-              </Button>
-            </Tooltip>
-          )}
+          {/* The way in to the settings is the gear on the quiz card now — the
+              row a teacher is already on when they decide to change how a paper
+              runs, rather than a button they have to open the editor to find.
+              Leaving here saves first, which is why `goto` still exists. */}
           <Button size="sm" variant="outline" onClick={save} isLoading={saving}>
             Save
           </Button>
@@ -747,19 +742,47 @@ export default function QuizEditor({ mode = 'questions' }) {
 
               <SectionCard title="When students may sit it" mb={4}>
                 <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                  {/* The cut-off in the same spelling the publish dialog writes
+                      and the engine reads first — `startDeadline`. This card used
+                      to offer only the older relative `marginMinutes`, so a quiz
+                      whose entry closes at a moment set while publishing showed a
+                      flat 0 here, which reads as "no cut-off" for a paper that
+                      has one. */}
                   <FormControl>
                     <Tooltip label="Students may still be sitting the test after this, but nobody new can begin">
-                      <FormLabel fontSize="xs">Late-entry window (minutes after opening)</FormLabel>
+                      <FormLabel fontSize="xs">Entry closes at</FormLabel>
                     </Tooltip>
                     <Input
                       size="sm"
-                      type="number"
-                      min={0}
-                      value={settings.marginMinutes}
-                      onChange={(e) => setSetting('marginMinutes', Number(e.target.value) || 0)}
+                      type="datetime-local"
+                      value={toLocalInput(settings.startDeadline)}
+                      onChange={(e) => setSetting('startDeadline', e.target.value || null)}
                     />
-                    <FormHelperText fontSize="xs">0 = anyone may start while the quiz is open.</FormHelperText>
+                    <FormHelperText fontSize="xs">
+                      Blank = anyone may start while the quiz is open. Also set when you publish.
+                    </FormHelperText>
                   </FormControl>
+                  {/* Only for a quiz still carrying the older relative form, and
+                      only while nothing has superseded it: an absolute cut-off
+                      wins outright, so showing both would offer two answers to one
+                      question. */}
+                  {!settings.startDeadline && settings.marginMinutes > 0 && (
+                    <FormControl>
+                      <Tooltip label="The older relative form of the same cut-off, counted from the opening time">
+                        <FormLabel fontSize="xs">Late-entry window (minutes after opening)</FormLabel>
+                      </Tooltip>
+                      <Input
+                        size="sm"
+                        type="number"
+                        min={0}
+                        value={settings.marginMinutes}
+                        onChange={(e) => setSetting('marginMinutes', Number(e.target.value) || 0)}
+                      />
+                      <FormHelperText fontSize="xs">
+                        0 = anyone may start while the quiz is open. Setting a moment above replaces this.
+                      </FormHelperText>
+                    </FormControl>
+                  )}
                   <FormControl>
                     <FormLabel fontSize="xs">Opens at</FormLabel>
                     <Input

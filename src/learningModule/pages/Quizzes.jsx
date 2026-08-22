@@ -40,8 +40,10 @@ import {
 // fails the whole module, which is a blank page rather than a missing
 // animation. Emotion is a declared dependency and Chakra's own styling engine.
 import { keyframes } from '@emotion/react';
-import { DeleteIcon } from '@chakra-ui/icons';
+import { DeleteIcon, DownloadIcon, SettingsIcon, TimeIcon } from '@chakra-ui/icons';
 import lmApi from '../api/lmApi';
+import LiveExamControl, { LiveCounts } from '../components/liveExam';
+import AccessCodeButton from '../components/AccessCodeButton';
 import { CopyLinkButton, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import PublishQuizModal from '../components/PublishQuizModal';
 import { formatDateTime, relativeTime } from '../format';
@@ -156,16 +158,16 @@ const METHODS = {
 };
 
 function CreateQuizModal({ isOpen, onClose, classId }) {
-  const [method, setMethod] = useState('quiz');
+  // Defaults to the invigilated exam preset: that is what this dialog is used
+  // for in practice, and the low-stakes quiz is a click away for the rest.
+  const [method, setMethod] = useState('exam_paper_timer');
   const [allowBack, setAllowBack] = useState(false);
   // Whether the sitting is watched, which is what decides if the browser may
-  // hold the next question. Defaults off: the safe answer for a paper whose
-  // conditions nobody has told us about yet.
-  const [proctored, setProctored] = useState(false);
+  // hold the next question. Defaults on to match the exam preset above.
+  const [proctored, setProctored] = useState(true);
   // Recorded here, finished in the editor: the .seb file cannot be built until
   // the quiz has a URL, which it does not have until it exists.
-  const [requireSeb, setRequireSeb] = useState(false);
-  const [sebBypass, setSebBypass] = useState(false);
+  const [requireSeb, setRequireSeb] = useState(true);
   // Whether the institution already has a shared .seb file and Config Key on the
   // server. `null` while unknown: with one file serving every exam, telling a
   // teacher to go and build one they do not need is the common case now, so the
@@ -202,11 +204,10 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
   const chosen = METHODS[method];
 
   const reset = () => {
-    setMethod('quiz');
+    setMethod('exam_paper_timer');
     setAllowBack(false);
-    setProctored(false);
-    setRequireSeb(false);
-    setSebBypass(false);
+    setProctored(true);
+    setRequireSeb(true);
     setTitle('');
     setDescription('');
     setTimeLimit('');
@@ -239,14 +240,35 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
           // thing is already in the browser and there is nothing to fetch ahead.
           prefetchQuestions: chosen.settings.deliveryMode === 'one_at_a_time' && proctored,
           requireSafeExamBrowser: requireSeb,
-          sebBypassEnabled: requireSeb && sebBypass,
+          // Always on with SEB: the student whose laptop cannot run SEB on the
+          // day is a known case, not an exception to opt into, so the paper is
+          // created with a code already minted and the teacher only has to hand
+          // it out. Turn it off in the editor → Proctoring if a paper must be
+          // SEB-only.
+          sebBypassEnabled: requireSeb,
         },
       });
       reset();
       onClose();
+      // The plaintext exists in this response and nowhere else, and the editor
+      // opens on the questions tab — so it is said here too, and stays on screen
+      // until the teacher dismisses it rather than fading out unread.
+      if (created.sebBypassCode) {
+        toast({
+          status: 'success',
+          title: `Access code: ${created.sebBypassCode}`,
+          description:
+            'Copy this now — it is not shown again. Hand it to a student who cannot run Safe Exam Browser. You can replace or turn it off in the editor → Proctoring.',
+          duration: null,
+          isClosable: true,
+        });
+      }
       // Straight into the editor — a quiz with no questions cannot be published
       // anyway, so there is nothing useful to come back to the list for.
-      navigate(`/learning/class/${classId}/quiz/${created._id}/edit`);
+      navigate(`/learning/class/${classId}/quiz/${created._id}/edit`, {
+        // The access code is in this response and nowhere else, ever again.
+        state: created.sebBypassCode ? { sebBypassCode: created.sebBypassCode } : undefined,
+      });
     } catch (error) {
       toast({ status: 'error', title: 'Could not create quiz', description: error.message });
     } finally {
@@ -391,30 +413,14 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
 
             {requireSeb && (
               <Box mt={2} pl={6}>
-                <Checkbox
-                  size="sm"
-                  alignItems="flex-start"
-                  isChecked={sebBypass}
-                  onChange={(event) => setSebBypass(event.target.checked)}
-                >
-                  <Text fontSize="sm">Also allow starting with an access code</Text>
-                  <Text fontSize="xs" color="lmFg.subtle">
-                    A normal browser link plus a code you hand out yourself, for the student whose
-                    laptop cannot run SEB on the day. Every use is recorded on the attempt. You
-                    generate the code in the editor.
-                  </Text>
-                </Checkbox>
+                <Text fontSize="xs" color="lmFg.subtle">
+                  An access code is generated with the paper, so a student whose laptop cannot run
+                  SEB on the day can still start from an ordinary browser with a code you hand out
+                  yourself. Every use is recorded on the attempt, and the code is shown to you in
+                  the editor → Proctoring, where you can replace or turn it off.
+                </Text>
 
-                {sharedSebReady === true ? (
-                  <Alert status="success" borderRadius="md" mt={3} py={2} fontSize="xs">
-                    <AlertIcon boxSize={3} />
-                    <Box>
-                      <b>Nothing else to set up.</b> This paper will use the institution&apos;s
-                      shared Safe Exam Browser configuration. Upload a file of its own in the quiz
-                      editor → Proctoring only if this paper needs a different lockdown.
-                    </Box>
-                  </Alert>
-                ) : sharedSebReady === false ? (
+                {sharedSebReady === false ? (
                   <Alert status="info" borderRadius="md" mt={3} py={2} fontSize="xs">
                     <AlertIcon boxSize={3} />
                     <Box>
@@ -560,7 +566,7 @@ function liveState(quiz, isTeacher) {
   };
 }
 
-function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete }) {
+function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, onRefresh }) {
   const [downloadingPdf, setDownloadingPdf] = useState(null);
   const toast = useToast();
   const navigate = useNavigate();
@@ -606,6 +612,15 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
     isTeacher || (canDownloadPaper && quiz.resultsReleased && quiz.settings?.showAnswersAfterSubmit);
 
   const isLive = Boolean(state.live || state.open);
+  /* Whether the paper has begun, which is when invigilation starts being the
+   * thing a teacher wants from this row.
+   *
+   * Deliberately not the same as `isLive`: it stays true after the window shuts,
+   * because a student who was thrown out at the end is let back in *after* the
+   * hall has emptied, and that is the one moment the control would otherwise
+   * disappear. A scheduled paper that has not opened yet has nobody to watch. */
+  const hasStarted =
+    isTeacher && Boolean(quiz.published) && !scheduled && !quiz.window?.notYetOpen;
   // Where "this is running" leads: the monitor for staff, the paper for a student.
   const liveTarget = isTeacher
     ? `/learning/class/${classId}/quiz/${quiz._id}/results`
@@ -618,6 +633,89 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
     ? Boolean(!quiz.inProgress && (state.completedAt || quiz.attemptsUsed > 0))
     : Boolean(state.completedAt || (quiz.stats?.attempts > 0 && quiz.window?.closed));
 
+  /* The paper as a download, as an icon rather than a labelled menu.
+   *
+   * It used to open the row from the left at full width, which put the least
+   * used control on the card in the most prominent place on it — ahead of Edit,
+   * Results and the live state — on every row, for every teacher, all term. As
+   * an icon beside Delete it is exactly as reachable and stops competing. The
+   * menu underneath is unchanged: the two documents are different documents, and
+   * one of them carries the answer key. */
+  const downloadMenu = canDownloadPaper && (
+    <Menu>
+      <Tooltip label="Download the paper">
+        <MenuButton
+          as={IconButton}
+          size="sm"
+          variant="ghost"
+          colorScheme="purple"
+          aria-label="Download the paper"
+          icon={<DownloadIcon />}
+          isLoading={Boolean(downloadingPdf)}
+        />
+      </Tooltip>
+      <MenuList zIndex={10}>
+        <MenuItem isDisabled={downloadingPdf === 'questions'} onClick={() => handleDownloadPdf(false)}>
+          📝 Questions Only
+        </MenuItem>
+        {canDownloadKey && (
+          <MenuItem isDisabled={downloadingPdf === 'answers'} onClick={() => handleDownloadPdf(true)}>
+            💡 Questions with Answers
+          </MenuItem>
+        )}
+      </MenuList>
+    </Menu>
+  );
+
+  /* Every wordless control in one group, pinned to the top corner of the card.
+     Scattered between the labelled buttons they read as gaps in a sentence — a
+     teacher scanning the row for "Results" had to look past a gear and a clock
+     to find it. On their own line above, they are a toolbar: settings,
+     schedule, download, delete, in the order they are reached for, and the
+     labelled buttons keep the right-hand side to themselves. */
+  const iconTools = isTeacher ? (
+    <>
+      <Tooltip label="Settings — delivery, marking, proctoring, instructions and access">
+        <IconButton
+          as={RouterLink}
+          to={`/learning/class/${classId}/quiz/${quiz._id}/settings`}
+          size="sm"
+          variant="ghost"
+          aria-label="Quiz settings"
+          icon={<SettingsIcon />}
+        />
+      </Tooltip>
+      {quiz.published && (
+        <Tooltip label="Schedule — when it opens, when entry closes, when results go out">
+          <IconButton
+            size="sm"
+            variant="ghost"
+            onClick={onPublish}
+            aria-label="Schedule quiz"
+            icon={<TimeIcon />}
+          />
+        </Tooltip>
+      )}
+      {downloadMenu}
+      <IconButton
+        size="sm"
+        variant="ghost"
+        colorScheme="red"
+        onClick={onDelete}
+        aria-label="Delete quiz"
+        icon={<DeleteIcon />}
+      />
+    </>
+  ) : (
+    downloadMenu
+  );
+
+  // The click-through, spread onto both halves of the card body: the title line
+  // and the detail beneath it are one target split in two by the toolbar.
+  const bodyLink = isLive
+    ? { onClick: () => navigate(liveTarget), cursor: 'pointer', role: 'link' }
+    : {};
+
   return (
     <Flex
       bg="lmBg.surface"
@@ -627,283 +725,263 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete })
       borderRadius="lg"
       p={4}
       mb={3}
-      align="center"
-      gap={4}
-      wrap="wrap"
+      direction="column"
+      align="stretch"
+      gap={2}
       transition="all 0.2s ease"
     >
-      {/* While it is running, the card is the way in: the whole body is the
-          link to the live page (teachers to the monitor, students to the
-          paper), not just the pill in its corner. Only the body — the action
-          buttons to the right keep their own destinations. */}
-      <Box
-        flex="1"
-        minW="220px"
-        onClick={isLive ? () => navigate(liveTarget) : undefined}
-        cursor={isLive ? 'pointer' : 'default'}
-        role={isLive ? 'link' : undefined}
-      >
-        <HStack spacing={2} wrap="wrap">
-          <Heading size="sm">{quiz.title}</Heading>
-          <Badge colorScheme={isExam ? 'red' : 'blue'}>{isExam ? '🎓 Exam' : '📝 Quiz'}</Badge>
-          {quiz.source === 'ai' && <Badge colorScheme="purple">✨ AI</Badge>}
-          {isTeacher && (
-            <Badge colorScheme={scheduled ? 'orange' : quiz.published ? 'green' : 'gray'}>
-              {scheduled ? 'Scheduled' : quiz.published ? 'Published' : 'Draft'}
-            </Badge>
-          )}
-          {/* Animated Green LIVE Button in Card Header */}
-          {isLive && !isCompleted && (
-            <Button
-              as={RouterLink}
-              to={liveTarget}
-              size="xs"
-              colorScheme="green"
-              variant="solid"
-              borderRadius="full"
-              px={3}
-              py={1}
-              h="auto"
-              leftIcon={
-                <Box
-                  as="span"
-                  w="7px"
-                  h="7px"
-                  bg="lmBg.surface"
-                  borderRadius="full"
-                  display="inline-block"
-                  sx={{ animation: `${liveDotBeacon} 1.2s ease-in-out infinite` }}
-                />
-              }
-              sx={{
-                animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`,
-                fontWeight: 'bold',
-                letterSpacing: '0.4px',
-                _hover: { textDecoration: 'none', transform: 'scale(1.05)' },
-              }}
-            >
-              🟢 {state.label || 'Live'}
-            </Button>
-          )}
-
-          {/* Completed badge */}
-          {isCompleted && (
-            <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5} py={0.5}>
-              ✅ Completed
-            </Badge>
-          )}
-        </HStack>
-        {isTeacher && (scheduled || opensAt || entryCloses) && (
-          <Text fontSize="xs" color="lmFg.subtle" mt={1}>
-            {[
-              scheduled && `🔗 Link goes live ${formatDateTime(quiz.publish.publishAt)}`,
-              opensAt && `▶️ Starts ${formatDateTime(opensAt)}`,
-              entryCloses && `🚪 Entry closes ${formatDateTime(entryCloses)}`,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </Text>
-        )}
-        <Text fontSize="xs" color="lmFg.muted" mt={1}>
-          {questionCount} questions · {quiz.totalMarks} marks
-          {quiz.settings?.timeLimitMinutes ? ` · ${quiz.settings.timeLimitMinutes} min` : ''}
-        </Text>
-
-        {/* Shown to students and staff alike. For a student it answers "did my
-            submission actually register?", which is the question they otherwise
-            ask a teacher; for staff it is when the cohort finished, which a
-            scheduled window does not tell them. */}
-        {state.completedAt && (
-          <Tooltip label={formatDateTime(state.completedAt)}>
-            <Text fontSize="xs" color="lmHue.green700" mt={1} fontWeight="500" display="inline-block">
-              ✅ {state.completedLabel} {relativeTime(state.completedAt)} ·{' '}
-              {formatDateTime(state.completedAt)}
-            </Text>
-          </Tooltip>
-        )}
-        {!state.completedAt && !state.live && quiz.window?.closed && (
-          <Text fontSize="xs" color="lmFg.muted" mt={1}>
-            🔒 Closed {relativeTime(quiz.window.closesAt)} · {formatDateTime(quiz.window.closesAt)}
-          </Text>
-        )}
-        {isTeacher && quiz.stats && (
-          <Text fontSize="xs" color="lmFg.muted">
-            {quiz.stats.attempts} attempt(s)
-            {quiz.stats.avg !== null && quiz.stats.avg !== undefined
-              ? ` · avg ${Math.round(quiz.stats.avg * 10) / 10}%`
-              : ''}
-          </Text>
-        )}
-        {!isTeacher && quiz.bestAttempt && (
-          <Badge colorScheme={quiz.bestAttempt.passed ? 'green' : 'red'} mt={1}>
-            Best: {quiz.bestAttempt.score}/{quiz.bestAttempt.maxScore} ({quiz.bestAttempt.percent}%)
-          </Badge>
-        )}
-        {!isTeacher && quiz.resultsPending && (
-          <Badge colorScheme="orange" mt={1}>
-            {quiz.resultReleaseAt
-              ? `Results announced ${formatDateTime(quiz.resultReleaseAt)}`
-              : 'Results not released yet'}
-          </Badge>
-        )}
-        {/* Stays up until they open it — the same marker the class card
-            carries, and the same thing clears both. */}
-        {!isTeacher && quiz.resultsUnread && (
-          <Badge colorScheme="green" mt={1} ml={1}>
-            🎯 Results announced — not seen yet
-          </Badge>
-        )}
-        {!isTeacher && start.why && (
-          <Text fontSize="xs" color="lmFg.muted" mt={1}>
-            {start.why}
-          </Text>
-        )}
-      </Box>
-
-      <Flex gap={2} wrap="wrap" align="center" maxW="100%">
-        {canDownloadPaper && (
-          <Menu>
-            <MenuButton
-              as={Button}
-              size="sm"
-              variant="outline"
-              colorScheme="purple"
-              isLoading={Boolean(downloadingPdf)}
-            >
-              📄 PDF ▾
-            </MenuButton>
-            <MenuList zIndex={10}>
-              <MenuItem
-                isDisabled={downloadingPdf === 'questions'}
-                onClick={() => handleDownloadPdf(false)}
+      {/* The title line, with the icon toolbar on the end of it: wordless
+          controls belong in the card's top corner, level with the name of the
+          paper they act on, not on a line of their own. */}
+      <Flex align="flex-start" gap={3}>
+        <Box flex="1" minW="220px" {...bodyLink}>
+          <HStack spacing={2} wrap="wrap">
+            <Heading size="sm">{quiz.title}</Heading>
+            <Badge colorScheme={isExam ? 'red' : 'blue'}>{isExam ? '🎓 Exam' : '📝 Quiz'}</Badge>
+            {quiz.source === 'ai' && <Badge colorScheme="purple">✨ AI</Badge>}
+            {isTeacher && (
+              <Badge colorScheme={scheduled ? 'orange' : quiz.published ? 'green' : 'gray'}>
+                {scheduled ? 'Scheduled' : quiz.published ? 'Published' : 'Draft'}
+              </Badge>
+            )}
+            {/* Animated Green LIVE Button in Card Header */}
+            {isLive && !isCompleted && (
+              <Button
+                as={RouterLink}
+                to={liveTarget}
+                size="xs"
+                colorScheme="green"
+                variant="solid"
+                borderRadius="full"
+                px={3}
+                py={1}
+                h="auto"
+                leftIcon={
+                  <Box
+                    as="span"
+                    w="7px"
+                    h="7px"
+                    bg="lmBg.surface"
+                    borderRadius="full"
+                    display="inline-block"
+                    sx={{ animation: `${liveDotBeacon} 1.2s ease-in-out infinite` }}
+                  />
+                }
+                sx={{
+                  animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`,
+                  fontWeight: 'bold',
+                  letterSpacing: '0.4px',
+                  _hover: { textDecoration: 'none', transform: 'scale(1.05)' },
+                }}
               >
-                📝 Questions Only
-              </MenuItem>
-              {canDownloadKey && (
-                <MenuItem
-                  isDisabled={downloadingPdf === 'answers'}
-                  onClick={() => handleDownloadPdf(true)}
-                >
-                  💡 Questions with Answers
-                </MenuItem>
-              )}
-            </MenuList>
-          </Menu>
+                🟢 {state.label || 'Live'}
+              </Button>
+            )}
+
+            {/* Completed badge */}
+            {isCompleted && (
+              <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5} py={0.5}>
+                ✅ Completed
+              </Badge>
+            )}
+          </HStack>
+        </Box>
+        {iconTools && (
+          <HStack spacing={1} mt={-1} mr={-1}>
+            {iconTools}
+          </HStack>
         )}
+      </Flex>
 
-        {isTeacher ? (
-          <>
-            <Button as={RouterLink} to={`/learning/class/${classId}/quiz/${quiz._id}/edit`} size="sm" variant="outline">
-              Edit
-            </Button>
+      <Flex align="center" gap={4} wrap="wrap">
+        {/* While it is running, the card is the way in: the whole body is the
+            link to the live page (teachers to the monitor, students to the
+            paper), not just the pill in its corner. Only the body — the action
+            buttons to the right keep their own destinations. */}
+        <Box flex="1" minW="220px" {...bodyLink}>
+          {isTeacher && (scheduled || opensAt || entryCloses) && (
+            <Text fontSize="xs" color="lmFg.subtle" mt={1}>
+              {[
+                scheduled && `🔗 Link goes live ${formatDateTime(quiz.publish.publishAt)}`,
+                opensAt && `▶️ Starts ${formatDateTime(opensAt)}`,
+                entryCloses && `🚪 Entry closes ${formatDateTime(entryCloses)}`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </Text>
+          )}
+          <Text fontSize="xs" color="lmFg.muted" mt={1}>
+            {questionCount} questions · {quiz.totalMarks} marks
+            {quiz.settings?.timeLimitMinutes ? ` · ${quiz.settings.timeLimitMinutes} min` : ''}
+          </Text>
 
-            {/* Always the same quiet Results button. The live state already has
-                its own loud control — the LIVE pill in the card header, and the
-                card body itself — so pulsing this one too said "live" three
-                times and dressed up results as something they are not. */}
-            <Button as={RouterLink} to={`/learning/class/${classId}/quiz/${quiz._id}/results`} size="sm" variant="outline">
-              Results
-            </Button>
+          {/* Shown to students and staff alike. For a student it answers "did my
+              submission actually register?", which is the question they otherwise
+              ask a teacher; for staff it is when the cohort finished, which a
+              scheduled window does not tell them. */}
+          {state.completedAt && (
+            <Tooltip label={formatDateTime(state.completedAt)}>
+              <Text fontSize="xs" color="lmHue.green700" mt={1} fontWeight="500" display="inline-block">
+                ✅ {state.completedLabel} {relativeTime(state.completedAt)} ·{' '}
+                {formatDateTime(state.completedAt)}
+              </Text>
+            </Tooltip>
+          )}
+          {!state.completedAt && !state.live && quiz.window?.closed && (
+            <Text fontSize="xs" color="lmFg.muted" mt={1}>
+              🔒 Closed {relativeTime(quiz.window.closesAt)} · {formatDateTime(quiz.window.closesAt)}
+            </Text>
+          )}
+          {/* Terminated first — see `LiveCounts`. It is the only one of the three
+              that is a person waiting on a decision from staff. */}
+          {hasStarted && <LiveCounts live={quiz.live} />}
+          {isTeacher && quiz.stats && (
+            <Text fontSize="xs" color="lmFg.muted">
+              {quiz.stats.attempts} attempt(s)
+              {quiz.stats.avg !== null && quiz.stats.avg !== undefined
+                ? ` · avg ${Math.round(quiz.stats.avg * 10) / 10}%`
+                : ''}
+            </Text>
+          )}
+          {!isTeacher && quiz.bestAttempt && (
+            <Badge colorScheme={quiz.bestAttempt.passed ? 'green' : 'red'} mt={1}>
+              Best: {quiz.bestAttempt.score}/{quiz.bestAttempt.maxScore} ({quiz.bestAttempt.percent}%)
+            </Badge>
+          )}
+          {!isTeacher && quiz.resultsPending && (
+            <Badge colorScheme="orange" mt={1}>
+              {quiz.resultReleaseAt
+                ? `Results announced ${formatDateTime(quiz.resultReleaseAt)}`
+                : 'Results not released yet'}
+            </Badge>
+          )}
+          {/* Stays up until they open it — the same marker the class card
+              carries, and the same thing clears both. */}
+          {!isTeacher && quiz.resultsUnread && (
+            <Badge colorScheme="green" mt={1} ml={1}>
+              🎯 Results announced — not seen yet
+            </Badge>
+          )}
+          {!isTeacher && start.why && (
+            <Text fontSize="xs" color="lmFg.muted" mt={1}>
+              {start.why}
+            </Text>
+          )}
+        </Box>
 
-            {/* Only once published: the link resolves to the student brief, which
-                a draft quiz will not serve to anyone but its author. */}
-            {quiz.published && <CopyLinkButton to={`/learning/class/${classId}/quiz/${quiz._id}`} />}
-            {quiz.published ? (
-              <>
-                <Button size="sm" variant="outline" onClick={onPublish}>
-                  🗓 Schedule
-                </Button>
+        <Flex gap={2} wrap="wrap" align="center" maxW="100%">
+          {isTeacher ? (
+            <>
+              {/* First while the exam is on, because mid-exam it is the only
+                  control on this row anybody wants — and it is on the row rather
+                  than three pages away on the results screen, which is where it
+                  used to be. */}
+              {hasStarted && (
+                <LiveExamControl classId={classId} quiz={quiz} live={quiz.live} onDone={onRefresh} />
+              )}
+              <Button as={RouterLink} to={`/learning/class/${classId}/quiz/${quiz._id}/edit`} size="sm" variant="outline">
+                Edit
+              </Button>
+
+              {/* Always the same quiet Results button. The live state already has
+                  its own loud control — the LIVE pill in the card header, and the
+                  card body itself — so pulsing this one too said "live" three
+                  times and dressed up results as something they are not. */}
+              <Button as={RouterLink} to={`/learning/class/${classId}/quiz/${quiz._id}/results`} size="sm" variant="outline">
+                Results
+              </Button>
+
+              {/* Only once published: the link resolves to the student brief, which
+                  a draft quiz will not serve to anyone but its author. */}
+              {quiz.published && <CopyLinkButton to={`/learning/class/${classId}/quiz/${quiz._id}`} />}
+              {quiz.published ? (
                 <Button size="sm" colorScheme="gray" onClick={onUnpublish}>
                   Unpublish
                 </Button>
-              </>
-            ) : (
-              <Button size="sm" colorScheme="green" onClick={onPublish}>
-                Publish
-              </Button>
-            )}
-            <IconButton
-              size="sm"
-              variant="ghost"
-              colorScheme="red"
-              onClick={onDelete}
-              aria-label="Delete quiz"
-              icon={<DeleteIcon />}
-            />
-          </>
-        ) : (
-          <>
-            {/* An open sitting comes first: a student whose paper is live —
-                including one their teacher has just reopened or extended — needs
-                the door back into it, not a verdict on a test they have not
-                finished. */}
-            {quiz.inProgress ? (
-              <Button
-                as={RouterLink}
-                to={`/learning/class/${classId}/quiz/${quiz._id}`}
-                size="sm"
-                colorScheme="green"
-                sx={{ animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`, fontWeight: 'bold' }}
-              >
-                Resume test
-              </Button>
-            ) : reviewable ? (
-              <Button
-                as={RouterLink}
-                to={`/learning/class/${classId}/quiz/${quiz._id}/attempt/${quiz.lastAttemptId}`}
-                size="sm"
-                colorScheme={quiz.resultsUnread ? 'green' : 'blue'}
-                variant={quiz.resultsUnread ? 'solid' : 'outline'}
-                leftIcon={<span>🎯</span>}
-                sx={
-                  quiz.resultsUnread
-                    ? {
-                        animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`,
-                        fontWeight: 'bold',
-                      }
-                    : undefined
-                }
-              >
-                {quiz.resultsUnread ? 'See your result' : 'View Result'}
-              </Button>
-            ) : quiz.resultsPending ? (
-              <Tooltip label="Your teacher has not released the results for this test yet.">
-                <Button size="sm" variant="outline" colorScheme="orange" isDisabled>
-                  🔒 Results pending
+              ) : (
+                <Button size="sm" colorScheme="green" onClick={onPublish}>
+                  Publish
                 </Button>
-              </Tooltip>
-            ) : (
-              <Button
-                as={RouterLink}
-                to={
-                  quiz.attemptsUsed > 0 && quiz.lastAttemptId
-                    ? `/learning/class/${classId}/quiz/${quiz._id}/attempt/${quiz.lastAttemptId}`
-                    : `/learning/class/${classId}/quiz/${quiz._id}`
-                }
-                size="sm"
-                colorScheme={
-                  isLive || start.can
-                    ? 'green'
-                    : 'purple'
-                }
-                sx={
-                  isLive && start.can && !isCompleted
-                    ? {
-                        animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`,
-                        fontWeight: 'bold',
-                      }
-                    : undefined
-                }
-              >
-                {quiz.attemptsUsed > 0
-                  ? 'Review answers'
-                  : start.can
-                    ? 'Start test'
-                    : 'View instructions'}
-              </Button>
-            )}
-          </>
-        )}
+              )}
+              {/* Only where there is a lockdown for it to unlock. */}
+              {quiz.published && quiz.settings?.requireSafeExamBrowser && (
+                <AccessCodeButton classId={classId} quiz={quiz} onDone={onRefresh} />
+              )}
+            </>
+          ) : (
+            <>
+              {/* An open sitting comes first: a student whose paper is live —
+                  including one their teacher has just reopened or extended — needs
+                  the door back into it, not a verdict on a test they have not
+                  finished. */}
+              {quiz.inProgress ? (
+                <Button
+                  as={RouterLink}
+                  to={`/learning/class/${classId}/quiz/${quiz._id}`}
+                  size="sm"
+                  colorScheme="green"
+                  sx={{ animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`, fontWeight: 'bold' }}
+                >
+                  Resume test
+                </Button>
+              ) : reviewable ? (
+                <Button
+                  as={RouterLink}
+                  to={`/learning/class/${classId}/quiz/${quiz._id}/attempt/${quiz.lastAttemptId}`}
+                  size="sm"
+                  colorScheme={quiz.resultsUnread ? 'green' : 'blue'}
+                  variant={quiz.resultsUnread ? 'solid' : 'outline'}
+                  leftIcon={<span>🎯</span>}
+                  sx={
+                    quiz.resultsUnread
+                      ? {
+                          animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`,
+                          fontWeight: 'bold',
+                        }
+                      : undefined
+                  }
+                >
+                  {quiz.resultsUnread ? 'See your result' : 'View Result'}
+                </Button>
+              ) : quiz.resultsPending ? (
+                <Tooltip label="Your teacher has not released the results for this test yet.">
+                  <Button size="sm" variant="outline" colorScheme="orange" isDisabled>
+                    🔒 Results pending
+                  </Button>
+                </Tooltip>
+              ) : (
+                <Button
+                  as={RouterLink}
+                  to={
+                    quiz.attemptsUsed > 0 && quiz.lastAttemptId
+                      ? `/learning/class/${classId}/quiz/${quiz._id}/attempt/${quiz.lastAttemptId}`
+                      : `/learning/class/${classId}/quiz/${quiz._id}`
+                  }
+                  size="sm"
+                  colorScheme={
+                    isLive || start.can
+                      ? 'green'
+                      : 'purple'
+                  }
+                  sx={
+                    isLive && start.can && !isCompleted
+                      ? {
+                          animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`,
+                          fontWeight: 'bold',
+                        }
+                      : undefined
+                  }
+                >
+                  {quiz.attemptsUsed > 0
+                    ? 'Review answers'
+                    : start.can
+                      ? 'Start test'
+                      : 'View instructions'}
+                </Button>
+              )}
+            </>
+          )}
+        </Flex>
       </Flex>
     </Flex>
   );
@@ -1024,6 +1102,7 @@ export default function Quizzes() {
               onPublish={() => openPublish(quiz)}
               onUnpublish={() => unpublish(quiz)}
               onDelete={() => remove(quiz)}
+              onRefresh={load}
             />
           ))
         )}

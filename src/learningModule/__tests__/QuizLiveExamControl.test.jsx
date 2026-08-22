@@ -4,7 +4,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithProviders } from '../../test/renderWithProviders';
 
 /**
- * The mid-exam control panel on the results page.
+ * The mid-exam control panel, opened from the quiz card.
  *
  * Two things are only ever asked while the hall is sitting: who is writing
  * outside Safe Exam Browser, and who has had the paper taken off them. Both
@@ -15,6 +15,10 @@ import { renderWithProviders } from '../../test/renderWithProviders';
  * The minutes are what these tests guard most closely: they are the difference
  * between handing a student back their paper and handing them a sitting that
  * expires on the first click.
+ *
+ * It opens from the quiz list rather than from the results page: when an exam
+ * starts, the list is the page a teacher has in front of them, and the panel was
+ * two navigations away behind analytics nobody reads mid-exam.
  */
 
 const mockNavigate = vi.fn();
@@ -30,11 +34,14 @@ vi.mock('react-router-dom', async () => {
 
 const quizResults = vi.fn();
 const reopenQuizAttempt = vi.fn();
+const listQuizzes = vi.fn();
 vi.mock('../api/lmApi', () => ({
   default: {
     quizResults: (...args) => quizResults(...args),
     reopenQuizAttempt: (...args) => reopenQuizAttempt(...args),
+    listQuizzes: (...args) => listQuizzes(...args),
     quizResultsCsvUrl: () => 'https://api.test/export.csv',
+    LmApiError: class LmApiError extends Error {},
   },
 }));
 
@@ -114,11 +121,31 @@ const resultsFixture = (quiz, attempts) => ({
   serverTime: new Date().toISOString(),
 });
 
+/** The row the panel hangs off: a published paper whose window is open. */
+const listedLive = (quiz, attempts) => [
+  {
+    ...quiz,
+    questionCount: quiz.questions.length,
+    window: { open: true, closed: false, notYetOpen: false },
+    publish: { scheduled: false },
+    stats: { attempts: attempts.length, avg: null, lastSubmittedAt: null },
+    live: {
+      writing: attempts.filter((a) => a.status === 'in_progress').length,
+      submitted: 0,
+      shutOut: attempts.filter((a) => a.status === 'terminated' || a.status === 'expired').length,
+      offSeb: attempts.filter((a) => a.status === 'in_progress' && a.sebBypassed).length,
+    },
+    sittingNow: attempts.filter((a) => a.status === 'in_progress').length,
+  },
+];
+
 const openPanel = async (fixture) => {
   quizResults.mockResolvedValue(fixture);
-  const { default: QuizResults } = await import('../pages/QuizResults');
-  renderWithProviders(<QuizResults />);
-  fireEvent.click(await screen.findByRole('button', { name: /live exam control/i }));
+  listQuizzes.mockResolvedValue(listedLive(fixture.quiz, fixture.attempts));
+  const { default: Quizzes } = await import('../pages/Quizzes');
+  renderWithProviders(<Quizzes />);
+  fireEvent.click(await screen.findByRole('button', { name: /live control/i }));
+  await waitFor(() => expect(quizResults).toHaveBeenCalled());
   return screen.findByRole('dialog');
 };
 
@@ -127,6 +154,52 @@ beforeEach(() => {
 });
 
 describe('the live exam control panel', () => {
+  /**
+   * The header answers the two questions asked from the doorway: how long is
+   * left, and how many are still in it. The clock counts to the *last* paper
+   * running, because that is when the invigilator can leave.
+   */
+  it('counts down to the last paper still running, with the writing and submitted numbers', async () => {
+    const fixture = resultsFixture(quizWith(), [
+      // 60 min paper: 5 min in, so 55 left; 20 min in, so 40 left.
+      writingWithoutSeb(),
+      writingWithoutSeb({
+        _id: 'a3',
+        studentName: 'Meera Nair',
+        startedAt: new Date(Date.now() - 20 * MINUTES).toISOString(),
+      }),
+      { ...shutOut(), _id: 'a4', status: 'submitted', submittedAt: new Date().toISOString() },
+    ]);
+    const dialog = await openPanel(fixture);
+    const header = within(dialog);
+
+    expect(header.getByText(/until the last paper ends/i)).toBeTruthy();
+    expect(header.getByText(/^54:5\d$/)).toBeTruthy();
+    expect(header.getByText('Writing').nextSibling.textContent).toBe('2');
+    expect(header.getByText('Submitted').nextSibling.textContent).toBe('1');
+    expect(header.getByText('Shut out').nextSibling.textContent).toBe('0');
+  });
+
+  it('counts down to the closing time when nobody is writing yet', async () => {
+    const dialog = await openPanel(
+      resultsFixture(
+        quizWith({ availableTo: new Date(Date.now() + 90 * MINUTES).toISOString() }),
+        [shutOut()],
+      ),
+    );
+
+    expect(within(dialog).getByText(/until the window closes/i)).toBeTruthy();
+    expect(within(dialog).getByText(/^1:29:5\d$/)).toBeTruthy();
+  });
+
+  it('says there is no clock on an untimed paper with no closing time', async () => {
+    const dialog = await openPanel(
+      resultsFixture(quizWith({ timeLimitMinutes: 0 }), [writingWithoutSeb()]),
+    );
+
+    expect(within(dialog).getByText('No clock')).toBeTruthy();
+  });
+
   it('lists a shut-out student by email, with when the paper ended', async () => {
     const dialog = await openPanel(
       resultsFixture(quizWith({ requireSafeExamBrowser: true }), [shutOut()]),

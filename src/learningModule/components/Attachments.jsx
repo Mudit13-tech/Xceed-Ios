@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -72,8 +73,14 @@ export function AttachmentList({ attachments = [], compact = false }) {
  * submission). Uploads immediately and hands the caller a stable attachment
  * array so the parent form only ever deals with metadata.
  */
-export function AttachmentPicker({ attachments = [], onChange, disabled }) {
+export function AttachmentPicker({ attachments = [], onChange, disabled, classId }) {
   const fileInput = useRef(null);
+  // Uploads are filed per class, so the picker needs the class it is composing
+  // in. Every composer that mounts it sits under /learning/class/:classId, so
+  // the route is the answer by default; the prop is there for anything that
+  // ever mounts one outside that route.
+  const params = useParams();
+  const targetClassId = classId || params.classId;
   const [linkUrl, setLinkUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const toast = useToast();
@@ -81,9 +88,14 @@ export function AttachmentPicker({ attachments = [], onChange, disabled }) {
   const handleFiles = async (event) => {
     const { files } = event.target;
     if (!files?.length) return;
+    if (!targetClassId) {
+      toast({ status: 'error', title: 'Upload failed', description: 'No class to attach these to.' });
+      if (fileInput.current) fileInput.current.value = '';
+      return;
+    }
     setUploading(true);
     try {
-      const result = await lmApi.uploadFiles(files);
+      const result = await lmApi.uploadFiles(targetClassId, files);
       onChange([...attachments, ...result.attachments]);
     } catch (error) {
       toast({ status: 'error', title: 'Upload failed', description: error.message });

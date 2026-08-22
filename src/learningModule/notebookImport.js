@@ -410,9 +410,75 @@ export function cellsFromIpynb(text) {
   return result(cells, { skipped, language: language ? String(language) : null });
 }
 
+/**
+ * Reads a `.c` file into cells.
+ *
+ * Split on `// %%` where the file carries it, by analogy with the `# %%` a `.py`
+ * uses — but a plain `.c` becomes a **single cell**, which is almost always what
+ * it should be. A C file is one translation unit with one `main`; chopping it up
+ * would produce a pile of cells that individually cannot compile, and a C cell
+ * in this notebook is a whole program.
+ *
+ * None of the Python post-processing applies: there are no imports to scan for
+ * package names and no IPython magics to strip, so this builds the result shape
+ * directly rather than going through `result`.
+ */
+const C_CELL_MARKER = /^[ \t]*\/\/[ \t]*%%(.*)$/;
+
+export function cellsFromC(text) {
+  const lines = String(text ?? '').split('\n');
+  const marked = lines.some((line) => C_CELL_MARKER.test(line));
+
+  const chunks = [];
+  let current = [];
+  let currentIsMarkdown = false;
+
+  const flush = () => {
+    const source = trimBlankLines(current).join('\n');
+    if (source.trim()) chunks.push({ type: currentIsMarkdown ? 'markdown' : 'code', source });
+    current = [];
+  };
+
+  if (marked) {
+    lines.forEach((line) => {
+      const match = line.match(C_CELL_MARKER);
+      if (!match) {
+        current.push(line);
+        return;
+      }
+      flush();
+      currentIsMarkdown = MARKDOWN_TAG.test(match[1] || '');
+    });
+  } else {
+    current = lines;
+  }
+  flush();
+
+  // A markdown cell written as `// %% [markdown]` still carries its comment
+  // slashes on every line; strip them so the prose reads as prose.
+  const cells = chunks.map((cell) =>
+    cell.type === 'markdown'
+      ? { ...cell, source: cell.source.replace(/^[ \t]*\/\/ ?/gm, '') }
+      : cell,
+  );
+
+  return {
+    cells: cells.slice(0, MAX_IMPORT_CELLS),
+    truncated: cells.length > MAX_IMPORT_CELLS,
+    marked,
+    skipped: 0,
+    language: 'c',
+    packages: [],
+    magics: 0,
+  };
+}
+
 /** Picks the parser from the file name. */
 export function cellsFromFile(fileName, text) {
-  return /\.ipynb$/i.test(String(fileName || '')) ? cellsFromIpynb(text) : cellsFromPython(text);
+  const name = String(fileName || '');
+  if (/\.ipynb$/i.test(name)) return cellsFromIpynb(text);
+  if (/\.[ch]$/i.test(name)) return cellsFromC(text);
+  return cellsFromPython(text);
 }
 
 export default cellsFromFile;
