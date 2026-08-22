@@ -147,9 +147,15 @@ export default function usePyodide(packages = [], sources = []) {
    *
    * `onOutput` is called as output arrives rather than only at the end, so a
    * long loop prints progressively the way it would in a terminal.
+   *
+   * The options argument exists so this matches `useCKernel.runCell` and the
+   * pages can stay language-agnostic. `stdin` is what `input()` reads;
+   * `prelude` is meaningless here and ignored — a Python kernel carries state
+   * between cells, so the hidden setup is replayed into it once rather than
+   * prepended to every cell the way C needs.
    */
   const runCell = useCallback(
-    (cellId, code, onOutput) =>
+    (cellId, code, onOutput, { stdin = '' } = {}) =>
       new Promise((resolve, reject) => {
         if (!workerRef.current) {
           reject(new Error('Python is not running yet.'));
@@ -162,7 +168,7 @@ export default function usePyodide(packages = [], sources = []) {
         const id = `${cellId}:${Date.now()}`;
         pendingRef.current = { id, resolve, reject, onOutput };
         setBusyCellId(cellId);
-        workerRef.current.postMessage({ type: 'run', id, code });
+        workerRef.current.postMessage({ type: 'run', id, code, stdin });
       }),
     [],
   );

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
+  ResponsiveContainer, Legend, LabelList,
 } from 'recharts';
 import getEnvironment from '../getenvironment';
 import HealthDashboard from './HealthDashboard';
@@ -486,7 +486,7 @@ export default function AMSDashboard() {
       const data = await res.json();
       setLiveRooms(data.rooms || []);
       setLiveAcqActive(data.acquisitionActive !== false);
-    } catch {}
+    } catch { /* keep the dashboard alive if live-status hiccups */ }
   }, []);
 
   useEffect(() => {
@@ -905,19 +905,46 @@ export default function AMSDashboard() {
                 No department data yet
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={chartData.byDept} margin={{ top: 4, right: 4, left: -22, bottom: 48 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
+              <ResponsiveContainer width="100%" height={Math.max(240, chartData.byDept.length * 48)}>
+                <BarChart
+                  data={chartData.byDept}
+                  layout="vertical"
+                  margin={{ top: 8, right: 40, left: 8, bottom: 8 }}
+                  barCategoryGap={12}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} horizontal={false} />
                   <XAxis
-                    dataKey="dept" tick={{ fontSize: 9, fill: T.textMuted }}
-                    angle={-38} textAnchor="end" interval={0}
-                    axisLine={false} tickLine={false}
+                    type="number"
+                    tick={{ fontSize: 10, fill: T.textMuted }}
+                    axisLine={false}
+                    tickLine={false}
                   />
-                  <YAxis tick={{ fontSize: 9, fill: T.textMuted }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    type="category"
+                    dataKey="dept"
+                    width={150}
+                    tick={{ fontSize: 11, fill: T.textMuted }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
                   <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(99,102,241,0.05)' }} />
                   <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 10, color: T.textMuted, paddingTop: 8 }} />
-                  <Bar dataKey="present" name="Present" fill={T.emerald} radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="absent" name="Absent" fill={T.red} radius={[4, 4, 0, 0]} opacity={0.7} />
+                  <Bar dataKey="present" name="Present" fill={T.emerald} radius={[0, 3, 3, 0]}>
+                    <LabelList
+                      dataKey="present"
+                      position="right"
+                      formatter={(v) => (v == null ? '' : Number(v).toLocaleString('en-IN'))}
+                      style={{ fill: T.emerald, fontSize: 11, fontWeight: 700 }}
+                    />
+                  </Bar>
+                  <Bar dataKey="absent" name="Absent" fill={T.red} radius={[0, 3, 3, 0]} opacity={0.7}>
+                    <LabelList
+                      dataKey="absent"
+                      position="right"
+                      formatter={(v) => (v == null ? '' : Number(v).toLocaleString('en-IN'))}
+                      style={{ fill: T.red, fontSize: 11, fontWeight: 700 }}
+                    />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -934,11 +961,11 @@ export default function AMSDashboard() {
                 No day data yet
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={chartData.byDay} margin={{ top: 4, right: 4, left: -22, bottom: 8 }}>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={chartData.byDay} margin={{ top: 8, right: 12, left: -18, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
-                  <XAxis dataKey="day" tick={{ fontSize: 10, fill: T.textMuted }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 9, fill: T.textMuted }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="day" tick={{ fontSize: 11, fill: T.textMuted }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: T.textMuted }} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(99,102,241,0.05)' }} />
                   <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 10, color: T.textMuted, paddingTop: 8 }} />
                   <Bar dataKey="present" name="Present" fill={T.emerald} radius={[4, 4, 0, 0]} />

@@ -57,22 +57,36 @@ export default function DeptOverridesChart() {
           No overrides recorded yet
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={rows} margin={{ top: 4, right: 4, left: -22, bottom: 48 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={theme.border} vertical={false} />
+        <ResponsiveContainer width="100%" height={Math.max(240, rows.length * 48)}>
+          <BarChart
+            data={rows}
+            layout="vertical"
+            margin={{ top: 8, right: 40, left: 8, bottom: 8 }}
+            barCategoryGap={12}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke={theme.border} horizontal={false} />
             <XAxis
-              dataKey="dept" tick={{ fontSize: 9, fill: theme.textMuted }}
-              angle={-38} textAnchor="end" interval={0}
-              axisLine={false} tickLine={false}
+              type="number"
+              allowDecimals={false}
+              tick={{ fontSize: 10, fill: theme.textMuted }}
+              axisLine={false}
+              tickLine={false}
             />
-            <YAxis allowDecimals={false} tick={{ fontSize: 9, fill: theme.textMuted }} axisLine={false} tickLine={false} />
+            <YAxis
+              type="category"
+              dataKey="dept"
+              width={150}
+              tick={{ fontSize: 11, fill: theme.textMuted }}
+              axisLine={false}
+              tickLine={false}
+            />
             <Tooltip
               contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.surface }}
               cursor={{ fill: 'rgba(99,102,241,0.05)' }}
             />
             <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 10, color: theme.textMuted, paddingTop: 8 }} />
-            <Bar dataKey="verified" name="Verified" stackId="a" fill={theme.success} radius={[0, 0, 0, 0]} />
-            <Bar dataKey="pending" name="Pending" stackId="a" fill={theme.warning} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="verified" name="Verified" stackId="a" fill={theme.success} />
+            <Bar dataKey="pending" name="Pending" stackId="a" fill={theme.warning} radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       )}

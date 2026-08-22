@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 
 import { renderWithProviders } from '../../test/renderWithProviders';
@@ -36,6 +36,15 @@ const sebLaunchToken = vi.fn(async () => ({ token: 'a-launch-token', expiresInSe
 const sebLaunchUrlFromToken = vi.fn(
   (token) => `sebs://api.test/api/v1/learningmodule/seb-launch/${token}`,
 );
+// The separate "get SEB itself" convenience — unrelated to this quiz, but
+// QuizBrief fetches it whenever the "not yet in SEB" instructions are on
+// screen, so every test reaching that branch needs this mocked or the fetch
+// throws synchronously and fails the test for a reason that has nothing to
+// do with what it is checking.
+const getSebInstallers = vi.fn(async () => ({
+  windows: { available: false, fileName: '', fileSize: 0, uploadedByName: '', uploadedAt: null },
+  mac: { available: false, fileName: '', fileSize: 0, uploadedByName: '', uploadedAt: null },
+}));
 vi.mock('../api/lmApi', () => ({
   default: {
     quizBrief: (...args) => quizBrief(...args),
@@ -44,6 +53,8 @@ vi.mock('../api/lmApi', () => ({
     sebConfigUrl: (...args) => sebConfigUrl(...args),
     sebLaunchToken: (...args) => sebLaunchToken(...args),
     sebLaunchUrlFromToken: (...args) => sebLaunchUrlFromToken(...args),
+    getSebInstallers: (...args) => getSebInstallers(...args),
+    sebInstallerDownloadUrl: (platform) => `https://api.test/api/v1/learningmodule/seb-installer/${platform}/download`,
     LmApiError: class LmApiError extends Error {
       constructor(message, status, payload) {
         super(message);
@@ -376,5 +387,98 @@ describe('the panel reflects whether Safe Exam Browser has actually been verifie
 
     expect(await screen.findByRole('link', { name: /download the exam file/i })).toBeTruthy();
     expect(screen.queryByText(/safe exam browser is active/i)).toBeNull();
+  });
+});
+
+describe('getting Safe Exam Browser itself, for a student who does not have it', () => {
+  // The panel this belongs to is only ever shown pre-launch — see "still gives
+  // the ordinary instructions" above — so every test here reuses that exact
+  // brief shape.
+  const notYetInSeb = () =>
+    brief({
+      settings: { deliveryMode: 'all_at_once', requireSafeExamBrowser: true, sebReady: true },
+      sebVerified: false,
+      sebReason: 'no-seb-headers',
+    });
+
+  const setUserAgent = (value) => {
+    Object.defineProperty(window.navigator, 'userAgent', { value, configurable: true });
+  };
+
+  afterEach(() => {
+    // Restore jsdom's own default rather than leaking a fake UA into whatever
+    // test runs next in this file.
+    setUserAgent(window.navigator.userAgent);
+  });
+
+  it('offers nothing when neither installer has been uploaded — no dead links', async () => {
+    getSebInstallers.mockResolvedValue({
+      windows: { available: false, fileName: '', fileSize: 0, uploadedByName: '', uploadedAt: null },
+      mac: { available: false, fileName: '', fileSize: 0, uploadedByName: '', uploadedAt: null },
+    });
+    quizBrief.mockResolvedValue(notYetInSeb());
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    await screen.findByRole('link', { name: /download the exam file/i });
+    expect(screen.queryByText(/don't have it yet/i)).toBeNull();
+  });
+
+  it('offers the Windows build first on a non-Mac browser', async () => {
+    setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
+    getSebInstallers.mockResolvedValue({
+      windows: { available: true, fileName: 'SEBSetup.exe', fileSize: 1, uploadedByName: '', uploadedAt: null },
+      mac: { available: true, fileName: 'SafeExamBrowser.dmg', fileSize: 1, uploadedByName: '', uploadedAt: null },
+    });
+    quizBrief.mockResolvedValue(notYetInSeb());
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    const link = await screen.findByRole('link', { name: /download safe exam browser for windows/i });
+    expect(link).toHaveAttribute('href', 'https://api.test/api/v1/learningmodule/seb-installer/windows/download');
+    const secondary = screen.getByRole('link', { name: /^mac version$/i });
+    expect(secondary).toHaveAttribute('href', 'https://api.test/api/v1/learningmodule/seb-installer/mac/download');
+  });
+
+  it('offers the Mac build first on a Mac browser', async () => {
+    setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)');
+    getSebInstallers.mockResolvedValue({
+      windows: { available: true, fileName: 'SEBSetup.exe', fileSize: 1, uploadedByName: '', uploadedAt: null },
+      mac: { available: true, fileName: 'SafeExamBrowser.dmg', fileSize: 1, uploadedByName: '', uploadedAt: null },
+    });
+    quizBrief.mockResolvedValue(notYetInSeb());
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    const link = await screen.findByRole('link', { name: /download safe exam browser for mac/i });
+    expect(link).toHaveAttribute('href', 'https://api.test/api/v1/learningmodule/seb-installer/mac/download');
+    expect(screen.getByRole('link', { name: /^windows version$/i })).toBeTruthy();
+  });
+
+  it('offers only the one that is actually uploaded, with no dead link for the other', async () => {
+    setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
+    getSebInstallers.mockResolvedValue({
+      windows: { available: true, fileName: 'SEBSetup.exe', fileSize: 1, uploadedByName: '', uploadedAt: null },
+      mac: { available: false, fileName: '', fileSize: 0, uploadedByName: '', uploadedAt: null },
+    });
+    quizBrief.mockResolvedValue(notYetInSeb());
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    await screen.findByRole('link', { name: /download safe exam browser for windows/i });
+    expect(screen.queryByRole('link', { name: /mac version/i })).toBeNull();
+  });
+
+  it('still offers the Mac build to a Mac student even when only that one exists', async () => {
+    setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)');
+    getSebInstallers.mockResolvedValue({
+      windows: { available: false, fileName: '', fileSize: 0, uploadedByName: '', uploadedAt: null },
+      mac: { available: true, fileName: 'SafeExamBrowser.dmg', fileSize: 1, uploadedByName: '', uploadedAt: null },
+    });
+    quizBrief.mockResolvedValue(notYetInSeb());
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    expect(await screen.findByRole('link', { name: /download safe exam browser for mac/i })).toBeTruthy();
   });
 });

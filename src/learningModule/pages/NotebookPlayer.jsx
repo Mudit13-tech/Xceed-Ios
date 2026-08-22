@@ -20,7 +20,7 @@ import lmApi from '../api/lmApi';
 import { DeadlineCountdown, ErrorState, Loading } from '../components/common';
 import NotebookCell from '../components/NotebookCell';
 import RichText from '../components/RichText';
-import usePyodide from '../hooks/usePyodide';
+import useNotebookKernel from '../hooks/useNotebookKernel';
 import { formatDateTime } from '../format';
 
 /**
@@ -86,11 +86,15 @@ export default function NotebookPlayer() {
   const lateSubmission =
     Boolean(notebook?.dueDate && attempt?.submittedAt) &&
     new Date(attempt.submittedAt) > new Date(notebook.dueDate);
-  const { status, detail, busyCellId, start, restart, runCell, stop } = usePyodide(packages, sources);
-  // Server-side runs are independent of the browser kernel: they work whether or
-  // not it has been started, which is the point for a notebook that cannot run
-  // in it at all.
-  const [serverRunning, setServerRunning] = useState(false);
+  // Defaulted here rather than trusted from the payload: a notebook stored
+  // before the field existed sends no language at all.
+  const language = notebook?.language === 'c' ? 'c' : 'python';
+  const isC = language === 'c';
+  const { status, detail, busyCellId, label, start, restart, runCell, stop } = useNotebookKernel(
+    language,
+    packages,
+    sources,
+  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -258,9 +262,15 @@ export default function NotebookPlayer() {
     );
   }, []);
 
-  /** Replays the teacher's hidden setup into a fresh kernel, once. */
+  /**
+   * Replays the teacher's hidden setup into a fresh kernel, once.
+   *
+   * Python only. C has no kernel state to replay into — its hidden cells are
+   * prepended to each cell's source as a prelude at run time instead, which is
+   * why this returns immediately for it.
+   */
   const ensureSetup = useCallback(() => {
-    if (!hiddenSetup.length) return Promise.resolve();
+    if (isC || !hiddenSetup.length) return Promise.resolve();
     if (!setupRef.current) {
       setupRef.current = (async () => {
         for (const source of hiddenSetup) {
@@ -276,12 +286,12 @@ export default function NotebookPlayer() {
       });
     }
     return setupRef.current;
-  }, [hiddenSetup, runCell]);
+  }, [hiddenSetup, isC, runCell]);
 
   const executeCell = useCallback(
     async (cell) => {
       if (status !== 'ready') {
-        toast({ status: 'info', title: 'Python is still starting.', duration: 2000 });
+        toast({ status: 'info', title: `${label} is still starting.`, duration: 2000 });
         return;
       }
 
@@ -297,7 +307,12 @@ export default function NotebookPlayer() {
 
       try {
         await ensureSetup();
-        const { result, error: runError } = await runCell(cell.key, cell.source, push);
+        const { result, error: runError } = await runCell(cell.key, cell.source, push, {
+          stdin: cell.stdin || '',
+          // Prepended to the source before compiling. Empty for Python, where
+          // the setup has already been run into the kernel by `ensureSetup`.
+          prelude: isC ? hiddenSetup : [],
+        });
         if (runError) collected.push({ type: 'error', text: runError });
         else if (result !== null && result !== undefined) collected.push({ type: 'result', text: result });
 
@@ -311,57 +326,8 @@ export default function NotebookPlayer() {
         patchCell(cell.key, { outputs: [{ type: 'error', text: err.message }] });
       }
     },
-    [ensureSetup, patchCell, runCell, scheduleSave, status, toast],
+    [ensureSetup, hiddenSetup, isC, label, patchCell, runCell, scheduleSave, status, toast],
   );
-
-  /**
-   * Runs everything in a sandboxed container on the server instead of the
-   * browser.
-   *
-   * The reason this exists is TensorFlow: Pyodide has no WebAssembly build of it
-   * and micropip has no pure-Python wheel to fall back on, so `import tensorflow`
-   * can never work in the browser kernel however long it is left to load.
-   *
-   * The browser stays the default. It is instant, costs nothing and scales to a
-   * cohort without a queue; this path costs real CPU on a shared machine, so it
-   * is a button rather than the behaviour. A 503 means the deployment has not
-   * configured a runner, which is the default — the message says so rather than
-   * leaving a button that looks broken.
-   */
-  const runAllOnServer = useCallback(async () => {
-    setServerRunning(true);
-    try {
-      const payload = cellsRef.current
-        .filter((cell) => cell.type === 'code' && cell.source.trim())
-        .map((cell) => ({ id: cell.key, source: cell.source }));
-      if (!payload.length) return;
-
-      const result = await lmApi.runNotebookOnServer(classId, notebookId, payload);
-
-      const byId = new Map((result.cells || []).map((cell) => [String(cell.id), cell.outputs || []]));
-      setCells((current) =>
-        current.map((cell) =>
-          byId.has(String(cell.key))
-            ? {
-                ...cell,
-                outputs: byId.get(String(cell.key)),
-                executedAt: new Date().toISOString(),
-                runCount: (cell.runCount || 0) + 1,
-              }
-            : cell,
-        ),
-      );
-      scheduleSave();
-
-      if (result.timedOut || result.failed) {
-        toast({ status: 'warning', title: result.message || 'The run did not finish.', duration: 8000 });
-      }
-    } catch (err) {
-      toast({ status: 'error', title: err.message, duration: 8000 });
-    } finally {
-      setServerRunning(false);
-    }
-  }, [classId, notebookId, scheduleSave, toast]);
 
   const runAll = useCallback(async () => {
     if (status !== 'ready') return;
@@ -395,7 +361,7 @@ export default function NotebookPlayer() {
   const addCell = (type, afterIndex = null) => {
   setCells((current) => {
     const next = [...current];
-    const cell = { key: clientKey(), type, source: '', outputs: [], runCount: 0 };
+    const cell = { key: clientKey(), type, source: '', stdin: '', outputs: [], runCount: 0 };
     if (afterIndex === null) {
       next.push(cell);
     } else {
@@ -469,7 +435,7 @@ export default function NotebookPlayer() {
             </Box>
           ) : null}
           <HStack spacing={2} mt={2} wrap="wrap">
-            <Badge colorScheme={kernelBadge[0]}>Python {kernelBadge[1]}</Badge>
+            <Badge colorScheme={kernelBadge[0]}>{label} {kernelBadge[1]}</Badge>
             {notebook.packages?.length ? <Badge>{notebook.packages.join(', ')}</Badge> : null}
             {/* A live counter rather than a date, and dropped once they have
                 turned it in — a clock still ticking down on submitted work
@@ -501,7 +467,7 @@ export default function NotebookPlayer() {
         <HStack spacing={2} wrap="wrap">
           {status === 'idle' || status === 'failed' ? (
             <Button size="sm" colorScheme="green" leftIcon={<FiPlay />} onClick={start}>
-              Start Python
+              Start {label}
             </Button>
           ) : (
             <>
@@ -515,17 +481,6 @@ export default function NotebookPlayer() {
               </Button>
               <Button size="sm" variant="outline" leftIcon={<FiRefreshCw />} onClick={restartKernel}>
                 Restart
-              </Button>
-              {/* For the libraries the browser kernel cannot load at all. */}
-              <Button
-                size="sm"
-                variant="outline"
-                colorScheme="purple"
-                onClick={runAllOnServer}
-                isLoading={serverRunning}
-                loadingText="Running on server"
-              >
-                Run on server
               </Button>
               {busyCellId ? (
                 <Button size="sm" colorScheme="red" leftIcon={<FiSquare />} onClick={stopKernel}>
@@ -548,10 +503,11 @@ export default function NotebookPlayer() {
         <Alert status="info" borderRadius="md" fontSize="sm">
           <AlertIcon />
           <Box>
-            <Text fontWeight="600">Python runs in this browser tab.</Text>
+            <Text fontWeight="600">{label} runs in this browser tab.</Text>
             <Text>
-              Nothing to install, and your code never leaves your machine to run — but the first start downloads
-              a few megabytes, so it is worth doing on a decent connection.
+              Nothing to install, and your code never leaves your machine to run — but the first start downloads{' '}
+              {isC ? 'the compiler, which is about 50MB' : 'a few megabytes'}, so it is worth doing on a decent
+              connection.
             </Text>
           </Box>
         </Alert>
@@ -587,6 +543,7 @@ export default function NotebookPlayer() {
               cell={cell}
               index={index}
               total={cells.length}
+              language={language}
               readOnly={submitted}
               running={busyCellId === cell.key}
               canRun={status === 'ready' && !busyCellId}

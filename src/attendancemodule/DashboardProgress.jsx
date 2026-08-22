@@ -246,7 +246,7 @@ function BatchChart({ rows }) {
                         <YAxis
                             type="category"
                             dataKey="label"
-                            width={160}
+                            width={220}
                             tick={{ fontSize: 11, fill: theme.textMuted }}
                             axisLine={false}
                             tickLine={false}

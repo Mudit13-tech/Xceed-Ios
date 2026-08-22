@@ -57,7 +57,7 @@ export default function Assignments() {
     if (!files.length) return;
     setImporting(true);
     try {
-      const { attachments } = await lmApi.uploadFiles(files);
+      const { attachments } = await lmApi.uploadFiles(classId, files);
       const draft = await lmApi.startAssignmentImport(classId, {
         title: files.length === 1 ? files[0].name.replace(/\.[^.]+$/, '') : 'Imported assignment',
         sources: attachments.map((file) => ({

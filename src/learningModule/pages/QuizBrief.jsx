@@ -56,6 +56,72 @@ const useCountdown = (target) => {
   return remaining;
 };
 
+/** True on a Mac, by the same signals a browser actually exposes — there is no
+ * more specific API than this to ask with. */
+const isAppleDevice = () => /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent || navigator.platform || '');
+
+/**
+ * A place to get Safe Exam Browser itself, not the settings file this quiz
+ * hands out.
+ *
+ * Entirely self-contained — its own fetch, its own state, nothing read from or
+ * written to the quiz this panel is otherwise about — because it answers a
+ * different question than everything around it: not "can this browser open
+ * this exam" but "does this computer have Safe Exam Browser installed at
+ * all". A student who does not is stuck on that question regardless of which
+ * quiz brought them here, and installing the exact build this installation
+ * was tested against is safer than whichever version their own search turns
+ * up. See `sebInstallerController.js` on the server — deliberately unrelated
+ * to any quiz's own data.
+ */
+function SebInstallerLinks() {
+  const [installers, setInstallers] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    lmApi
+      .getSebInstallers()
+      .then((result) => { if (!cancelled) setInstallers(result); })
+      // Nothing configured, or the request failed — either way there is
+      // nothing to offer, and this panel has no error state of its own to
+      // show for it: the surrounding SEB instructions stand on their own.
+      .catch(() => { if (!cancelled) setInstallers(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!installers) return null;
+
+  const mac = isAppleDevice();
+  const primary = mac ? installers.mac : installers.windows;
+  const secondary = mac ? installers.windows : installers.mac;
+  if (!primary?.available && !secondary?.available) return null;
+
+  return (
+    <Text fontSize="xs" color="lmFg.subtle" mb={1}>
+      Don&apos;t have it yet?{' '}
+      {primary?.available && (
+        <Box
+          as="a"
+          href={lmApi.sebInstallerDownloadUrl(mac ? 'mac' : 'windows')}
+          textDecoration="underline"
+        >
+          Download Safe Exam Browser for {mac ? 'Mac' : 'Windows'}
+        </Box>
+      )}
+      {primary?.available && secondary?.available && ' · '}
+      {secondary?.available && (
+        <Box
+          as="a"
+          href={lmApi.sebInstallerDownloadUrl(mac ? 'windows' : 'mac')}
+          textDecoration="underline"
+        >
+          {mac ? 'Windows' : 'Mac'} version
+        </Box>
+      )}
+    </Text>
+  );
+}
+
 /**
  * The clock a waiting student actually watches, given its own block rather than
  * a line inside an alert — on a fullscreen brief this is the one thing on the
@@ -727,6 +793,7 @@ export default function QuizBrief() {
                       Safe Exam Browser has to be installed on this computer first. Open the test in
                       it below, and nothing else you have open will be reachable while the test runs.
                     </Text>
+                    <SebInstallerLinks />
                     {/* One click, if SEB is installed: following a `seb://` link hands
                         the settings straight to it. The download beneath is the same
                         file the long way round, for a browser that will not follow an

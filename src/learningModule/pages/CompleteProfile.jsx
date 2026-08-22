@@ -20,6 +20,7 @@ import {
 } from '@chakra-ui/react';
 import { FiHash, FiUser, FiUserCheck } from 'react-icons/fi';
 import lmApi from '../api/lmApi';
+import { looksLikeEmail, EMAIL_AS_NAME_MESSAGE } from '../displayName';
 
 /**
  * The gate a student passes through once, the first time they open the module.
@@ -55,6 +56,12 @@ export default function CompleteProfile({ onDone }) {
   // Opens with whatever is already known — the account's name, and a roll
   // number a teacher may have recorded on a roster. For an imported cohort
   // that is the right answer already, and confirming beats retyping.
+  //
+  // The name arrives blank when what is stored on the account is its email
+  // address: that is the value every account is created with, and prefilling it
+  // is how whole cohorts ended up with `21103078@nitj.ac.in` printed in the name
+  // column of every result sheet. The server drops it (see lmAuth.profileName)
+  // so this form asks rather than offering the placeholder back.
   useEffect(() => {
     let cancelled = false;
     lmApi
@@ -81,6 +88,12 @@ export default function CompleteProfile({ onDone }) {
     const trimmedRoll = rollNumber.trim();
     if (trimmedName.length < 2) {
       setError('Enter your full name as it should appear on results.');
+      return;
+    }
+    // Typing the address in anyway — or pasting it back — is the same wrong
+    // answer the prefill used to hand out. The server refuses it too.
+    if (looksLikeEmail(trimmedName)) {
+      setError(EMAIL_AS_NAME_MESSAGE);
       return;
     }
     if (!trimmedRoll) {
@@ -159,6 +172,10 @@ export default function CompleteProfile({ onDone }) {
                     maxLength={80}
                   />
                 </InputGroup>
+                <FormHelperText fontSize="xs">
+                  Your name, not your email address — this is what your teachers
+                  see on rosters and result sheets.
+                </FormHelperText>
               </FormControl>
 
               <FormControl isRequired>

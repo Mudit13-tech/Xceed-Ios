@@ -30,7 +30,7 @@ import HintTooltip from '../components/HintTooltip';
 import NotebookCell from '../components/NotebookCell';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
 import { toDateTimeInput } from '../format';
-import usePyodide from '../hooks/usePyodide';
+import useNotebookKernel from '../hooks/useNotebookKernel';
 import { MAX_IMPORT_CELLS, cellsFromFile } from '../notebookImport';
 
 /**
@@ -46,6 +46,7 @@ const newCell = (type) => ({
   _id: `new-${Math.random().toString(36).slice(2)}`,
   type,
   source: '',
+  stdin: '',
   locked: false,
   hidden: false,
   outputs: [],
@@ -101,8 +102,10 @@ export default function NotebookEditor() {
   // during the startup wait without the teacher declaring them anywhere.
   const sources = useMemo(() => cells.map((cell) => cell.source), [cells]);
 
-  const { status, detail, busyCellId, kernelPackages, start, restart, runCell, stop } =
-    usePyodide(packages, sources);
+  const language = notebook?.language === 'c' ? 'c' : 'python';
+  const isC = language === 'c';
+  const { status, detail, busyCellId, kernelPackages, label, start, restart, runCell, stop } =
+    useNotebookKernel(language, packages, sources);
 
   // Installs happen once, at startup: a package added after that is not in the
   // running kernel however many times the cell is run.
@@ -163,10 +166,12 @@ export default function NotebookEditor() {
   /** Runs hidden setup first, exactly as a student's kernel will. */
   const executeCell = async (cell) => {
     if (status !== 'ready') {
-      toast({ status: 'info', title: 'Start Python first.', duration: 2000 });
+      toast({ status: 'info', title: `Start ${label} first.`, duration: 2000 });
       return;
     }
-    if (!setupDone) {
+    // C has no kernel state, so its hidden cells are prepended to each run
+    // rather than executed once into a namespace.
+    if (!isC && !setupDone) {
       for (const setup of cellsRef.current.filter((entry) => entry.hidden && entry.type === 'code')) {
         // eslint-disable-next-line no-await-in-loop
         await runCell('__setup__', setup.source, () => {});
@@ -182,7 +187,12 @@ export default function NotebookEditor() {
     };
 
     try {
-      const { result, error: runError } = await runCell(cell._id, cell.source, push);
+      const { result, error: runError } = await runCell(cell._id, cell.source, push, {
+        stdin: cell.stdin || '',
+        prelude: isC
+          ? cellsRef.current.filter((entry) => entry.hidden && entry.type === 'code').map((entry) => entry.source)
+          : [],
+      });
       if (runError) collected.push({ type: 'error', text: runError });
       else if (result !== null && result !== undefined) collected.push({ type: 'result', text: result });
       patchCell(cell._id, {
@@ -208,7 +218,10 @@ export default function NotebookEditor() {
     const isIpynb = /\.ipynb$/i.test(file.name);
 
     try {
-      const { cells: imported, truncated, marked, skipped, language, packages, magics } = cellsFromFile(
+      // `fileLanguage`, not `language`: the outer one is this notebook's kernel,
+      // and shadowing it here is how the mismatch check below would end up
+      // comparing a value with itself.
+      const { cells: imported, truncated, marked, skipped, language: fileLanguage, packages, magics } = cellsFromFile(
         file.name,
         await file.text(),
       );
@@ -249,13 +262,16 @@ export default function NotebookEditor() {
         duration: 7000,
       });
 
-      // An R or Julia notebook imports perfectly cleanly and then fails on every
-      // cell, because the kernel here only speaks Python. Worth its own warning.
-      if (language && !/^python/i.test(language)) {
+      // A file written for another kernel imports perfectly cleanly and then
+      // fails on every cell. That is an R or Julia notebook landing in a Python
+      // one, and now also a .c file landing in a Python notebook or the reverse.
+      const wrongKernel = fileLanguage
+        && (isC ? !/^c$/i.test(fileLanguage) : !/^python/i.test(fileLanguage));
+      if (wrongKernel) {
         toast({
           status: 'warning',
-          title: `That notebook was written for ${language}.`,
-          description: 'Cells here run against a Python kernel, so they will not work unmodified.',
+          title: `That file was written for ${fileLanguage}.`,
+          description: `Cells here run against a ${label} kernel, so they will not work unmodified.`,
           duration: 9000,
         });
       }
@@ -293,6 +309,7 @@ export default function NotebookEditor() {
           _id: String(cell._id).startsWith('new-') ? undefined : cell._id,
           type: cell.type,
           source: cell.source,
+          stdin: cell.stdin || '',
           locked: cell.locked,
           hidden: cell.hidden,
           order,
@@ -346,7 +363,7 @@ export default function NotebookEditor() {
         </Button>
         {status === 'idle' || status === 'failed' ? (
           <Button size="sm" variant="outline" onClick={start}>
-            Start Python
+            Start {label}
           </Button>
         ) : (
           <Button
@@ -360,7 +377,7 @@ export default function NotebookEditor() {
               restart();
             }}
           >
-            Restart Python
+            Restart {label}
           </Button>
         )}
         <Button
@@ -393,7 +410,7 @@ export default function NotebookEditor() {
         <Alert status="warning" borderRadius="md" py={2} fontSize="sm">
           <AlertIcon />
           <Box flex="1">
-            Python is already running without {missingFromKernel.join(', ')}. Restart it to install{' '}
+            {label} is already running without {missingFromKernel.join(', ')}. Restart it to install{' '}
             {missingFromKernel.length === 1 ? 'that package' : 'those packages'}.
           </Box>
           <Button
@@ -449,38 +466,71 @@ export default function NotebookEditor() {
           </FormControl>
 
           <FormControl>
-            <FormLabel fontSize="sm">Packages</FormLabel>
-            <Input
-              value={packagesText}
-              placeholder="numpy, pandas, matplotlib"
-              onChange={(e) => setPackagesText(e.target.value)}
-            />
-            <FormHelperText fontSize="xs">
-              Installed into the browser kernel before the notebook runs. numpy, pandas, matplotlib, scipy,
-              sympy and scikit-learn have prebuilt WebAssembly builds; a package needing a C extension that has
-              not been built for the browser will not install. TensorFlow, PyTorch and Keras save fine but
-              have no browser build at all — the notebook is stored, the browser kernel skips them, and the
-              cells that need them want Run on server or the Colab link below.
-            </FormHelperText>
+            <FormLabel fontSize="sm">Language</FormLabel>
+            <HStack>
+              <Badge colorScheme={isC ? 'blue' : 'green'} fontSize="sm" px={2} py={1}>
+                {label}
+              </Badge>
+              <Text fontSize="xs" opacity={0.6}>
+                {notebook.published
+                  ? 'Fixed once published — students already have code in this language.'
+                  : 'Chosen when the notebook was created.'}
+              </Text>
+            </HStack>
           </FormControl>
 
-          {/* The honest escape hatch for deep learning. Nothing here can run
-              TensorFlow, so a notebook that needs it points the class at Colab
-              rather than shipping a kernel that fails at the first import. */}
-          <FormControl>
-            <FormLabel fontSize="sm">Open in Colab link (optional)</FormLabel>
-            <Input
-              value={notebook.colabUrl || ''}
-              placeholder="https://colab.research.google.com/drive/…"
-              onChange={(e) => setNotebook({ ...notebook, colabUrl: e.target.value })}
-            />
-            <FormHelperText fontSize="xs">
-              Shows the class a button to open this lesson in Google Colab, for work the browser kernel
-              cannot do — TensorFlow, PyTorch, or anything needing a GPU. Must be a colab.research.google.com
-              address; anything else is discarded on save. Students run it in their own Google account, so
-              their work stays in their Drive and does not come back here.
-            </FormHelperText>
-          </FormControl>
+          {/* C has no package installer and no Colab story, so both fields are
+              hidden rather than shown inert — an empty box a teacher can type
+              into but which does nothing is worse than no box. */}
+          {isC ? (
+            <FormControl>
+              <FormLabel fontSize="sm">How C cells run</FormLabel>
+              <FormHelperText fontSize="xs" mt={0}>
+                Each code cell is a whole program: it needs its own{' '}
+                <Box as="code">main()</Box>, and nothing carries over from the cell above. Put shared{' '}
+                <Box as="code">#include</Box> lines, typedefs and helper functions in a{' '}
+                <b>hidden setup</b> cell — those are prepended to every cell before it compiles, so a hidden
+                cell must <i>not</i> define <Box as="code">main()</Box>. Cells are compiled with real clang,
+                so the errors are the ones a compiler would give.
+              </FormHelperText>
+            </FormControl>
+          ) : (
+            <>
+              <FormControl>
+                <FormLabel fontSize="sm">Packages</FormLabel>
+                <Input
+                  value={packagesText}
+                  placeholder="numpy, pandas, matplotlib"
+                  onChange={(e) => setPackagesText(e.target.value)}
+                />
+                <FormHelperText fontSize="xs">
+                  Installed into the browser kernel before the notebook runs. numpy, pandas, matplotlib, scipy,
+                  sympy and scikit-learn have prebuilt WebAssembly builds; a package needing a C extension that has
+                  not been built for the browser will not install. TensorFlow, PyTorch and Keras save fine but
+                  have no browser build at all — the notebook is stored, the browser kernel skips them, and the
+                  cells that need them want the Colab link below.
+                </FormHelperText>
+              </FormControl>
+
+              {/* The honest escape hatch for deep learning. Nothing here can run
+                  TensorFlow, so a notebook that needs it points the class at Colab
+                  rather than shipping a kernel that fails at the first import. */}
+              <FormControl>
+                <FormLabel fontSize="sm">Open in Colab link (optional)</FormLabel>
+                <Input
+                  value={notebook.colabUrl || ''}
+                  placeholder="https://colab.research.google.com/drive/…"
+                  onChange={(e) => setNotebook({ ...notebook, colabUrl: e.target.value })}
+                />
+                <FormHelperText fontSize="xs">
+                  Shows the class a button to open this lesson in Google Colab, for work the browser kernel
+                  cannot do — TensorFlow, PyTorch, or anything needing a GPU. Must be a colab.research.google.com
+                  address; anything else is discarded on save. Students run it in their own Google account, so
+                  their work stays in their Drive and does not come back here.
+                </FormHelperText>
+              </FormControl>
+            </>
+          )}
 
           <Divider />
 
@@ -590,6 +640,7 @@ export default function NotebookEditor() {
               cell={cell}
               index={index}
               total={cells.length}
+              language={language}
               running={String(busyCellId) === String(cell._id)}
               canRun={status === 'ready' && !busyCellId}
               onChange={(patch) => patchCell(cell._id, patch)}
@@ -621,7 +672,7 @@ export default function NotebookEditor() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".py,.ipynb,text/x-python,application/x-ipynb+json"
+          accept={isC ? '.c,.h,text/x-c' : '.py,.ipynb,text/x-python,application/x-ipynb+json'}
           hidden
           data-testid="notebook-import"
           onChange={(event) => {
@@ -630,14 +681,20 @@ export default function NotebookEditor() {
             event.target.value = '';
           }}
         />
-        <HintTooltip label="A Jupyter notebook, or a script split on the # %% markers VS Code, Spyder and jupytext write">
+        <HintTooltip
+          label={
+            isC
+              ? 'A .c file. It comes in as one cell unless it is split on // %% markers — a C file is one program.'
+              : 'A Jupyter notebook, or a script split on the # %% markers VS Code, Spyder and jupytext write'
+          }
+        >
           <Button
             size="sm"
             variant="outline"
             leftIcon={<FiUpload />}
             onClick={() => fileInputRef.current?.click()}
           >
-            Import .ipynb / .py
+            {isC ? 'Import .c' : 'Import .ipynb / .py'}
           </Button>
         </HintTooltip>
 
@@ -668,10 +725,20 @@ export default function NotebookEditor() {
       />
 
       <Text fontSize="xs" opacity={0.6}>
-        Importing adds cells to the end of this notebook, without their saved outputs. An{' '}
-        <Box as="code">.ipynb</Box> already knows where its cells are; in a <Box as="code">.py</Box> put{' '}
-        <Box as="code"># %%</Box> on its own line to start a new cell, or <Box as="code"># %% [markdown]</Box>{' '}
-        for a text cell.
+        Importing adds cells to the end of this notebook, without their saved outputs.{' '}
+        {isC ? (
+          <>
+            A <Box as="code">.c</Box> file comes in as a single cell, because a C file is one program. To
+            split it, put <Box as="code">// %%</Box> on its own line to start a new cell, or{' '}
+            <Box as="code">// %% [markdown]</Box> for a text cell.
+          </>
+        ) : (
+          <>
+            An <Box as="code">.ipynb</Box> already knows where its cells are; in a <Box as="code">.py</Box>{' '}
+            put <Box as="code"># %%</Box> on its own line to start a new cell, or{' '}
+            <Box as="code"># %% [markdown]</Box> for a text cell.
+          </>
+        )}
       </Text>
     </VStack>
   );

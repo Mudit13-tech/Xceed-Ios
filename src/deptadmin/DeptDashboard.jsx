@@ -111,16 +111,38 @@ export default function DeptDashboard() {
             <DashboardProgress title="Acquisition and Roll Assignment Progress" compact />
 
             <section style={{ ...styles.card, marginTop: 18 }}>
-                <div style={{ ...styles.heading, fontSize: 17, marginBottom: 18 }}>Year-wise attendance</div>
+                <div
+                    style={{
+                        display: 'flex',
+                        alignItems: 'baseline',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: 8,
+                        marginBottom: 16,
+                    }}
+                >
+                    <div style={{ ...styles.heading, fontSize: 17 }}>Year-wise attendance</div>
+                    <div style={{ fontSize: 12, color: theme.textMuted }}>Today, {stats.date}</div>
+                </div>
                 {stats.byYear.length === 0 ? (
                     <div style={{ color: theme.textMuted, padding: '24px 0', textAlign: 'center' }}>No year-wise attendance has been recorded today.</div>
                 ) : stats.byYear.map((item) => (
-                    <div key={item.year} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 64px', gap: 14, alignItems: 'center', marginBottom: 14 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600 }}>Year {item.year}</span>
-                        <div style={{ height: 10, borderRadius: 5, overflow: 'hidden', background: theme.surfaceAlt }}>
-                            <div style={{ height: '100%', width: `${((item.attendancePct || 0) / maxYearPct) * 100}%`, background: theme.accent, borderRadius: 5 }} />
+                    <div key={item.year} style={{ display: 'grid', gridTemplateColumns: '100px 1fr 76px', gap: 14, alignItems: 'center', marginBottom: 16 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>Year {item.year}</span>
+                        <div style={{ height: 12, borderRadius: 6, overflow: 'hidden', background: theme.surfaceAlt }}>
+                            <div
+                                style={{
+                                    height: '100%',
+                                    width: `${((item.attendancePct || 0) / maxYearPct) * 100}%`,
+                                    background: `linear-gradient(90deg, ${theme.accent}, ${theme.accent}CC)`,
+                                    borderRadius: 6,
+                                    transition: 'width .5s ease',
+                                }}
+                            />
                         </div>
-                        <span style={{ fontSize: 13, fontWeight: 700, textAlign: 'right' }}>{displayPercent(item.attendancePct)}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, textAlign: 'right', color: theme.accent, fontFamily: theme.fontMono }}>
+                            {displayPercent(item.attendancePct)}
+                        </span>
                     </div>
                 ))}
             </section>

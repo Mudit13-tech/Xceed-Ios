@@ -34,6 +34,7 @@ import { loginPathFor } from '../../authRedirect';
 import lmApi from '../api/lmApi';
 import useStableNavigate from '../hooks/useStableNavigate';
 import { canCreateClass, isStudentOnly } from '../roles';
+import { looksLikeEmail } from '../displayName';
 import NotificationBell from './NotificationBell';
 import { buttonTextStyles } from './common';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
@@ -41,6 +42,11 @@ import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 // Split out of the shell: every student sees it exactly once, and nobody else
 // ever does, so it has no business in the bundle that loads on every page.
 const CompleteProfile = lazy(() => import('../pages/CompleteProfile'));
+
+// Opened from the account menu, by anyone whose name still reads as their email
+// address — and by anyone who simply mistyped it. Lazy for the same reason:
+// most sessions never open it.
+const EditNameDialog = lazy(() => import('./EditNameDialog'));
 
 // Shared look for the header's square action buttons (theme toggle, logout) so
 // they read as one pair. Mirrors the attendance shell's SQUARE_BTN.
@@ -372,6 +378,8 @@ export default function LearningLayout() {
   const [overview, setOverview] = useState(null);
   const [classes, setClasses] = useState(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  // The "Edit your name" dialog, kept apart from the drawer's disclosure above.
+  const nameDialog = useDisclosure();
   const navigate = useStableNavigate();
 
   // Which class is open, and where inside it. Read with useMatch rather than
@@ -433,6 +441,16 @@ export default function LearningLayout() {
   const mayCreateClass = canCreateClass(me?.roles);
   // Students have no platform navbar above this header, so it owns the page.
   const studentOnly = isStudentOnly(me?.roles);
+  /**
+   * Whether this account is going by its email address instead of a name.
+   *
+   * Students are marched through `CompleteProfile` for it, but staff have no
+   * roll number to give and so never meet that gate — for them this prompt in
+   * the account menu is the only way the placeholder ever gets corrected. The
+   * server decides it (`lmAuth.nameIsEmail`); the local check is the fallback
+   * for a `/me` served before that flag existed.
+   */
+  const nameIsEmail = Boolean(me && (me.nameIsEmail ?? looksLikeEmail(me.name)));
 
   /**
    * A student who has not yet given their name and roll number gets that form
@@ -549,8 +567,23 @@ export default function LearningLayout() {
                     <Text fontSize="xs" color="lmFg.muted" noOfLines={1}>
                       {me.email}
                     </Text>
+                    {/* Said plainly, because the account is being shown to
+                        teachers and printed on result sheets under an address
+                        rather than a name, and nothing else on screen makes
+                        that look like a mistake. */}
+                    {nameIsEmail && (
+                      <Text fontSize="xs" color="orange.400" mt={1}>
+                        Your email address is being used as your name.
+                      </Text>
+                    )}
                   </Box>
                   <MenuDivider />
+                  <MenuItem
+                    color={nameIsEmail ? 'orange.400' : menuTextColor}
+                    onClick={nameDialog.onOpen}
+                  >
+                    {nameIsEmail ? 'Set your name' : 'Edit your name'}
+                  </MenuItem>
                   <MenuItem color={menuTextColor} onClick={handleLogout}>
                     Log out
                   </MenuItem>
@@ -608,6 +641,18 @@ export default function LearningLayout() {
           </DrawerBody>
         </DrawerContent>
       </Drawer>
+
+      {nameDialog.isOpen && (
+        <Suspense fallback={null}>
+          {/* `load` re-reads /me, so the header stops showing the address the
+              moment the name is saved. */}
+          <EditNameDialog
+            isOpen={nameDialog.isOpen}
+            onClose={nameDialog.onClose}
+            onSaved={load}
+          />
+        </Suspense>
+      )}
     </Box>
   );
 }
