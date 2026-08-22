@@ -151,8 +151,8 @@ export default function Navbar() {
       isAuthenticated &&
       !isPublicPath &&
       !location.pathname.startsWith('/learning') &&
-      userDetails?.user?.role?.some(r => r?.toLowerCase() === 'student') &&
-      !userDetails?.user?.role?.some(r => r?.toLowerCase() === 'admin')
+      userDetails?.user?.role?.length === 1 &&
+      userDetails?.user?.role?.[0]?.toLowerCase() === 'student'
     ) {
       navigate('/learning', { replace: true });
     }
