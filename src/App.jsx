@@ -330,7 +330,8 @@ function RouteFallback() {
 const APP_ROUTES = (
         <Routes>
           {/* Landing Page */}
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/home" element={<Home />} />
           <Route path="/guide" element={<GuidePage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/nirf" element={<NirfRanking />} />
