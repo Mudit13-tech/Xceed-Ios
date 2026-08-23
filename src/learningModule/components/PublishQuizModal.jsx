@@ -84,6 +84,8 @@ function ClockRow({ step, title, subtitle, children, isInvalid, action }) {
 
 /** Now, as `<input type="datetime-local">` wants it. */
 const nowForInput = () => toDateTimeInput(new Date());
+/** Current date and time plus 5 minutes, formatted for `<input type="datetime-local">`. */
+const nowPlus5ForInput = () => toDateTimeInput(new Date(Date.now() + 5 * 60 * 1000));
 
 export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPublished }) {
   const [publishAt, setPublishAt] = useState('');
@@ -126,8 +128,8 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
     hydratedFor.current = String(quiz._id);
 
     setLink('');
-    setPublishAt(toDateTimeInput(quiz.publishAt));
-    setAvailableFrom(toDateTimeInput(quiz.settings?.availableFrom));
+    setPublishAt(toDateTimeInput(quiz.publishAt) || nowForInput());
+    setAvailableFrom(toDateTimeInput(quiz.settings?.availableFrom) || nowPlus5ForInput());
     setAvailableTo(toDateTimeInput(quiz.settings?.availableTo));
     // `window.startDeadline` rather than the setting, so a quiz still carrying
     // the older "minutes after opening" margin opens the toggle already on,
@@ -160,7 +162,9 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
     : publishAt
       ? new Date(publishAt)
       : new Date();
-  const publishInPast = Boolean(!isAlreadyPublished && publishAt && new Date(publishAt) < new Date());
+  const publishInPast = Boolean(
+    !isAlreadyPublished && publishAt && new Date(publishAt) < new Date(Date.now() - 60000),
+  );
   const startsBeforePublished = Boolean(
     !isAlreadyPublished && availableFrom && effectivePublishTime && new Date(availableFrom) < effectivePublishTime,
   );

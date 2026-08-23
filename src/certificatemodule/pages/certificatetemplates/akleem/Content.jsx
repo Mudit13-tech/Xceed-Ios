@@ -62,6 +62,7 @@ function Content() {
   const [verifiableLink, setVerifiableLink] = useState(false)
   const [certiType, setCertiType] = useState('');
   const [logos, setLogos] = useState([""]);
+  const [qr, setQr] = useState(null);
   const [participantDetail, setParticipantDetail] = useState({});
   const [signature, setSignatures] = useState([
     {
@@ -257,6 +258,7 @@ function Content() {
             console.log(logo[i].url)
           }
         setLogos(logo);
+        setQr(data_one[0].qr || null);
         // if(data_one[0].title){settitle(data_one[0].title)};
         const verifiablelink = data_one[0].verifiableLink.toString()
         // console.log(verifiableLink)
@@ -338,6 +340,7 @@ function Content() {
       title={title}
       verifiableLink={verifiableLink}
       logos={logos}
+      qr={qr}
       participantDetail={participantDetail}
       signature={signature}
       header={header}

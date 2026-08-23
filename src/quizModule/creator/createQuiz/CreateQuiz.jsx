@@ -11,7 +11,7 @@ import getEnvironment from '../../../getenvironment';
 const CreateQuiz = () => {
   const initialValues = {
     quizName: '',
-    startTime: '',
+    startTime: moment().add(5, 'minutes').format('YYYY-MM-DDTHH:mm'),
     marginTime: '',
     resultTime: '',
     negativeMarking: '',

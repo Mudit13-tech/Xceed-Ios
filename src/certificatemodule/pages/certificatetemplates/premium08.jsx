@@ -1,18 +1,37 @@
-//==========================PREMIUM 9==============================
-
+//========================PREMIUM 08 — Regal Laurel======================
 
 import React from 'react';
 import { useEffect, useRef } from 'react';
 
 import ReactHtmlParser from 'react-html-parser';
-// import getEnvironment from "../../../../getenvironment";
-import ProxifiedImage from '../../components/ProxifiedImage';
 import QRCode from 'qrcode';
-import { Button, Text } from '@chakra-ui/react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+import { Text } from '@chakra-ui/react';
 
-// const apiUrl = getEnvironment();
+const IVORY = '#FBF7EE';
+const MAROON = '#5B1A24';
+const GOLD = '#B98C2F';
+const GOLD_LIGHT = '#E3C77A';
+
+// One half of the wreath. It is drawn twice rather than referenced with <use>,
+// which html2canvas does not follow when the certificate is rasterised.
+const LaurelHalf = ({ transform }) => (
+  <g transform={transform}>
+    <path
+      d="M0 96C-34 62-46 22-40-22-8-4 8 26 6 62"
+      fill="none"
+      stroke={GOLD}
+      strokeWidth="4"
+    />
+    <g fill={GOLD}>
+      <ellipse cx="-30" cy="-8" rx="13" ry="6" transform="rotate(-28 -30 -8)" />
+      <ellipse cx="-26" cy="18" rx="14" ry="6" transform="rotate(-20 -26 18)" />
+      <ellipse cx="-18" cy="44" rx="14" ry="6" transform="rotate(-10 -18 44)" />
+      <ellipse cx="-6" cy="68" rx="13" ry="6" transform="rotate(4 -6 68)" />
+      <ellipse cx="-8" cy="6" rx="12" ry="5" transform="rotate(38 -8 6)" />
+      <ellipse cx="-2" cy="32" rx="12" ry="5" transform="rotate(48 -2 32)" />
+    </g>
+  </g>
+);
 
 const CertificateContent = ({
   eventId,
@@ -38,7 +57,7 @@ const CertificateContent = ({
   const svgRef = useRef();
 
   useEffect(() => {
-    const url = window.location.href; // Replace with your URL
+    const url = window.location.href;
     const svg = svgRef.current;
 
     QRCode.toDataURL(url, (err, dataUrl) => {
@@ -48,13 +67,12 @@ const CertificateContent = ({
         'http://www.w3.org/2000/svg',
         'image'
       );
-      image.setAttribute('x', '100');
-      image.setAttribute('y', '500');
-      image.setAttribute('width', '100');
-      image.setAttribute('height', '100');
+      image.setAttribute('x', '110');
+      image.setAttribute('y', '618');
+      image.setAttribute('width', '86');
+      image.setAttribute('height', '86');
       image.setAttributeNS('http://www.w3.org/1999/xlink', 'href', dataUrl);
       image.classList.add('qrcode');
-
       svg.appendChild(image);
       if (!verifiableLink) {
         document.querySelectorAll('.qrcode').forEach((elem) => {
@@ -76,69 +94,79 @@ const CertificateContent = ({
       className="svg-img tw-object-contain"
       ref={svgRef}
     >
-      <g clipPath="url(#clip0_137_57)">
-        <path fill="#fff" d="M0 0H1122.5V798.222H0z"></path>
-        <g fill="#0E99FE" fillOpacity="0.16" opacity="0.66">
-          <path d="M1083.3 510.582l58.47-55.357v110.713l-58.47-55.356zM167.375 721.83l-29.232 33.754v-67.508l29.232 33.754z"></path>
-          <rect
-            width="311.806"
-            height="311.806"
-            x="-170.934"
-            y="512.798"
-            rx="27.283"
-            transform="rotate(-45 -170.934 512.798)"
-          ></rect>
-          <rect
-            width="311.806"
-            height="311.806"
-            x="-170.934"
-            y="337.407"
-            rx="27.283"
-            transform="rotate(-45 -170.934 337.407)"
-          ></rect>
-          <rect
-            width="311.806"
-            height="311.806"
-            x="409.804"
-            y="807.454"
-            rx="27.283"
-            transform="rotate(-45 409.804 807.454)"
-          ></rect>
-          <rect
-            width="311.806"
-            height="311.806"
-            x="861.142"
-            y="759.903"
-            rx="27.283"
-            transform="rotate(-45 861.142 759.903)"
-          ></rect>
-          <rect
-            width="311.806"
-            height="311.806"
-            x="946.109"
-            y="243.865"
-            rx="27.283"
-            transform="rotate(-45 946.109 243.865)"
-          ></rect>
-          <rect
-            width="311.806"
-            height="311.806"
-            x="47.33"
-            y="891.641"
-            rx="27.283"
-            transform="rotate(-45 47.33 891.641)"
-          ></rect>
-        </g>
-      </g>
       <defs>
-        <clipPath id="clip0_137_57">
-          <path fill="#fff" d="M0 0H1122.5V798.222H0z"></path>
-        </clipPath>
+        <linearGradient id="p08-gold" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={GOLD_LIGHT} />
+          <stop offset="0.5" stopColor={GOLD} />
+          <stop offset="1" stopColor={GOLD_LIGHT} />
+        </linearGradient>
       </defs>
 
-      <foreignObject width={'90%'} height={'400'} y={'40'} x={'5%'}>
+      <rect width="1122.52" height="793.7" fill={IVORY} />
+
+      {/* Maroon border band, with a gold rule floating inside it. */}
+      <rect
+        x="18"
+        y="18"
+        width="1086.52"
+        height="757.7"
+        fill="none"
+        stroke={MAROON}
+        strokeWidth="26"
+      />
+      <rect
+        x="18"
+        y="18"
+        width="1086.52"
+        height="757.7"
+        fill="none"
+        stroke="url(#p08-gold)"
+        strokeWidth="2"
+      />
+      <rect
+        x="48"
+        y="48"
+        width="1026.52"
+        height="697.7"
+        fill="none"
+        stroke="url(#p08-gold)"
+        strokeWidth="3"
+      />
+
+      {/* Filigree arcs tucked into each corner of the inner rule. */}
+      <g fill="none" stroke={GOLD} strokeWidth="2">
+        <path d="M48 128c44 0 80-36 80-80" />
+        <path d="M48 104c30 0 56-26 56-56" />
+        <path d="M1074.52 128c-44 0-80-36-80-80" />
+        <path d="M1074.52 104c-30 0-56-26-56-56" />
+        <path d="M48 665.7c44 0 80 36 80 80" />
+        <path d="M48 689.7c30 0 56 26 56 56" />
+        <path d="M1074.52 665.7c-44 0-80 36-80 80" />
+        <path d="M1074.52 689.7c-30 0-56 26-56 56" />
+      </g>
+
+      {/* Laurel wreath watermark behind the body text. */}
+      <g transform="translate(561 470)" opacity="0.12">
+        <LaurelHalf />
+        <LaurelHalf transform="scale(-1 1)" />
+      </g>
+
+      {/* Ribbon banner sitting under the award line. */}
+      <g transform="translate(561 386)">
+        <path fill={MAROON} d="M-150-16h300v32h-300z" />
+        <path fill={MAROON} d="M-198-24l48 24-48 24 16-24z" />
+        <path fill={MAROON} d="M198-24l-48 24 48 24-16-24z" />
+        <path
+          fill="none"
+          stroke={GOLD_LIGHT}
+          strokeWidth="1.5"
+          d="M-142-9h284v18h-284z"
+        />
+      </g>
+
+      <foreignObject width={'90%'} height={'400'} y={'80'} x={'5%'}>
         <div
-          style={{ height: '200px' }}
+          style={{ height: '170px' }}
           className="tw-flex tw-items-center tw-justify-center tw-w-full"
         >
           {logos.map((item, key) => (
@@ -183,8 +211,8 @@ const CertificateContent = ({
         </div>
       </foreignObject>
 
-      <foreignObject x="0%" y="190.473" width="100%" height="200">
-        <div className="tw-mt-8 tw-text-center tw-flex-col tw-items-center tw-flex tw-gap-1 tw-justify-center">
+      <foreignObject x="0%" y="215.473" width="100%" height="200">
+        <div className="tw-mt-6 tw-text-center tw-flex-col tw-items-center tw-flex tw-gap-1 tw-justify-center">
           {header.map((item, ind) => (
             <Text
               width="70%"
@@ -193,7 +221,7 @@ const CertificateContent = ({
               fontStyle={item.italic}
               fontWeight={item.bold}
               color={item.fontColor}
-              className="tw-uppercase"
+              className="tw-uppercase tw-tracking-widest"
               key={ind}
             >
               {item.header}
@@ -203,7 +231,7 @@ const CertificateContent = ({
       </foreignObject>
 
       {/* certificateOf */}
-      <foreignObject y="295.473" width="100%" height="200">
+      <foreignObject y="300.473" width="100%" height="200">
         <Text
           width="100%"
           fontSize={`${certificateOf.fontSize}px`}
@@ -219,7 +247,7 @@ const CertificateContent = ({
         </Text>
       </foreignObject>
 
-      <foreignObject width="100%" x="11%" y="375.473" height="160">
+      <foreignObject width="100%" x="11%" y="415.473" height="160">
         <Text
           width="77%"
           fontSize={`${contentBody.fontSize}px`}
@@ -233,15 +261,15 @@ const CertificateContent = ({
         </Text>
       </foreignObject>
 
-      <foreignObject x={'20%'} y={435} width={'62%'} height={400}>
+      <foreignObject x={'20%'} y={455} width={'62%'} height={400}>
         <div
-          style={{ height: '250px' }}
+          style={{ height: '235px' }}
           className="tw-flex-wrap tw-flex tw-items-center tw-justify-between tw-gap-6 tw-px-6 "
         >
           {signature.map((item, key) => (
             <div
               key={key}
-              style={{ height: '250px' }}
+              style={{ height: '235px' }}
               className="tw-flex tw-flex-col tw-items-center tw-justify-end tw-gap-2"
             >
               <div
@@ -264,6 +292,7 @@ const CertificateContent = ({
                 fontStyle={item.name.italic}
                 fontWeight={item.name.bold}
                 color={item.name.fontColor}
+                className="tw-text-wrap tw-max-w-48 tw-text-center"
               >
                 {item.name.name}
               </Text>
@@ -273,7 +302,7 @@ const CertificateContent = ({
                 fontStyle={item.position.italic}
                 fontWeight={item.position.bold}
                 color={item.position.fontColor}
-                className="-tw-mt-3"
+                className="-tw-mt-3 tw-text-wrap tw-max-w-48 tw-text-center"
               >
                 {item.position.position}
               </Text>
@@ -281,14 +310,15 @@ const CertificateContent = ({
           ))}
         </div>
       </foreignObject>
+
       {verifiableLink && (
-        <foreignObject x={'0%'} y={'91%'} width={'100%'} height={'100'}>
+        <foreignObject x={'0%'} y={'89%'} width={'100%'} height={'100'}>
           <div className="tw-text-sm tw-text-center tw-text-gray-700 ">
             {window.location.href}
           </div>
         </foreignObject>
       )}
-      <foreignObject x={'0%'} y={'89%'} width={'100%'} height={'100'}>
+      <foreignObject x={'0%'} y={'87%'} width={'100%'} height={'100'}>
         <Text className="tw-text-sm tw-text-center tw-text-gray-700 ">
           Issued On: {footer.footer}
         </Text>

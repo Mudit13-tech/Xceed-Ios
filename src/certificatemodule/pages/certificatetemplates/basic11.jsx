@@ -61,8 +61,8 @@ const CertificateContent = ({
     <svg
       xmlns="http://www.w3.org/2000/svg"
       style={{
-        width: window.outerWidth >= 768 ? "841.9" : window.outerWidth,
-        height: window.outerWidth >= 768 ? "595.5" : "auto"
+        width: window.outerWidth >= 768 ? "841.9px" : window.outerWidth,
+        height: window.outerWidth >= 768 ? "595.5px" : "auto"
       }}
       viewBox="0 0 1122.52 793.7"
       id="svg"

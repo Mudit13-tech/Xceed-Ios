@@ -3,15 +3,13 @@ import Bottom from './Bottom';
 import Content from './Content';
 import Top from './Top';
 import html2canvas from 'html2canvas';
-// import downloadCertificatePdf from '../../certipdfdownload';
 import QRCode from 'qrcode';
-import { Button, Spinner } from '@chakra-ui/react';
-// import jsPDF from 'jspdf';
-import getEnvironment from '../../../../getenvironment';
+import { Button } from '@chakra-ui/react';
+import jsPDF from 'jspdf';
+import { buildEmbeddedFontCss } from '../embedFonts';
 
 function Template01() {
   const svgRef = useRef();
-  const apiUrl = getEnvironment();
   const [imageDownloading, setImageDownloading] = useState(false)
   const [imageDownloaded, setImageDownloaded] = useState(false)
   const [pdfDownloading, setpdfDownloading] = useState(false)
@@ -67,218 +65,210 @@ function Template01() {
   //   const file = new File([blob], "Certificate", { type: "text/html" });
   //   return file;
   // }
-  const handleDownloadImage = async () => {
-    try {
-      if (imageDownloaded) {
-        const ans = confirm("you want to download again")
-        if (!ans) {
-          return;
-        }
-      }
-      setImageDownloading(true)
-      const input = document.getElementById('id-card-class').firstElementChild;
-      input.style.padding="0px";
-      input.style.margin="0px";
-      // input.style.width = '841.92px';
-      // input.style.height = '595.499987px';
-      html2canvas(input, {
-        x:1,
-        y:1,
-        width:input.firstElementChild.clientWidth,
-        height:input.firstElementChild.clientHeight,
-        logging: true,
-        allowTaint: true,
-        backgroundColor: "white",
-        useCORS: true,
-        foreignObjectRendering: true,
-        scale:5,
-      }).then((canvas) => {
-        const imgData = canvas.toDataURL('image/png');
-        const link = document.createElement('a');
-        link.href = imgData;
+  // The certificate is laid out at a fixed 841.9 x 595.5 CSS px. Capture the
+  // wrapper itself rather than probing a child: the first child is a <style>
+  // tag whenever the QR has been freely placed, and an <svg> otherwise, and
+  // neither reports usable clientWidth/clientHeight in every browser.
+  const renderCanvas = async () => {
+    const host = document.getElementById('id-card-class');
+    const source = host && host.firstElementChild;
+    if (!source) {
+      throw new Error('Certificate is still loading.');
+    }
 
-        link.download = 'certificate-by-XCEED.png';
-        link.click();
-        setImageDownloading(false)
+    // Webfonts that have not finished loading render as fallbacks in the
+    // capture, so wait them out before rasterising.
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+
+    // Waiting is not enough on its own: the capture is rasterised from an SVG
+    // loaded as an image, which cannot fetch webfonts at all. Without this the
+    // certificate renders in fallback fonts whose metrics differ, and every
+    // centred and wrapped line lands somewhere other than where it sits on
+    // screen. Embedding the faces as data URIs is what keeps the text put.
+    const fontCss = await buildEmbeddedFontCss(source);
+
+    // html2canvas derives its draw offset from the captured element's page
+    // position, and on the foreignObject path applies that offset twice over —
+    // once as a canvas translate, once inside drawImage — each time multiplied
+    // by the scale. Zero is the only value it renders correctly; anything else
+    // drags the capture off the canvas, which is what shifted the certificate
+    // upward (it renders below the app header). Rather than predict that
+    // offset and subtract it back out, capture a copy that actually sits at the
+    // page origin: pinned at 0,0 and told the page is unscrolled, the offset is
+    // zero by construction rather than by arithmetic. Working on a clone also
+    // means the live certificate is never mutated mid-render.
+    const stage = document.createElement('div');
+    stage.style.cssText =
+      'position:fixed;left:0;top:0;margin:0;padding:0;background:#fff;pointer-events:none;z-index:-1;';
+    const clone = source.cloneNode(true);
+    clone.style.margin = '0px';
+    clone.style.padding = '0px';
+    stage.appendChild(clone);
+    document.body.appendChild(stage);
+
+    try {
+      const rect = clone.getBoundingClientRect();
+      const width = Math.ceil(rect.width) || 842;
+      const height = Math.ceil(rect.height) || 596;
+
+      // Browsers cap canvas dimensions and, more sharply, the size of a data
+      // URL a download can carry. A flat scale of 5 pushed a desktop-sized
+      // certificate past both, which is why the download silently did nothing
+      // on laptops while the smaller mobile layout squeaked through. Cap the
+      // long edge instead so the output stays high-resolution but always
+      // representable.
+      const MAX_EDGE = 4000;
+      const scale = Math.max(1, Math.min(4, MAX_EDGE / Math.max(width, height)));
+
+      return await html2canvas(clone, {
+        width,
+        height,
+        // Pins the origin html2canvas measures against, so the pinned clone
+        // resolves to exactly (0, 0).
+        scrollX: 0,
+        scrollY: 0,
+        logging: false,
+        allowTaint: true,
+        backgroundColor: 'white',
+        useCORS: true,
+        // Every template puts its titles, body, signatures and logos inside
+        // SVG <foreignObject> elements. html2canvas's default renderer walks
+        // the DOM and lays each node out itself, which ignores the
+        // foreignObject's own x/y and drops all that text in the wrong place.
+        // This flag hands the whole tree to the browser to render instead, so
+        // the capture matches what is on screen. Note it requires every image
+        // to already be a data URL — Content.jsx inlines the logos and
+        // signatures for exactly this reason.
+        foreignObjectRendering: true,
+        scale,
+        // A <style> already inside the subtree is dropped during cloning, so
+        // the embedded faces have to be added afterwards, here.
+        onclone: (_doc, clonedRoot) => {
+          if (!fontCss) return;
+          const styleEl = _doc.createElement('style');
+          styleEl.textContent = fontCss;
+          clonedRoot.appendChild(styleEl);
+        },
       });
+    } finally {
+      document.body.removeChild(stage);
+    }
+  };
+
+  // Object URLs sidestep the data-URL size limit that broke the desktop
+  // download, and Firefox only fires a download for an anchor that is actually
+  // in the document.
+  const saveBlob = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    // Revoking immediately can cancel the download in some browsers.
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
+
+  const handleDownloadImage = async () => {
+    if (imageDownloading) return;
+    try {
+      if (imageDownloaded && !confirm('you want to download again')) {
+        return;
+      }
+      setImageDownloading(true);
+      const canvas = await renderCanvas();
+      const blob = await new Promise((resolve, reject) =>
+        canvas.toBlob(
+          (result) =>
+            result ? resolve(result) : reject(new Error('Could not encode the image.')),
+          'image/png'
+        )
+      );
+      saveBlob(blob, 'certificate-by-XCEED.png');
+      setImageDownloaded(true);
     } catch (error) {
-      console.error(error);
+      console.error('Error downloading the image:', error);
+      alert('An unexpected error occurred while downloading the image. Please try again later.');
+    } finally {
       setImageDownloading(false);
     }
   };
 
-    // const handleDownloadPDF = () => {
-    //   // const input = document.getElementById('id-card');
-    //   const input = document.getElementsByClassName('id-card-class');
-    //   input.style.width = '1754px';
-    //   input.style.height = '1240px';
-    //   html2canvas(input, {
-    //     logging: true,
-    //     allowTaint: true,
-    //     backgroundColor: '#ffffff',
-    //     useCORS: true,
-    //     foreignObjectRendering: true,
-    //     scrollX: 0,
-    //     scrollY: 0,
-    //     windowWidth: document.documentElement.offsetWidth,
-    //     windowHeight: document.documentElement.offsetHeight,
-    //   }).then((canvas) => {
-    //     const imgData = canvas.toDataURL('image/png');
-
-    //     const pdf = new jsPDF({
-    //       orientation: 'landscape',
-    //       unit: 'px',
-    //       format: [1754, 1240],
-    //     });
-    //     pdf.addImage(imgData, 'JPEG', 0, 0, 1754, 1240);
-    //     pdf.save('download.pdf');
-    //   });
-    //   input.style.height = 'auto';
-    //   input.style.width = 'auto';
-    // };
-
-
-    // const handleDownloadImage = async () => {
-    //   try {
-    //     if (imageDownloaded) {
-    //       const ans = confirm("you want to download again")
-    //       if (!ans) {
-    //         return;
-    //       }
-    //     }
-    //     setImageDownloading(true)
-    //     const response = await fetch(
-    //       `${apiUrl}/certificatemodule/certificate/download/image`,
-    //       {
-    //         method: 'POST',
-    //         headers: {"Content-Type": "application/json"},
-    //         credentials: 'include',
-    //         body: JSON.stringify({url : window.location.href}),
-    //       }
-    //     );
-    //     const data = await response.blob();
-    //     const blob = new Blob([data], { type: 'image/png' });
-    //     const url = URL.createObjectURL(blob);
-    //     const link = document.createElement('a');
-    //     link.href = url;
-    //     link.download = 'certificate.' + 'png';
-    //     link.click();
-    //     URL.revokeObjectURL(url);
-    //     setImageDownloading(false)
-    //   } catch (error) {
-    //     console.error('Error downloading:', error);
-    //     alert('An unexpected error occurred while downloading image. Please try again later.');
-    //     setImageDownloading(false)
-    //   }
-    // };
-    // const handleDownloadImage = async () => {
-    //   try {
-    //     if (imageDownloaded) {
-    //       const ans = confirm("you want to download again")
-    //       if (!ans) {
-    //         return;
-    //       }
-    //     }
-    //     setImageDownloading(true)
-    //     const html = document.getElementsByTagName("html")[0].cloneNode("html")
-    //     const file = await saveDOMToHtmlFile(html)
-    //     // console.log(file)
-    //     console.log(html)
-    //     let formData = new FormData()
-    //     formData.append("certificate", file)
-    //     const response = await fetch(
-    //       `${apiUrl}/certificatemodule/certificate/download/image`,
-    //       {
-    //         method: 'POST',
-    //         credentials: 'include',
-    //         body: formData,
-    //       }
-    //     );
-    //     const data = await response.blob();
-    //     const blob = new Blob([data], { type: 'image/png' });
-    //     const url = URL.createObjectURL(blob);
-    //     const link = document.createElement('a');
-    //     link.href = url;
-    //     link.download = 'certificate.' + 'png';
-    //     link.click();
-    //     URL.revokeObjectURL(url);
-    //     setImageDownloading(false)
-    //   } catch (error) {
-    //     console.error('Error downloading:', error);
-    //     alert('An unexpected error occurred while downloading image. Please try again later.');
-    //     setImageDownloading(false)
-    //   }
-    // };
-
-    const handleDownloadPDF = async () => {
-      try {
-        if (pdfDownloaded) {
-          const ans = confirm("you want to download again")
-          if (!ans) {
-            return;
-          }
-        }
-        setpdfDownloading(true)
-        const html = document.getElementsByTagName("html")[0].cloneNode("html")
-        // console.log(html)
-        const file = await saveDOMToHtmlFile(html)
-        // console.log(file)
-        let formData = new FormData()
-        formData.append("certificate", file)
-        const response = await fetch(
-          `${apiUrl}/certificatemodule/certificate/download/pdf`,
-          {
-            method: 'POST',
-            credentials: 'include',
-            body: formData,
-          },
-          { responseType: 'blob' }
-        );
-        const data = await response.blob();
-        const blob = new Blob([data], { type: 'application/pdf' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', 'certificate.pdf');
-        document.body.appendChild(link);
-        link.click();
-        link.parentNode.removeChild(link);
-        setpdfDownloading(false)
-      } catch (error) {
-        console.error('Error downloading the PDF:', error);
-        alert('An unexpected error occurred while downloading pdf. Please try again later.');
-        setpdfDownloading(false)
+  const handleDownloadPDF = async () => {
+    if (pdfDownloading) return;
+    try {
+      if (pdfDownloaded && !confirm('you want to download again')) {
+        return;
       }
+      setpdfDownloading(true);
+      const canvas = await renderCanvas();
+      // One page, exactly the shape of the certificate, so nothing is letterboxed.
+      const pdf = new jsPDF({
+        orientation: canvas.width >= canvas.height ? 'landscape' : 'portrait',
+        unit: 'pt',
+        format: [canvas.width, canvas.height],
+      });
+      pdf.addImage(
+        canvas.toDataURL('image/jpeg', 0.95),
+        'JPEG',
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+      saveBlob(pdf.output('blob'), 'certificate-by-XCEED.pdf');
+      setpdfDownloaded(true);
+    } catch (error) {
+      console.error('Error downloading the PDF:', error);
+      alert('An unexpected error occurred while downloading the PDF. Please try again later.');
+    } finally {
+      setpdfDownloading(false);
     }
-    const handleClick = (type) => {
-      if (type == "image") { setImageDownloaded(true); handleDownloadImage() }
-      else if (type == "pdf") { setpdfDownloaded(true); handleDownloadPDF() }
-    }
-    return (
-      <>
-        <div id="id-card-class" >
-          <Content />
-        </div>
-        <div className='tw-hidden'>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 1122.52 793.7"
-            ref={svgRef}
-          >
-            <Top />
-            <Bottom />
-          </svg>
-        </div>
-        <div className="tw-flex tw-items-center">
-          {imageDownloading ? <p>Downloading <Spinner /></p> : <Button disabled={imageDownloading} onClick={(e) => { handleClick("image") }} variant="solid" colorScheme="teal">
-            Download Image
-          </Button>}
-          {/* {pdfDownloading ? <p>Downloading <Spinner /></p> : <Button disabled={pdfDownloading} onClick={(e) => { handleClick("pdf") }} variant="outline" colorScheme="teal">
-            Download PDF
-          </Button>} */}
-          </div>
-      </>
-    );
-  }
+  };
 
-  export default Template01;
+  return (
+    <>
+      <div id="id-card-class">
+        <Content />
+      </div>
+      <div className="tw-hidden">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 1122.52 793.7"
+          ref={svgRef}
+        >
+          <Top />
+          <Bottom />
+        </svg>
+      </div>
+      <div className="tw-flex tw-items-center tw-gap-2">
+        <Button
+          isDisabled={imageDownloading || pdfDownloading}
+          isLoading={imageDownloading}
+          loadingText="Downloading"
+          onClick={handleDownloadImage}
+          variant="solid"
+          colorScheme="teal"
+        >
+          Download Image
+        </Button>
+        <Button
+          isDisabled={imageDownloading || pdfDownloading}
+          isLoading={pdfDownloading}
+          loadingText="Downloading"
+          onClick={handleDownloadPDF}
+          variant="outline"
+          colorScheme="teal"
+        >
+          Download PDF
+        </Button>
+      </div>
+    </>
+  );
+}
+
+export default Template01;

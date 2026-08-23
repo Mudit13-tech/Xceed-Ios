@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1122.52 793.7" width="1122.52" height="793.7">
+  <defs><clipPath id="p"><rect width="1122.52" height="793.7"/></clipPath></defs>
+  <rect width="1122.52" height="793.7" fill="#FFFFFF"/>
+  <g clip-path="url(#p)">
+    <path fill="#14B8A6" opacity="0.35" d="M0 0h1122.52v96c-160 62-330 6-500 24S220 196 0 118Z"/>
+    <path fill="#0F766E" d="M0 0h1122.52v52c-190 78-368 8-548 26S186 152 0 74Z"/>
+    <path fill="#14B8A6" opacity="0.35" d="M1122.52 793.7H0v-96c160-62 330-6 500-24s402.52-76 622.52 2Z"/>
+    <path fill="#0F766E" d="M1122.52 793.7H0v-52c190-78 368-8 548-26s384.52-74 574.52 4Z"/>
+  </g>
+  <rect x="52" y="150" width="1018.52" height="500" fill="none" stroke="#0B3B39" stroke-opacity="0.25" stroke-width="1.5"/>
+  <g fill="#9AA3AE">
+    <rect x="390" y="195" width="110" height="55" rx="6"/>
+    <rect x="622" y="195" width="110" height="55" rx="6"/>
+  </g>
+  <text x="561" y="290" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="22" fill="#0F766E" letter-spacing="10">CERTIFICATE OF MERIT</text>
+  <text x="561" y="358" text-anchor="middle" font-family="Georgia, serif" font-size="44" fill="#0B3B39">Participant Name</text>
+  <path d="M481 380h160" stroke="#0F766E" stroke-width="3"/>
+  <circle cx="561" cy="380" r="6" fill="#0F766E"/>
+  <g fill="#C8CDD4">
+    <rect x="300" y="418" width="522" height="12" rx="6"/>
+    <rect x="340" y="446" width="442" height="12" rx="6"/>
+    <rect x="400" y="474" width="322" height="12" rx="6"/>
+  </g>
+  <g fill="#9AA3AE">
+    <rect x="260" y="576" width="200" height="4" rx="2"/>
+    <rect x="300" y="594" width="120" height="10" rx="5"/>
+    <rect x="662" y="576" width="200" height="4" rx="2"/>
+    <rect x="702" y="594" width="120" height="10" rx="5"/>
+  </g>
+</svg>

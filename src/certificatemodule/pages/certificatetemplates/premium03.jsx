@@ -66,8 +66,8 @@ const Template12 = ({
       xmlns="http://www.w3.org/2000/svg"
       xmlnsXlink="http://www.w3.org/1999/xlink"
       style={{
-        width: window.outerWidth >= 768 ? '841.9' : window.outerWidth,
-        height: window.outerWidth >= 768 ? '595.5' : 'auto',
+        width: window.outerWidth >= 768 ? '841.9px' : window.outerWidth,
+        height: window.outerWidth >= 768 ? '595.5px' : 'auto',
       }}
       viewBox="0 0 841.92 595.499987"
       id="svg"

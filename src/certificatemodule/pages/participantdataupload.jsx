@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import getEnvironment from '../../getenvironment';
 import FileDownloadButton from '../../filedownload/filedownload';
 import { Link as ChakraLink } from '@chakra-ui/react';
@@ -7,6 +8,7 @@ import { IconButton } from '@chakra-ui/react';
 import { FiEdit2, FiMail, FiTrash2 } from 'react-icons/fi';
 import { FiCheck } from 'react-icons/fi';
 import { FiDownload } from 'react-icons/fi';
+import { FiAlertTriangle, FiFileText, FiX } from 'react-icons/fi';
 import { Tooltip } from '@chakra-ui/react';
 
 import saveAs from 'file-saver';
@@ -14,7 +16,9 @@ import saveAs from 'file-saver';
 // import subjectFile from '../assets/subject_template';
 import {
   Container,
+  Flex,
   Heading,
+  Progress,
   Input,
   Box,
   FormLabel,
@@ -24,6 +28,11 @@ import {
   Text,
   Center,
   HStack,
+  VStack,
+  Badge,
+  Spinner,
+  List,
+  ListItem,
 } from '@chakra-ui/react';
 import {
   CustomTh,
@@ -46,6 +55,89 @@ import { Button } from '@chakra-ui/react';
 import Header from '../../components/header';
 import { FaUpload } from 'react-icons/fa';
 
+// Column names as they appear in public/participant_template.xlsx. The upload
+// route stores each sheet row as-is, so these are also the participant fields
+// that survive a batch upload.
+const REQUIRED_COLUMNS = ['name', 'mailId', 'certiType'];
+const OPTIONAL_COLUMNS = [
+  'department',
+  'college',
+  'types',
+  'teamName',
+  'position',
+  'title1',
+  'title2',
+];
+const KNOWN_COLUMNS = [...REQUIRED_COLUMNS, ...OPTIONAL_COLUMNS];
+const CERTIFICATE_TYPES = ['winner', 'participant', 'speaker', 'organizer'];
+
+const cell = (value) => String(value ?? '').trim();
+
+// The upload route accepts whatever the sheet contains, so a malformed file is
+// only discovered once its rows are already in the database. Parsing the file
+// here first lets the user see what will be sent -- and what is missing --
+// before committing to the upload.
+const buildPreview = (rows) => {
+  const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  const missingColumns = REQUIRED_COLUMNS.filter(
+    (column) => !columns.includes(column)
+  );
+  // Unknown columns are not fatal: they are saved but ignored by the
+  // certificate templates, which is worth pointing out before the upload.
+  const unknownColumns = columns.filter(
+    (column) => !KNOWN_COLUMNS.includes(column)
+  );
+
+  const invalidRows = [];
+  rows.forEach((row, index) => {
+    const problems = [];
+
+    REQUIRED_COLUMNS.forEach((column) => {
+      if (!cell(row[column])) {
+        problems.push(`${column} is empty`);
+      }
+    });
+
+    const mailId = cell(row.mailId);
+    if (mailId && !/^\S+@\S+\.\S+$/.test(mailId)) {
+      problems.push(`"${mailId}" is not a valid email address`);
+    }
+
+    const certiType = cell(row.certiType).toLowerCase();
+    if (certiType && !CERTIFICATE_TYPES.includes(certiType)) {
+      problems.push(
+        `certiType "${cell(row.certiType)}" is not one of ${CERTIFICATE_TYPES.join(', ')}`
+      );
+    }
+
+    if (problems.length > 0) {
+      // +2 so the number matches the spreadsheet: one for the header row, one
+      // because sheet rows are numbered from 1.
+      invalidRows.push({ rowNumber: index + 2, problems });
+    }
+  });
+
+  // A duplicated address usually means the same person was pasted in twice; the
+  // server does not check, so a certificate would be mailed to them twice over.
+  const seen = new Set();
+  const duplicateMails = new Set();
+  rows.forEach((row) => {
+    const mailId = cell(row.mailId).toLowerCase();
+    if (!mailId) return;
+    if (seen.has(mailId)) duplicateMails.add(mailId);
+    seen.add(mailId);
+  });
+
+  return {
+    rows,
+    columns,
+    missingColumns,
+    unknownColumns,
+    invalidRows,
+    duplicateMails: [...duplicateMails],
+  };
+};
+
 function Participant() {
   const currentURL = window.location.pathname;
   const parts = currentURL.split('/');
@@ -55,6 +147,10 @@ function Participant() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadState, setUploadState] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
+  const [uploadError, setUploadError] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [filePreview, setFilePreview] = useState(null);
+  const fileInputRef = useRef(null);
   const [tableData, setTableData] = useState([]);
   const [editRowId, setEditRowId] = useState(null);
   const [semesterData, setSemesterData] = useState([]);
@@ -95,8 +191,20 @@ function Participant() {
   });
 
   const [downloadType, setDownloadType] = useState(false);
+  // Batch mail runs one participant at a time so the page can report where it
+  // has got to; the server's own bulk route returns only once everything is
+  // finished, which looks like nothing is happening.
+  const [mailProgress, setMailProgress] = useState({
+    running: false,
+    total: 0,
+    done: 0,
+    current: '',
+    failed: [],
+  });
+  const [isSavingNew, setIsSavingNew] = useState(false);
 
   const apiUrl = getEnvironment();
+  const toast = useToast();
 
   useEffect(() => {
     fetchParticipantData();
@@ -104,6 +212,7 @@ function Participant() {
 
   const fetchParticipantData = () => {
     if (eventId) {
+      setIsLoading(true);
       fetch(
         `${apiUrl}/certificatemodule/participant/getparticipant/${eventId}`,
         {
@@ -124,37 +233,143 @@ function Participant() {
         })
         .catch((error) => {
           console.error('Error:', error);
+        })
+        .finally(() => {
+          setIsLoading(false);
         });
     } else {
       setTableData([]);
     }
   };
 
-  const handleFileChange = (e) => {
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+    setUploadError('');
+    // Without this the same file cannot be picked twice in a row, because the
+    // input fires no change event when its value is unchanged.
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
+    clearSelectedFile();
+    setUploadMessage('');
+    if (!file) return;
+
+    if (!/\.(xlsx|xls)$/i.test(file.name)) {
+      setUploadError(
+        'Unsupported file type. Upload an Excel file (.xlsx) built from the template.'
+      );
+      return;
+    }
+
     setSelectedFile(file);
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      // The upload route walks every sheet in the workbook, so the preview has
+      // to as well or it would under-report what is about to be saved.
+      const rows = workbook.SheetNames.flatMap((sheetName) =>
+        XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' })
+      );
+
+      if (rows.length === 0) {
+        setUploadError('This file has no data rows below the header.');
+        return;
+      }
+      setFilePreview(buildPreview(rows));
+    } catch (error) {
+      console.error('Error reading file:', error);
+      setUploadError(
+        'Could not read this file. Make sure it is a valid Excel workbook.'
+      );
+    }
   };
 
   const handleUpload = () => {
-    if (selectedFile) {
-      const formData = new FormData();
-      formData.append('csvFile', selectedFile);
-      formData.append('eventId', eventId);
-
-      fetch(`${apiUrl}/upload/participant`, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-      })
-        .then((response) => response.json())
-        .then(() => {
-          fetchParticipantDataparticipantData();
-          setSelectedFile(null);
-        })
-        .catch((error) => console.error('Error:', error));
-    } else {
-      alert('Please select a CSV file before uploading.');
+    if (!selectedFile) {
+      toast({
+        title: 'No file selected',
+        description: 'Choose an Excel file before uploading.',
+        status: 'warning',
+        duration: 4000,
+        isClosable: true,
+      });
+      return;
     }
+
+    // Missing required columns are blocked rather than warned about: every row
+    // would land without a name or an email, leaving unusable records behind.
+    if (filePreview?.missingColumns.length) {
+      toast({
+        title: 'Required columns missing',
+        description: `Add ${filePreview.missingColumns.join(', ')} to the sheet, then upload again.`,
+        status: 'error',
+        duration: 6000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    const rowCount = filePreview?.rows.length ?? 0;
+    setIsUploading(true);
+    setUploadError('');
+    setUploadMessage('');
+
+    const formData = new FormData();
+    formData.append('csvFile', selectedFile);
+    formData.append('eventId', eventId);
+
+    fetch(`${apiUrl}/upload/participant`, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    })
+      .then(async (response) => {
+        // The shared upload route answers with plain text on success and JSON
+        // only when it has something to report, so read the body as text and
+        // then try to make sense of it as JSON.
+        const body = await response.text();
+        if (!response.ok) {
+          throw new Error(
+            body || `Error: ${response.status} - ${response.statusText}`
+          );
+        }
+        try {
+          return JSON.parse(body);
+        } catch {
+          return {};
+        }
+      })
+      .then((data) => {
+        clearSelectedFile();
+        fetchParticipantData();
+        const description =
+          data?.message ||
+          `${rowCount} participant${rowCount === 1 ? '' : 's'} added to this event.`;
+        setUploadMessage(description);
+        toast({
+          title: 'Upload successful',
+          description,
+          status: 'success',
+          duration: 4000,
+          isClosable: true,
+        });
+      })
+      .catch((error) => {
+        console.error('Error:', error);
+        setUploadError(error.message || 'Upload failed. Please try again.');
+        toast({
+          title: 'Upload failed',
+          description: error.message || 'Participant data could not be uploaded.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      })
+      .finally(() => {
+        setIsUploading(false);
+      });
   };
 
   // const handleUpload = () => {
@@ -343,32 +558,99 @@ function Participant() {
     }
   };
 
-  const handleBatchMail = () => {
-    // Make the fetch request
-    fetch(`${apiUrl}/certificatemodule/emails/send-emails/${eventId}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // 'Frontend-Host': window.location.origin,
-      },
-      // body: JSON.stringify(requestData),
-      credentials: 'include',
-    })
-      .then((response) => {
+  const markCertificateSent = async (participantId) => {
+    const response = await fetch(
+      `${apiUrl}/certificatemodule/participant/addparticipant/${participantId}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isCertificateSent: true }),
+        credentials: 'include',
+      }
+    );
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status} - ${response.statusText}`);
+    }
+  };
+
+  const handleBatchMail = async () => {
+    const pending = tableData.filter((row) => !row.isCertificateSent);
+
+    if (pending.length === 0) {
+      toast({
+        title: 'Nothing to send',
+        description: 'Every participant has already received their certificate.',
+        status: 'info',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Send certificates to ${pending.length} participant${
+        pending.length === 1 ? '' : 's'
+      }?`
+    );
+    if (!confirmed) return;
+
+    setMailProgress({
+      running: true,
+      total: pending.length,
+      done: 0,
+      current: '',
+      failed: [],
+    });
+
+    const failed = [];
+
+    for (let i = 0; i < pending.length; i += 1) {
+      const participant = pending[i];
+      const label = participant.mailId || participant.name || 'participant';
+
+      setMailProgress((prev) => ({ ...prev, done: i, current: label }));
+
+      try {
+        const response = await fetch(
+          `${apiUrl}/certificatemodule/emails/send-email/${participant._id}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+          }
+        );
         if (!response.ok) {
           throw new Error(`Error: ${response.status} - ${response.statusText}`);
         }
-        return response.json();
-      })
-      .then((data) => {
-        // Handle the response from the backend, if needed
-        console.log('Mail sent successfully:', data);
-      })
-      .catch((error) => {
-        console.error('Error sending mail:', error);
-      });
+        await markCertificateSent(participant._id);
+      } catch (error) {
+        console.error('Error sending mail to', label, error);
+        failed.push(label);
+      }
+    }
+
+    setMailProgress({
+      running: false,
+      total: pending.length,
+      done: pending.length,
+      current: '',
+      failed,
+    });
+
+    fetchParticipantData();
+
+    toast({
+      title: failed.length
+        ? `Sent ${pending.length - failed.length} of ${pending.length}`
+        : 'All certificates sent',
+      description: failed.length
+        ? `${failed.length} could not be sent — see the list above the table.`
+        : `${pending.length} email${pending.length === 1 ? '' : 's'} sent.`,
+      status: failed.length ? 'warning' : 'success',
+      duration: 5000,
+      isClosable: true,
+    });
   };
-  const toast = useToast();
 
   const handleMailClick = (Id) => {
     // Make the fetch request
@@ -469,18 +751,26 @@ function Participant() {
     //     `Duplicate entry for "${editedSData.name}" is detected. Kindly delete the entry.`
     //   );
     // } else {
-    if (!editedSData.name.trim()) {
-      alert('Name is required');
+    // Toasts rather than alert(): a blocking dialog freezes the whole tab.
+    const missing = !editedSData.name.trim()
+      ? 'Name'
+      : !editedSData.certiType.trim()
+        ? 'Certificate type'
+        : !editedSData.mailId.trim()
+          ? 'E-mail'
+          : null;
+    if (missing) {
+      toast({
+        title: `${missing} is required`,
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
       return;
     }
-    if (!editedSData.certiType.trim()) {
-      alert('Certificate type is required');
-      return;
-    }
-    if (!editedSData.mailId.trim()) {
-      alert('E-mail is required');
-      return;
-    }
+
+    if (isSavingNew) return;
+    setIsSavingNew(true);
     fetch(`${apiUrl}/certificatemodule/participant/addparticipant/${eventId}`, {
       method: 'POST',
       headers: {
@@ -508,9 +798,35 @@ function Participant() {
         fetchParticipantData();
         handleCancelAddSubject();
         addsetDuplicateEntryMessage('');
+        // Leaving the old values behind made the form look stuck the next time
+        // it was opened.
+        setEditedSData({
+          name: '',
+          department: '',
+          college: '',
+          types: '',
+          teamName: '',
+          position: '',
+          title1: '',
+          title2: '',
+          certiType: '',
+          mailId: '',
+          eventId: eventId,
+          isCertificateSent: false,
+        });
       })
       .catch((error) => {
         console.error('Error:', error);
+        toast({
+          title: 'Could not save the participant',
+          description: error.message,
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      })
+      .finally(() => {
+        setIsSavingNew(false);
       });
     // }
   };
@@ -574,7 +890,70 @@ function Participant() {
   // }
   return (
     <Container maxW="8xl">
-      <Header title="Add Participant" />
+      {/* Header card, matching the certificate design and dashboard pages. */}
+      <Box
+        mt={4}
+        mb={5}
+        px={{ base: 5, md: 8 }}
+        py={{ base: 5, md: 6 }}
+        borderRadius="2xl"
+        bgGradient="linear(to-r, teal.600, blue.600)"
+        color="white"
+        boxShadow="lg"
+      >
+        <Flex
+          direction={{ base: 'column', md: 'row' }}
+          align={{ md: 'center' }}
+          justify="space-between"
+          gap={4}
+        >
+          <Box>
+            <Text
+              fontSize="xs"
+              textTransform="uppercase"
+              letterSpacing="widest"
+              opacity={0.85}
+            >
+              Certificate Module
+            </Text>
+            <Heading size="lg" mt={1}>
+              Participants
+            </Heading>
+            <Text mt={2} fontSize="sm" opacity={0.9}>
+              Add people one at a time or upload a sheet — each row needs a name,
+              an email, and the certificate type they should receive.
+            </Text>
+          </Box>
+
+          <HStack spacing={3} flexShrink={0}>
+            <Box
+              bg="whiteAlpha.300"
+              borderRadius="lg"
+              px={4}
+              py={2}
+              textAlign="center"
+              minW="96px"
+            >
+              <Text fontSize="2xl" fontWeight="bold" lineHeight={1}>
+                {tableData.length}
+              </Text>
+              <Text fontSize="xs" textTransform="uppercase" letterSpacing="wide">
+                Added
+              </Text>
+            </Box>
+            <Button
+              size="sm"
+              bg="white"
+              color="teal.700"
+              _hover={{ bg: 'gray.100' }}
+              as="a"
+              href="/cm/dashboard"
+            >
+              Back to events
+            </Button>
+          </HStack>
+        </Flex>
+      </Box>
 
       <Box
         p="3"
@@ -623,12 +1002,14 @@ function Participant() {
               >
                 <Input
                   type="file"
-                  accept=".xlsx"
+                  accept=".xlsx,.xls"
+                  ref={fileInputRef}
                   onChange={handleFileChange}
                   name="XlsxFile"
                   variant="unstyled"
                   width={{ base: '100%', md: '260px' }}
                   cursor="pointer"
+                  isDisabled={isUploading}
                   sx={{
                     '::file-selector-button': {
                       border: 'none',
@@ -647,22 +1028,43 @@ function Participant() {
                   }}
                 />
 
-                <Box
-                  as={CustomTealButton}
-                  onClick={handleUpload}
-                  p="8px"
-                  borderRadius="md"
-                  cursor="pointer"
-                  bgColor="purple.500"
-                  _hover={{ bg: 'purple.700' }}
-                  flexShrink={0}
+                <Tooltip
+                  label={
+                    selectedFile
+                      ? 'Upload the selected file'
+                      : 'Choose an Excel file first'
+                  }
+                  hasArrow
+                  placement="bottom"
                 >
-                  <FaUpload style={{ height: 18, width: 18, color: 'white' }} />
-                </Box>
+                  <Box
+                    as={CustomTealButton}
+                    onClick={handleUpload}
+                    aria-label="Upload participant file"
+                    p="8px"
+                    borderRadius="md"
+                    cursor={
+                      selectedFile && !isUploading ? 'pointer' : 'not-allowed'
+                    }
+                    bgColor="purple.500"
+                    opacity={selectedFile && !isUploading ? 1 : 0.5}
+                    pointerEvents={isUploading ? 'none' : 'auto'}
+                    _hover={{ bg: 'purple.700' }}
+                    flexShrink={0}
+                  >
+                    {isUploading ? (
+                      <Spinner size="sm" color="white" />
+                    ) : (
+                      <FaUpload
+                        style={{ height: 18, width: 18, color: 'white' }}
+                      />
+                    )}
+                  </Box>
+                </Tooltip>
               </Box>
 
               {uploadMessage && (
-                <Box fontSize="sm" color="gray.600">
+                <Box fontSize="sm" color="green.600" fontWeight="medium">
                   {uploadMessage}
                 </Box>
               )}
@@ -684,6 +1086,125 @@ function Participant() {
               />
             </Tooltip>
           </Box>
+
+          {/* What the chosen file actually contains, checked against the
+              template before anything is sent to the server. */}
+          {uploadError && (
+            <Box
+              bg="red.50"
+              borderWidth="1px"
+              borderColor="red.200"
+              borderRadius="md"
+              px="4"
+              py="3"
+              fontSize="sm"
+              color="red.700"
+            >
+              {uploadError}
+            </Box>
+          )}
+
+          {filePreview && (
+            <Box
+              borderWidth="1px"
+              borderColor="gray.200"
+              borderRadius="md"
+              bg="gray.50"
+              px="4"
+              py="3"
+            >
+              <VStack align="stretch" spacing="3">
+                <HStack justify="space-between" flexWrap="wrap" gap="2">
+                  <HStack spacing="2">
+                    <FiFileText />
+                    <Text fontWeight="medium" fontSize="sm">
+                      {selectedFile?.name}
+                    </Text>
+                    <Badge colorScheme="purple">
+                      {filePreview.rows.length} row
+                      {filePreview.rows.length === 1 ? '' : 's'}
+                    </Badge>
+                    {filePreview.invalidRows.length > 0 && (
+                      <Badge colorScheme="orange">
+                        {filePreview.invalidRows.length} need
+                        {filePreview.invalidRows.length === 1 ? 's' : ''}{' '}
+                        attention
+                      </Badge>
+                    )}
+                  </HStack>
+
+                  <IconButton
+                    aria-label="Clear selected file"
+                    icon={<FiX />}
+                    size="xs"
+                    variant="ghost"
+                    onClick={clearSelectedFile}
+                    isDisabled={isUploading}
+                  />
+                </HStack>
+
+                {filePreview.missingColumns.length > 0 && (
+                  <HStack align="flex-start" spacing="2" color="red.600">
+                    <Box pt="1">
+                      <FiAlertTriangle />
+                    </Box>
+                    <Text fontSize="sm">
+                      Required column
+                      {filePreview.missingColumns.length === 1 ? '' : 's'}{' '}
+                      <b>{filePreview.missingColumns.join(', ')}</b> not found in
+                      the sheet. Upload is blocked until they are added.
+                    </Text>
+                  </HStack>
+                )}
+
+                {filePreview.unknownColumns.length > 0 && (
+                  <Text fontSize="sm" color="gray.600">
+                    Column{filePreview.unknownColumns.length === 1 ? '' : 's'}{' '}
+                    <b>{filePreview.unknownColumns.join(', ')}</b> are not used
+                    by the certificate templates and will be ignored.
+                  </Text>
+                )}
+
+                {filePreview.duplicateMails.length > 0 && (
+                  <Text fontSize="sm" color="orange.600">
+                    Repeated email address
+                    {filePreview.duplicateMails.length === 1 ? '' : 'es'}:{' '}
+                    <b>{filePreview.duplicateMails.join(', ')}</b>. Each copy
+                    gets its own certificate.
+                  </Text>
+                )}
+
+                {filePreview.invalidRows.length > 0 && (
+                  <Box>
+                    <Text fontSize="sm" fontWeight="medium" color="orange.700">
+                      Rows with problems:
+                    </Text>
+                    <List fontSize="sm" color="gray.700" mt="1" spacing="1">
+                      {filePreview.invalidRows.slice(0, 5).map((row) => (
+                        <ListItem key={row.rowNumber}>
+                          Row {row.rowNumber}: {row.problems.join('; ')}
+                        </ListItem>
+                      ))}
+                    </List>
+                    {filePreview.invalidRows.length > 5 && (
+                      <Text fontSize="sm" color="gray.500" mt="1">
+                        ...and {filePreview.invalidRows.length - 5} more.
+                      </Text>
+                    )}
+                  </Box>
+                )}
+
+                {filePreview.missingColumns.length === 0 &&
+                  filePreview.invalidRows.length === 0 && (
+                    <Text fontSize="sm" color="green.600">
+                      Every row has a name, a valid email and a known
+                      certificate type. Ready to upload.
+                    </Text>
+                  )}
+              </VStack>
+            </Box>
+          )}
+
           {/* Header + Batch Upload */}
 
           {/* Form / Manual Add */}
@@ -889,8 +1410,9 @@ function Participant() {
                     boxShadow="md"
                     _hover={{ bg: 'blue.600', boxShadow: 'lg' }}
                     onClick={handleSaveNewSubject}
+                    isDisabled={isSavingNew}
                   >
-                    Save New Participant Data
+                    {isSavingNew ? 'Saving…' : 'Save New Participant Data'}
                   </CustomBlueButton>
                 </Box>
               </FormControl>
@@ -916,6 +1438,58 @@ function Participant() {
         </Box>
 
         {addduplicateEntryMessage && <p>{addduplicateEntryMessage}</p>}
+
+        {/* How far the batch send has got, and what failed. */}
+        {mailProgress.total > 0 &&
+          (mailProgress.running || mailProgress.failed.length > 0) && (
+            <Box
+              bg="white"
+              borderWidth="1px"
+              borderColor={mailProgress.running ? 'blue.200' : 'orange.200'}
+              borderRadius="lg"
+              p={4}
+            >
+              <Flex justify="space-between" align="center" gap={3} wrap="wrap">
+                <Text fontWeight="semibold">
+                  {mailProgress.running
+                    ? `Sending certificates — ${mailProgress.done} of ${mailProgress.total}`
+                    : `Finished — ${
+                        mailProgress.total - mailProgress.failed.length
+                      } of ${mailProgress.total} sent`}
+                </Text>
+                <Text fontSize="sm" color="gray.500">
+                  {Math.round((mailProgress.done / mailProgress.total) * 100)}%
+                </Text>
+              </Flex>
+
+              <Progress
+                mt={2}
+                borderRadius="full"
+                size="sm"
+                value={(mailProgress.done / mailProgress.total) * 100}
+                colorScheme={mailProgress.failed.length ? 'orange' : 'blue'}
+                isAnimated={mailProgress.running}
+                hasStripe={mailProgress.running}
+              />
+
+              {mailProgress.running && mailProgress.current && (
+                <Text fontSize="sm" color="gray.600" mt={2}>
+                  Currently sending to {mailProgress.current}
+                </Text>
+              )}
+
+              {!mailProgress.running && mailProgress.failed.length > 0 && (
+                <Box mt={3}>
+                  <Text fontSize="sm" fontWeight="semibold" color="orange.700">
+                    Could not send to:
+                  </Text>
+                  <Text fontSize="sm" color="gray.700">
+                    {mailProgress.failed.join(', ')}
+                  </Text>
+                </Box>
+              )}
+            </Box>
+          )}
 
         {/* Table to display participant data along with the buttons-> batch mail and download partic. template */}
         <Box
@@ -950,6 +1524,7 @@ function Participant() {
                 onClick={handleBatchMail}
                 variant="ghost"
                 size="lg"
+                isDisabled={mailProgress.running}
               />
             </Tooltip>
 

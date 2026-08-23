@@ -1,8 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import getEnvironment from '../../getenvironment';
 import {
+  Badge,
+  Box,
   Container,
+  Flex,
+  Heading,
+  Icon,
+  Progress,
+  SimpleGrid,
+  Spinner,
+  Stat,
+  StatLabel,
+  StatNumber,
   Table,
   TableContainer,
   Tbody,
@@ -12,17 +23,14 @@ import {
   Tr,
   Button,
   Center,
+  Wrap,
+  WrapItem,
   useToast,
 } from '@chakra-ui/react';
-import { Tooltip, IconButton, Text } from '@chakra-ui/react';
-import { FiEdit, FiUsers, FiLock } from 'react-icons/fi';
-import Header from '../../components/header';
+import { Tooltip, Text } from '@chakra-ui/react';
+import { AddIcon } from '@chakra-ui/icons';
+import { FiEdit, FiUsers, FiLock, FiUnlock } from 'react-icons/fi';
 import { useDisclosure } from '@chakra-ui/react';
-import {
-  CustomTh,
-  CustomLink,
-  CustomTealButton,
-} from '../../styles/customStyles';
 
 function CMDashboard() {
   const navigate = useNavigate();
@@ -122,10 +130,48 @@ function CMDashboard() {
           );
           const { issuedCount, totalCount } = await res.json();
 
+          // Which certificate types already have a saved design, so the row can
+          // show them as cards instead of a single "edit" button that says
+          // nothing about whether the design work is done.
+          let designedTypes = [];
+          try {
+            const typesRes = await fetch(
+              `${apiUrl}/certificatemodule/certificate/designedtypes/${event._id}`,
+              { credentials: 'include' }
+            );
+            if (typesRes.ok) {
+              const payload = await typesRes.json();
+              designedTypes = Array.isArray(payload.types) ? payload.types : [];
+            }
+          } catch (error) {
+            console.error('Could not load designed certificate types:', error);
+          }
+
+          // How many participants have been added, and under which category,
+          // so the row can say whether that step is still pending.
+          let participantSummary = { total: 0, byType: [] };
+          try {
+            const summaryRes = await fetch(
+              `${apiUrl}/certificatemodule/participant/summary/${event._id}`,
+              { credentials: 'include' }
+            );
+            if (summaryRes.ok) {
+              const payload = await summaryRes.json();
+              participantSummary = {
+                total: payload.total || 0,
+                byType: Array.isArray(payload.byType) ? payload.byType : [],
+              };
+            }
+          } catch (error) {
+            console.error('Could not load participant summary:', error);
+          }
+
           return {
             ...event,
             totalCertificates: totalCount,
             certificatesIssued: issuedCount,
+            designedTypes,
+            participantSummary,
           };
         })
       );
@@ -246,257 +292,333 @@ function CMDashboard() {
     }
   };
 
-  const currentUrl = window.location.href;
-  const urlParts = currentUrl.split('/');
-  const domainName = urlParts[2];
+  const totals = {
+    events: table.length,
+    locked: table.filter((event) => event.lock).length,
+    certificates: table.reduce((sum, e) => sum + (e.totalCertificates || 0), 0),
+    issued: table.reduce((sum, e) => sum + (e.certificatesIssued || 0), 0),
+  };
+
+  const openEvents = totals.events - totals.locked;
+
+  const statCard = (label, value, color) => (
+    <Stat
+      borderWidth="1px"
+      borderColor="gray.100"
+      borderRadius="xl"
+      px={4}
+      py={3}
+      bg="white"
+      boxShadow="sm"
+    >
+      <StatLabel fontSize="xs" textTransform="uppercase" letterSpacing="wide" color="gray.500">
+        {label}
+      </StatLabel>
+      <StatNumber fontSize="2xl" color={color}>
+        {value}
+      </StatNumber>
+    </Stat>
+  );
 
   return (
-    // <Container maxW="7xl">
-    //   <Button
-    //     colorScheme="teal"
-    //     onClick={handleAddEvent}
-    //     mb={4}
-    //     isDisabled={!(table.length === 0 || areAllEventsLocked)} // Button is enabled when there are no events or all events are locked
-    //     float="right"
-    //   >
-    //     Add New Event
-    //   </Button>
-
-    //   <Header title="List of Events"></Header>
-
-    //   <TableContainer>
-    //     <Table variant="striped" size="md" mt="1">
-    //       <Thead>
-    //         <Tr>
-    //           <CustomTh>Event Name</CustomTh>
-    //           <CustomTh>Event Date</CustomTh>
-    //           <CustomTh>Edit certificate details</CustomTh>
-    //           <CustomTh>Edit participant details</CustomTh>
-    //           <CustomTh>Total Certificates</CustomTh>
-    //           <CustomTh>Certificates Issued</CustomTh>
-    //           <CustomTh>Lock Status</CustomTh>
-    //         </Tr>
-    //       </Thead>
-    //       <Tbody>
-    //         {table.map((event) => (
-    //           <Tr key={event._id}>
-    //             <Td>
-    //               <Center>{event.name}</Center>
-    //             </Td>
-    //             <Td>
-    //               <Center>
-    //                 {new Date(event.ExpiryDate).toLocaleDateString('en-GB')}
-    //               </Center>
-    //             </Td>
-    //             {!event.lock ? (
-    //               <Td>
-    //                 <Center>
-    //                   <CustomLink href={`http://${domainName}/cm/${event._id}`}>
-    //                     {event.name} Certificates
-    //                   </CustomLink>
-    //                 </Center>
-    //               </Td>
-    //             ) : (
-    //               <Td>
-    //                 <Center>Certificates Locked</Center>
-    //               </Td>
-    //             )}
-    //             <Td>
-    //               {!event.lock ? (
-    //                 <Center>
-    //                   <CustomLink
-    //                     href={`http://${domainName}/cm/${event._id}/addparticipant`}
-    //                   >
-    //                     {event.name} participants
-    //                   </CustomLink>
-    //                 </Center>
-    //               ) : (
-    //                 <Center>Participants Locked</Center>
-    //               )}
-    //             </Td>
-    //             <Td>
-    //               <Center>{event.totalCertificates}</Center>
-    //             </Td>
-    //             <Td>
-    //               <Center>{event.certificatesIssued}</Center>
-    //             </Td>
-    //             <Td>
-    //               <Center>
-    //                 {!event.lock ? (
-    //                   <CustomTealButton
-    //                     onClick={() => lockEvent(event._id)}
-    //                     disabled={isEventLocked}
-    //                   >
-    //                     Lock The Event
-    //                   </CustomTealButton>
-    //                 ) : (
-    //                   <span>
-    //                     Locked on{' '}
-    //                     {new Date(event.updated_at).toLocaleDateString('en-GB')}
-    //                   </span>
-    //                 )}
-    //               </Center>
-    //             </Td>
-    //           </Tr>
-    //         ))}
-    //       </Tbody>
-    //     </Table>
-    //   </TableContainer>
-    //   {loading && <p>Loading...</p>}
-    // </Container>
-
-    //CHANGED UI
-    <Container maxW="7xl">
-      {/* <Button
-        colorScheme="teal"
-        onClick={handleAddEvent}
-        mb={4}
-        isDisabled={!(table.length === 0 || areAllEventsLocked)}
-        float="right"
+    <Container maxW="7xl" pb={10}>
+      <Box
+        mt={4}
+        mb={5}
+        px={{ base: 5, md: 8 }}
+        py={{ base: 6, md: 7 }}
+        borderRadius="2xl"
+        bgGradient="linear(to-r, teal.600, blue.600)"
+        color="white"
+        boxShadow="lg"
       >
-        Add New Event
-      </Button> */}
+        <Flex
+          direction={{ base: 'column', md: 'row' }}
+          align={{ md: 'flex-start' }}
+          justify="space-between"
+          gap={4}
+        >
+          <Box>
+            <Text fontSize="xs" textTransform="uppercase" letterSpacing="widest" opacity={0.85}>
+              Certificate Module
+            </Text>
+            <Heading size="lg" mt={1}>
+              My Events
+            </Heading>
+            <Text mt={2} fontSize="sm" opacity={0.9}>
+              Design certificates, manage participants, and track how many certificates each event
+              has issued.
+            </Text>
+          </Box>
 
-      {/*experimental for lock event issue */}
-      <Button
-        colorScheme="teal"
-        onClick={handleAddEvent}
-        mb={4}
-        isDisabled={!areAllEventsLocked}
-        float="right"
-      >
-        Add New Event
-      </Button>
+          <Box textAlign={{ md: 'right' }} minW={{ md: '260px' }}>
+            <Flex gap={3} justify={{ md: 'flex-end' }} wrap="wrap">
+              <Button
+                variant="outline"
+                color="white"
+                borderColor="whiteAlpha.700"
+                _hover={{ bg: 'whiteAlpha.200' }}
+                onClick={() =>
+                  window.open('/certificate-manual', '_blank', 'noopener,noreferrer')
+                }
+              >
+                Help &amp; Manual
+              </Button>
+              <Button
+                leftIcon={<AddIcon />}
+                bg="white"
+                color="teal.700"
+                _hover={{ bg: 'gray.100' }}
+                onClick={handleAddEvent}
+                isDisabled={!areAllEventsLocked}
+              >
+                Add New Event
+              </Button>
+            </Flex>
 
-      <Button
-        colorScheme="gray"
-        variant="outline"
-        onClick={() => window.open('/certificate-manual', '_blank', 'noopener,noreferrer')}
-        mb={4}
-        mr={3}
-        float="right"
-      >
-        Help &amp; Manual
-      </Button>
+            <Flex
+              mt={2}
+              align="flex-start"
+              justify={{ md: 'flex-end' }}
+              gap={2}
+              fontSize="xs"
+              color={areAllEventsLocked ? 'whiteAlpha.800' : 'yellow.200'}
+            >
+              <Icon as={areAllEventsLocked ? FiUnlock : FiLock} mt="2px" />
+              <Text textAlign={{ md: 'right' }}>
+                {areAllEventsLocked
+                  ? 'All events are locked — you can create a new event.'
+                  : `Lock your ${openEvents} unlocked event${openEvents === 1 ? '' : 's'} before you can create a new one.`}
+              </Text>
+            </Flex>
+          </Box>
+        </Flex>
+      </Box>
 
-      <Header title="List of Events" />
+      <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4} mb={5}>
+        {statCard('Events', totals.events, 'blue.600')}
+        {statCard('Locked', totals.locked, 'red.500')}
+        {statCard('Participants', totals.certificates, 'teal.600')}
+        {statCard('Certificates Issued', totals.issued, 'purple.600')}
+      </SimpleGrid>
 
       {eventsLoading ? (
-        <Center py={10}>
-          <Text fontSize="lg" fontWeight="semibold" color="gray.600">
-            Wait, the events are loading…
-          </Text>
+        <Center py={12}>
+          <Spinner size="xl" color="teal.500" />
         </Center>
+      ) : table.length === 0 ? (
+        <Box
+          borderWidth="1px"
+          borderColor="gray.100"
+          borderRadius="xl"
+          bg="white"
+          py={12}
+          textAlign="center"
+        >
+          <Text color="gray.600" fontWeight="medium">
+            No events yet.
+          </Text>
+          <Text color="gray.500" fontSize="sm" mt={1}>
+            Use “Add New Event” above to create your first event.
+          </Text>
+        </Box>
       ) : (
-        <TableContainer>
-          <Table variant="striped" size="md" mt="1" >
-            <Thead>
-              <Tr>
-                <CustomTh>Event Name</CustomTh>
-                <CustomTh>Event Date</CustomTh>
-                <CustomTh>Certificates</CustomTh>
-                <CustomTh>Participants</CustomTh>
-                <CustomTh>Total</CustomTh>
-                <CustomTh>Issued</CustomTh>
-                <CustomTh>Status</CustomTh>
-              </Tr>
-            </Thead>
-
-            <Tbody>
-              {table.map((event) => (
-                <Tr key={event._id}>
-                  <Td>
-                    <Center>{event.name}</Center>
-                  </Td>
-
-                  <Td>
-                    <Center>
-                      {new Date(event.ExpiryDate).toLocaleDateString('en-GB')}
-                    </Center>
-                  </Td>
-
-                  {/* Certificates */}
-                  <Td>
-                    <Center>
-                      {!event.lock ? (
-                        <Tooltip label="Edit certificate details" hasArrow>
-                          <IconButton
-                            icon={<FiEdit />}
-                            variant="ghost"
-                            colorScheme="teal"
-                            size={'lg'}
-                            aria-label="Edit certificates"
-                            as="a"
-                            href={`http://${domainName}/cm/${event._id}`}
-                          />
-                        </Tooltip>
-                      ) : (
-                        <Text fontSize="sm" color="gray.500">
-                          Locked
-                        </Text>
-                      )}
-                    </Center>
-                  </Td>
-
-                  {/* Participants */}
-                  <Td>
-                    <Center>
-                      {!event.lock ? (
-                        <Tooltip label="Edit participant details" hasArrow>
-                          <IconButton
-                            icon={<FiUsers />}
-                            variant="ghost"
-                            colorScheme="teal"
-                            aria-label="Edit participants"
-                            size={'lg'}
-                            as="a"
-                            href={`http://${domainName}/cm/${event._id}/addparticipant`}
-                          />
-                        </Tooltip>
-                      ) : (
-                        <Text fontSize="sm" color="gray.500">
-                          Locked
-                        </Text>
-                      )}
-                    </Center>
-                  </Td>
-
-                  <Td>
-                    <Center>{event.totalCertificates}</Center>
-                  </Td>
-                  <Td>
-                    <Center>{event.certificatesIssued}</Center>
-                  </Td>
-
-                  {/* Lock Status */}
-                  <Td>
-                    <Center>
-                      {!event.lock ? (
-                        <Tooltip label="Lock this event" hasArrow>
-                          <IconButton
-                            icon={<FiLock />}
-                            colorScheme="red"
-                            variant="outline"
-                            aria-label="Lock event"
-                            onClick={() => lockEvent(event._id)}
-                            isDisabled={event.lock} // ADDED EVENT.LOCK INSTEAD OF ISEVENTLOCKED (EXPERIMENTAL FOR LOCK EVENT ISSUE)
-                          />
-                        </Tooltip>
-                      ) : (
-                        <Text fontSize="sm" color="gray.600">
-                          Locked on{' '}
-                          {new Date(event.updated_at).toLocaleDateString(
-                            'en-GB'
-                          )}
-                        </Text>
-                      )}
-                    </Center>
-                  </Td>
+        <Box
+          borderWidth="1px"
+          borderColor="gray.100"
+          borderRadius="xl"
+          bg="white"
+          boxShadow="sm"
+          overflow="hidden"
+        >
+          <TableContainer>
+            <Table size="md" variant="simple">
+              <Thead bg="gray.50">
+                <Tr>
+                  <Th>Event</Th>
+                  <Th>Date</Th>
+                  <Th textAlign="center">Certificate Design</Th>
+                  <Th textAlign="center">Participant Details</Th>
+                  <Th>Issued</Th>
+                  <Th textAlign="center">Status</Th>
                 </Tr>
-              ))}
-            </Tbody>
-          </Table>
-        </TableContainer>
+              </Thead>
+
+              <Tbody>
+                {table.map((event) => {
+                  const total = event.totalCertificates || 0;
+                  const issued = event.certificatesIssued || 0;
+                  const percent = total ? Math.round((issued / total) * 100) : 0;
+
+                  return (
+                    <Tr key={event._id} _hover={{ bg: 'gray.50' }}>
+                      <Td fontWeight="medium">{event.name}</Td>
+
+                      <Td whiteSpace="nowrap" color="gray.600">
+                        {new Date(event.ExpiryDate).toLocaleDateString('en-GB')}
+                      </Td>
+
+                      {/* Certificate design: one card per designed type */}
+                      <Td>
+                        {event.designedTypes && event.designedTypes.length > 0 ? (
+                          <Wrap spacing={2} justify="center">
+                            {event.designedTypes.map((type) => (
+                              <WrapItem key={type}>
+                                <Tooltip label="Open the certificate design" hasArrow>
+                                  <Box
+                                    as={RouterLink}
+                                    to={`/cm/${event._id}`}
+                                    px={3}
+                                    py={2}
+                                    borderWidth="1px"
+                                    borderColor="teal.200"
+                                    borderRadius="md"
+                                    bg="teal.50"
+                                    minW="96px"
+                                    textAlign="center"
+                                    _hover={{ bg: 'teal.100', borderColor: 'teal.300' }}
+                                  >
+                                    <Text
+                                      fontSize="sm"
+                                      fontWeight="medium"
+                                      color="teal.800"
+                                      textTransform="capitalize"
+                                    >
+                                      {type}
+                                    </Text>
+                                    <Text fontSize="xs" color="teal.600">
+                                      {event.lock ? 'View' : 'Edit design'}
+                                    </Text>
+                                  </Box>
+                                </Tooltip>
+                              </WrapItem>
+                            ))}
+                          </Wrap>
+                        ) : event.lock ? (
+                          <Text fontSize="sm" color="gray.400" textAlign="center">
+                            Design not completed
+                          </Text>
+                        ) : (
+                          <Center>
+                            <Tooltip label="Start designing this certificate" hasArrow>
+                              <Button
+                                as={RouterLink}
+                                to={`/cm/${event._id}`}
+                                size="sm"
+                                variant="outline"
+                                colorScheme="orange"
+                                leftIcon={<FiEdit />}
+                              >
+                                Design not completed
+                              </Button>
+                            </Tooltip>
+                          </Center>
+                        )}
+                      </Td>
+
+                      {/* Participant details: how many, in which category */}
+                      <Td>
+                        {(event.participantSummary?.total || 0) > 0 ? (
+                          <Tooltip
+                            label={event.lock ? 'View participants' : 'Edit participant details'}
+                            hasArrow
+                          >
+                            <Box
+                              as={RouterLink}
+                              to={`/cm/${event._id}/addparticipant`}
+                              display="block"
+                              px={3}
+                              py={2}
+                              borderWidth="1px"
+                              borderColor="teal.200"
+                              borderRadius="md"
+                              bg="teal.50"
+                              _hover={{ bg: 'teal.100', borderColor: 'teal.300' }}
+                            >
+                              <Text fontSize="sm" fontWeight="medium" color="teal.800" textAlign="center">
+                                {event.participantSummary.total}{' '}
+                                {event.participantSummary.total === 1
+                                  ? 'participant'
+                                  : 'participants'}
+                              </Text>
+                              <Wrap spacing={1} justify="center" mt={1}>
+                                {event.participantSummary.byType.map((row) => (
+                                  <WrapItem key={row.certiType}>
+                                    <Badge colorScheme="teal" textTransform="capitalize">
+                                      {row.certiType}: {row.count}
+                                    </Badge>
+                                  </WrapItem>
+                                ))}
+                              </Wrap>
+                            </Box>
+                          </Tooltip>
+                        ) : event.lock ? (
+                          <Text fontSize="sm" color="gray.400" textAlign="center">
+                            Participant details pending
+                          </Text>
+                        ) : (
+                          <Center>
+                            <Tooltip label="Add participants for this event" hasArrow>
+                              <Button
+                                as={RouterLink}
+                                to={`/cm/${event._id}/addparticipant`}
+                                size="sm"
+                                variant="outline"
+                                colorScheme="orange"
+                                leftIcon={<FiUsers />}
+                              >
+                                Participant details pending
+                              </Button>
+                            </Tooltip>
+                          </Center>
+                        )}
+                      </Td>
+
+                      {/* Issued */}
+                      <Td minW="170px">
+                        <Text fontSize="sm" mb={1}>
+                          {issued} / {total}
+                        </Text>
+                        <Progress
+                          value={percent}
+                          size="xs"
+                          borderRadius="full"
+                          colorScheme={percent === 100 ? 'green' : 'teal'}
+                        />
+                      </Td>
+
+                      {/* Lock status */}
+                      <Td textAlign="center">
+                        {!event.lock ? (
+                          <Tooltip label="Lock this event" hasArrow>
+                            <Button
+                              size="sm"
+                              leftIcon={<FiLock />}
+                              colorScheme="red"
+                              variant="outline"
+                              onClick={() => lockEvent(event._id)}
+                            >
+                              Lock
+                            </Button>
+                          </Tooltip>
+                        ) : (
+                          <Box>
+                            <Badge colorScheme="red" borderRadius="md" px={2} py={1}>
+                              Locked
+                            </Badge>
+                            <Text fontSize="xs" color="gray.500" mt={1}>
+                              {new Date(event.updated_at).toLocaleDateString('en-GB')}
+                            </Text>
+                          </Box>
+                        )}
+                      </Td>
+                    </Tr>
+                  );
+                })}
+              </Tbody>
+            </Table>
+          </TableContainer>
+        </Box>
       )}
 
       {loading && <p>Loading...</p>}

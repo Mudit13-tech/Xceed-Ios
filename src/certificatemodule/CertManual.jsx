@@ -65,15 +65,14 @@ function SectionTitle({ children }) {
         }}>{children}</div>
     );
 }
-
 // ── tabs ──────────────────────────────────────────────────────────────────────
 
 const TABS = [
     { id: 'overview',     label: 'Overview',              icon: '🗂️' },
-    { id: 'setup',        label: 'Event Setup',           icon: '⚙️' },
+    { id: 'setup',        label: 'Events Dashboard',      icon: '📊' },
     { id: 'design',       label: 'Certificate Design',    icon: '🎨' },
     { id: 'participants', label: 'Participants & Emails', icon: '📧' },
-    { id: 'lock',         label: 'Lock & Public Page',     icon: '🔒' },
+    { id: 'lock',         label: 'Lock & Public Page',    icon: '🔒' },
 ];
 
 // ── tab content ───────────────────────────────────────────────────────────────
@@ -92,12 +91,14 @@ function TabOverview({ setTab }) {
             <SectionTitle>What This Module Does</SectionTitle>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
                 {[
-                    { icon: '🎨', title: 'Pre-built Templates', desc: '23 ready-made certificate designs (Basic + Premium) — fill in text, logos, and signatures rather than building a layout from scratch.' },
-                    { icon: '🏷️', title: 'Per-Type Designs', desc: 'Design a separate certificate for each type you plan to issue — Winner, Participant, Speaker, Organizer — each saved independently.' },
-                    { icon: '🔗', title: 'Merge-Field Variables', desc: 'Insert placeholders like {{name}} and {{department}} into the certificate body — each participant\'s certificate is auto-filled with their own data.' },
-                    { icon: '📧', title: 'One-Click Distribution', desc: 'Send every participant a unique certificate link by email in a single action — re-sending only reaches participants who haven\'t received theirs yet.' },
+                    { icon: '🎨', title: 'Pre-built Templates', desc: '23 ready-made certificate designs (13 Basic + 10 Premium) — fill in text, logos, and signatures rather than building a layout from scratch.' },
+                    { icon: '🖱️', title: 'Drag-to-Place Preview', desc: 'The design page shows a live preview beside the form. Drag logos, signatures, and the QR code straight onto the certificate to set their position and size.' },
+                    { icon: '🏷️', title: 'Per-Type Designs', desc: 'Design a separate certificate for each type you issue — Winner, Participant, Speaker, Organizer — each saved independently.' },
+                    { icon: '🔗', title: 'Merge-Field Variables', desc: 'Click a variable chip to drop {{name}}, {{department}} and the rest into the certificate body at the cursor — each certificate is auto-filled with that participant\'s own data.' },
+                    { icon: '📋', title: 'Checked Excel Upload', desc: 'The participants sheet is read and checked in the browser first: missing columns, bad emails, unknown certificate types and repeated addresses are all shown before anything is saved.' },
+                    { icon: '📧', title: 'Tracked Bulk Email', desc: 'Send every pending participant their certificate link in one action, with a live progress bar, a running count, and a list of any addresses that failed.' },
                     { icon: '✅', title: 'QR Verification', desc: 'Optionally stamp a QR code on the certificate that links back to its own public page, for third parties to verify authenticity.' },
-                    { icon: '🔒', title: 'One-Way Lock', desc: 'Locking an event freezes all certificate and participant data on the backend. Only an admin can unlock it again.' },
+                    { icon: '🔒', title: 'One-Way Lock', desc: 'Locking an event freezes all certificate and participant data on the backend — designs and participant lists become read-only.' },
                 ].map(c => (
                     <div key={c.title} style={{
                         background: '#fff', border: '1px solid #e4e8f5',
@@ -136,41 +137,46 @@ function TabOverview({ setTab }) {
                 ))}
             </div>
 
-            <SectionTitle>Who Does What</SectionTitle>
+            <SectionTitle>The Three Screens You Will Use</SectionTitle>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
                 {[
                     {
-                        icon: '🛠️', title: 'Admin', color: '#6366f1',
+                        icon: '📊', title: 'Events Dashboard', color: '#6366f1', tab: 'setup',
+                        route: '/cm/dashboard',
                         items: [
-                            'Assigns events to users (auto-grants the CM role)',
-                            'Can unlock or delete any event',
-                            'Manages any user\'s uploaded logos and signatures',
+                            'Every event you own, with totals on top',
+                            'Shows which certificate types are designed',
+                            'Shows how many participants are loaded',
+                            'Lock an event and track certificates issued',
                         ],
                     },
                     {
-                        icon: '🎓', title: 'Event Organizer (CM)', color: '#10b981',
+                        icon: '🎨', title: 'Certificate Design', color: '#10b981', tab: 'design',
+                        route: '/cm/<eventId>',
                         items: [
-                            'Creates events for themselves (once they have the CM role)',
-                            'Designs certificates, uploads participants, sends emails',
-                            'Can lock an event — but cannot unlock it themselves',
+                            'Form on the left, live certificate on the right',
+                            'Drag logos, signatures and QR on the preview',
+                            'One saved design per certificate type',
                         ],
                     },
                     {
-                        icon: '👤', title: 'Participant', color: '#f59e0b',
+                        icon: '📧', title: 'Participants', color: '#f59e0b', tab: 'participants',
+                        route: '/cm/<eventId>/addparticipant',
                         items: [
-                            'No account or login needed',
-                            'Receives a unique certificate link by email',
-                            'Views and downloads their certificate as an image',
+                            'Excel batch upload, checked before saving',
+                            'Manual add and inline row editing',
+                            'Bulk email with live progress and failures',
                         ],
                     },
                 ].map(u => (
-                    <div key={u.title} style={{
+                    <div key={u.title} onClick={() => setTab(u.tab)} style={{
                         background: '#fff', border: `1px solid ${u.color}33`,
                         borderLeft: `4px solid ${u.color}`,
-                        borderRadius: 10, padding: '14px 16px',
+                        borderRadius: 10, padding: '14px 16px', cursor: 'pointer',
                     }}>
                         <div style={{ fontSize: 18, marginBottom: 6 }}>{u.icon}</div>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: T.text, marginBottom: 8 }}>{u.title}</div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: T.text, marginBottom: 2 }}>{u.title}</div>
+                        <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8 }}><code>{u.route}</code></div>
                         <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, color: '#6b7280', lineHeight: 1.75 }}>
                             {u.items.map(i => <li key={i}>{i}</li>)}
                         </ul>
@@ -181,16 +187,15 @@ function TabOverview({ setTab }) {
             <SectionTitle>Important Notes</SectionTitle>
             <Note type="warning">
                 <strong>One event campaign at a time.</strong> The <strong>Add New Event</strong> button on
-                the CM Dashboard stays disabled until every one of your existing events is locked. Finish
-                and lock the current event before starting the next one.
+                the Events Dashboard stays disabled until every one of your existing events is locked. The
+                line under the button tells you how many events are still unlocked.
             </Note>
             <Note type="warning">
-                <strong>Locking is one-way for the organizer.</strong> Once locked, no certificate content
-                or participant data can be edited, added, or deleted — this is enforced on the server, not
-                just hidden in the UI. Only an admin can unlock an event.
+                <strong>Locking is one-way.</strong> Once locked, no certificate content or participant data
+                can be edited, added, or deleted — this is enforced on the server, not just hidden in the UI.
             </Note>
             <Note type="tip">
-                Follow the steps in order — Event Setup → Certificate Design → Participants & Emails →
+                Follow the steps in order — Create Event → Certificate Design → Participants &amp; Emails →
                 Lock. Design your certificate for each type <em>before</em> uploading participants of that type,
                 so the merge fields render correctly.
             </Note>
@@ -202,57 +207,89 @@ function TabSetup() {
     return (
         <div>
             <Note type="info">
-                An event can be created in one of two ways — by an admin assigning it to a user, or by a
-                user who already has the organizer (CM) role creating it themselves.
+                Everything starts at the <strong>Events Dashboard</strong> (<code>/cm/dashboard</code>). It
+                lists every event you own and is the launch point for the design page and the participants
+                page.
             </Note>
 
-            <SectionTitle>Way 1 — Admin Assigns an Event</SectionTitle>
-            <Step n={1} title="Open the Admin Event Console">
-                Navigate to <strong>Assign Event</strong> (route <code>/cm/addevent</code>). This screen is
-                only for admins.
+            <SectionTitle>Creating an Event</SectionTitle>
+            <Step n={1} title="Click Add New Event">
+                On the dashboard header, click <strong>Add New Event</strong>. It opens the create-event form
+                (<code>/cm/useraddevent</code>). The button is disabled while you still have an unlocked
+                event — see the note at the end of this tab.
             </Step>
-            <Step n={2} title="Pick or Type the User">
-                Select an existing user, or type in a new one, who will organise this event.
-            </Step>
-            <Step n={3} title="Fill in Event Details">
+            <Step n={2} title="Fill in the Three Fields">
                 Enter <strong>Event Name</strong>, <strong>Event Date</strong>, and <strong>Plan</strong>
-                (Basic / Premium — defaults to Basic), then submit.
-            </Step>
-            <Note type="tip">
-                Assigning an event to a user for the first time automatically grants them the
-                <strong> CM (organizer)</strong> role — no separate role-management step is needed.
-            </Note>
-
-            <SectionTitle>Way 2 — Self-Service (Existing CM Users)</SectionTitle>
-            <Step n={1} title="Open Create Event">
-                A user who already has the CM role goes to <strong>Create Event</strong>
-                (route <code>/cm/useraddevent</code>).
-            </Step>
-            <Step n={2} title="Fill in the Same Three Fields">
-                Enter <strong>Event Name</strong>, <strong>Event Date</strong>, and <strong>Plan</strong>,
-                then click <strong>Submit</strong>.
+                (Basic / Premium — defaults to Basic), then click <strong>Submit</strong>. The new event
+                appears as a row on the dashboard.
             </Step>
             <Note type="info">
                 <strong>Plan</strong> (Basic/Premium) is a record-keeping field only — it does not restrict
                 which of the 23 certificate templates you can pick from in the design step.
             </Note>
 
-            <SectionTitle>CM Dashboard</SectionTitle>
+            <SectionTitle>Reading the Dashboard — Header</SectionTitle>
+            <div style={{
+                background: '#f8f9ff', border: '1px solid #e4e8f5',
+                borderRadius: 10, padding: '16px 20px', marginBottom: 16,
+            }}>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#374151', lineHeight: 1.9 }}>
+                    <li><strong>Help &amp; Manual</strong> — opens this manual in a new tab.</li>
+                    <li><strong>Add New Event</strong> — creates your next event (see above).</li>
+                    <li>A lock line under the buttons reads either <em>"All events are locked — you can create
+                    a new event"</em> or <em>"Lock your N unlocked events before you can create a new one."</em></li>
+                </ul>
+            </div>
+
+            <SectionTitle>Reading the Dashboard — Summary Cards</SectionTitle>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                {[
+                    { title: 'Events', desc: 'How many events you own in total.' },
+                    { title: 'Locked', desc: 'How many of them are already locked and read-only.' },
+                    { title: 'Participants', desc: 'Total participants added across all your events.' },
+                    { title: 'Certificates Issued', desc: 'How many of those participants have been emailed their certificate.' },
+                ].map(c => (
+                    <div key={c.title} style={{
+                        background: '#fff', border: '1px solid #e4e8f5', borderRadius: 10, padding: '12px 16px',
+                    }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: T.text, marginBottom: 3 }}>{c.title}</div>
+                        <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.6 }}>{c.desc}</div>
+                    </div>
+                ))}
+            </div>
+
+            <SectionTitle>Reading the Dashboard — Event Table</SectionTitle>
             <div style={{
                 background: '#f8f9ff', border: '1px solid #e4e8f5',
                 borderRadius: 10, padding: '16px 20px', marginBottom: 16,
             }}>
                 <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, marginBottom: 10 }}>
-                    The CM Dashboard lists all events belonging to the logged-in organizer, with columns:
+                    One row per event, with six columns:
                 </div>
                 <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#374151', lineHeight: 1.9 }}>
-                    <li><strong>Event Name</strong> and <strong>Event Date</strong></li>
-                    <li><strong>Certificates</strong> (pencil icon) — opens the Certificate Design page for this event</li>
-                    <li><strong>Participants</strong> (people icon) — opens the Participants &amp; Emails page for this event</li>
-                    <li><strong>Total</strong> and <strong>Issued</strong> — participant count vs. certificates emailed so far</li>
-                    <li><strong>Status</strong> — a lock icon (click to lock), or "Locked on &lt;date&gt;" once locked</li>
+                    <li><strong>Event</strong> — the event name.</li>
+                    <li><strong>Date</strong> — the event date, in DD/MM/YYYY.</li>
+                    <li><strong>Certificate Design</strong> — one card per certificate type that already has a
+                    saved design (Winner, Participant, …). Click a card to open that design. If nothing has
+                    been designed yet, the column shows a <strong>Design not completed</strong> button that
+                    takes you to the design page.</li>
+                    <li><strong>Participant Details</strong> — a card showing the participant count with a
+                    badge per certificate type (e.g. <em>winner: 6</em>). Click it to open the participants
+                    page. With no participants yet it shows <strong>Participant details pending</strong>.</li>
+                    <li><strong>Issued</strong> — <em>issued / total</em> with a progress bar; the bar turns
+                    green at 100%.</li>
+                    <li><strong>Status</strong> — a <strong>Lock</strong> button while the event is open, or a
+                    red <strong>Locked</strong> badge with the lock date once locked.</li>
                 </ul>
             </div>
+            <Note type="tip">
+                The two middle columns are your progress checklist: an event is ready to lock when both show
+                teal cards rather than the orange "not completed / pending" buttons, and the Issued bar is full.
+            </Note>
+            <Note type="info">
+                On a locked event the cards still open the same pages, but read-only — the card sub-label
+                reads <strong>View</strong> instead of <strong>Edit design</strong>.
+            </Note>
 
             <Note type="warning">
                 The <strong>Add New Event</strong> button is disabled unless all of your existing events
@@ -268,81 +305,111 @@ function TabDesign() {
         <div>
             <Note type="key">
                 Certificate designs are saved <strong>per certificate type</strong> — Winner, Participant,
-                Speaker, and Organizer each have their own independent design. Repeat this entire step once
-                for every certificate type you intend to issue for the event.
+                Speaker, and Organizer each have their own independent design. Repeat this step once for
+                every certificate type you intend to issue for the event.
             </Note>
+
+            <SectionTitle>How the Page is Laid Out</SectionTitle>
+            <div style={{
+                background: '#f8f9ff', border: '1px solid #e4e8f5',
+                borderRadius: 10, padding: '16px 20px', marginBottom: 16,
+            }}>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#374151', lineHeight: 1.9 }}>
+                    <li><strong>Left — the form.</strong> Every field of the certificate, top to bottom, ending
+                    in <strong>Save Changes</strong>. The header card is tinted with the colour of the
+                    certificate type being edited, so it is obvious which design is on screen.</li>
+                    <li><strong>Right — Certificate Preview.</strong> A live render that updates as you type,
+                    with the current zoom percentage in its toolbar.</li>
+                    <li><strong>The divider between them can be dragged</strong> to give the form or the
+                    preview more room. Double-click it — or click <strong>Reset layout</strong> — to return to
+                    the default split; once focused it also responds to the arrow keys.</li>
+                </ul>
+            </div>
 
             <SectionTitle>Step-by-Step — Designing a Certificate</SectionTitle>
 
             <Step n={1} title="Open Certificate Design">
-                From the CM Dashboard, click the <strong>Certificates</strong> (pencil) icon for an event.
-                A live preview of the certificate appears alongside the form as you fill it in.
+                From the Events Dashboard, click a certificate-type card in the <strong>Certificate Design</strong>
+                column, or the <strong>Design not completed</strong> button if nothing has been designed yet.
             </Step>
 
             <Step n={2} title="Select Certificate Type">
                 Choose <strong>Winner</strong>, <strong>Participant</strong>, <strong>Speaker</strong>, or
-                <strong> Organizer</strong> from the dropdown. Everything you fill in below is saved
-                against this specific type — switching the type loads (or starts) a separate design.
+                <strong> Organizer</strong> at the top of the form. Everything below is saved against this
+                specific type — switching the type loads (or starts) a separate design, and the header and
+                preview badge change colour to match.
             </Step>
 
             <Step n={3} title="Name of the Institute">
-                Enter one or more title lines, each with its own font size, family, color, bold, and italic
-                controls. Use <strong>Add another</strong> for multi-line titles.
+                Enter one or more title lines. The pencil button beside a line opens its font size, style,
+                colour, bold, and italic controls. Use <strong>Add another</strong> for multi-line titles.
             </Step>
 
             <Step n={4} title="Select Certificate Template">
-                Pick a design from the template gallery — <strong>23 pre-built templates</strong> (Basic
-                and Premium styles). These are fixed layouts, not a freeform editor: the fields you fill in
-                (text, logos, signatures) are injected into whichever template you choose.
+                Pick a design from the horizontal template gallery — <strong>23 pre-built templates</strong>
+                (13 Basic, 10 Premium). The selected one is outlined in blue. These are fixed layouts: the
+                fields you fill in are injected into whichever template you choose.
             </Step>
 
             <Step n={5} title="Logos (up to 4)">
-                Upload logo images (JPG/PNG). Each logo has its own <strong>Vertical Position</strong> and
-                <strong> Size</strong> fields under "Advanced settings". The Add-another button disables
-                once you have 4 logos.
+                Upload logo images (JPG/PNG only, maximum 4), then <strong>drag the logo on the preview</strong>
+                to position it and drag its corner handle to resize. Numeric <strong>Vertical Position</strong>
+                and <strong>Size</strong> fields are still available under the pencil button if you prefer exact
+                values. The delete icon on a logo row removes it.
             </Step>
 
             <Step n={6} title="Department / Club and Certificate Heading">
-                Fill in one or more <strong>Department or Club</strong> header lines (same styling
-                controls), then the main heading text in <strong>Certificate</strong> — e.g.
-                "CERTIFICATE OF APPRECIATION".
+                Fill in one or more <strong>Department or Club</strong> header lines (same styling controls),
+                then the main heading text — e.g. "CERTIFICATE OF PARTICIPATION".
             </Step>
 
             <Step n={7} title="Body of the Certificate — Using Variables">
-                Write the certificate wording in the body textarea. Click <strong>See variables</strong>
-                to reveal clickable chips for <code>{'{{name}}'}</code>, <code>{'{{department}}'}</code>,
+                Write the wording in the body editor. Click <strong>See variables</strong> to open the variable
+                panel, then click any chip — <code>{'{{name}}'}</code>, <code>{'{{department}}'}</code>,
                 <code>{'{{college}}'}</code>, <code>{'{{teamName}}'}</code>, <code>{'{{position}}'}</code>,
-                <code>{'{{title1}}'}</code>, and <code>{'{{title2}}'}</code>. Clicking a chip copies the
-                placeholder to your clipboard so you can paste it into the body — it is replaced with each
-                participant's own data when their certificate is rendered.
+                <code>{'{{title1}}'}</code>, <code>{'{{title2}}'}</code> — and it is
+                <strong> inserted straight into the body at your cursor</strong>. Each variable is replaced
+                with that participant's own value when their certificate is rendered.
             </Step>
+
+            <Note type="warning">
+                A variable only fills in if the participants sheet actually carries that column, and the match
+                is on the exact variable name. A variable with no matching data renders empty.
+            </Note>
 
             <Step n={8} title="Signatures">
                 Add one or more signature blocks — each with a <strong>Name</strong> and
-                <strong> Position</strong> (job title, both stylable), and an image upload for the
-                signature itself.
+                <strong> Position</strong> (both stylable), and an image for the signature itself.
                 <ul style={{ margin: '8px 0 0 0', paddingLeft: 18, lineHeight: 1.9 }}>
-                    <li><strong>Use existing signature with details</strong> — reuse a signature already
-                    uploaded for this event instead of uploading it again.</li>
-                    <li><strong>Remove Background</strong> — converts white pixels in the uploaded
-                    signature image to transparent, so it blends into the certificate background.</li>
+                    <li>Signatures are placed like logos — <strong>drag them on the preview</strong>, resize
+                    from the corner, and drag the end of the separator line to change its length.</li>
+                    <li><strong>Use an existing signature</strong> — reuse a signature already uploaded rather
+                    than uploading it again.</li>
+                    <li><strong>Remove Background</strong> — converts white pixels in the uploaded signature
+                    image to transparent, so it blends into the certificate.</li>
+                    <li><strong>Delete</strong> removes a signature row; on the last remaining row the button
+                    reads <strong>Clear</strong> and only empties it, so there is always one row to fill in.</li>
                 </ul>
             </Step>
 
             <Step n={9} title="QR Code with Verifiable Link">
-                Toggle <strong>Required</strong> to stamp a QR code onto the certificate that links back to
-                its own public page — useful for third parties to verify a certificate is genuine.
+                Turn the <strong>QR code with verifiable link</strong> switch on to stamp a QR code that links
+                back to the certificate's own public page — useful for third parties verifying a certificate is
+                genuine. Drag the QR on the preview to place it; the line under the switch reports its exact
+                position and size, and <strong>Snap back</strong> returns it to the template's default spot.
             </Step>
 
             <Step n={10} title="Date of Issue and Save">
-                Set the <strong>Date of issue</strong> (defaults to today), then click
-                <strong> Save Changes</strong>. This saves the design for the selected certificate type only.
+                Set the <strong>Date of issue</strong>, then click <strong>Save Changes</strong> at the bottom
+                of the form. This saves the design for the selected certificate type only — switch the type and
+                repeat for the next one.
             </Step>
 
             <Note type="tip">
-                Design and save all the certificate types you plan to use (e.g. both Winner and
-                Participant) before moving on to upload participants — a participant's certificate cannot
-                render correctly if no design exists yet for their assigned certificate type.
+                Design and save every certificate type you plan to use (e.g. both Winner and Participant)
+                before uploading participants — a participant's certificate cannot render if no design exists
+                for their assigned type. The dashboard shows one card per designed type, so you can check at a
+                glance which are done.
             </Note>
         </div>
     );
@@ -352,8 +419,9 @@ function TabParticipants() {
     return (
         <div>
             <Note type="info">
-                Open the <strong>Participants</strong> (people icon) link for an event from the CM Dashboard
-                to reach this page.
+                Open the <strong>Participant Details</strong> card for an event on the Events Dashboard to
+                reach this page (<code>/cm/&lt;eventId&gt;/addparticipant</code>). Its header shows how many
+                participants have been added so far, plus a <strong>Back to events</strong> button.
             </Note>
 
             <SectionTitle>Adding Participants — Batch Upload (Recommended for Bulk)</SectionTitle>
@@ -362,28 +430,55 @@ function TabParticipants() {
                 <code> .xlsx</code> file.
             </Step>
             <Step n={2} title="Fill in the Template">
-                Enter one row per participant. Exact column headers, in order:
+                Enter one row per participant. Column headers:
                 <div style={{
                     background: '#0f172a', color: '#e2e8f0', borderRadius: 8,
                     padding: '14px 18px', fontFamily: 'monospace', fontSize: 12,
                     margin: '10px 0', lineHeight: 1.9,
                 }}>
-                    name | department | college | mailId | certiType | teamName | position | title1 | title2
+                    name | mailId | certiType | department | college | types | teamName | position | title1 | title2
                 </div>
                 <ul style={{ margin: '8px 0 0 0', paddingLeft: 18, lineHeight: 1.9, fontSize: 13 }}>
-                    <li><strong>certiType</strong> should be one of <code>winner</code>, <code>participant</code>,
-                    <code>speaker</code>, or <code>organizer</code> — matching a certificate design you've
+                    <li><strong>name</strong>, <strong>mailId</strong> and <strong>certiType</strong> are
+                    required; the rest are optional.</li>
+                    <li><strong>certiType</strong> must be one of <code>winner</code>, <code>participant</code>,
+                    <code>speaker</code>, or <code>organizer</code> — matching a certificate design you have
                     already saved for that type.</li>
-                    <li>Sample row: <code>hari | ee | nitj | harimur@gmail.com | winner | XCEED | first | no idea | no idea</code></li>
+                    <li>Sample row: <code>hari | harimur@gmail.com | winner | ee | nitj | … | XCEED | first</code></li>
                 </ul>
             </Step>
-            <Step n={3} title="Upload the File">
-                Choose the completed <code>.xlsx</code> file and click the upload (arrow) icon. Each row
-                becomes one participant record.
+            <Step n={3} title="Choose the File and Read the Check Report">
+                Pick the completed <code>.xlsx</code>. Before anything is sent to the server the sheet is read
+                in the browser and a summary appears under the file picker — see the next section.
             </Step>
-            <Note type="warning">
-                The batch template has <strong>no "Type" column</strong>. If you need the extra "Type of the
-                event" field on a participant, add or edit that participant manually instead.
+            <Step n={4} title="Upload">
+                Click the purple upload button. Each row becomes one participant record and the table below
+                refreshes. The <strong>✕</strong> button clears the selected file if you want to start again.
+            </Step>
+
+            <SectionTitle>What the Pre-Upload Check Tells You</SectionTitle>
+            <div style={{
+                background: '#f8f9ff', border: '1px solid #e4e8f5',
+                borderRadius: 10, padding: '16px 20px', marginBottom: 16,
+            }}>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#374151', lineHeight: 1.9 }}>
+                    <li><strong>Row count</strong> — how many rows were found, plus a badge for how many
+                    "need attention".</li>
+                    <li><strong>Missing required columns</strong> — shown in red. <strong>Upload is blocked</strong>
+                    until <code>name</code>, <code>mailId</code> and <code>certiType</code> are all present.</li>
+                    <li><strong>Unknown columns</strong> — saved but ignored by the certificate templates, so
+                    they are listed as a heads-up.</li>
+                    <li><strong>Repeated email addresses</strong> — allowed; each copy gets its own certificate.</li>
+                    <li><strong>Rows with problems</strong> — the first five are listed by spreadsheet row
+                    number with the reason: an empty required cell, an address that is not a valid email, or a
+                    <code> certiType</code> that is not one of the four allowed values.</li>
+                    <li>When everything is clean you get a green line confirming every row has a name, a valid
+                    email, and a known certificate type.</li>
+                </ul>
+            </div>
+            <Note type="tip">
+                Row numbers in the report match the numbers you see in Excel, so you can jump straight to the
+                offending row, fix it, and re-select the file.
             </Note>
 
             <SectionTitle>Adding a Participant Manually</SectionTitle>
@@ -391,12 +486,16 @@ function TabParticipants() {
                 Click <strong>+ Add Participant Manually</strong>.
             </Step>
             <Step n={2} title="Fill in the Fields">
-                Name, Department, College, Type, Team Name, Position, Title-1, Title-2, Email, and
-                Certificate Type (Winner / Participant / Speaker / Organizer). Only <strong>Name</strong>,
-                <strong> Certificate Type</strong>, and <strong>E-mail</strong> are required.
+                Name, Department, College, Type, Team Name, Position, Title-1, Title-2, Email, and Certificate
+                Type (Winner / Participant / Speaker / Organizer). Only <strong>Name</strong>,
+                <strong> Certificate Type</strong>, and <strong>E-mail</strong> are required; a missing one
+                raises a toast naming the field.
             </Step>
             <Step n={3} title="Save">
-                Click <strong>Save New Participant Data</strong>. The new participant appears in the table below.
+                Click <strong>Save New Participant Data</strong>. The button reads <em>Saving…</em> and is
+                disabled while the save is in flight, so a double click cannot create the participant twice.
+                On success the form is cleared, ready for the next entry, and the participant appears in the
+                table below.
             </Step>
 
             <SectionTitle>Participants Table</SectionTitle>
@@ -410,23 +509,37 @@ function TabParticipants() {
                 <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#374151', lineHeight: 1.9 }}>
                     <li><strong>Certificate Link</strong> — a "View" link to that participant's public certificate page.</li>
                     <li><strong>Mail Status</strong> — Sent (green) or Not sent (red).</li>
-                    <li><strong>Actions</strong> — edit (pencil), delete (trash), and send-mail (envelope) for that one participant.</li>
+                    <li><strong>Actions</strong> — edit (pencil), delete (trash), and send-mail (envelope) for
+                    that one participant. Editing happens inline: the row's cells turn into inputs and a save
+                    button appears.</li>
                 </ul>
             </div>
 
             <SectionTitle>Sending Certificate Emails</SectionTitle>
-            <Step n={1} title="Send to Everyone at Once">
-                Click the mail icon at the top of the table ("Send email to all participants"). Each
-                participant receives an email with the subject
-                <em> "&lt;Event Name&gt;: Your certificate is here!"</em> containing their unique certificate link.
+            <Step n={1} title="Send to Everyone Pending">
+                Click the mail icon above the table ("Send email to all participants"). It counts everyone
+                whose mail status is still <em>Not sent</em> and asks you to confirm — e.g. <em>"Send
+                certificates to 42 participants?"</em>. If everybody already has theirs, it simply says there
+                is nothing to send.
             </Step>
-            <Step n={2} title="Send to One Participant">
+            <Step n={2} title="Watch the Progress Panel">
+                A panel appears above the table with a progress bar, <em>"Sending certificates — 12 of 42"</em>,
+                a percentage, and the address currently being mailed. Emails go out one participant at a time
+                and each is marked as sent as it succeeds, so you can see exactly how far the run has got. The
+                bulk-mail button stays disabled until it finishes.
+            </Step>
+            <Step n={3} title="Check the Result">
+                When the run ends the panel reports how many of the total were sent. Any address that failed is
+                listed under <strong>Could not send to:</strong> and the closing toast turns orange rather than
+                green. Those participants keep their <em>Not sent</em> status, so clicking bulk mail again
+                retries exactly them.
+            </Step>
+            <Step n={4} title="Send to One Participant">
                 Use the per-row envelope icon to (re)send the email to just that participant.
             </Step>
             <Note type="tip">
-                Sending to "all participants" is <strong>idempotent</strong> — it automatically skips anyone
-                whose mail status is already "Sent". You can safely re-click it after adding new participants
-                without spamming everyone else again.
+                Bulk sending is safe to repeat — it only ever mails participants marked <em>Not sent</em>, so
+                you can re-click it after adding new participants without spamming everyone else again.
             </Note>
         </div>
     );
@@ -462,45 +575,32 @@ function TabLock() {
 
             <SectionTitle>Locking an Event</SectionTitle>
             <Step n={1} title="When to Lock">
-                Lock an event once you've finished designing all certificate types, uploaded/added all
-                participants, and sent all certificate emails.
+                Lock an event once you've finished designing all certificate types, added all participants,
+                and sent all certificate emails. The dashboard row is your checklist: design cards present,
+                participant card present, and the Issued bar full.
             </Step>
-            <Step n={2} title="Click the Lock Icon">
-                On the CM Dashboard, click the lock icon in the Status column for the event. A confirmation
-                dialog appears: <em>"Sure? You wont be able to edit any content once locked!"</em>
+            <Step n={2} title="Click the Lock Button">
+                On the Events Dashboard, click <strong>Lock</strong> in the Status column for the event. A
+                confirmation dialog appears: <em>"Sure? You wont be able to edit any content once locked!"</em>
             </Step>
             <Step n={3} title="Confirm">
-                Confirming sets the event to locked. The Status column now shows "Locked on &lt;date&gt;".
+                Confirming sets the event to locked. The Status column now shows a red <strong>Locked</strong>
+                badge with the date, and the Locked summary card at the top of the dashboard goes up by one.
             </Step>
 
             <Note type="warning">
                 <strong>Locking is enforced on the server, not just the UI.</strong> Once locked, every
                 mutating action — editing certificate designs, and adding, editing, batch-uploading, or
-                deleting participants — is rejected with "Event Locked". This is a one-way action for the
-                organizer.
+                deleting participants — is rejected with "Event Locked". Treat it as final: lock only when the
+                event is genuinely finished.
             </Note>
-
-            <SectionTitle>Reversing a Lock — Admin Only</SectionTitle>
-            <div style={{
-                background: '#f8f9ff', border: '1px solid #e4e8f5',
-                borderRadius: 10, padding: '16px 20px', marginBottom: 16,
-            }}>
-                <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, marginBottom: 10 }}>
-                    A CM (organizer) cannot unlock their own event. If a correction is needed after locking,
-                    an admin must intervene using the following admin-only screens:
-                </div>
-                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#374151', lineHeight: 1.9 }}>
-                    <li><strong>User Events</strong> (<code>/cm/userevents/&lt;userId&gt;</code>) — unlock or
-                    permanently delete any of that user's events.</li>
-                    <li><strong>User Logos</strong> (<code>/cm/userimages/logos/&lt;userId&gt;</code>) — view
-                    and delete any logo the user has uploaded, across all their certificates.</li>
-                    <li><strong>User Signatures</strong> (<code>/cm/userimages/signatures/&lt;userId&gt;</code>)
-                    — view and delete any signature the user has uploaded.</li>
-                </ul>
-            </div>
+            <Note type="info">
+                A locked event stays fully readable. Its design cards and participant card still open the same
+                pages in view-only mode, and participants' certificate links keep working.
+            </Note>
             <Note type="tip">
-                Contact an admin if you need to reopen a locked event — they can unlock it from the
-                User Events screen so you can resume editing.
+                Locking every open event is also what re-enables <strong>Add New Event</strong>, so it is the
+                normal way to close out one campaign and start the next.
             </Note>
         </div>
     );
