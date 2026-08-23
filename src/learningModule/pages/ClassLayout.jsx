@@ -33,6 +33,7 @@ const TABS = [
   { path: 'quizzes', label: 'Quizzes' },
   { path: 'tutorials', label: 'Tutorials' },
   { path: 'assignments', label: 'Assignments' },
+  { path: 'forms', label: 'Forms' },
   { path: 'notebooks', label: 'Coding' },
   { path: 'grades', label: 'Grades' },
   { path: 'studio', label: 'AI Studio' },

@@ -57,6 +57,11 @@ const TutorialImport = lazyWithPreload(() => import('./pages/TutorialImport'));
 const TutorialEditor = lazyWithPreload(() => import('./pages/TutorialEditor'));
 const TutorialPlayer = lazyWithPreload(() => import('./pages/TutorialPlayer'));
 const TutorialResults = lazyWithPreload(() => import('./pages/TutorialResults'));
+const Forms = lazyWithPreload(() => import('./pages/Forms'));
+const FormEditor = lazyWithPreload(() => import('./pages/FormEditor'));
+const FormFill = lazyWithPreload(() => import('./pages/FormFill'));
+const FormResponses = lazyWithPreload(() => import('./pages/FormResponses'));
+const FormLinkJoin = lazyWithPreload(() => import('./pages/FormLinkJoin'));
 const Todo = lazyWithPreload(() => import('./pages/Todo'));
 const Calendar = lazyWithPreload(() => import('./pages/Calendar'));
 const Timetable = lazyWithPreload(() => import('./pages/Timetable'));
@@ -86,6 +91,11 @@ const LEARNING_ROUTES = (
       <Route path="short/join" element={<ShortJoin />} />
       <Route path="short/join/:code" element={<ShortJoin />} />
       <Route path="short/live/:sessionId" element={<ShortPlay />} />
+
+      {/* A form shared as "anyone with the link" — outside class/:classId and
+          LearningLayout for the same reason as the Short routes above: whoever
+          opens this link may hold no account at all. See FormLinkJoin. */}
+      <Route path="form/link/:shareCode" element={<FormLinkJoin />} />
 
       {/* Where Safe Exam Browser is sent to quit — the `quitURL` in the settings
           file. Outside LearningLayout on purpose: the layout fetches the signed-in
@@ -147,6 +157,12 @@ const LEARNING_ROUTES = (
           <Route path="tutorials" element={<Tutorials />} />
           {/* Assignments: the assessed sibling of tutorials, on its own routes. */}
           <Route path="assignments" element={<Assignments />} />
+          {/* Forms: a Google-Forms-like builder, entirely separate from quizzes
+              and tutorials. The fill page is not behind RequireTeacher — the
+              same class member who authors it elsewhere can also just be
+              filling in somebody else's. */}
+          <Route path="forms" element={<Forms />} />
+          <Route path="form/:formId" element={<FormFill />} />
           {/* The virtual lab. The bench is not behind RequireTeacher because it
               is the same screen for both: a teacher opens it to check the
               experiment runs, a student opens it to do it, and the server
@@ -184,6 +200,8 @@ const LEARNING_ROUTES = (
             <Route path="assignment/:assignmentId/results" element={<AssignmentResults />} />
             {/* Reviewing an assignment read off an uploaded paper. */}
             <Route path="assignment-import/:draftId" element={<AssignmentImport />} />
+            <Route path="form/:formId/edit" element={<FormEditor />} />
+            <Route path="form/:formId/responses" element={<FormResponses />} />
           </Route>
 
           <Route path="tutorial/:tutorialId" element={<TutorialPlayer />} />

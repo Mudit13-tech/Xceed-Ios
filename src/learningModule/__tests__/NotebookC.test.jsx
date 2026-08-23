@@ -26,9 +26,11 @@ vi.mock('@uiw/react-codemirror', () => ({
   default: ({ value, editable }) => (
     <textarea data-testid="editor" readOnly={editable === false} value={value} onChange={() => {}} />
   ),
+  keymap: { of: () => [] },
 }));
 vi.mock('@codemirror/lang-python', () => ({ python: () => ['python-mode'] }));
 vi.mock('@codemirror/lang-cpp', () => ({ cpp: () => ['cpp-mode'] }));
+vi.mock('@codemirror/state', () => ({ Prec: { highest: (k) => k } }));
 
 // The real hooks would spawn workers and fetch a 50MB toolchain; the picker is
 // what is under test, not either kernel.

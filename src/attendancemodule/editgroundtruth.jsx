@@ -54,6 +54,13 @@ function PhotoGroup({ label, accent, hint, photos, onDelete, onMove, moveLabel, 
                                 {photo.score.toFixed(2)}
                             </div>
                         )}
+                        {(photo.createdAt || photo.addedAt) && (
+                            <div style={{ position: 'absolute', bottom: 3, right: 3, fontSize: '8px',
+                                          color: 'rgba(255,255,255,0.85)', background: 'rgba(0,0,0,0.4)',
+                                          padding: '1px 3px', borderRadius: 2 }}>
+                                {new Date(photo.createdAt || photo.addedAt).toLocaleDateString()}
+                            </div>
+                        )}
                         {onMove && (
                             <button
                                 title={moveTitle}

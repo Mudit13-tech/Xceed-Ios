@@ -16,8 +16,10 @@ import NotebookEditor from '../pages/NotebookEditor';
 
 vi.mock('@uiw/react-codemirror', () => ({
   default: ({ value }) => <textarea data-testid="editor" readOnly value={value} onChange={() => {}} />,
+  keymap: { of: () => [] },
 }));
 vi.mock('@codemirror/lang-python', () => ({ python: () => [] }));
+vi.mock('@codemirror/state', () => ({ Prec: { highest: (k) => k } }));
 
 vi.mock('react-router-dom', async (importOriginal) => ({
   ...(await importOriginal()),

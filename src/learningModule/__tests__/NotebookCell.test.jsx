@@ -16,8 +16,10 @@ vi.mock('@uiw/react-codemirror', () => ({
   default: ({ value, editable }) => (
     <textarea data-testid="editor" readOnly={editable === false} value={value} onChange={() => {}} />
   ),
+  keymap: { of: () => [] },
 }));
 vi.mock('@codemirror/lang-python', () => ({ python: () => [] }));
+vi.mock('@codemirror/state', () => ({ Prec: { highest: (k) => k } }));
 
 const codeCell = (overrides = {}) => ({
   _id: 'c1',

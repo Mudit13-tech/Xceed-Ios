@@ -48,6 +48,40 @@ export const shortGuest = {
 };
 
 /**
+ * A guest's identity for one Forms link — the same pattern as `shortGuest`
+ * above, for a respondent who opened a share link with no account. Its own
+ * key and its own header, so a Forms guest and a Shorts guest in the same
+ * browser tab (a student answering a poll, then filling in a form from a
+ * different class's link) never collide.
+ */
+const FORM_GUEST_KEY = 'lmFormGuest';
+
+export const formGuest = {
+  save: (formId, token) => {
+    try {
+      sessionStorage.setItem(FORM_GUEST_KEY, JSON.stringify({ formId: String(formId), token }));
+    } catch {
+      // A browser refusing storage is not a reason to fail the join; the
+      // respondent simply cannot survive a reload.
+    }
+  },
+  token: () => {
+    try {
+      return JSON.parse(sessionStorage.getItem(FORM_GUEST_KEY) || 'null')?.token || null;
+    } catch {
+      return null;
+    }
+  },
+  clear: () => {
+    try {
+      sessionStorage.removeItem(FORM_GUEST_KEY);
+    } catch {
+      /* nothing to clear */
+    }
+  },
+};
+
+/**
  * The token naming this browser as the one sitting a given quiz attempt.
  *
  * Minted server-side when the attempt starts and echoed on every request that
@@ -116,6 +150,9 @@ async function request(path, { method = 'GET', body, raw = false, signal, keepal
   // token is resolved by their account, and the server ignores the header.
   const guestToken = shortGuest.token();
   if (guestToken) options.headers['X-Short-Guest'] = guestToken;
+
+  const formGuestToken = formGuest.token();
+  if (formGuestToken) options.headers['X-Form-Guest'] = formGuestToken;
 
   // Attached by path rather than by each call site, so a sitting endpoint added
   // later cannot forget it and silently reopen the second-screen hole.
@@ -261,12 +298,22 @@ const lmApi = {
       method: 'POST',
       body: {
         emails,
+        rollNumbers: options.rollNumbers,
         role,
         createAccounts: true,
         grantRoleToExisting: true,
       },
     }),
   inviteStatus: (classId, batchId) => request(`/classes/${classId}/members/invite-status/${batchId}`),
+  previewErpImport: (classId) => request(`/classes/${classId}/members/erp-preview`),
+  importErpMembers: (classId, options = {}) =>
+    request(`/classes/${classId}/members/import-erp`, {
+      method: 'POST',
+      body: {
+        createAccounts: options.createAccounts !== false,
+        grantRoleToExisting: Boolean(options.grantRoleToExisting),
+      },
+    }),
   decideJoinRequest: (classId, membershipId, approve) =>
     request(`/classes/${classId}/members/${membershipId}/decide`, { method: 'POST', body: { approve } }),
   updateMember: (classId, membershipId, body) =>
@@ -814,6 +861,42 @@ const lmApi = {
   shortPresenterStreamUrl: (classId, sessionId) =>
     `${BASE()}/classes/${classId}/short-sessions/${sessionId}/stream`,
   shortParticipantStreamUrl: (sessionId) => `${BASE()}/shorts/live/${sessionId}/stream`,
+
+  /* forms — a Google-Forms-like builder for the class. Own model, own
+     controller, own routes; nothing here is read by or written to quizzes or
+     tutorials. Authoring/results are staff-only server-side; the class-mode
+     fill pair is open to any class member. Link-mode responding (including
+     guests) is not class-scoped — see `joinFormByLink` below. */
+  listForms: (classId) => request(`/classes/${classId}/forms`),
+  createForm: (classId, body) => request(`/classes/${classId}/forms`, { method: 'POST', body }),
+  getForm: (classId, formId) => request(`/classes/${classId}/forms/${formId}`),
+  updateForm: (classId, formId, body) => request(`/classes/${classId}/forms/${formId}`, { method: 'PATCH', body }),
+  deleteForm: (classId, formId) => request(`/classes/${classId}/forms/${formId}`, { method: 'DELETE' }),
+  publishForm: (classId, formId, body) =>
+    request(`/classes/${classId}/forms/${formId}/publish`, { method: 'POST', body: body || {} }),
+  getFormForFill: (classId, formId) => request(`/classes/${classId}/forms/${formId}/fill`),
+  submitFormResponse: (classId, formId, answers) =>
+    request(`/classes/${classId}/forms/${formId}/fill`, { method: 'POST', body: { answers } }),
+  listFormResponses: (classId, formId) => request(`/classes/${classId}/forms/${formId}/responses`),
+  getFormSummary: (classId, formId) => request(`/classes/${classId}/forms/${formId}/responses/summary`),
+  formResponsesCsvUrl: (classId, formId) => `${BASE()}/classes/${classId}/forms/${formId}/responses.csv`,
+  deleteFormResponse: (classId, formId, responseId) =>
+    request(`/classes/${classId}/forms/${formId}/responses/${responseId}`, { method: 'DELETE' }),
+
+  // Link-mode responding — a share link has a code and nothing else, so there
+  // is no classId to scope these under (the same reason Shorts' join/answer
+  // routes sit outside the class router). `name` is only read by the server
+  // when the form allows guests and nobody is signed in.
+  formGuest,
+  joinFormByLink: (shareCode, { name } = {}) =>
+    request(`/forms/link/${encodeURIComponent(shareCode)}/join`, {
+      method: 'POST',
+      body: name ? { name } : {},
+    }),
+  getFormByLink: (shareCode) => request(`/forms/link/${encodeURIComponent(shareCode)}`),
+  submitFormResponseByLink: (shareCode, answers) =>
+    request(`/forms/link/${encodeURIComponent(shareCode)}/responses`, { method: 'POST', body: { answers } }),
+  formShareUrl: (shareCode) => `${window.location.origin}/learning/form/link/${shareCode}`,
 
   /* analytics + uploads */
   analytics: (classId) => request(`/classes/${classId}/analytics`),

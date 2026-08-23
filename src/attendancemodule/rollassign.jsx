@@ -2651,6 +2651,7 @@ export function GTModal({ rollNo, batchName, onClose, showToast, onMoved, embedd
                 <div style={{ padding: '4px 6px', display: 'flex', flexDirection: 'column', gap: 2 }} onClick={(e) => { if (type === 'backup') e.stopPropagation(); }}>
                     <div style={{ fontSize: '9px', fontFamily: theme.fontMono, color: theme.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{photo.filename}</div>
                     {photo.score != null && <span style={{ fontSize: '9px', color: theme.accent, background: theme.accentDim, padding: '1px 4px', borderRadius: 3, alignSelf: 'flex-start' }}>{photo.score.toFixed(2)}</span>}
+                    {(photo.createdAt || photo.addedAt) && <div style={{ fontSize: '8px', color: theme.textMuted, opacity: 0.8 }}>{new Date(photo.createdAt || photo.addedAt).toLocaleString()}</div>}
                     <button onClick={(e) => { e.stopPropagation(); movePhoto(photo.filename, type); }} disabled={isBusy}
                         style={{ padding: '3px 0', fontSize: '9px', fontWeight: 700, background: isEmbed ? theme.warningDim : theme.successDim, color: isEmbed ? theme.warning : theme.success, border: `1px solid ${isEmbed ? theme.warning + '44' : theme.success + '44'}`, borderRadius: 4, cursor: isBusy ? 'not-allowed' : 'pointer', width: '100%' }}>
                         {isEmbed ? '→ Backup' : '↑ Embedding'}

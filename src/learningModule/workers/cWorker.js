@@ -111,19 +111,51 @@ async function untarGz(response) {
   return files;
 }
 
+const CACHE_NAME = 'c-toolchain-v1';
+
+/**
+ * Fetches a resource using persistent CacheStorage when available.
+ * On cache hit: returns the cached Response instantly with zero network delay.
+ * On cache miss: downloads from network and caches the response for future visits.
+ */
+async function fetchCached(url) {
+  if (typeof caches !== 'undefined') {
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(url);
+      if (cached) {
+        return cached;
+      }
+      const response = await fetch(url);
+      if (response.ok) {
+        try {
+          await cache.put(url, response.clone());
+        } catch {
+          // Ignore quota / cache write errors
+        }
+      }
+      return response;
+    } catch {
+      // Fallback if caches is not accessible
+    }
+  }
+  return fetch(url);
+}
+
 /** Fetches and compiles one wasm binary, reporting progress as it goes. */
 async function loadBinary(name, label) {
   post({ type: 'status', phase: 'loading', detail: `Downloading ${label}…` });
-  const response = await fetch(`${baseURL}${name}`);
+  const response = await fetchCached(`${baseURL}${name}`);
   if (!response.ok) throw new Error(`Could not fetch ${name} (HTTP ${response.status}).`);
   post({ type: 'status', phase: 'loading', detail: `Preparing ${label}…` });
 
-  // compileStreaming insists on an `application/wasm` content-type and cannot be
-  // retried once it has taken the body, so the choice is made up front rather
-  // than in a catch. A campus mirror serving these as octet-stream is a
-  // configuration detail nobody should have to debug from a blank notebook.
-  if ((response.headers.get('content-type') || '').includes('application/wasm')) {
-    return WebAssembly.compileStreaming(response);
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/wasm') && typeof WebAssembly.compileStreaming === 'function') {
+    try {
+      return await WebAssembly.compileStreaming(response.clone());
+    } catch {
+      // Fall back to buffer compilation if compileStreaming fails
+    }
   }
   return WebAssembly.compile(await response.arrayBuffer());
 }
@@ -131,15 +163,26 @@ async function loadBinary(name, label) {
 async function init(url) {
   baseURL = url.endsWith('/') ? url : `${url}/`;
 
-  // Sequential rather than Promise.all: three large downloads at once on a
-  // teaching-lab connection is slower overall and makes the progress text lie.
-  clangModule = await loadBinary('clang.wasm', 'the C compiler');
-  linkerModule = await loadBinary('wasm-ld.wasm', 'the linker');
+  post({ type: 'status', phase: 'loading', detail: 'Starting C toolchain…' });
 
-  post({ type: 'status', phase: 'loading', detail: 'Unpacking the C standard library…' });
-  const response = await fetch(`${baseURL}clang-fs.tar.gz`);
-  if (!response.ok) throw new Error(`Could not fetch the C standard library (HTTP ${response.status}).`);
-  sysroot = await untarGz(response);
+  // Parallelize downloading and compiling all three toolchain components simultaneously:
+  // - clang compiler wasm module (~30MB)
+  // - wasm-ld linker wasm module (~15MB)
+  // - clang-fs WASI sysroot (~7MB tar.gz)
+  const clangPromise = loadBinary('clang.wasm', 'the C compiler');
+  const linkerPromise = loadBinary('wasm-ld.wasm', 'the linker');
+  const sysrootPromise = (async () => {
+    const response = await fetchCached(`${baseURL}clang-fs.tar.gz`);
+    if (!response.ok) throw new Error(`Could not fetch the C standard library (HTTP ${response.status}).`);
+    post({ type: 'status', phase: 'loading', detail: 'Unpacking the C standard library…' });
+    return untarGz(response);
+  })();
+
+  const [clang, linker, fs] = await Promise.all([clangPromise, linkerPromise, sysrootPromise]);
+
+  clangModule = clang;
+  linkerModule = linker;
+  sysroot = fs;
 
   ready = true;
   post({ type: 'status', phase: 'ready', detail: '' });
