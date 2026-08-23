@@ -4,13 +4,49 @@ import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import getEnvironment from '../../getenvironment';
-import { Text, Button, Flex } from '@chakra-ui/react';
+import { Text, Button, Flex, IconButton, useColorMode, } from '@chakra-ui/react';
 import { loginPathFor } from '../../authRedirect';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import lmApi from '../../learningModule/api/lmApi';
 
+function MoonIcon({ size = 18 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+    </svg>
+  );
+}
+
+function SunIcon({ size = 18 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </svg>
+  );
+}
+
 export default function Navbar() {
+  const { colorMode, toggleColorMode } = useColorMode();
   const [navbarOpen, setNavbarOpen] = useState(false);
   const [isNarrow, setIsNarrow] = useState(
     () => typeof window !== 'undefined' && window.innerWidth < 768
@@ -275,20 +311,58 @@ export default function Navbar() {
               {isAuthenticated && (
                 <>
                   {userDetails && (
-                    <Flex align={'center'} gap={2}>
+                    <Flex align="center" gap={2}>
                       <Text fontSize="sm" color="orange">
                         {userDetails.user.email}
                       </Text>
 
+                      <IconButton
+                        onClick={toggleColorMode}
+                        variant="outline"
+                        size="sm"
+                        color="white"
+                        borderColor="cyan.300"
+                        aria-label={
+                          colorMode === 'light'
+                            ? 'Switch to dark mode'
+                            : 'Switch to light mode'
+                        }
+                        title={colorMode === 'light' ? 'Dark mode' : 'Light mode'}
+                        icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
+                        _hover={{
+                          bg: 'cyan.400',
+                          color: 'gray.900',
+                          borderColor: 'cyan.300',
+                        }}
+                        _active={{
+                          bg: 'cyan.500',
+                          color: 'gray.900',
+                          borderColor: 'cyan.400',
+                        }}
+                        _focusVisible={{
+                          boxShadow: '0 0 0 3px rgba(34, 211, 238, 0.45)',
+                        }}
+                      />
+
                       <Button
-                        variant={'outline'}
+                        variant="outline"
                         size="sm"
                         color="white"
                         borderColor="cyan.300"
                         fontWeight="semibold"
-                        _hover={{ bg: 'cyan.400', color: 'gray.900', borderColor: 'cyan.300' }}
-                        _active={{ bg: 'cyan.500', color: 'gray.900', borderColor: 'cyan.400' }}
-                        _focusVisible={{ boxShadow: '0 0 0 3px rgba(34, 211, 238, 0.45)' }}
+                        _hover={{
+                          bg: 'cyan.400',
+                          color: 'gray.900',
+                          borderColor: 'cyan.300',
+                        }}
+                        _active={{
+                          bg: 'cyan.500',
+                          color: 'gray.900',
+                          borderColor: 'cyan.400',
+                        }}
+                        _focusVisible={{
+                          boxShadow: '0 0 0 3px rgba(34, 211, 238, 0.45)',
+                        }}
                         onClick={handleLogout}
                       >
                         Logout

@@ -34,10 +34,12 @@ const UserSignatures = () => {
         }
 
         let data = await response.json();
-        // Filter out invalid URLs
-        data = data.filter(url => url && url.trim !== '');
-
-        
+        // Keep only real image addresses. The old check compared the `trim`
+        // function itself against '', so it never dropped anything and blank
+        // entries reached the grid as broken images.
+        data = (Array.isArray(data) ? data : [])
+          .map((url) => (typeof url === 'string' ? url.trim() : ''))
+          .filter((url) => url !== '');
 
         setSignatures(data);
 

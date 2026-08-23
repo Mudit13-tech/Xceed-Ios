@@ -23,6 +23,7 @@ function ViewCertificate() {
   const [title, setTitle] = useState([""]);
   const [verifiableLink, setVerifiableLink] = useState("");
   const [logos, setLogos] = useState([]);
+  const [qr, setQr] = useState(null);
   const [participantDetail, setParticipantDetail] = useState({});
   const [signature, setSignatures] = useState([]);
   const [header, setHeader] = useState([]);
@@ -92,6 +93,7 @@ function ViewCertificate() {
       setTitle(data_one[0].title);
       setVerifiableLink(data_one[0].verifiableLink);
       setLogos(data_one[0].logos);
+      setQr(data_one[0].qr || null);
       setSignatures(data_one[0].signatures);
       setHeader(data_one[0].header)
       setFooter(data_one[0].footer)
@@ -151,6 +153,7 @@ function ViewCertificate() {
         contentBody={contentBody}
         certiType={certiType}
         logos={logos}
+        qr={qr}
         participantDetail={participantDetail}
         signature={signature}
         header={header}

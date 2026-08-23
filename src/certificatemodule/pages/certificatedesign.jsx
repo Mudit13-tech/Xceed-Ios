@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Input,
   Button,
   VStack,
   IconButton,
   HStack,
-  Textarea,
   Flex,
   Box,
   Text,
@@ -19,13 +18,19 @@ import {
   Tooltip,
   Switch,
 } from '@chakra-ui/react';
-import { AddIcon, CloseIcon, EditIcon, InfoIcon } from '@chakra-ui/icons';
+import { AddIcon, ArrowBackIcon, CloseIcon, EditIcon, InfoIcon } from '@chakra-ui/icons';
+import { useNavigate } from 'react-router-dom';
 import getEnvironment from '../../getenvironment';
 // import Header from '../../components/header';
-import Header from '../components/Header';
 import { useToast } from '@chakra-ui/react';
 import CertificateContent from './certificatetemplates/basic01';
-import SelectCertficate from './SelectCertficate';
+import SelectCertficate, {
+  isPlacedLine,
+  isPlacedLogo,
+  isPlacedQr,
+  isPlacedSignature,
+  isPlacedText,
+} from './SelectCertficate';
 import {
   Accordion,
   AccordionItem,
@@ -36,13 +41,1104 @@ import {
 import { HexAlphaColorPicker } from 'react-colorful';
 import { FaUpload } from 'react-icons/fa';
 import Signaturemodal from './signaturemodal';
+import ImportCertificateDesign from './ImportCertificateDesign';
+
+const CERTIFICATE_TYPES = ['participant', 'winner', 'speaker', 'organizer'];
+
+// Placeholders the body text can interpolate. The "copy variable" panel and the
+// highlighter below both read this list, so they can never drift apart.
+const BODY_VARIABLES = [
+  'name',
+  'department',
+  'college',
+  'teamName',
+  'position',
+  'title1',
+  'title2',
+];
+
+// A new certificate opens with every variable already wired into a sentence, so
+// the shape of a body is obvious without hunting through the variables panel.
+const DEFAULT_BODY_TEXT =
+  'This is to certify that {{name}} of {{department}}, {{college}}, ' +
+  'representing {{teamName}}, has secured {{position}} in {{title1}} ' +
+  'organised as part of {{title2}}.';
+
+const VARIABLE_PATTERN = /\{\{\s*\w+\s*\}\}/g;
+
+// Layout shared by the chips and the plain text around them, so a line of body
+// text measures the same in the editor as it does on the certificate.
+const BODY_TEXT_METRICS = {
+  fontSize: '16px',
+  lineHeight: '1.8',
+  letterSpacing: 'normal',
+  padding: '8px 16px',
+};
+
+// A zero-width space parked after every chip: without it the browser has
+// nowhere to put the caret when a chip ends a line.
+const CARET_ANCHOR = '\u200b';
+
+// Each variable lives in the body as one uneditable chip. The braces belong to
+// the chip rather than to the text, so no amount of typing or backspacing
+// inside the body can break a variable's syntax — a chip goes in or comes out
+// whole.
+function createVariableChip(name) {
+  const chip = document.createElement('span');
+  chip.setAttribute('contenteditable', 'false');
+  chip.setAttribute('data-variable', name);
+  chip.className = BODY_VARIABLES.includes(name)
+    ? 'cert-var-chip'
+    : 'cert-var-chip cert-var-chip--unknown';
+  chip.textContent = name;
+  return chip;
+}
+
+// Stored string -> chips and text.
+function renderBodyInto(root, text) {
+  root.textContent = '';
+
+  const appendText = (plain) => {
+    plain.split('\n').forEach((line, i) => {
+      if (i > 0) root.appendChild(document.createElement('br'));
+      if (line) root.appendChild(document.createTextNode(line));
+    });
+  };
+
+  let cursor = 0;
+  let match;
+  VARIABLE_PATTERN.lastIndex = 0;
+  while ((match = VARIABLE_PATTERN.exec(text)) !== null) {
+    if (match.index > cursor) appendText(text.slice(cursor, match.index));
+    root.appendChild(createVariableChip(match[0].replace(/[{}\s]/g, '')));
+    root.appendChild(document.createTextNode(CARET_ANCHOR));
+    cursor = match.index + match[0].length;
+  }
+  appendText(text.slice(cursor));
+}
+
+// ...and back, so what gets saved is still the plain {{name}} string the
+// certificate renderer already understands.
+function serializeBody(root) {
+  let out = '';
+
+  root.childNodes.forEach((node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      out += node.nodeValue.split(CARET_ANCHOR).join('');
+    } else if (node.nodeName === 'BR') {
+      out += '\n';
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const variable = node.getAttribute('data-variable');
+      if (variable) {
+        out += `{{${variable}}}`;
+      } else {
+        // A wrapper the browser added itself — Chrome starts a <div> per line.
+        if (out && !out.endsWith('\n')) out += '\n';
+        out += serializeBody(node);
+      }
+    }
+  });
+
+  return out;
+}
+
+// The body editor. A textarea can only hold characters, so variables are shown
+// as chips in a contentEditable instead; `value`/`onChange` still speak the
+// plain "{{name}}" string, and `apiRef` exposes insertVariable to the panel.
+function BodyEditor({ value, onChange, apiRef, placeholder }) {
+  const editorRef = useRef(null);
+  const lastEmitted = useRef(null);
+  const text = value || '';
+
+  const emit = useCallback(() => {
+    const next = serializeBody(editorRef.current);
+    lastEmitted.current = next;
+    onChange(next);
+  }, [onChange]);
+
+  // Rebuild only for changes that came from outside (a saved certificate
+  // loading, the type switching). Rebuilding on our own keystrokes would throw
+  // the caret back to the start of the box on every letter.
+  useEffect(() => {
+    if (!editorRef.current || text === lastEmitted.current) return;
+    renderBodyInto(editorRef.current, text);
+    lastEmitted.current = text;
+  }, [text]);
+
+  const insertVariable = useCallback(
+    (name) => {
+      const root = editorRef.current;
+      if (!root) return;
+
+      root.focus();
+      const selection = window.getSelection();
+      let range;
+      if (
+        selection &&
+        selection.rangeCount > 0 &&
+        root.contains(selection.getRangeAt(0).startContainer)
+      ) {
+        range = selection.getRangeAt(0);
+      } else {
+        // Never focused, or the caret is somewhere else on the page: append.
+        range = document.createRange();
+        range.selectNodeContents(root);
+        range.collapse(false);
+      }
+
+      range.deleteContents();
+      const anchor = document.createTextNode(CARET_ANCHOR);
+      range.insertNode(anchor);
+      range.insertNode(createVariableChip(name));
+
+      const caret = document.createRange();
+      caret.setStart(anchor, anchor.length);
+      caret.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(caret);
+
+      emit();
+    },
+    [emit]
+  );
+
+  useEffect(() => {
+    if (!apiRef) return undefined;
+    apiRef.current = { insertVariable };
+    return () => {
+      apiRef.current = null;
+    };
+  }, [apiRef, insertVariable]);
+
+  return (
+    <Box
+      ref={editorRef}
+      contentEditable
+      suppressContentEditableWarning
+      role="textbox"
+      aria-multiline="true"
+      data-placeholder={placeholder}
+      onInput={emit}
+      onBlur={emit}
+      onPaste={(e) => {
+        // Chips are ours to create; anything pasted in comes in as plain text.
+        e.preventDefault();
+        const pasted = e.clipboardData.getData('text/plain');
+        document.execCommand('insertText', false, pasted);
+      }}
+      width="100%"
+      minH="120px"
+      maxH="320px"
+      overflowY="auto"
+      resize="vertical"
+      border="1px solid"
+      borderColor="inherit"
+      borderRadius="md"
+      whiteSpace="pre-wrap"
+      wordBreak="break-word"
+      _focus={{
+        outline: 'none',
+        borderColor: 'blue.500',
+        boxShadow: '0 0 0 1px var(--chakra-colors-blue-500)',
+      }}
+      sx={{
+        ...BODY_TEXT_METRICS,
+        '&:empty::before': {
+          content: 'attr(data-placeholder)',
+          color: 'gray.400',
+        },
+        '.cert-var-chip': {
+          display: 'inline-block',
+          px: '6px',
+          mx: '1px',
+          borderRadius: '4px',
+          bg: 'blue.50',
+          color: 'blue.700',
+          border: '1px solid',
+          borderColor: 'blue.200',
+          fontSize: '0.85em',
+          lineHeight: '1.5',
+          whiteSpace: 'nowrap',
+          userSelect: 'all',
+        },
+        '.cert-var-chip--unknown': {
+          bg: 'red.50',
+          color: 'red.600',
+          borderColor: 'red.200',
+        },
+      }}
+    />
+  );
+}
+
+// Winner is what most events design first, so it is the type this page opens on
+// when nothing else is requested or already saved.
+const DEFAULT_CERTI_TYPE = 'winner';
+
+// Spellings and casings seen in saved certificates, mapped to the keys above.
+const CERTI_TYPE_ALIASES = {
+  organiser: 'organizer',
+  organizor: 'organizer',
+  participants: 'participant',
+  winners: 'winner',
+  speakers: 'speaker',
+};
+
+export const certiTypeStyle = (value) => {
+  const key = String(value || '').trim().toLowerCase();
+  return CERTI_TYPE_STYLES[key] || CERTI_TYPE_STYLES[CERTI_TYPE_ALIASES[key]] || null;
+};
+
+// Order shown in the dropdown — the default type sits at the top.
+const CERTI_TYPE_ORDER = [
+  DEFAULT_CERTI_TYPE,
+  ...CERTIFICATE_TYPES.filter((type) => type !== DEFAULT_CERTI_TYPE),
+];
+
+// Each type gets its own colour so the one being edited is obvious at a glance.
+// `panel` washes the whole form panel — light enough to read black text over,
+// strong enough to notice — while `tint` is a shade up so badges and the type
+// selector still stand out against it.
+const CERTI_TYPE_STYLES = {
+  winner: {
+    label: 'Winner',
+    scheme: 'pink',
+    accent: 'pink.500',
+    tint: 'pink.100',
+    panel: 'pink.50',
+  },
+  participant: {
+    label: 'Participant',
+    scheme: 'blue',
+    accent: 'blue.500',
+    tint: 'blue.100',
+    panel: 'blue.50',
+  },
+  speaker: {
+    label: 'Speaker',
+    scheme: 'purple',
+    accent: 'purple.500',
+    tint: 'purple.100',
+    panel: 'purple.50',
+  },
+  organizer: {
+    label: 'Organizer',
+    scheme: 'green',
+    accent: 'green.500',
+    tint: 'green.100',
+    panel: 'green.50',
+  },
+};
+
+// How much of the width the form panel takes when the page first loads, and the
+// range the splitter is allowed to move within.
+const SPLIT_STORAGE_KEY = 'cm-certificate-design-split';
+const DEFAULT_SPLIT = 42;
+const MIN_SPLIT = 24;
+const MAX_SPLIT = 76;
+const MAX_PREVIEW_SCALE = 2.5;
+
+const readStoredSplit = () => {
+  try {
+    const stored = Number(window.localStorage.getItem(SPLIT_STORAGE_KEY));
+    if (!Number.isFinite(stored) || stored <= 0) return DEFAULT_SPLIT;
+    return Math.min(MAX_SPLIT, Math.max(MIN_SPLIT, stored));
+  } catch (error) {
+    return DEFAULT_SPLIT;
+  }
+};
+
+// The certificate templates render at a fixed A4-landscape size, so they would
+// overflow a narrowed panel. This shrinks the whole certificate to whatever
+// width the panel currently has instead of clipping it.
+const ScaledCertificate = ({ children, onScaleChange }) => {
+  const outerRef = useRef(null);
+  const innerRef = useRef(null);
+  const [scale, setScale] = useState(1);
+  const [natural, setNatural] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const outer = outerRef.current;
+    const inner = innerRef.current;
+    if (!outer || !inner) return undefined;
+
+    const measure = () => {
+      const available = outer.clientWidth;
+      // offsetWidth/Height are the untransformed layout size, so scaling the
+      // inner element never feeds back into this measurement.
+      const naturalWidth = inner.offsetWidth;
+      const naturalHeight = inner.offsetHeight;
+      if (!available || !naturalWidth) return;
+
+      // Fill the panel in both directions: shrink when it narrows, grow when
+      // it widens (capped so a very wide panel doesn't blow the design up).
+      const next = Math.min(MAX_PREVIEW_SCALE, available / naturalWidth);
+      setScale(next);
+      setNatural((current) =>
+        current.width === naturalWidth && current.height === naturalHeight
+          ? current
+          : { width: naturalWidth, height: naturalHeight }
+      );
+      if (onScaleChange) onScaleChange(next);
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(outer);
+    observer.observe(inner);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [onScaleChange]);
+
+  return (
+    <Box ref={outerRef} width="100%" overflow="hidden">
+      {/* The frame is exactly the scaled size, so the certificate stays centred
+          and inside the panel however far the splitter is dragged. */}
+      <Box
+        mx="auto"
+        overflow="hidden"
+        style={{
+          width: natural.width ? `${natural.width * scale}px` : '100%',
+          height: natural.height ? `${natural.height * scale}px` : 'auto',
+        }}
+      >
+        <Box
+          ref={innerRef}
+          width="max-content"
+          style={{
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+          }}
+        >
+          {children}
+        </Box>
+      </Box>
+    </Box>
+  );
+};
+
+// The dashboard links straight to one design with `?certiType=winner`. Anything
+// unrecognised is ignored, leaving the old behaviour of resolving the first type
+// that has a saved design.
+const requestedCertiType = () => {
+  const type = new URLSearchParams(window.location.search).get('certiType');
+  return CERTIFICATE_TYPES.includes(type) ? type : '';
+};
+
+// Drag/resize handles drawn over the certificate preview. It lives inside the
+// scaled certificate, so its own coordinates are template pixels; only pointer
+// deltas need converting back from screen pixels.
+const LogoPlacementLayer = ({
+  logos,
+  scale,
+  onLogoChange,
+  qr,
+  showQr,
+  onQrChange,
+  signatures,
+  onSignatureChange,
+  onSignatureLineChange,
+  onSignatureTextChange,
+}) => {
+  const layerRef = useRef(null);
+  const [activeIndex, setActiveIndex] = useState(null);
+  const [selectedIndex, setSelectedIndex] = useState(null);
+  const [measureTick, setMeasureTick] = useState(0);
+  const [signatureHeights, setSignatureHeights] = useState({});
+  // Name and designation have no stored width or height -- they are as big as
+  // their text renders -- so the drag handles are sized from the DOM instead.
+  const [textSizes, setTextSizes] = useState({});
+  // Where the rule, the name and the designation are actually drawn while they
+  // are still flowing inside their signature block. Handles sit on top of these
+  // so the parts can be dragged without being pinned first.
+  const [partRects, setPartRects] = useState({});
+  const [hoveredKey, setHoveredKey] = useState(null);
+
+  // Nothing on the certificate looks clickable on its own, so hovering shows a
+  // dashed outline and selecting turns it solid — the same language for logos,
+  // signatures, the separator rule and the QR.
+  const outlineFor = (key, isSelected) => {
+    if (isSelected) return `${2 / (scale || 1)}px solid #38A169`;
+    if (hoveredKey === key) return `${2 / (scale || 1)}px dashed #38A169`;
+    return `${2 / (scale || 1)}px solid transparent`;
+  };
+
+  const hoverProps = (key) => ({
+    onPointerEnter: () => setHoveredKey(key),
+    onPointerLeave: () => setHoveredKey((current) => (current === key ? null : current)),
+  });
+
+  // The drawn signature block sits right behind its handle; matching heights
+  // keeps the outline around the whole thing, caption included.
+  const registerSignatureNode = (index, node) => {
+    const root = node?.parentElement?.parentElement;
+    if (!root) return;
+    const block = root.querySelector(
+      `div[data-placed-signature="true"][data-signature-index="${index}"]`
+    );
+    if (!block) return;
+    const height = Math.round(block.offsetHeight);
+    if (!height) return;
+    setSignatureHeights((current) =>
+      current[index] === height ? current : { ...current, [index]: height }
+    );
+  };
+
+  // Every logo is draggable from the moment it is drawn: any logo that has no
+  // coordinates yet is measured where the template put it and pinned there, so
+  // it stays visually identical while becoming movable.
+  useEffect(() => {
+    const layer = layerRef.current;
+    const root = layer?.parentElement;
+    if (!layer || !root) return;
+    if (!logos.some((logo) => logo && logo.url && !isPlacedLogo(logo))) return;
+
+    const layerRect = layer.getBoundingClientRect();
+    if (!layerRect.width) return;
+
+    const bump = () => setMeasureTick((tick) => tick + 1);
+    const templateImages = Array.from(root.querySelectorAll('img')).filter(
+      (img) => img.dataset.placedLogo !== 'true'
+    );
+    const claimed = new Set();
+    const safeScale = scale || 1;
+
+    logos.forEach((logo, index) => {
+      if (!logo || !logo.url || isPlacedLogo(logo)) return;
+
+      let match = -1;
+      for (let i = 0; i < templateImages.length; i += 1) {
+        if (claimed.has(i)) continue;
+        if (templateImages[i].getAttribute('src') === logo.url) {
+          match = i;
+          break;
+        }
+      }
+      if (match === -1) return;
+      claimed.add(match);
+
+      const image = templateImages[match];
+      if (!image.complete) {
+        image.addEventListener('load', bump, { once: true });
+        return;
+      }
+
+      const rect = image.getBoundingClientRect();
+      if (rect.width < 2 || rect.height < 2) return;
+
+      onLogoChange(index, {
+        x: Math.round((rect.left - layerRect.left) / safeScale),
+        y: Math.round((rect.top - layerRect.top) / safeScale),
+        width: Math.round(rect.width / safeScale),
+        height: Math.round(rect.height / safeScale),
+      });
+    });
+  }, [logos, scale, measureTick, onLogoChange]);
+
+  // `key` is a logo index, or the string 'qr' for the QR code.
+  const startGesture = (event, key, mode) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setActiveIndex(key);
+    setSelectedIndex(key);
+
+    const isQr = key === 'qr';
+    const signatureIndex =
+      typeof key === 'string' && key.startsWith('sig-')
+        ? Number(key.slice(4))
+        : -1;
+    const lineIndex =
+      typeof key === 'string' && key.startsWith('line-')
+        ? Number(key.slice(5))
+        : -1;
+    // The signer's name and their designation each move on their own, so they
+    // get their own keys and read their coordinates from their own sub-object.
+    const nameIndex =
+      typeof key === 'string' && key.startsWith('name-')
+        ? Number(key.slice(5))
+        : -1;
+    const positionIndex =
+      typeof key === 'string' && key.startsWith('pos-')
+        ? Number(key.slice(4))
+        : -1;
+    const isSignature = signatureIndex >= 0;
+    const isLine = lineIndex >= 0;
+    const isName = nameIndex >= 0;
+    const isPosition = positionIndex >= 0;
+    const textField = isName ? 'name' : isPosition ? 'position' : null;
+    const textIndex = isName ? nameIndex : positionIndex;
+    const item = isQr
+      ? qr || {}
+      : isSignature
+        ? signatures[signatureIndex] || {}
+        : isLine
+          ? signatures[lineIndex]?.line || {}
+          : textField
+            ? signatures[textIndex]?.[textField] || {}
+            : logos[key];
+    const startX = event.clientX;
+    const startY = event.clientY;
+    // A part still flowing inside its block has no coordinates yet, so the
+    // drag starts from wherever it is currently drawn.
+    const drawn = partRects[key];
+    const origin = {
+      x: Number(item.x) ?? null,
+      y: Number(item.y) ?? null,
+      width:
+        Number(
+          isQr
+            ? item.size
+            : isSignature
+              ? item?.url?.size
+              : isLine
+                ? item.width
+                : textField
+                  ? textSizes[key]?.width
+                  : item.width
+        ) || (isQr ? 100 : isLine ? 100 : 80),
+      height:
+        Number(
+          isQr
+            ? item.size
+            : isSignature
+              ? signatureHeights[signatureIndex] || item?.url?.size
+              : isLine
+                ? 1
+                : textField
+                  ? textSizes[key]?.height
+                  : item.height
+        ) || (isQr ? 100 : isLine ? 1 : 80),
+    };
+    if (!Number.isFinite(origin.x) || !Number.isFinite(origin.y)) {
+      origin.x = drawn?.x || 0;
+      origin.y = drawn?.y || 0;
+    }
+
+    const bounds = {
+      width: layerRef.current?.clientWidth || 0,
+      height: layerRef.current?.clientHeight || 0,
+    };
+
+    const apply = (patch) =>
+      isQr
+        ? onQrChange(patch)
+        : isSignature
+          ? onSignatureChange(signatureIndex, patch)
+          : isLine
+            ? onSignatureLineChange(lineIndex, patch)
+            : textField
+              ? onSignatureTextChange(textIndex, textField, patch)
+              : onLogoChange(key, patch);
+
+    const onMove = (moveEvent) => {
+      const safeScale = scale || 1;
+      const dx = (moveEvent.clientX - startX) / safeScale;
+      const dy = (moveEvent.clientY - startY) / safeScale;
+
+      if (mode === 'move') {
+        const maxX = Math.max(0, bounds.width - origin.width);
+        const maxY = Math.max(0, bounds.height - origin.height);
+        apply({
+          x: Math.round(Math.min(maxX, Math.max(0, origin.x + dx))),
+          y: Math.round(Math.min(maxY, Math.max(0, origin.y + dy))),
+        });
+      } else if (isQr) {
+        // The QR must stay square to keep scanning reliably.
+        apply({ size: Math.round(Math.max(40, origin.width + dx)) });
+      } else if (isSignature) {
+        // Signature blocks scale by their image width; the caption follows.
+        apply({ size: Math.round(Math.max(40, origin.width + dx)) });
+      } else if (isLine) {
+        // The rule only has a length worth changing.
+        apply({ width: Math.round(Math.max(20, origin.width + dx)) });
+      } else if (textField) {
+        // Text is only ever moved -- its size is the font size, set in the
+        // form, so there is no resize gesture to handle here.
+      } else {
+        apply({
+          width: Math.round(Math.max(20, origin.width + dx)),
+          height: Math.round(Math.max(20, origin.height + dy)),
+        });
+      }
+    };
+
+    const onUp = () => {
+      setActiveIndex(null);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  };
+
+  // Signature blocks are measured from their image, the same way logos are.
+  useEffect(() => {
+    const layer = layerRef.current;
+    const root = layer?.parentElement;
+    if (!layer || !root) return;
+    if (
+      !signatures.some(
+        (item) => item?.url?.url && !isPlacedSignature(item)
+      )
+    )
+      return;
+
+    const layerRect = layer.getBoundingClientRect();
+    if (!layerRect.width) return;
+
+    const bump = () => setMeasureTick((tick) => tick + 1);
+    const images = Array.from(root.querySelectorAll('img')).filter(
+      (img) =>
+        img.dataset.placedLogo !== 'true' &&
+        img.dataset.placedSignature !== 'true'
+    );
+    const claimed = new Set();
+    const safeScale = scale || 1;
+
+    signatures.forEach((item, index) => {
+      const url = item?.url?.url;
+      if (!url || isPlacedSignature(item)) return;
+
+      let match = -1;
+      for (let i = 0; i < images.length; i += 1) {
+        if (claimed.has(i)) continue;
+        if (images[i].getAttribute('src') === url) {
+          match = i;
+          break;
+        }
+      }
+      if (match === -1) return;
+      claimed.add(match);
+
+      const image = images[match];
+      if (!image.complete) {
+        image.addEventListener('load', bump, { once: true });
+        return;
+      }
+
+      const rect = image.getBoundingClientRect();
+      if (rect.width < 2 || rect.height < 2) return;
+
+      onSignatureChange(index, {
+        x: Math.round((rect.left - layerRect.left) / safeScale),
+        y: Math.round((rect.top - layerRect.top) / safeScale),
+      });
+    });
+  }, [signatures, scale, measureTick, onSignatureChange]);
+
+  // The rule, the name and the designation stay where the block puts them —
+  // the rule above the name, the designation under it, exactly as the templates
+  // draw them. They are only measured here, so a handle can be placed over each
+  // one; dragging is what gives a part coordinates of its own.
+  useEffect(() => {
+    const layer = layerRef.current;
+    const root = layer?.parentElement;
+    if (!layer || !root) return;
+
+    const layerRect = layer.getBoundingClientRect();
+    if (!layerRect.width) return;
+    const safeScale = scale || 1;
+
+    const sizes = {};
+    const rects = {};
+
+    const record = (key, node) => {
+      const rect = node.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return;
+      sizes[key] = {
+        width: Math.round(rect.width / safeScale),
+        height: Math.round(rect.height / safeScale),
+      };
+      rects[key] = {
+        ...sizes[key],
+        x: Math.round((rect.left - layerRect.left) / safeScale),
+        y: Math.round((rect.top - layerRect.top) / safeScale),
+      };
+    };
+
+    signatures.forEach((item, index) => {
+      if (!isPlacedSignature(item)) return;
+
+      [
+        ['data-signature-line', `line-${index}`],
+        ['data-signature-name', `name-${index}`],
+        ['data-signature-position', `pos-${index}`],
+      ].forEach(([attribute, key]) => {
+        const node = root.querySelector(
+          `div[${attribute}="true"][data-signature-index="${index}"]`
+        );
+        if (node) record(key, node);
+      });
+    });
+
+    const same = (a, b) => {
+      const keys = Object.keys(b);
+      return (
+        keys.length === Object.keys(a).length &&
+        keys.every((key) =>
+          Object.keys(b[key]).every((prop) => a[key]?.[prop] === b[key][prop])
+        )
+      );
+    };
+
+    setTextSizes((current) => (same(current, sizes) ? current : sizes));
+    setPartRects((current) => (same(current, rects) ? current : rects));
+  }, [signatures, scale, measureTick]);
+
+  // Same idea for the QR code: the templates append it as an SVG image with the
+  // class `qrcode`, so it is measured there and pinned in place.
+  useEffect(() => {
+    const layer = layerRef.current;
+    const root = layer?.parentElement;
+    if (!layer || !root) return undefined;
+    if (!showQr || isPlacedQr(qr)) return undefined;
+
+    const layerRect = layer.getBoundingClientRect();
+    if (!layerRect.width) return undefined;
+
+    const node = root.querySelector('.qrcode');
+    if (!node) {
+      // The templates add it asynchronously once the QR image is encoded.
+      const timer = window.setTimeout(() => setMeasureTick((t) => t + 1), 200);
+      return () => window.clearTimeout(timer);
+    }
+
+    const rect = node.getBoundingClientRect();
+    if (rect.width < 2) return undefined;
+
+    const safeScale = scale || 1;
+    onQrChange({
+      x: Math.round((rect.left - layerRect.left) / safeScale),
+      y: Math.round((rect.top - layerRect.top) / safeScale),
+      size: Math.round(rect.width / safeScale),
+    });
+    return undefined;
+  }, [qr, showQr, scale, measureTick, onQrChange]);
+
+  useEffect(() => {
+    if (selectedIndex === null) return undefined;
+    const onPointerDown = (event) => {
+      if (layerRef.current && layerRef.current.contains(event.target)) return;
+      setSelectedIndex(null);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [selectedIndex]);
+
+  // Handles keep a constant on-screen size however far the preview is scaled.
+  const handleSize = 12 / (scale || 1);
+  const borderWidth = 2 / (scale || 1);
+
+  return (
+    <div
+      ref={layerRef}
+      style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+    >
+      {logos.map((logo, index) => {
+        if (!isPlacedLogo(logo)) return null;
+        const isActive = activeIndex === index;
+        const isSelected = selectedIndex === index || isActive;
+
+        return (
+          <div
+            key={index}
+            onPointerDown={(event) => startGesture(event, index, 'move')}
+            {...hoverProps(index)}
+            style={{
+              position: 'absolute',
+              left: `${Number(logo.x)}px`,
+              top: `${Number(logo.y)}px`,
+              width: `${logo.width || 80}px`,
+              height: `${logo.height || 80}px`,
+              // Dashed on hover, solid once selected.
+              border: outlineFor(index, isSelected),
+              background: isSelected ? 'rgba(56,161,105,0.08)' : 'transparent',
+              cursor: 'move',
+              pointerEvents: 'auto',
+              touchAction: 'none',
+            }}
+            title="Click to select · drag to move · drag the corner to resize"
+          >
+            {isSelected && (
+              <div
+                onPointerDown={(event) => startGesture(event, index, 'resize')}
+                style={{
+                  position: 'absolute',
+                  right: `${-handleSize / 2}px`,
+                  bottom: `${-handleSize / 2}px`,
+                  width: `${handleSize}px`,
+                  height: `${handleSize}px`,
+                  borderRadius: '2px',
+                  background: '#38A169',
+                  cursor: 'nwse-resize',
+                  pointerEvents: 'auto',
+                  touchAction: 'none',
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
+
+      {signatures.map((item, index) => {
+        if (!isPlacedSignature(item)) return null;
+        const key = `sig-${index}`;
+        const isSelected = selectedIndex === key || activeIndex === key;
+        const width = Number(item?.url?.size) || 100;
+        const height = signatureHeights[index] || width;
+
+        return (
+          <div
+            key={key}
+            ref={(node) => registerSignatureNode(index, node)}
+            onPointerDown={(event) => startGesture(event, key, 'move')}
+            {...hoverProps(key)}
+            style={{
+              position: 'absolute',
+              left: `${Number(item.x)}px`,
+              top: `${Number(item.y)}px`,
+              width: `${width}px`,
+              height: `${height}px`,
+              border: outlineFor(key, isSelected),
+              background: isSelected ? 'rgba(56,161,105,0.08)' : 'transparent',
+              cursor: 'move',
+              pointerEvents: 'auto',
+              touchAction: 'none',
+            }}
+            title="Signature — click to select, drag to move, drag the corner to resize"
+          >
+            {isSelected && (
+              <div
+                onPointerDown={(event) => startGesture(event, key, 'resize')}
+                style={{
+                  position: 'absolute',
+                  right: `${-handleSize / 2}px`,
+                  bottom: `${-handleSize / 2}px`,
+                  width: `${handleSize}px`,
+                  height: `${handleSize}px`,
+                  borderRadius: '2px',
+                  background: '#38A169',
+                  cursor: 'nwse-resize',
+                  pointerEvents: 'auto',
+                  touchAction: 'none',
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
+
+      {/* One handle per text, so the name and the designation move apart. */}
+      {signatures.flatMap((item, index) => {
+        if (!isPlacedSignature(item)) return [];
+        return [
+          ['name', `name-${index}`, item?.name, "Signer's name"],
+          ['position', `pos-${index}`, item?.position, 'Designation'],
+        ].map(([field, key, text, label]) => {
+          const drawn = partRects[key];
+          const size = textSizes[key];
+          if (!size) return null;
+          const placed = isPlacedText(text);
+          if (!placed && !drawn) return null;
+          const left = placed ? Number(text.x) : drawn.x;
+          const top = placed ? Number(text.y) : drawn.y;
+          const isSelected = selectedIndex === key || activeIndex === key;
+
+          return (
+            <div
+              key={key}
+              onPointerDown={(event) => startGesture(event, key, 'move')}
+              {...hoverProps(key)}
+              style={{
+                position: 'absolute',
+                left: `${left}px`,
+                top: `${top}px`,
+                width: `${size.width}px`,
+                height: `${size.height}px`,
+                border: outlineFor(key, isSelected),
+                background: isSelected
+                  ? 'rgba(56,161,105,0.12)'
+                  : 'transparent',
+                cursor: 'move',
+                pointerEvents: 'auto',
+                touchAction: 'none',
+              }}
+              title={`${label} — drag to move it on its own`}
+            />
+          );
+        });
+      })}
+
+      {signatures.map((item, index) => {
+        if (!isPlacedSignature(item)) return null;
+        const key = `line-${index}`;
+        const drawn = partRects[key];
+        const placed = isPlacedLine(item?.line);
+        if (!placed && !drawn) return null;
+        const isSelected = selectedIndex === key || activeIndex === key;
+        const width = Number(item?.line?.width) || drawn?.width || 100;
+        const left = placed ? Number(item.line.x) : drawn.x;
+        const top = placed ? Number(item.line.y) : drawn.y;
+        // A one-pixel rule is impossible to grab, so the handle is padded.
+        const grab = 10 / (scale || 1);
+
+        return (
+          <div
+            key={key}
+            onPointerDown={(event) => startGesture(event, key, 'move')}
+            {...hoverProps(key)}
+            style={{
+              position: 'absolute',
+              left: `${left}px`,
+              top: `${top - grab / 2}px`,
+              width: `${width}px`,
+              height: `${grab}px`,
+              border: outlineFor(key, isSelected),
+              background: isSelected ? 'rgba(56,161,105,0.12)' : 'transparent',
+              cursor: 'move',
+              pointerEvents: 'auto',
+              touchAction: 'none',
+            }}
+            title="Separator line — click to select, drag to move, drag the end to change its length"
+          >
+            {isSelected && (
+              <div
+                onPointerDown={(event) => startGesture(event, key, 'resize')}
+                style={{
+                  position: 'absolute',
+                  right: `${-handleSize / 2}px`,
+                  top: `${(grab - handleSize) / 2}px`,
+                  width: `${handleSize}px`,
+                  height: `${handleSize}px`,
+                  borderRadius: '2px',
+                  background: '#38A169',
+                  cursor: 'ew-resize',
+                  pointerEvents: 'auto',
+                  touchAction: 'none',
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
+
+      {showQr && isPlacedQr(qr) && (
+        <div
+          onPointerDown={(event) => startGesture(event, 'qr', 'move')}
+          {...hoverProps('qr')}
+          style={{
+            position: 'absolute',
+            left: `${Number(qr.x)}px`,
+            top: `${Number(qr.y)}px`,
+            width: `${Number(qr.size) || 100}px`,
+            height: `${Number(qr.size) || 100}px`,
+            border: outlineFor('qr', selectedIndex === 'qr'),
+            background:
+              selectedIndex === 'qr' ? 'rgba(56,161,105,0.08)' : 'transparent',
+            cursor: 'move',
+            pointerEvents: 'auto',
+            touchAction: 'none',
+          }}
+          title="QR code — click to select, drag to move, drag the corner to resize"
+        >
+          {selectedIndex === 'qr' && (
+            <div
+              onPointerDown={(event) => startGesture(event, 'qr', 'resize')}
+              style={{
+                position: 'absolute',
+                right: `${-handleSize / 2}px`,
+                bottom: `${-handleSize / 2}px`,
+                width: `${handleSize}px`,
+                height: `${handleSize}px`,
+                borderRadius: '2px',
+                background: '#38A169',
+                cursor: 'nwse-resize',
+                pointerEvents: 'auto',
+                touchAction: 'none',
+              }}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const CertificateForm = () => {
   const apiUrl = getEnvironment();
+  const navigate = useNavigate();
   const toast = useToast();
+
+  // Lets the variables panel drop a chip in at the body editor's caret.
+  const bodyEditorRef = useRef(null);
+
+  // Resizable split between the form panel and the certificate preview.
+  const shellRef = useRef(null);
+  const [splitPct, setSplitPct] = useState(readStoredSplit);
+  const [isDragging, setIsDragging] = useState(false);
+  const [previewScale, setPreviewScale] = useState(1);
+  const [isWide, setIsWide] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth >= 768
+  );
+
+  useEffect(() => {
+    const onResize = () => setIsWide(window.innerWidth >= 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    if (!isDragging) return undefined;
+
+    const onMove = (event) => {
+      const shell = shellRef.current;
+      if (!shell) return;
+      const rect = shell.getBoundingClientRect();
+      if (!rect.width) return;
+      const pct = ((event.clientX - rect.left) / rect.width) * 100;
+      const clamped = Math.min(MAX_SPLIT, Math.max(MIN_SPLIT, pct));
+      setSplitPct(clamped);
+    };
+
+    const onUp = () => {
+      setIsDragging(false);
+      setSplitPct((current) => {
+        try {
+          window.localStorage.setItem(SPLIT_STORAGE_KEY, String(current));
+        } catch (error) {
+          /* storage unavailable — the layout just won't be remembered */
+        }
+        return current;
+      });
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [isDragging]);
+
+  const handlePreviewScale = useCallback((value) => setPreviewScale(value), []);
+
+
   const [isCertificateLoading, setIsCertificateLoading] = useState(false);
   const [isResolvingInitialType, setIsResolvingInitialType] = useState(true);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  // The design last loaded or saved on this page. Switching to a type that has
+  // no design of its own opens on a copy of it, so the four types can be built
+  // from one — but only in the form: it is written to the server only if the
+  // user saves it under the new type.
+  const carryOverRef = useRef(null);
   const date = new Date();
   const a = date.getMonth() > 8 ? '' : 0;
   const defaultDate = `${date.getFullYear()}-${a}${
@@ -61,7 +1157,7 @@ const CertificateForm = () => {
       },
     ],
     body: {
-      body: '',
+      body: DEFAULT_BODY_TEXT,
       fontSize: 16,
       fontFamily: '',
       bold: 'normal',
@@ -90,7 +1186,7 @@ const CertificateForm = () => {
         url: { url: '', size: 100 },
       },
     ],
-    certiType: '',
+    certiType: requestedCertiType(),
     templateId: '0', //Template Design Number
     title: [
       {
@@ -127,6 +1223,8 @@ const CertificateForm = () => {
       },
     ],
     verifiableLink: true,
+    // Null coordinates mean "wherever the template puts it".
+    qr: { x: null, y: null, size: 100 },
     certificateOf: {
       certificateOf: 'CERTIFICATE OF APPRECIATION',
       fontSize: 32,
@@ -142,7 +1240,7 @@ const CertificateForm = () => {
   const currentURL = window.location.pathname;
   const parts = currentURL.split('/');
   const eventId = parts[parts.length - 1];
-  const certificateTypes = ['participant', 'winner', 'speaker', 'organizer'];
+  const certificateTypes = CERTIFICATE_TYPES;
 
   const getDefaultSignature = () => ({
     name: {
@@ -165,6 +1263,16 @@ const CertificateForm = () => {
   });
 
   const normalizeSignature = (signature) => {
+    // Coordinates are absent on signatures saved before free placement.
+    const placement = {
+      x: signature?.x ?? null,
+      y: signature?.y ?? null,
+      line: {
+        x: signature?.line?.x ?? null,
+        y: signature?.line?.y ?? null,
+        width: signature?.line?.width ?? 100,
+      },
+    };
     const fallback = getDefaultSignature();
     if (!signature || typeof signature !== 'object') {
       return fallback;
@@ -210,6 +1318,7 @@ const CertificateForm = () => {
       name: normalizedName,
       position: normalizedPosition,
       url: normalizedUrl,
+      ...placement,
     };
   };
 
@@ -220,8 +1329,16 @@ const CertificateForm = () => {
         return;
       }
 
+      // Try the default type first, then the rest, so an event with no saved
+      // design at all still lands on Winner.
+      const orderedTypes = [
+        DEFAULT_CERTI_TYPE,
+        ...certificateTypes.filter((type) => type !== DEFAULT_CERTI_TYPE),
+      ];
+      let resolved = '';
+
       try {
-        for (const certType of certificateTypes) {
+        for (const certType of orderedTypes) {
           const response = await fetch(
             `${apiUrl}/certificatemodule/certificate/getcertificatedetails/${eventId}/${certType}`,
             {
@@ -243,13 +1360,17 @@ const CertificateForm = () => {
             Array.isArray(responseData) &&
             responseData.length > 0
           ) {
-            setFormData((prev) => ({ ...prev, certiType: certType }));
+            resolved = certType;
             break;
           }
         }
       } catch (error) {
         console.error('Error resolving certificate type:', error);
       } finally {
+        setFormData((prev) => ({
+          ...prev,
+          certiType: resolved || DEFAULT_CERTI_TYPE,
+        }));
         setIsResolvingInitialType(false);
       }
     };
@@ -257,335 +1378,352 @@ const CertificateForm = () => {
     resolveInitialType();
   }, [apiUrl, eventId, formData.certiType]);
 
-  {
-    /* Purpose: Resets form when certificate type changes and fetches existing certificate data from the API*/
-  }
-  useEffect(() => {
-    const certType = formData.certiType;
-    setSelectedFiles([]);
-    setFormData({
-      logos: [{ url: '', height: 80, width: 80 }],
-      header: [
-        {
-          header: '',
-          fontSize: 22,
-          fontFamily: '',
-          bold: 'bold',
-          italic: 'normal',
-          fontColor: 'black',
-        },
-      ],
-      body: {
-        body: '',
-        fontSize: 16,
-        fontFamily: '',
-        bold: 'normal',
-        italic: 'normal',
-        fontColor: 'black',
-      },
-      footer: { footer: defaultDate },
-      signatures: [getDefaultSignature()],
-      certiType: certType,
-      templateId: '0', //Template Design Number
-      title: [
-        {
-          name: 'डॉ बी आर अम्बेडकर राष्ट्रीय प्रौद्योगिकी संस्थान जालंधर',
-          fontSize: 20,
-          fontFamily: 'Noto Serif Devanagari',
-          bold: 'bold',
-          italic: 'normal',
-          fontColor: 'black',
-        },
-        {
-          name: 'जी.टी. रोड, अमृतसर बाईपास, जालंधर, पंजाब, भारत-144008',
-          fontSize: 14,
-          fontFamily: 'Noto Serif Devanagari',
-          bold: 'normal',
-          italic: 'normal',
-          fontColor: 'black',
-        },
-        {
-          name: 'Dr B R Ambedkar National Institute of Technology Jalandhar',
-          fontSize: 19,
-          fontFamily: 'serif',
-          bold: 'bold',
-          italic: 'normal',
-          fontColor: 'black',
-        },
-        {
-          name: 'G.T Road, Amritsar Bypass, Jalandhar, Punjab, India-144008',
-          fontSize: 14,
-          fontFamily: 'serif',
-          bold: 'normal',
-          italic: 'normal',
-          fontColor: 'black',
-        },
-      ],
-      verifiableLink: true,
-      certificateOf: {
-        certificateOf: 'CERTIFICATE OF APPRECIATION',
-        fontSize: 32,
+  // Designs are plain JSON, so this is enough to hand a copy to another type
+  // without the two sharing (and mutating) the same nested objects.
+  const cloneDesign = (design) => JSON.parse(JSON.stringify(design));
+
+  // The empty form a type opens on when there is nothing to copy from.
+  const blankFormData = (certType) => ({
+    logos: [{ url: '', height: 80, width: 80 }],
+    header: [
+      {
+        header: '',
+        fontSize: 22,
         fontFamily: '',
         bold: 'bold',
         italic: 'normal',
         fontColor: 'black',
       },
-    });
-    const fetchData = async () => {
-      setIsCertificateLoading(true);
-      try {
-        const response = await fetch(
-          `${apiUrl}/certificatemodule/certificate/getcertificatedetails/${eventId}/${formData.certiType}`,
-          {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-          }
-        );
-        if (response.ok) {
-          const responseData = await response.json();
-          console.log('response:', responseData);
-          if (
-            responseData &&
-            Array.isArray(responseData) &&
-            responseData.length > 0
-          ) {
-            let {
-              certificateOf,
-              title,
-              signatures,
-              header,
-              footer,
-              body,
-              certiType,
-              logos,
-              templateId,
-              verifiableLink,
-            } = responseData[0];
-            const Signatures =
-              Array.isArray(signatures) && signatures.length > 0
-                ? signatures.map((signatureItem) =>
-                    normalizeSignature(signatureItem)
-                  )
-                : [getDefaultSignature()];
-            const defaultHeader = {
-              header: '',
-              fontSize: 22,
-              fontFamily: '',
-              bold: 'bold',
-              italic: 'normal',
-              fontColor: 'black',
-            };
-            const defaultBody = {
-              body: '',
-              fontSize: 16,
-              fontFamily: '',
-              bold: 'normal',
-              italic: 'normal',
-              fontColor: 'black',
-            };
-            const defaultCertificateOf = {
-              certificateOf: 'CERTIFICATE OF APPRECIATION',
-              fontSize: 32,
-              fontFamily: '',
-              bold: 'bold',
-              italic: 'normal',
-              fontColor: 'black',
-            };
+    ],
+    body: {
+      body: DEFAULT_BODY_TEXT,
+      fontSize: 16,
+      fontFamily: '',
+      bold: 'normal',
+      italic: 'normal',
+      fontColor: 'black',
+    },
+    footer: { footer: defaultDate },
+    signatures: [getDefaultSignature()],
+    certiType: certType,
+    templateId: '0', //Template Design Number
+    title: [
+      {
+        name: 'डॉ बी आर अम्बेडकर राष्ट्रीय प्रौद्योगिकी संस्थान जालंधर',
+        fontSize: 20,
+        fontFamily: 'Noto Serif Devanagari',
+        bold: 'bold',
+        italic: 'normal',
+        fontColor: 'black',
+      },
+      {
+        name: 'जी.टी. रोड, अमृतसर बाईपास, जालंधर, पंजाब, भारत-144008',
+        fontSize: 14,
+        fontFamily: 'Noto Serif Devanagari',
+        bold: 'normal',
+        italic: 'normal',
+        fontColor: 'black',
+      },
+      {
+        name: 'Dr B R Ambedkar National Institute of Technology Jalandhar',
+        fontSize: 19,
+        fontFamily: 'serif',
+        bold: 'bold',
+        italic: 'normal',
+        fontColor: 'black',
+      },
+      {
+        name: 'G.T Road, Amritsar Bypass, Jalandhar, Punjab, India-144008',
+        fontSize: 14,
+        fontFamily: 'serif',
+        bold: 'normal',
+        italic: 'normal',
+        fontColor: 'black',
+      },
+    ],
+    verifiableLink: true,
+    // Null coordinates mean "wherever the template puts it".
+    qr: { x: null, y: null, size: 100 },
+    certificateOf: {
+      certificateOf: 'CERTIFICATE OF APPRECIATION',
+      fontSize: 32,
+      fontFamily: '',
+      bold: 'bold',
+      italic: 'normal',
+      fontColor: 'black',
+    },
+  });
 
-            //for logos
-            const Logos =
-              Array.isArray(logos) && logos.length > 0
-                ? logos.map((logoItem) => {
-                    if (logoItem && typeof logoItem === 'object') {
-                      if (logoItem.url || logoItem.url === '') {
-                        return {
-                          url: logoItem.url,
-                          height: logoItem.height ?? 80,
-                          width: logoItem.width ?? 80,
-                        };
-                      }
+  // Turns a saved certificate document into the shape the form edits. Older
+  // documents are missing fields or store them in long-gone shapes, so most
+  // branches here are migrations of one of those.
+  const buildFormDataFromDoc = (doc, certType) => {
+    let {
+      certificateOf,
+      title,
+      signatures,
+      header,
+      footer,
+      body,
+      logos,
+      templateId,
+      verifiableLink,
+      qr,
+    } = doc;
 
-                      let str = '';
-                      for (let key in logoItem) {
-                        parseInt(key) || key == '0'
-                          ? (str = str + logoItem[key])
-                          : '';
-                      }
-                      return { url: str, width: 80, height: 80 };
-                    }
-
-                    return { url: logoItem || '', width: 80, height: 80 };
-                  })
-                : [{ url: '', height: 80, width: 80 }];
-
-            //for header (department/club)
-            const Header =
-              Array.isArray(header) && header.length > 0
-                ? header.map((headerItem) => {
-                    if (headerItem && typeof headerItem === 'object') {
-                      if (headerItem.header || headerItem.header === '') {
-                        return {
-                          ...defaultHeader,
-                          ...headerItem,
-                        };
-                      }
-
-                      let str = '';
-                      for (let key in headerItem) {
-                        parseInt(key) || key == '0'
-                          ? (str = str + headerItem[key])
-                          : '';
-                      }
-                      return {
-                        ...defaultHeader,
-                        header: str,
-                      };
-                    }
-
-                    return {
-                      ...defaultHeader,
-                      header: headerItem || '',
-                    };
-                  })
-                : [defaultHeader];
-
-            // for footer
-            const Footer =
-              footer && typeof footer === 'object' && !Array.isArray(footer)
-                ? { footer: footer.footer ?? defaultDate }
-                : { footer: defaultDate };
-
-            //for certificateOf
-            const CertificateOf =
-              certificateOf &&
-              typeof certificateOf === 'object' &&
-              !Array.isArray(certificateOf)
-                ? {
-                    ...defaultCertificateOf,
-                    ...certificateOf,
-                    certificateOf:
-                      certificateOf.certificateOf ??
-                      defaultCertificateOf.certificateOf,
-                  }
-                : defaultCertificateOf;
-
-            // for body
-            const Body =
-              body && typeof body === 'object' && !Array.isArray(body)
-                ? {
-                    ...defaultBody,
-                    ...body,
-                    body: body.body ?? defaultBody.body,
-                  }
-                : {
-                    ...defaultBody,
-                    body: body || defaultBody.body,
-                  };
-
-            //for title
-            let Title = [];
-            if (Array.isArray(title) && title.length > 0) {
-              if (title[0] && (title[0][0] || title[0][0] == '')) {
-                title.forEach((element) => {
-                  let str = '';
-                  for (let key in element) {
-                    parseInt(key) || key == '0' ? (str = str + element[key]) : '';
-                  }
-                  let obj = {
-                    name: str,
-                    fontSize: '',
-                    fontFamily: '',
-                    bold: 'normal',
-                    italic: 'normal',
-                    fontColor: 'black',
-                  };
-                  Title.push(obj);
-                });
-              } else if (title[0]['name'] || title[0]['name'] == '') {
-                Title = title;
-              }
-            }
-            if (Title.length === 0) {
-              Title = [
-                {
-                  name: 'डॉ बी आर अम्बेडकर राष्ट्रीय प्रौद्योगिकी संस्थान जालंधर',
-                  fontSize: 20,
-                  fontFamily: 'Noto Serif Devanagari',
-                  bold: 'bold',
-                  italic: 'normal',
-                  fontColor: 'black',
-                },
-                {
-                  name: 'जी.टी. रोड, अमृतसर बाईपास, जालंधर, पंजाब, भारत-144008',
-                  fontSize: 14,
-                  fontFamily: 'Noto Serif Devanagari',
-                  bold: 'normal',
-                  italic: 'normal',
-                  fontColor: 'black',
-                },
-                {
-                  name: 'Dr B R Ambedkar National Institute of Technology Jalandhar',
-                  fontSize: 19,
-                  fontFamily: 'serif',
-                  bold: 'bold',
-                  italic: 'normal',
-                  fontColor: 'black',
-                },
-                {
-                  name: 'G.T Road, Amritsar Bypass, Jalandhar, Punjab, India-144008',
-                  fontSize: 14,
-                  fontFamily: 'serif',
-                  bold: 'normal',
-                  italic: 'normal',
-                  fontColor: 'black',
-                },
-              ];
-            }
-            // console.log(verifiableLink)
-            //for verifiableLink
-            if (typeof verifiableLink === 'string') {
-              verifiableLink = verifiableLink === 'true';
-            } else {
-              verifiableLink = !!verifiableLink;
-            }
-
-            // console.log(Title,Body,Footer,Header,Signatures)
-            setFormData({
-              title: Title,
-              body: Body,
-              certificateOf: CertificateOf,
-              footer: Footer,
-              header: Header,
-              signatures: Signatures,
-              certiType: certiType,
-              logos: Logos,
-              templateId: templateId,
-              verifiableLink: verifiableLink,
-            });
-            console.log(formData.logos);
-          } else {
-            console.error(
-              'Error: Fetched data does not match the expected structure.'
-            );
-          }
-        } else {
-          const responseData = await response.json();
-          console.error('Error fetching form data:', responseData.error);
-        }
-      } catch (error) {
-        console.error('Error fetching form data:', error);
-      } finally {
-        setIsCertificateLoading(false);
-      }
+    const Signatures =
+      Array.isArray(signatures) && signatures.length > 0
+        ? signatures.map((signatureItem) => normalizeSignature(signatureItem))
+        : [getDefaultSignature()];
+    const defaultHeader = {
+      header: '',
+      fontSize: 22,
+      fontFamily: '',
+      bold: 'bold',
+      italic: 'normal',
+      fontColor: 'black',
+    };
+    const defaultBody = {
+      body: DEFAULT_BODY_TEXT,
+      fontSize: 16,
+      fontFamily: '',
+      bold: 'normal',
+      italic: 'normal',
+      fontColor: 'black',
+    };
+    const defaultCertificateOf = {
+      certificateOf: 'CERTIFICATE OF APPRECIATION',
+      fontSize: 32,
+      fontFamily: '',
+      bold: 'bold',
+      italic: 'normal',
+      fontColor: 'black',
     };
 
-    if (formData.certiType) {
-      fetchData();
+    //for logos
+    const Logos =
+      Array.isArray(logos) && logos.length > 0
+        ? logos.map((logoItem) => {
+            if (logoItem && typeof logoItem === 'object') {
+              if (logoItem.url || logoItem.url === '') {
+                return {
+                  url: logoItem.url,
+                  height: logoItem.height ?? 80,
+                  width: logoItem.width ?? 80,
+                  // Absent on every certificate saved before free
+                  // placement, which keeps them in template layout.
+                  x: logoItem.x ?? null,
+                  y: logoItem.y ?? null,
+                };
+              }
+
+              let str = '';
+              for (let key in logoItem) {
+                parseInt(key) || key == '0' ? (str = str + logoItem[key]) : '';
+              }
+              return { url: str, width: 80, height: 80 };
+            }
+
+            return { url: logoItem || '', width: 80, height: 80 };
+          })
+        : [{ url: '', height: 80, width: 80 }];
+
+    //for header (department/club)
+    const Header =
+      Array.isArray(header) && header.length > 0
+        ? header.map((headerItem) => {
+            if (headerItem && typeof headerItem === 'object') {
+              if (headerItem.header || headerItem.header === '') {
+                return {
+                  ...defaultHeader,
+                  ...headerItem,
+                };
+              }
+
+              let str = '';
+              for (let key in headerItem) {
+                parseInt(key) || key == '0' ? (str = str + headerItem[key]) : '';
+              }
+              return {
+                ...defaultHeader,
+                header: str,
+              };
+            }
+
+            return {
+              ...defaultHeader,
+              header: headerItem || '',
+            };
+          })
+        : [defaultHeader];
+
+    // for footer
+    const Footer =
+      footer && typeof footer === 'object' && !Array.isArray(footer)
+        ? { footer: footer.footer ?? defaultDate }
+        : { footer: defaultDate };
+
+    //for certificateOf
+    const CertificateOf =
+      certificateOf &&
+      typeof certificateOf === 'object' &&
+      !Array.isArray(certificateOf)
+        ? {
+            ...defaultCertificateOf,
+            ...certificateOf,
+            certificateOf:
+              certificateOf.certificateOf ?? defaultCertificateOf.certificateOf,
+          }
+        : defaultCertificateOf;
+
+    // for body
+    const Body =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? {
+            ...defaultBody,
+            ...body,
+            // A saved-but-empty body still opens on the default
+            // sentence, so the chips are always there to start from.
+            body: body.body || defaultBody.body,
+          }
+        : {
+            ...defaultBody,
+            body: body || defaultBody.body,
+          };
+
+    //for title
+    let Title = [];
+    if (Array.isArray(title) && title.length > 0) {
+      if (title[0] && (title[0][0] || title[0][0] == '')) {
+        title.forEach((element) => {
+          let str = '';
+          for (let key in element) {
+            parseInt(key) || key == '0' ? (str = str + element[key]) : '';
+          }
+          let obj = {
+            name: str,
+            fontSize: '',
+            fontFamily: '',
+            bold: 'normal',
+            italic: 'normal',
+            fontColor: 'black',
+          };
+          Title.push(obj);
+        });
+      } else if (title[0]['name'] || title[0]['name'] == '') {
+        Title = title;
+      }
     }
+    if (Title.length === 0) {
+      Title = blankFormData(certType).title;
+    }
+
+    //for verifiableLink
+    if (typeof verifiableLink === 'string') {
+      verifiableLink = verifiableLink === 'true';
+    } else {
+      verifiableLink = !!verifiableLink;
+    }
+
+    return {
+      title: Title,
+      body: Body,
+      certificateOf: CertificateOf,
+      footer: Footer,
+      header: Header,
+      signatures: Signatures,
+      // Always the type being edited rather than the one the document was saved
+      // under, since the same document is reused when a design is copied over.
+      certiType: certType,
+      logos: Logos,
+      templateId: templateId ?? '0',
+      verifiableLink: verifiableLink,
+      // Absent on certificates saved before the QR could be moved.
+      qr: {
+        x: qr?.x ?? null,
+        y: qr?.y ?? null,
+        size: qr?.size ?? 100,
+      },
+    };
+  };
+
+  // Reads one type's saved design, or null when that type has none yet — which
+  // the API reports as a 400, so it is not an error worth surfacing here.
+  const fetchCertificateDoc = async (certType) => {
+    try {
+      const response = await fetch(
+        `${apiUrl}/certificatemodule/certificate/getcertificatedetails/${eventId}/${certType}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        }
+      );
+      if (!response.ok) return null;
+      const responseData = await response.json();
+      return Array.isArray(responseData) && responseData.length > 0
+        ? responseData[0]
+        : null;
+    } catch (error) {
+      console.error('Error fetching form data:', error);
+      return null;
+    }
+  };
+
+  {
+    /* Purpose: Loads the selected type's saved design. A type that has none yet
+       opens on a copy of the design last loaded or saved, so the four types can
+       be built from one. The copy only fills the form — nothing reaches the
+       server until the user saves it. */
+  }
+  useEffect(() => {
+    const certType = formData.certiType;
+    if (!certType) return undefined;
+
+    let cancelled = false;
+    setSelectedFiles([]);
+
+    const loadDesign = async () => {
+      setIsCertificateLoading(true);
+      const doc = await fetchCertificateDoc(certType);
+      if (cancelled) return;
+
+      if (doc) {
+        const loaded = buildFormDataFromDoc(doc, certType);
+        setFormData(loaded);
+        // Whatever design was last opened is what an undesigned type copies.
+        carryOverRef.current = cloneDesign(loaded);
+      } else {
+        setFormData(
+          carryOverRef.current
+            ? { ...cloneDesign(carryOverRef.current), certiType: certType }
+            : blankFormData(certType)
+        );
+      }
+      setIsCertificateLoading(false);
+    };
+
+    loadDesign();
+    return () => {
+      cancelled = true;
+    };
   }, [apiUrl, eventId, formData.certiType]);
+
+  // Copies a design saved on one of the owner's other events into the form,
+  // under the type being edited here. Images come across as the addresses they
+  // were already uploaded to, so nothing has to be re-uploaded. Like the
+  // carry-over between types, this only fills the form — the design reaches
+  // this event when the user saves it.
+  const handleImportDesign = (doc) => {
+    const imported = buildFormDataFromDoc(doc, formData.certiType);
+    setSelectedFiles([]);
+    setFormData(imported);
+    // The other types copy from whatever was last loaded, so an import is what
+    // they should start from as well.
+    carryOverRef.current = cloneDesign(imported);
+  };
 
   const handleFileChange = (e, fieldName, index) => {
     const file = e.target.files[0];
@@ -730,7 +1868,6 @@ const CertificateForm = () => {
     { id: 16, label: 'Basic 10', imageUrl: '/templatebg/basic11.png' },
     { id: 18, label: 'Basic 11', imageUrl: '/templatebg/basic13.png' },
     { id: 19, label: 'Basic 12', imageUrl: '/templatebg/basic14.png' },
-    { id: 20, label: 'Basic 13', imageUrl: '/templatebg/basic15.png' },
     { id: 9, label: 'Premium 1', imageUrl: '/templatebg/premium01.png' },
     { id: 10, label: 'Premium 2', imageUrl: '/templatebg/premium02.png' },
     { id: 11, label: 'Premium 3', imageUrl: '/templatebg/premium03.png' },
@@ -741,6 +1878,8 @@ const CertificateForm = () => {
     { id: 13, label: 'Premium 8', imageUrl: '/templatebg/basic10.png' },
     { id: 17, label: 'Premium 9', imageUrl: '/templatebg/basic12.png' },
     { id: 21, label: 'Premium 10', imageUrl: '/templatebg/basic16.png' },
+    { id: 23, label: 'Basic 14', imageUrl: '/templatebg/basic17.svg' },
+    { id: 25, label: 'Premium 11', imageUrl: '/templatebg/premium08.svg' },
   ];
   const handleTemplateSelect = (id) => {
     setFormData((prevState) => ({
@@ -985,6 +2124,16 @@ const CertificateForm = () => {
           duration: 2000,
           isClosable: true,
         });
+
+        // Re-read what was actually stored: images only get their final URL on
+        // the server, so this is the version another type can be copied from.
+        const savedDoc = await fetchCertificateDoc(formData.certiType);
+        if (savedDoc) {
+          const savedForm = buildFormDataFromDoc(savedDoc, formData.certiType);
+          setSelectedFiles([]);
+          setFormData(savedForm);
+          carryOverRef.current = cloneDesign(savedForm);
+        }
       } else {
         console.error('Error submitting form:', response.statusText);
         toast({
@@ -1005,17 +2154,17 @@ const CertificateForm = () => {
     }
   };
 
-  function copyVariable(text) {
-    if (!navigator.clipboard) {
-      return Promise.reject('Clipboard API not supported');
-    }
-    toast({
-      title: 'Variable copied',
-      status: 'success',
-      duration: 1000,
-      isClosable: true,
-    });
-    return navigator.clipboard.writeText(text);
+  // The editor owns the caret, so insertion is its job; this only forwards the
+  // click on a variable button.
+  function insertBodyVariable(variable) {
+    bodyEditorRef.current?.insertVariable(variable);
+  }
+
+  function handleBodyTextChange(bodyText) {
+    setFormData((prevData) => ({
+      ...prevData,
+      body: { ...prevData.body, body: bodyText },
+    }));
   }
 
   const fontsizeopt = [];
@@ -1079,25 +2228,261 @@ const CertificateForm = () => {
     'Roboto',
     'Oswald',
   ];
+
+  // Saved certificates carry the type as free text, so a stray capital or the
+  // British spelling of "organiser" must still find its colour.
+  const activeType = certiTypeStyle(formData.certiType);
+
+  // Applied while dragging in the preview, and by the place/reset buttons.
+  const updateLogoPlacement = useCallback((index, patch) => {
+    setFormData((prev) => {
+      const logos = [...prev.logos];
+      if (!logos[index]) return prev;
+      logos[index] = { ...logos[index], ...patch };
+      return { ...prev, logos };
+    });
+  }, []);
+
+  // Uploading from the logos section adds the logo itself: it fills the first
+  // empty slot, or appends a new one. The file is queued under the row's field
+  // name so it reaches the server the same way a per-row upload does.
+  const handleNewLogoFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const emptySlot = formData.logos.findIndex((logo) => !logo.url);
+    const index = emptySlot === -1 ? formData.logos.length : emptySlot;
+    const objectUrl = URL.createObjectURL(file);
+
+    setFormData((prev) => {
+      const logos = [...prev.logos];
+      if (index < logos.length) {
+        logos[index] = { ...logos[index], url: objectUrl, x: null, y: null };
+      } else {
+        logos.push({ url: objectUrl, width: 80, height: 80, x: null, y: null });
+      }
+      return { ...prev, logos };
+    });
+
+    const field = `logos[${index}].url`;
+    setSelectedFiles((prev) => {
+      const existing = prev.findIndex((entry) => field in entry);
+      if (existing === -1) return [...prev, { [field]: file }];
+      const updated = [...prev];
+      updated[existing] = { [field]: file };
+      return updated;
+    });
+
+    e.target.value = '';
+  };
+
+  const updateQrPlacement = useCallback((patch) => {
+    setFormData((prev) => ({
+      ...prev,
+      qr: { ...(prev.qr || { size: 100 }), ...patch },
+    }));
+  }, []);
+
+  const resetQrPlacement = () => updateQrPlacement({ x: null, y: null });
+
+  // `size` lands on the signature image; the coordinates on the block itself.
+  const updateSignaturePlacement = useCallback((index, patch) => {
+    setFormData((prev) => {
+      const signatures = [...prev.signatures];
+      const current = signatures[index];
+      if (!current) return prev;
+      const { size, ...placement } = patch;
+      signatures[index] = {
+        ...current,
+        ...placement,
+        ...(size === undefined
+          ? {}
+          : { url: { ...(current.url || {}), size } }),
+      };
+      return { ...prev, signatures };
+    });
+  }, []);
+
+  const updateSignatureLine = useCallback((index, patch) => {
+    setFormData((prev) => {
+      const signatures = [...prev.signatures];
+      const current = signatures[index];
+      if (!current) return prev;
+      signatures[index] = {
+        ...current,
+        line: { ...(current.line || {}), ...patch },
+      };
+      return { ...prev, signatures };
+    });
+  }, []);
+
+  // `field` is 'name' or 'position'. Only the coordinates live here; the font
+  // settings on the same object are edited through the form.
+  // Removes a signature outright, or empties the last one left so the section
+  // never ends up with no rows at all.
+  const handleDeleteSignature = (index) => {
+    const label =
+      formData.signatures[index]?.name?.name?.trim() || `Signature ${index + 1}`;
+    const removing = formData.signatures.length > 1;
+    const confirmed = window.confirm(
+      removing ? `Delete ${label}?` : `Clear ${label}?`
+    );
+    if (!confirmed) return;
+
+    if (removing) {
+      handleDelete('signatures', index);
+    } else {
+      setFormData((prev) => {
+        const signatures = [...prev.signatures];
+        signatures[index] = getDefaultSignature();
+        return { ...prev, signatures };
+      });
+    }
+
+    toast({
+      title: removing ? 'Signature deleted' : 'Signature cleared',
+      status: 'success',
+      duration: 2000,
+      isClosable: true,
+    });
+  };
+
+  const updateSignatureText = useCallback((index, field, patch) => {
+    setFormData((prev) => {
+      const signatures = [...prev.signatures];
+      const current = signatures[index];
+      if (!current) return prev;
+      signatures[index] = {
+        ...current,
+        [field]: { ...(current[field] || {}), ...patch },
+      };
+      return { ...prev, signatures };
+    });
+  }, []);
+
+  // Snapping the signature back takes its rule and both texts with it, so the
+  // whole block reflows exactly as the template drew it.
+  const resetSignaturePlacement = (index) => {
+    updateSignaturePlacement(index, { x: null, y: null });
+    updateSignatureLine(index, { x: null, y: null });
+    updateSignatureText(index, 'name', { x: null, y: null });
+    updateSignatureText(index, 'position', { x: null, y: null });
+  };
+
+  // Clearing the coordinates hands the logo back to the template, which the
+  // preview then re-measures — so this reads as "snap back where it started".
+  const resetLogoPlacement = (index) => {
+    updateLogoPlacement(index, { x: null, y: null });
+  };
+
+  const setSplit = (value) => {
+    const next = Math.min(MAX_SPLIT, Math.max(MIN_SPLIT, value));
+    setSplitPct(next);
+    try {
+      window.localStorage.setItem(SPLIT_STORAGE_KEY, String(next));
+    } catch (error) {
+      /* storage unavailable — the layout just won't be remembered */
+    }
+  };
+
+  const handleSplitterDown = (event) => {
+    if (!isWide) return;
+    event.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleSplitterKeyDown = (event) => {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      setSplit(splitPct - (event.shiftKey ? 10 : 2));
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      setSplit(splitPct + (event.shiftKey ? 10 : 2));
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      setSplit(DEFAULT_SPLIT);
+    }
+  };
+
   return (
     <Flex
+      ref={shellRef}
       style={{
         height: '89dvh',
-        // overflowY: 'scroll',
         clipPath: 'content-box',
+        userSelect: isDragging ? 'none' : 'auto',
       }}
       className="tw-flex tw-flex-col md:tw-flex-row"
     >
       <Container
-        maxW="lg"
+        maxW="full"
+        // Plain white: the field and card borders wash out against a tinted
+        // panel. The type's colour lives on the header card and the type
+        // selector instead, where it does not sit behind any controls.
+        bg="white"
         style={{
           height: '89dvh',
           overflowY: 'scroll',
-          // clipPath: 'content-box',
+          ...(isWide
+            ? { flexBasis: `${splitPct}%`, flexGrow: 0, flexShrink: 0 }
+            : {}),
         }}
         width={'100%'}
       >
-        <Header title="Enter Certificate Details"></Header>
+        <Box
+          mt={4}
+          mb={4}
+          px={5}
+          py={4}
+          borderRadius="2xl"
+          // The card carries the type's colour too — the panel wash alone is
+          // too pale to notice when switching types quickly.
+          bgGradient={
+            activeType
+              ? `linear(to-r, ${activeType.scheme}.600, ${activeType.scheme}.400)`
+              : 'linear(to-r, teal.600, blue.600)'
+          }
+          transition="background 150ms ease"
+          color="white"
+          boxShadow="md"
+        >
+          <Text fontSize="xs" textTransform="uppercase" letterSpacing="widest" opacity={0.85}>
+            Certificate Module
+          </Text>
+          <Flex align="center" justify="space-between" gap={3} mt={1} wrap="wrap">
+            <Heading size="md">Certificate Details</Heading>
+            <Flex align="center" gap={3} wrap="wrap">
+              <Button
+                size="sm"
+                leftIcon={<ArrowBackIcon />}
+                variant="outline"
+                color="white"
+                borderColor="whiteAlpha.700"
+                _hover={{ bg: 'whiteAlpha.200' }}
+                onClick={() => navigate('/cm/dashboard')}
+              >
+                Back to Dashboard
+              </Button>
+              {activeType && (
+                <Box
+                  bg="whiteAlpha.300"
+                  borderRadius="full"
+                  px={3}
+                  py={1}
+                  fontSize="xs"
+                  fontWeight="bold"
+                  textTransform="uppercase"
+                  letterSpacing="wide"
+                >
+                  {activeType.label}
+                </Box>
+              )}
+            </Flex>
+          </Flex>
+          <Text mt={2} fontSize="sm" opacity={0.9}>
+            Edit the fields below — the preview on the right updates as you type.
+          </Text>
+        </Box>
 
         <Box
           as="form"
@@ -1113,9 +2498,19 @@ const CertificateForm = () => {
             {/* Certificate Type Selection */}
             <Box
               width="100%"
-              className="tw-flex tw-flex-row tw-gap-3 tw-items-center tw-justify-between tw-px-2"
+              bg={activeType ? activeType.tint : 'gray.50'}
+              borderWidth="1px"
+              borderColor={activeType ? activeType.accent : 'gray.300'}
+              borderLeftWidth="6px"
+              borderRadius="10px"
+              px={3}
+              py={3}
+              className="tw-flex tw-flex-row tw-gap-3 tw-items-center tw-justify-between"
             >
-              <Text className="tw-font-bold tw-text-[17px] ">
+              <Text
+                className="tw-font-bold tw-text-[17px]"
+                color={activeType ? activeType.accent : 'gray.700'}
+              >
                 Certificate Type:
               </Text>
               <Select
@@ -1124,17 +2519,54 @@ const CertificateForm = () => {
                 onChange={(e) => handleChange(e, 'certiType', null)}
                 placeholder="Select Certificate Type"
                 maxWidth="220px"
-                borderWidth="1px"
-                borderColor="gray.300"
-                textColor="gray.700"
+                bg="white"
+                fontWeight="bold"
+                borderWidth="2px"
+                borderColor={activeType ? activeType.accent : 'gray.300'}
+                color="black"
+                sx={{ '& option': { background: 'white', color: 'black' } }}
                 borderRadius="7px"
+                _hover={{ borderColor: activeType ? activeType.accent : 'gray.400' }}
               >
-                <option value="winner">Winner</option>
-                <option value="participant">Participant</option>
-                <option value="speaker">Speaker</option>
-                <option value="organizer">Organizer</option>
+                {CERTI_TYPE_ORDER.map((type) => (
+                  <option key={type} value={type}>
+                    {CERTI_TYPE_STYLES[type].label}
+                  </option>
+                ))}
               </Select>
             </Box>
+
+            {/* Starting point: rather than filling every field again for a new
+                event, the whole design can be pulled in from an event that was
+                already set up. */}
+            <Flex
+              width="100%"
+              align="center"
+              justify="space-between"
+              gap={3}
+              wrap="wrap"
+              px={3}
+              py={3}
+              borderWidth="1px"
+              borderColor="gray.200"
+              borderRadius="10px"
+              bg="gray.50"
+            >
+              <Box minW={0}>
+                <Text className="tw-font-bold tw-text-[15px]" color="gray.700">
+                  Start from an existing event
+                </Text>
+                <Text fontSize="xs" color="gray.500">
+                  Copies the text, logos, signatures and template across. Review
+                  it, then save.
+                </Text>
+              </Box>
+              <ImportCertificateDesign
+                eventId={eventId}
+                currentType={formData.certiType}
+                onImport={handleImportDesign}
+              />
+            </Flex>
 
             {/* Title Fields */}
             <Box
@@ -1341,6 +2773,8 @@ const CertificateForm = () => {
             >
               <Text className="tw-font-bold">Select Certificate Template:</Text>
               <Box
+                width="100%"
+                maxWidth="100%"
                 overflowX="auto"
                 whiteSpace="nowrap"
                 padding="10px 0"
@@ -1348,7 +2782,7 @@ const CertificateForm = () => {
                 borderRadius={'8px'}
                 borderColor={'gray.300'}
               >
-                <HStack maxW={450} spacing={4} overflowX={'scroll'}>
+                <HStack spacing={4} width="max-content">
                   {templateOptions.map((template) => (
                     <Box
                       key={template.id}
@@ -1362,7 +2796,7 @@ const CertificateForm = () => {
                       cursor="pointer"
                       padding="2px"
                     >
-                      <Image src={template.imageUrl} alt={template.label} />
+                      <Image src={template.imageUrl} alt={template.label} w={150} />
                       <Text w={150} fontSize="sm" textAlign="center">
                         {template.label}
                       </Text>
@@ -1400,6 +2834,10 @@ const CertificateForm = () => {
                   />
                 </Tooltip>
               </HStack>
+              <Text fontSize="xs" color="teal.600">
+                Drag a logo on the preview to set its position, and its corner to
+                resize it.
+              </Text>
 
               {formData.logos.map((logo, index) => (
                 <Box
@@ -1427,25 +2865,75 @@ const CertificateForm = () => {
                           display="none"
                         />
 
-                        <Text fontSize="sm">
-                          Upload Logo : <b>Logo {index + 1}</b>
-                        </Text>
+                        {/* Thumbnail of what is actually on the certificate */}
+                        <HStack spacing={3} align="center" flex="1" minW={0}>
+                          {logo.url ? (
+                            <Tooltip label="Click to replace this image" hasArrow>
+                              <Box
+                                as="label"
+                                htmlFor={`logo${index}`}
+                                boxSize="46px"
+                                flexShrink={0}
+                                borderWidth="1px"
+                                borderColor="gray.200"
+                                borderRadius="md"
+                                bg="white"
+                                display="flex"
+                                alignItems="center"
+                                justifyContent="center"
+                                overflow="hidden"
+                                cursor="pointer"
+                                _hover={{ borderColor: 'purple.300' }}
+                              >
+                              <Image
+                                src={logo.url}
+                                alt={`Logo ${index + 1}`}
+                                maxH="40px"
+                                maxW="40px"
+                                objectFit="contain"
+                                />
+                              </Box>
+                            </Tooltip>
+                          ) : (
+                            <Box
+                              as="label"
+                              htmlFor={`logo${index}`}
+                              boxSize="46px"
+                              flexShrink={0}
+                              border="2px dashed"
+                              borderColor="gray.300"
+                              borderRadius="md"
+                              display="flex"
+                              alignItems="center"
+                              justifyContent="center"
+                              cursor="pointer"
+                              color="gray.400"
+                              _hover={{ borderColor: 'purple.300', color: 'purple.400' }}
+                            >
+                              <FaUpload style={{ height: 16, width: 16 }} />
+                            </Box>
+                          )}
+
+                          <Box minW={0}>
+                            <Text fontSize="sm" fontWeight="semibold">
+                              Logo {index + 1}
+                            </Text>
+                            <Text
+                              fontSize="xs"
+                              color={logo.url ? 'gray.500' : 'gray.400'}
+                            >
+                              {logo.url
+                                ? `${Math.round(Number(logo.width) || 80)} × ${Math.round(
+                                    Number(logo.height) || 80
+                                  )} px`
+                                : 'No image uploaded'}
+                            </Text>
+                          </Box>
+                        </HStack>
 
                         <HStack spacing={2}>
-                          {/* Upload */}
-                          <Box
-                            as="label"
-                            htmlFor={`logo${index}`}
-                            p="5px"
-                            borderRadius="md"
-                            _hover={{ bg: 'purple.50' }}
-                            cursor="pointer"
-                          >
-                            <FaUpload
-                              style={{ height: 22, width: 22, color: 'purple' }}
-                            />
-                          </Box>
-
+                          {/* Kept in the form so the picked file is submitted
+                              with the row — opened from the thumbnail. */}
                           <Input
                             id={`logo${index}`}
                             name={`logos[${index}].url`}
@@ -1463,24 +2951,42 @@ const CertificateForm = () => {
                           />
 
                           {/* Edit */}
-                          <AccordionButton
-                            height="32px"
-                            width="32px"
-                            borderRadius="md"
-                            _hover={{ bg: 'blue.50' }}
-                            justifyContent="center"
-                          >
-                            <EditIcon color="blue.500" boxSize="20px" />
-                          </AccordionButton>
+                          <Tooltip label="Edit size and position" hasArrow>
+                            <AccordionButton
+                              height="32px"
+                              width="32px"
+                              borderRadius="md"
+                              _hover={{ bg: 'blue.50' }}
+                              justifyContent="center"
+                            >
+                              <EditIcon color="blue.500" boxSize="20px" />
+                            </AccordionButton>
+                          </Tooltip>
 
-                          {/* Delete */}
-                          {index > 0 && (
+                          {/* Delete — removes the logo, or clears the image
+                              when it is the only row left. */}
+                          <Tooltip
+                            label={index > 0 ? 'Remove this logo' : 'Remove this image'}
+                            hasArrow
+                          >
                             <IconButton
                               size="sm"
-                              icon={<CloseIcon color="red" boxSize="14px" />}
-                              onClick={() => handleDelete('logos', index)}
+                              variant="ghost"
+                              aria-label="Delete logo"
+                              icon={<CloseIcon color="red.500" boxSize="14px" />}
+                              _hover={{ bg: 'red.50' }}
+                              isDisabled={index === 0 && !logo.url}
+                              onClick={() =>
+                                index > 0
+                                  ? handleDelete('logos', index)
+                                  : updateLogoPlacement(index, {
+                                      url: '',
+                                      x: null,
+                                      y: null,
+                                    })
+                              }
                             />
-                          )}
+                          </Tooltip>
                         </HStack>
                       </HStack>
 
@@ -1524,6 +3030,44 @@ const CertificateForm = () => {
                               />
                             </HStack>
                           </HStack>
+
+                          {/* The form is submitted as FormData, so placement has
+                              to travel as real inputs. They are only rendered
+                              for placed logos — no inputs means no coordinates,
+                              which is how the old layout stays untouched. */}
+                          {isPlacedLogo(logo) && (
+                            <>
+                              <input
+                                type="hidden"
+                                name={`logos[${index}].x`}
+                                value={Math.round(Number(logo.x))}
+                                readOnly
+                              />
+                              <input
+                                type="hidden"
+                                name={`logos[${index}].y`}
+                                value={Math.round(Number(logo.y))}
+                                readOnly
+                              />
+                            </>
+                          )}
+
+                          {/* Position is edited on the preview itself. */}
+                          {isPlacedLogo(logo) && (
+                            <HStack width="100%" spacing={3} mt={3} align="center">
+                              <Text fontSize="sm" color="gray.600">
+                                Position: {Math.round(Number(logo.x))},{' '}
+                                {Math.round(Number(logo.y))} — drag it on the preview
+                              </Text>
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() => resetLogoPlacement(index)}
+                              >
+                                Snap back
+                              </Button>
+                            </HStack>
+                          )}
                         </Box>
                       </AccordionPanel>
                     </AccordionItem>
@@ -1531,22 +3075,40 @@ const CertificateForm = () => {
                 </Box>
               ))}
 
-              {/* Add Button */}
+              {/* Upload straight from here — picking a file adds the logo. */}
               {formData.logos.length < 4 && (
-                <Button
-                  onClick={() => addField('logos')}
+                <Box
+                  as="label"
+                  htmlFor="logo-upload-new"
                   width="100%"
-                  height="45px"
+                  minHeight="52px"
                   border="2px dashed"
                   borderColor="green.400"
-                  color="green.500"
-                  bg="transparent"
-                  leftIcon={<AddIcon />}
+                  borderRadius="8px"
+                  color="green.600"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  gap={2}
+                  cursor="pointer"
                   _hover={{ bg: 'green.50', borderColor: 'green.500' }}
                 >
-                  Add another
-                </Button>
+                  <FaUpload style={{ height: 16, width: 16 }} />
+                  <Text fontSize="sm" fontWeight="semibold">
+                    Upload logo
+                  </Text>
+                  <Text fontSize="xs" color="gray.500">
+                    JPG or PNG · up to 4
+                  </Text>
+                </Box>
               )}
+              <input
+                id="logo-upload-new"
+                type="file"
+                accept="image/jpeg , image/png"
+                onChange={handleNewLogoFile}
+                style={{ display: 'none' }}
+              />
             </Box>
 
             {/* Department and Club Fields */}
@@ -1844,7 +3406,7 @@ const CertificateForm = () => {
                         onClick={() => {
                           const el = document.getElementById('bodyVariables');
                           el.style.display =
-                            el.style.display === 'flex' ? 'none' : 'flex';
+                            el.style.display === 'block' ? 'none' : 'block';
                         }}
                       >
                         See variables
@@ -1874,27 +3436,21 @@ const CertificateForm = () => {
                     borderRadius="6px"
                   >
                     <Text fontSize="sm" color="gray.600" mb={2}>
-                      Click to copy variable
+                      Click to insert at the cursor
                     </Text>
 
                     <HStack wrap="wrap" spacing={2}>
-                      {[
-                        'name',
-                        'department',
-                        'college',
-                        'teamName',
-                        'position',
-                        'title1',
-                        'title2',
-                      ].map((item) => (
+                      {BODY_VARIABLES.map((item) => (
                         <Button
                           key={item}
                           type="button"
                           size="sm"
                           variant="outline"
-                          onClick={(e) =>
-                            copyVariable(`{{${e.target.innerText}}}`)
-                          }
+                          color="blue.700"
+                          borderColor="blue.200"
+                          bg="blue.50"
+                          _hover={{ bg: 'blue.100' }}
+                          onClick={() => insertBodyVariable(item)}
                         >
                           {item}
                         </Button>
@@ -1904,14 +3460,40 @@ const CertificateForm = () => {
 
                   {/* Body Text */}
                   <VStack width="100%" spacing={3}>
-                    <Textarea
-                      name="body.body"
+                    <BodyEditor
+                      apiRef={bodyEditorRef}
                       value={formData.body.body}
-                      onChange={(e) => handleChange(e, 'body', null)}
-                      placeholder="Drag from bottom right corner to increase the text area"
-                      minH="120px"
-                      resize="vertical"
+                      onChange={handleBodyTextChange}
+                      placeholder="Write the certificate body, and click a variable above to drop it in"
                     />
+
+                    {/* The editor is a contentEditable, which a form does not
+                        submit. This carries its text into the FormData under
+                        the name the server reads. */}
+                    <input
+                      type="hidden"
+                      name="body.body"
+                      value={formData.body.body || ''}
+                      readOnly
+                    />
+
+                    {/* The body only fills in for columns the sheet actually
+                        carries, and the match is on the exact variable name. */}
+                    <Box width="100%">
+                      <Text fontSize="sm" color="gray.600">
+                        The variables used above must be uploaded as columns in
+                        the participant details sheet. Use the variable names
+                        exactly as they are:
+                      </Text>
+                      <Text
+                        fontSize="sm"
+                        fontWeight="semibold"
+                        color="blue.700"
+                        mt={1}
+                      >
+                        {BODY_VARIABLES.join(', ')}
+                      </Text>
+                    </Box>
 
                     {/* Advanced Settings */}
                     <AccordionPanel pt={2} width="100%">
@@ -2005,6 +3587,10 @@ const CertificateForm = () => {
             >
               {/* Section Header */}
               <Text fontWeight="bold">Signatures</Text>
+              <Text fontSize="xs" color="teal.600" mt={-2}>
+                Drag a signature — and the line above the name — on the preview to
+                set its position, and its corner to resize it.
+              </Text>
 
               {formData.signatures.map((signature, index) => (
                 <Box
@@ -2018,12 +3604,95 @@ const CertificateForm = () => {
                   _hover={{ borderColor: 'blue.300' }}
                 >
                   <VStack width="100%" spacing={3}>
-                    {/* Existing Signature */}
-                    <HStack width="100%" justifyContent="space-between">
-                      <Text fontSize="sm" color="gray.600">
-                        Use existing signature with details
-                      </Text>
+                    {/* Placement travels only once the block has been moved,
+                        so signatures saved earlier stay where the template
+                        put them. */}
+                    {isPlacedSignature(signature) && (
+                      <HStack width="100%" spacing={3} align="center">
+                        <input
+                          type="hidden"
+                          name={`signatures[${index}].x`}
+                          value={Math.round(Number(signature.x))}
+                          readOnly
+                        />
+                        <input
+                          type="hidden"
+                          name={`signatures[${index}].y`}
+                          value={Math.round(Number(signature.y))}
+                          readOnly
+                        />
+                        {isPlacedText(signature.name) && (
+                          <>
+                            <input
+                              type="hidden"
+                              name={`signatures[${index}].name.x`}
+                              value={Math.round(Number(signature.name.x))}
+                              readOnly
+                            />
+                            <input
+                              type="hidden"
+                              name={`signatures[${index}].name.y`}
+                              value={Math.round(Number(signature.name.y))}
+                              readOnly
+                            />
+                          </>
+                        )}
+                        {isPlacedText(signature.position) && (
+                          <>
+                            <input
+                              type="hidden"
+                              name={`signatures[${index}].position.x`}
+                              value={Math.round(Number(signature.position.x))}
+                              readOnly
+                            />
+                            <input
+                              type="hidden"
+                              name={`signatures[${index}].position.y`}
+                              value={Math.round(Number(signature.position.y))}
+                              readOnly
+                            />
+                          </>
+                        )}
+                        {isPlacedLine(signature.line) && (
+                          <>
+                            <input
+                              type="hidden"
+                              name={`signatures[${index}].line.x`}
+                              value={Math.round(Number(signature.line.x))}
+                              readOnly
+                            />
+                            <input
+                              type="hidden"
+                              name={`signatures[${index}].line.y`}
+                              value={Math.round(Number(signature.line.y))}
+                              readOnly
+                            />
+                            <input
+                              type="hidden"
+                              name={`signatures[${index}].line.width`}
+                              value={Math.round(Number(signature.line.width) || 100)}
+                              readOnly
+                            />
+                          </>
+                        )}
+                        <Text fontSize="xs" color="gray.600" flex="1" minW={0}>
+                          Position: {Math.round(Number(signature.x))},{' '}
+                          {Math.round(Number(signature.y))} — drag it, and the line
+                          above the name, on the preview
+                        </Text>
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          flexShrink={0}
+                          onClick={() => resetSignaturePlacement(index)}
+                        >
+                          Snap back
+                        </Button>
+                      </HStack>
+                    )}
 
+                    {/* Existing signatures, listed inline */}
+                    <Box width="100%">
                       <Signaturemodal
                         eventId={eventId}
                         formData={formData}
@@ -2035,12 +3704,12 @@ const CertificateForm = () => {
                         handleChange={handleChange}
                         selectedFiles={selectedFiles}
                       />
-                    </HStack>
+                    </Box>
 
                     {/* NAME */}
                     <Accordion allowMultiple>
                       <AccordionItem border="none">
-                        <HStack justify="space-between">
+                        <HStack width="100%" justify="space-between" spacing={2}>
                           <Input
                             name={`signatures[${index}].name.name`}
                             value={signature.name.name}
@@ -2048,11 +3717,14 @@ const CertificateForm = () => {
                               handleChange(e, 'signatures', index)
                             }
                             placeholder="Name"
+                            flex="1"
+                            minW={0}
                           />
 
                           <AccordionButton
                             height="32px"
                             width="32px"
+                            flexShrink={0}
                             borderRadius="md"
                             _hover={{ bg: 'blue.50' }}
                           >
@@ -2148,7 +3820,7 @@ const CertificateForm = () => {
                     {/* POSITION */}
                     <Accordion allowMultiple>
                       <AccordionItem border="none">
-                        <HStack justify="space-between">
+                        <HStack width="100%" justify="space-between" spacing={2}>
                           <Input
                             name={`signatures[${index}].position.position`}
                             value={signature.position.position}
@@ -2156,11 +3828,14 @@ const CertificateForm = () => {
                               handleChange(e, 'signatures', index)
                             }
                             placeholder="Position"
+                            flex="1"
+                            minW={0}
                           />
 
                           <AccordionButton
                             height="32px"
                             width="32px"
+                            flexShrink={0}
                             borderRadius="md"
                             _hover={{ bg: 'blue.50' }}
                           >
@@ -2258,59 +3933,91 @@ const CertificateForm = () => {
                     {/* IMAGE UPLOAD */}
                     <Accordion allowMultiple>
                       <AccordionItem border="none">
-                        <HStack justify="space-between">
-                          <Text fontSize="sm">
-                            Upload signature image (jpg/png)
-                          </Text>
-
-                          <HStack spacing={2}>
+                        <HStack width="100%" spacing={3} align="center">
+                          {signature.url.url && (
                             <Box
-                              as="label"
-                              htmlFor={`signatures-${index}`}
-                              cursor="pointer"
-                              p={1}
+                              boxSize="46px"
+                              flexShrink={0}
+                              borderWidth="1px"
+                              borderColor="gray.200"
                               borderRadius="md"
-                              _hover={{ bg: 'purple.50' }}
+                              bg="white"
+                              display="flex"
+                              alignItems="center"
+                              justifyContent="center"
+                              overflow="hidden"
                             >
-                              <FaUpload
-                                style={{
-                                  height: 22,
-                                  width: 22,
-                                  color: 'purple',
-                                }}
+                              <Image
+                                src={signature.url.url}
+                                alt="Signature"
+                                maxH="40px"
+                                maxW="40px"
+                                objectFit="contain"
                               />
                             </Box>
+                          )}
 
-                            <input
-                              id={`signatures-${index}`}
-                              type="file"
-                              accept="image/jpeg , image/png"
-                              style={{ display: 'none' }}
-                              onChange={(e) => {
-                                handleFileChange(e, 'signatures', index);
-                                toast({
-                                  title: 'Image uploaded',
-                                  status: 'success',
-                                  duration: 2000,
-                                  isClosable: true,
-                                });
-                              }}
-                            />
+                          {/* Upload sits below the name and position, and takes
+                              whatever width the panel currently has. */}
+                          <Box
+                            as="label"
+                            htmlFor={`signatures-${index}`}
+                            flex="1"
+                            minW={0}
+                            minHeight="46px"
+                            border="2px dashed"
+                            borderColor="purple.300"
+                            borderRadius="8px"
+                            color="purple.600"
+                            display="flex"
+                            alignItems="center"
+                            justifyContent="center"
+                            gap={2}
+                            px={3}
+                            cursor="pointer"
+                            _hover={{ bg: 'purple.50', borderColor: 'purple.400' }}
+                          >
+                            <FaUpload style={{ height: 14, width: 14 }} />
+                            <Text fontSize="sm" fontWeight="semibold" noOfLines={1}>
+                              {signature.url.url
+                                ? 'Replace signature image'
+                                : 'Upload signature image'}
+                            </Text>
+                            <Text fontSize="xs" color="gray.500">
+                              JPG or PNG
+                            </Text>
+                          </Box>
 
-                            <AccordionButton
-                              height="32px"
-                              width="32px"
-                              borderRadius="md"
-                            >
-                              <EditIcon color="blue.500" boxSize="18px" />
-                            </AccordionButton>
-                          </HStack>
+                          <input
+                            id={`signatures-${index}`}
+                            type="file"
+                            accept="image/jpeg , image/png"
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                              handleFileChange(e, 'signatures', index);
+                              toast({
+                                title: 'Image uploaded',
+                                status: 'success',
+                                duration: 2000,
+                                isClosable: true,
+                              });
+                            }}
+                          />
+
+                          <AccordionButton
+                            height="32px"
+                            width="32px"
+                            flexShrink={0}
+                            borderRadius="md"
+                          >
+                            <EditIcon color="blue.500" boxSize="18px" />
+                          </AccordionButton>
                         </HStack>
 
                         <AccordionPanel pt={2}>
                           <Box bg="gray.50" p={3} borderRadius="md">
-                            <HStack spacing={4}>
-                              <Text>Size</Text>
+                            <HStack spacing={4} width="100%">
+                              <Text flexShrink={0}>Size</Text>
                               <Input
                                 type="number"
                                 name={`signatures[${index}].url.size`}
@@ -2318,6 +4025,8 @@ const CertificateForm = () => {
                                 onChange={(e) =>
                                   handleChange(e, 'signatures', index)
                                 }
+                                flex="1"
+                                minW="70px"
                               />
 
                               <Input
@@ -2344,18 +4053,40 @@ const CertificateForm = () => {
                     </Accordion>
 
                     {/* Actions */}
-                    <HStack justify="flex-end">
-                      {index > 0 && (
-                        <IconButton
-                          icon={<CloseIcon color="red" />}
-                          onClick={() => handleDelete('signatures', index)}
-                        />
-                      )}
+                    <HStack justify="flex-end" spacing={2}>
+                      {/* The last remaining row is emptied rather than removed,
+                          so the form always has a signature to fill in. */}
+                      <Tooltip
+                        label={
+                          formData.signatures.length > 1
+                            ? 'Delete this signature'
+                            : 'Clear this signature'
+                        }
+                        hasArrow
+                      >
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          colorScheme="red"
+                          leftIcon={<CloseIcon boxSize="10px" />}
+                          onClick={() => handleDeleteSignature(index)}
+                        >
+                          {formData.signatures.length > 1 ? 'Delete' : 'Clear'}
+                        </Button>
+                      </Tooltip>
+
                       {index === formData.signatures.length - 1 && (
-                        <IconButton
-                          icon={<AddIcon color="green" />}
-                          onClick={() => addField('signatures')}
-                        />
+                        <Tooltip label="Add another signature" hasArrow>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            colorScheme="green"
+                            leftIcon={<AddIcon boxSize="10px" />}
+                            onClick={() => addField('signatures')}
+                          >
+                            Add signature
+                          </Button>
+                        </Tooltip>
                       )}
                     </HStack>
                   </VStack>
@@ -2442,6 +4173,43 @@ const CertificateForm = () => {
               />
             </Box>
 
+            {/* QR placement — only sent once the QR has actually been moved,
+                so certificates saved earlier keep the template's position. */}
+            {formData.verifiableLink && isPlacedQr(formData.qr) && (
+              <Box
+                width="100%"
+                className="tw-flex tw-flex-row tw-gap-2 tw-px-2 tw-items-center tw-justify-between"
+              >
+                <input
+                  type="hidden"
+                  name="qr.x"
+                  value={Math.round(Number(formData.qr.x))}
+                  readOnly
+                />
+                <input
+                  type="hidden"
+                  name="qr.y"
+                  value={Math.round(Number(formData.qr.y))}
+                  readOnly
+                />
+                <input
+                  type="hidden"
+                  name="qr.size"
+                  value={Math.round(Number(formData.qr.size) || 100)}
+                  readOnly
+                />
+                <Text fontSize="sm" color="teal.600">
+                  QR position: {Math.round(Number(formData.qr.x))},{' '}
+                  {Math.round(Number(formData.qr.y))} · size{' '}
+                  {Math.round(Number(formData.qr.size) || 100)}px — drag it on the
+                  preview
+                </Text>
+                <Button size="xs" variant="outline" onClick={resetQrPlacement}>
+                  Snap back
+                </Button>
+              </Box>
+            )}
+
             {/* Date of issue */}
             <Box
               width="100%"
@@ -2478,36 +4246,138 @@ const CertificateForm = () => {
           </VStack>
         </Box>
       </Container>
-      <Box flex="1" p="4" style={{ margin: '0px', padding: '0px' }}>
-        {isResolvingInitialType || isCertificateLoading ? (
-          <Center width="100%" height="100%" minHeight="320px">
-            <Text fontSize="lg" fontWeight="semibold" color="gray.600">
-              Loading Certificate
-            </Text>
-          </Center>
-        ) : formData.certiType ? (
-          <SelectCertficate
-            eventId={eventId}
-            templateId={formData.templateId}
-            contentBody={formData.body}
-            certiType={formData.certiType}
-            title={formData.title}
-            certificateOf={formData.certificateOf}
-            verifiableLink={formData.verifiableLink.toString()}
-            logos={formData.logos}
-            participantDetail={{}}
-            signature={formData.signatures}
-            header={formData.header}
-            footer={formData.footer}
-          />
-        ) : (
-          <Center width="100%" height="100%" minHeight="320px">
-            <Text fontSize="md" color="gray.600">
-              No certificate configuration found for this event.
-            </Text>
-          </Center>
-        )}
+
+      {/* Drag this to give the form more room and shrink the certificate. */}
+      <Box
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize the form and certificate panels"
+        aria-valuenow={Math.round(splitPct)}
+        aria-valuemin={MIN_SPLIT}
+        aria-valuemax={MAX_SPLIT}
+        tabIndex={0}
+        display={{ base: 'none', md: 'flex' }}
+        alignItems="center"
+        justifyContent="center"
+        flex="0 0 12px"
+        cursor="col-resize"
+        bg={isDragging ? 'teal.50' : 'gray.50'}
+        borderX="1px solid"
+        borderColor="gray.200"
+        _hover={{ bg: 'teal.50' }}
+        _focusVisible={{ outline: '2px solid', outlineColor: 'teal.400' }}
+        onPointerDown={handleSplitterDown}
+        onDoubleClick={() => setSplit(DEFAULT_SPLIT)}
+        onKeyDown={handleSplitterKeyDown}
+        title="Drag to resize · double-click to reset"
+      >
+        <Box
+          width="3px"
+          height="42px"
+          borderRadius="full"
+          bg={isDragging ? 'teal.500' : 'gray.300'}
+        />
       </Box>
+
+      {/* The preview keeps a plain white ground whatever type is being edited,
+          so the certificate is judged on its own colours. */}
+      <Flex flex="1" minWidth={0} direction="column" bg="white" overflow="hidden">
+        <Flex
+          align="center"
+          justify="space-between"
+          px={4}
+          py={2}
+          borderBottom="1px solid"
+          borderColor="gray.200"
+          bg="white"
+        >
+          <HStack spacing={2}>
+            <Text fontSize="sm" fontWeight="semibold" color="gray.700">
+              Certificate Preview
+            </Text>
+            {activeType && (
+              <Box
+                bg={activeType.tint}
+                color={activeType.accent}
+                borderWidth="1px"
+                borderColor={activeType.accent}
+                borderRadius="full"
+                px={2}
+                py="1px"
+                fontSize="xs"
+                fontWeight="bold"
+                textTransform="uppercase"
+              >
+                {activeType.label}
+              </Box>
+            )}
+          </HStack>
+          <HStack spacing={3}>
+            <Text fontSize="xs" color="gray.500">
+              {Math.round(previewScale * 100)}%
+            </Text>
+            <Text fontSize="xs" color="gray.500" display={{ base: 'none', lg: 'block' }}>
+              Drag the logos, signatures and QR here to set their position and size
+            </Text>
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => setSplit(DEFAULT_SPLIT)}
+              isDisabled={!isWide}
+            >
+              Reset layout
+            </Button>
+          </HStack>
+        </Flex>
+
+        <Box flex="1" overflowY="auto" overflowX="hidden" px={0} py={2}>
+          {isResolvingInitialType || isCertificateLoading ? (
+            <Center width="100%" height="100%" minHeight="320px">
+              <Text fontSize="lg" fontWeight="semibold" color="gray.600">
+                Loading Certificate
+              </Text>
+            </Center>
+          ) : formData.certiType ? (
+            <ScaledCertificate onScaleChange={handlePreviewScale}>
+              <SelectCertficate
+                eventId={eventId}
+                templateId={formData.templateId}
+                contentBody={formData.body}
+                certiType={formData.certiType}
+                title={formData.title}
+                certificateOf={formData.certificateOf}
+                verifiableLink={formData.verifiableLink.toString()}
+                logos={formData.logos}
+                participantDetail={{}}
+                signature={formData.signatures}
+                header={formData.header}
+                footer={formData.footer}
+                qr={formData.qr}
+                overlay={
+                  <LogoPlacementLayer
+                    logos={formData.logos}
+                    scale={previewScale}
+                    onLogoChange={updateLogoPlacement}
+                    qr={formData.qr}
+                    showQr={formData.verifiableLink === true}
+                    onQrChange={updateQrPlacement}
+                    signatures={formData.signatures}
+                    onSignatureChange={updateSignaturePlacement}
+                    onSignatureLineChange={updateSignatureLine}
+                    onSignatureTextChange={updateSignatureText}
+                  />
+                }
+              />
+            </ScaledCertificate>
+          ) : (
+            <Center width="100%" height="100%" minHeight="320px">
+              <Text fontSize="md" color="gray.600">
+                No certificate configuration found for this event.
+              </Text>
+            </Center>
+          )}
+        </Box>
+      </Flex>
     </Flex>
   );
 };

@@ -126,6 +126,13 @@ function ClassCard({ klass, onOpen }) {
           </Flex>
         )}
 
+        {/* Timetable schedule display */}
+        {klass.schedule && klass.schedule.length > 0 && (
+          <Text mt={3} fontSize="xs" color={metaColor} noOfLines={2}>
+            📅 {klass.schedule.join(', ')}
+          </Text>
+        )}
+
         {/* Quiz marks released and not yet read. Deliberately on the subject
             card rather than only in the notification bell: a student who was in
             a lecture when the announcement went out has a read bell and no idea

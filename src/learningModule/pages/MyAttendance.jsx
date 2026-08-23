@@ -30,7 +30,9 @@ import {
 } from '@chakra-ui/react';
 
 import getEnvironment from '../../getenvironment';
+import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import StudentAttendanceMap from '../components/StudentAttendanceMap';
 import { relativeTime } from '../format';
 
 /**
@@ -162,6 +164,7 @@ function DisputeDialog({ record, reasons, isOpen, onClose, onRaised }) {
 
 export default function MyAttendance() {
   const [state, setState] = useState({ loading: true, error: null, data: null });
+  const [profile, setProfile] = useState(null);
   const [filter, setFilter] = useState('all');
   const [active, setActive] = useState(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -169,8 +172,20 @@ export default function MyAttendance() {
   const load = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true }));
     try {
-      const data = await api('/mine/attendance');
-      setState({ loading: false, error: null, data });
+      const [disputesRes, profileRes] = await Promise.allSettled([
+        api('/mine/attendance'),
+        lmApi.myProfile(),
+      ]);
+
+      if (disputesRes.status === 'fulfilled') {
+        setState({ loading: false, error: null, data: disputesRes.value });
+      } else {
+        setState({ loading: false, error: null, data: null });
+      }
+
+      if (profileRes.status === 'fulfilled') {
+        setProfile(profileRes.value);
+      }
     } catch (err) {
       setState({ loading: false, error: err, data: null });
     }
@@ -178,10 +193,12 @@ export default function MyAttendance() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (state.loading) return <Loading label="Loading your attendance…" />;
-  if (state.error) return <ErrorState error={state.error} onRetry={load} />;
+  if (state.loading && !profile) return <Loading label="Loading your attendance…" />;
+  if (state.error && !profile) return <ErrorState error={state.error} onRetry={load} />;
 
   const { records = [], reasons = [], rollNo, windowDays } = state.data || {};
+  const currentRoll = profile?.studentRollNo || rollNo || '';
+
   const visible = records.filter((record) => {
     if (filter === 'all') return true;
     if (filter === 'disputed') return !!record.dispute;
@@ -194,10 +211,23 @@ export default function MyAttendance() {
   };
 
   return (
-    <VStack align="stretch" spacing={4}>
+    <VStack align="stretch" spacing={5}>
+      {/* ── Student GitHub-Style Attendance Contribution Map (Issue #1928) ── */}
+      <StudentAttendanceMap
+        history={profile?.attendanceHistory || []}
+        academicSessions={profile?.academicSessions || []}
+        currentSession={profile?.currentSession || null}
+        studentRollNo={currentRoll}
+      />
+
+      {/* ── Recent Markings & Dispute Management Table ─────────────────────── */}
       <SectionCard
-        title="My attendance"
-        subtitle={`Roll ${rollNo} · the last ${windowDays} days. Disagree with a marking? Raise a dispute and your Department Coordinator will review it.`}
+        title="Recent Markings & Disputes"
+        subtitle={
+          currentRoll
+            ? `Roll ${currentRoll} · Disagree with a recent marking? Raise a dispute and your Department Coordinator will review it.`
+            : 'Recent class markings. Disagree with a marking? Raise a dispute and your Department Coordinator will review it.'
+        }
         action={(
           <Select size="sm" width="190px" value={filter} onChange={(e) => setFilter(e.target.value)}>
             <option value="all">All classes</option>
