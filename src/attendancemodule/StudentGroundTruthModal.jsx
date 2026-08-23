@@ -90,6 +90,8 @@ export default function StudentGroundTruthModal({ batch, rollNo, student, onClos
             const tag = (list, group) => (Array.isArray(list) ? list : []).map((p) => ({
                 filename: p.filename,
                 score: p.score,
+                addedAt: p.addedAt,
+                createdAt: p.createdAt,
                 group,
             }));
             setPhotos([
@@ -255,6 +257,9 @@ export default function StudentGroundTruthModal({ batch, rollNo, student, onClos
                     >
                         {photo.filename}
                         {photo.score != null ? ` · ${Number(photo.score).toFixed(2)}` : ''}
+                        {(photo.createdAt || photo.addedAt) ? <div style={{ marginTop: 2, fontSize: 9, color: theme.textMuted, opacity: 0.8 }}>
+                            {new Date(photo.createdAt || photo.addedAt).toLocaleString()}
+                        </div> : null}
                     </div>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                         {targets.map((target) => (

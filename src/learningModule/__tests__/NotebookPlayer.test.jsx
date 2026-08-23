@@ -24,8 +24,10 @@ vi.mock('@uiw/react-codemirror', () => ({
       onChange={(event) => onChange(event.target.value)}
     />
   ),
+  keymap: { of: () => [] },
 }));
 vi.mock('@codemirror/lang-python', () => ({ python: () => [] }));
+vi.mock('@codemirror/state', () => ({ Prec: { highest: (k) => k } }));
 
 vi.mock('react-router-dom', async (importOriginal) => ({
   ...(await importOriginal()),

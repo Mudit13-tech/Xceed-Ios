@@ -7,6 +7,7 @@ import {
   Badge,
   Box,
   Button,
+  Checkbox,
   Flex,
   FormControl,
   FormHelperText,
@@ -172,6 +173,7 @@ function CreateClassModal({ isOpen, onClose, onCreated, me }) {
   const [subjectId, setSubjectId] = useState('');
   const [name, setName] = useState('');
   const [coverColor, setCoverColor] = useState(CLASS_COLORS[0]);
+  const [importFromErp, setImportFromErp] = useState(true);
   const [saving, setSaving] = useState(false);
   // Once the teacher edits the name themselves, stop overwriting it when they
   // change the subject.
@@ -188,6 +190,7 @@ function CreateClassModal({ isOpen, onClose, onCreated, me }) {
     setSubjectId('');
     setName('');
     setNameTouched(false);
+    setImportFromErp(true);
     setCoverColor(CLASS_COLORS[0]);
   }, []);
 
@@ -264,8 +267,16 @@ function CreateClassModal({ isOpen, onClose, onCreated, me }) {
         semester,
         dept: branch?.dept || '',
         coverColor,
+        importFromErp,
       });
-      toast({ status: 'success', title: `"${created.name}" created`, description: `Class code: ${created.code}` });
+      const erpMsg = created.erpImport
+        ? ` · ${created.erpImport.newCount || 0} student(s) imported from ERP`
+        : '';
+      toast({
+        status: 'success',
+        title: `"${created.name}" created`,
+        description: `Class code: ${created.code}${erpMsg}`,
+      });
       reset();
       onCreated(created);
     } catch (error) {
@@ -368,6 +379,21 @@ function CreateClassModal({ isOpen, onClose, onCreated, me }) {
               placeholder="Picked from the subject — edit if you want"
             />
           </FormControl>
+
+          <Box mb={4} p={3} borderWidth="1px" borderColor="blue.100" borderRadius="md" bg="blue.50">
+            <Checkbox
+              isChecked={importFromErp}
+              onChange={(e) => setImportFromErp(e.target.checked)}
+              colorScheme="blue"
+            >
+              <Text fontSize="sm" fontWeight="600" color="blue.900">
+                Import students automatically from ERP for this subject
+              </Text>
+            </Checkbox>
+            <Text fontSize="xs" color="blue.700" mt={1} ml={6}>
+              Fetches enrolled roll numbers from Attendance ERP and invites them to the class automatically.
+            </Text>
+          </Box>
 
           <FormControl mb={4}>
             <FormLabel fontSize="sm">Theme colour</FormLabel>
