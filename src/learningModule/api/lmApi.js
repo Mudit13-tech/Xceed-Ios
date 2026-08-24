@@ -232,9 +232,10 @@ const lmApi = {
   calendar: (params) => request(`/calendar${qs(params)}`),
   claimInvites: () => request('/claim-invites', { method: 'POST', body: {} }),
 
-  /* The one-time name + roll number a student gives before the module opens.
-     `myIdentity` is fetched only by that form — `me()` already carries the
-     `needsIdentity` flag that decides whether to show it. */
+  /* The one-time name — plus a roll number, from a student — an account gives
+     before the module opens. `myIdentity` is fetched only by that form; `me()`
+     already carries the `needsIdentity` flag that decides whether to show it.
+     The name is refused a second time, so there is no edit path beside this. */
   myIdentity: () => request('/me/identity'),
   saveIdentity: (body) => request('/me/identity', { method: 'POST', body }),
 
@@ -275,7 +276,7 @@ const lmApi = {
   getClass: (classId) => request(`/classes/${classId}`),
   updateClass: (classId, body) => request(`/classes/${classId}`, { method: 'PATCH', body }),
   archiveClass: (classId, archive) => request(`/classes/${classId}/archive`, { method: 'POST', body: { archive } }),
-  achieveClass: (classId, achieve) => request(`/classes/${classId}/achieve`, { method: 'POST', body: { achieve } }),
+  completeClass: (classId, complete) => request(`/classes/${classId}/complete`, { method: 'POST', body: { complete } }),
   regenerateCode: (classId) => request(`/classes/${classId}/code/regenerate`, { method: 'POST', body: {} }),
   deleteClass: (classId) => request(`/classes/${classId}`, { method: 'DELETE' }),
   joinByCode: (code) => request('/join', { method: 'POST', body: { code } }),
@@ -512,6 +513,25 @@ const lmApi = {
     request(`/classes/${classId}/attempts/${attemptId}/reopen`, { method: 'POST', body }),
   deleteQuizAttempt: (classId, attemptId) =>
     request(`/classes/${classId}/attempts/${attemptId}`, { method: 'DELETE' }),
+  // Ends a sitting that is still running, by hand. The mirror of `reopen` — a
+  // sitting stopped this way lands in the same shut-out list and is undone by
+  // the same "Let in" button.
+  terminateQuizAttempt: (classId, attemptId, reason) =>
+    request(`/classes/${classId}/attempts/${attemptId}/terminate`, {
+      method: 'POST',
+      body: { reason },
+    }),
+
+  /* the hall register. `entries` is [{ studentId, status }] with status
+     'present' | 'absent'; marking absent also ends that student's sitting and
+     keeps them out of a fresh one until they are marked present again. */
+  quizAttendance: (classId, quizId) =>
+    request(`/classes/${classId}/quizzes/${quizId}/attendance`),
+  markQuizAttendance: (classId, quizId, entries) =>
+    request(`/classes/${classId}/quizzes/${quizId}/attendance`, {
+      method: 'POST',
+      body: { entries },
+    }),
 
   /* correcting the answer key of a paper the class has already sat.
      `questions` is [{ questionId, correctAnswers, marks, negativeMarks,

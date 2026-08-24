@@ -6,6 +6,7 @@ import {
   Badge,
   Box,
   Button,
+  HStack,
   Heading,
   Input,
   Text,
@@ -17,7 +18,8 @@ import {
 import lmApi from '../api/lmApi';
 import StageBar from '../components/StageBar';
 import { loginPathFor } from '../../authRedirect';
-import { Loading } from '../components/common';
+import { DeadlineCountdown, Loading } from '../components/common';
+import { formatDateTime } from '../format';
 import FormRenderer from '../components/FormRenderer';
 
 /**
@@ -112,25 +114,35 @@ export default function FormLinkJoin() {
         <StageBar label="Form" title={form.title} />
         <VStack align="stretch" spacing={4} maxW="640px" mx="auto" p={{ base: 4, md: 8 }}>
           <Box>
-            <Heading size="md">{form.title}</Heading>
+            <HStack>
+              <Heading size="md">{form.title}</Heading>
+              {!form.closed && form.dueDate && <DeadlineCountdown dueDate={form.dueDate} prefix="Closes in" />}
+            </HStack>
             {form.description && (
               <Text fontSize="sm" color="lmFg.muted" mt={1}>
                 {form.description}
               </Text>
             )}
-            {existingResponse && (
+            {!form.closed && existingResponse && (
               <Badge colorScheme="green" mt={2}>
                 You can update your response below
               </Badge>
             )}
           </Box>
-          <FormRenderer
-            form={form}
-            existingResponse={existingResponse}
-            onSubmit={submit}
-            submitting={submitting}
-            canUploadFiles={false}
-          />
+          {form.closed ? (
+            <Alert status="warning" borderRadius="md">
+              <AlertIcon />
+              This form closed on {formatDateTime(form.dueDate)} and is no longer accepting responses.
+            </Alert>
+          ) : (
+            <FormRenderer
+              form={form}
+              existingResponse={existingResponse}
+              onSubmit={submit}
+              submitting={submitting}
+              canUploadFiles={false}
+            />
+          )}
         </VStack>
       </Box>
     );

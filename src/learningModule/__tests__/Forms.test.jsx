@@ -15,7 +15,11 @@ vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
     ...actual,
-    Link: ({ children, to }) => <a href={to}>{children}</a>,
+    Link: ({ children, to, ...rest }) => (
+      <a href={to} {...rest}>
+        {children}
+      </a>
+    ),
     useNavigate: () => mockNavigate,
     useOutletContext: () => ({ classId: 'c1', isTeacher: mockIsTeacher.value }),
   };
@@ -58,6 +62,47 @@ describe('as a teacher', () => {
     );
   });
 
+  it('shows how many of the class have filled a class-scoped form', async () => {
+    listForms.mockResolvedValue([
+      {
+        _id: 'f1',
+        title: 'Roll call',
+        published: true,
+        questions: [{}],
+        responseCount: 12,
+        enrolledCount: 30,
+        settings: { accessMode: 'class' },
+      },
+    ]);
+    await open();
+    expect(await screen.findByText(/12\/30 students filled/i)).toBeInTheDocument();
+  });
+
+  it('shows a Closed badge and no countdown once a deadline has passed', async () => {
+    listForms.mockResolvedValue([
+      { _id: 'f1', title: 'Late poll', published: true, questions: [{}], settings: {}, closed: true, dueDate: new Date(Date.now() - 1000).toISOString() },
+    ]);
+    await open();
+    expect(await screen.findByText(/^closed$/i)).toBeInTheDocument();
+    expect(screen.queryByText(/closes in/i)).toBeNull();
+  });
+
+  it('shows a live countdown when a deadline is set and still open', async () => {
+    listForms.mockResolvedValue([
+      {
+        _id: 'f1',
+        title: 'Open poll',
+        published: true,
+        questions: [{}],
+        settings: {},
+        closed: false,
+        dueDate: new Date(Date.now() + 3600_000).toISOString(),
+      },
+    ]);
+    await open();
+    expect(await screen.findByText(/closes in/i)).toBeInTheDocument();
+  });
+
   it('creates a form and navigates to its editor', async () => {
     listForms.mockResolvedValue([]);
     createForm.mockResolvedValue({ _id: 'new1' });
@@ -87,6 +132,28 @@ describe('as a student', () => {
     await open();
     expect(screen.getByText(/^responded$/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /view \/ edit response/i })).toBeInTheDocument();
+  });
+
+  it('disables the action once a form has closed, rather than sending them to a page that will refuse them', async () => {
+    listForms.mockResolvedValue([{ _id: 'f1', title: 'Poll', questionCount: 2, responded: false, closed: true }]);
+    await open();
+    const link = screen.getByRole('link', { name: /^closed$/i });
+    expect(link).toHaveAttribute('disabled');
+  });
+
+  it('shows a live countdown to the deadline while the form is still open', async () => {
+    listForms.mockResolvedValue([
+      {
+        _id: 'f1',
+        title: 'Poll',
+        questionCount: 2,
+        responded: false,
+        closed: false,
+        dueDate: new Date(Date.now() + 3600_000).toISOString(),
+      },
+    ]);
+    await open();
+    expect(await screen.findByText(/closes in/i)).toBeInTheDocument();
   });
 });
 

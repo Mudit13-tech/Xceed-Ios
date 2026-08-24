@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useNavigate, useOutletContext } from 'react-router-dom';
 import { Badge, Box, Button, Flex, HStack, Heading, Text } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { DeadlineCountdown, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 
 /**
  * Lists the class's forms — a Google-Forms-like builder, entirely separate
@@ -96,6 +96,8 @@ export default function Forms() {
                   {isTeacher && form.settings?.accessMode === 'anyone' && (
                     <Badge colorScheme="purple">Anyone with the link</Badge>
                   )}
+                  {form.closed && <Badge colorScheme="red">Closed</Badge>}
+                  {!form.closed && form.dueDate && <DeadlineCountdown dueDate={form.dueDate} prefix="Closes in" />}
                 </HStack>
                 {form.description && (
                   <Text fontSize="sm" color="lmFg.subtle" noOfLines={2} mt={1}>
@@ -104,7 +106,11 @@ export default function Forms() {
                 )}
                 <Text fontSize="xs" color="lmFg.muted" mt={1}>
                   {form.questions?.length ?? form.questionCount ?? 0} question(s)
-                  {isTeacher ? ` · ${form.responseCount ?? 0} response(s)` : ''}
+                  {isTeacher
+                    ? form.settings?.accessMode === 'class'
+                      ? ` · ${form.responseCount ?? 0}/${form.enrolledCount ?? 0} students filled`
+                      : ` · ${form.responseCount ?? 0} response(s)`
+                    : ''}
                 </Text>
                 {!isTeacher && form.responded && <Badge colorScheme="green" mt={1}>Responded</Badge>}
               </Box>
@@ -135,8 +141,9 @@ export default function Forms() {
                     to={`/learning/class/${classId}/form/${form._id}`}
                     size="sm"
                     colorScheme="teal"
+                    isDisabled={form.closed}
                   >
-                    {form.responded ? 'View / edit response' : 'Fill in'}
+                    {form.closed ? 'Closed' : form.responded ? 'View / edit response' : 'Fill in'}
                   </Button>
                 )}
               </HStack>

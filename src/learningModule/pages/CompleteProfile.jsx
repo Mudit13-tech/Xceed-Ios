@@ -23,12 +23,20 @@ import lmApi from '../api/lmApi';
 import { looksLikeEmail, EMAIL_AS_NAME_MESSAGE } from '../displayName';
 
 /**
- * The gate a student passes through once, the first time they open the module.
+ * The gate an account passes through once, the first time it opens the module.
  *
  * A roll number is the only name a mark sheet is ever read by, and the module
  * used to hold it per class — typed by whichever teacher imported a roster, and
  * missing entirely when a student joined with a code. Asking the student
  * themselves, once, gives every class they are ever in one answer to copy.
+ *
+ * The name is asked for on the same terms, and of staff as well: every account
+ * on the platform is created with its email address sitting in the name field,
+ * and a class owned by `someone@nitj.ac.in` reads that way to every student in
+ * it. This replaced an always-open "Edit your name" item in the account menu —
+ * a name that rosters, gradebooks and result sheets are read by should not be
+ * re-typed at will, so it is given once here and afterwards only an
+ * administrator changes it. `saveMyIdentity` refuses a second, different one.
  *
  * It is a whole page rather than a dismissable dialog on purpose: it is
  * mandatory, and a dialog with no way to close it is a worse version of a page.
@@ -42,6 +50,10 @@ import { looksLikeEmail, EMAIL_AS_NAME_MESSAGE } from '../displayName';
 export default function CompleteProfile({ onDone }) {
   const [name, setName] = useState('');
   const [rollNumber, setRollNumber] = useState('');
+  // Both come from the server: staff have no roll number to give, and a name
+  // already on the account is shown but not retaken.
+  const [needsRoll, setNeedsRoll] = useState(false);
+  const [nameLocked, setNameLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -70,6 +82,8 @@ export default function CompleteProfile({ onDone }) {
         if (cancelled) return;
         setName(identity.name || '');
         setRollNumber(identity.rollNumber || '');
+        setNeedsRoll(Boolean(identity.required));
+        setNameLocked(Boolean(identity.nameLocked ?? identity.name));
       })
       .catch(() => {
         // A failed prefill is not a failed form: it opens empty instead.
@@ -96,7 +110,7 @@ export default function CompleteProfile({ onDone }) {
       setError(EMAIL_AS_NAME_MESSAGE);
       return;
     }
-    if (!trimmedRoll) {
+    if (needsRoll && !trimmedRoll) {
       setError('Your roll number is required.');
       return;
     }
@@ -140,9 +154,9 @@ export default function CompleteProfile({ onDone }) {
               Complete Your Profile
             </Heading>
             <Text color={subColor} fontSize="sm" textAlign="center">
-              Before you start, confirm your name and roll number. They identify your
-              work in every class, quiz and result sheet, so they are needed once
-              before you can go on.
+              {needsRoll
+                ? 'Before you start, give your name and roll number. They identify your work in every class, quiz and result sheet, so they are needed once before you can go on.'
+                : 'Before you start, give your name. It is what your students and colleagues see on every class you teach, so it is needed once before you can go on.'}
             </Text>
           </Flex>
 
@@ -165,38 +179,49 @@ export default function CompleteProfile({ onDone }) {
                   <InputLeftElement pointerEvents="none">
                     <Icon as={FiUser} color={subColor} />
                   </InputLeftElement>
+                  {/* Read-only rather than absent when it is already settled: a
+                      student who came back only for a roll number should still
+                      see the name their marks will be filed under. */}
                   <Input
                     placeholder="As it should appear on results"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && !saving && !needsRoll && submit()}
                     maxLength={80}
+                    isReadOnly={nameLocked}
+                    isDisabled={nameLocked}
                   />
                 </InputGroup>
                 <FormHelperText fontSize="xs">
-                  Your name, not your email address — this is what your teachers
-                  see on rosters and result sheets.
+                  {nameLocked
+                    ? 'Already set. Ask your administrator if it needs correcting.'
+                    : needsRoll
+                      ? 'Your name, not your email address — this is what your teachers see on rosters and result sheets. You can set it once, so check the spelling.'
+                      : 'Your name, not your email address — this is what your students see on every class you teach. You can set it once, so check the spelling.'}
                 </FormHelperText>
               </FormControl>
 
-              <FormControl isRequired>
-                <FormLabel>Roll Number</FormLabel>
-                <InputGroup>
-                  <InputLeftElement pointerEvents="none">
-                    <Icon as={FiHash} color={subColor} />
-                  </InputLeftElement>
-                  <Input
-                    placeholder="e.g. 21103078"
-                    value={rollNumber}
-                    onChange={(e) => setRollNumber(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && !saving && submit()}
-                    maxLength={40}
-                  />
-                </InputGroup>
-                <FormHelperText fontSize="xs">
-                  Exactly as your institute issued it. Your teachers find your marks by
-                  this.
-                </FormHelperText>
-              </FormControl>
+              {needsRoll && (
+                <FormControl isRequired>
+                  <FormLabel>Roll Number</FormLabel>
+                  <InputGroup>
+                    <InputLeftElement pointerEvents="none">
+                      <Icon as={FiHash} color={subColor} />
+                    </InputLeftElement>
+                    <Input
+                      placeholder="e.g. 21103078"
+                      value={rollNumber}
+                      onChange={(e) => setRollNumber(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && !saving && submit()}
+                      maxLength={40}
+                    />
+                  </InputGroup>
+                  <FormHelperText fontSize="xs">
+                    Exactly as your institute issued it. Your teachers find your marks by
+                    this.
+                  </FormHelperText>
+                </FormControl>
+              )}
 
               <Button
                 colorScheme="cyan"

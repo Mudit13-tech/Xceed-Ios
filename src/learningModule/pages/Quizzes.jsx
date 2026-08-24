@@ -43,6 +43,7 @@ import { keyframes } from '@emotion/react';
 import { DeleteIcon, DownloadIcon, SettingsIcon, TimeIcon } from '@chakra-ui/icons';
 import lmApi from '../api/lmApi';
 import LiveExamControl, { LiveCounts } from '../components/liveExam';
+import AttendanceControl from '../components/attendanceControl';
 import AccessCodeButton from '../components/AccessCodeButton';
 import { CopyLinkButton, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import PublishQuizModal from '../components/PublishQuizModal';
@@ -878,6 +879,12 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
                   used to be. */}
               {hasStarted && (
                 <LiveExamControl classId={classId} quiz={quiz} live={quiz.live} onDone={onRefresh} />
+              )}
+              {/* Beside it, and only once the paper has begun for the same
+                  reason: a register is taken in the hall, and there is no hall
+                  before the exam opens. */}
+              {hasStarted && (
+                <AttendanceControl classId={classId} quiz={quiz} onDone={onRefresh} />
               )}
               <Button as={RouterLink} to={`/learning/class/${classId}/quiz/${quiz._id}/edit`} size="sm" variant="outline">
                 Edit

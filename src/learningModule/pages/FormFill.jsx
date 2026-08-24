@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
-import { Badge, Box, Button, Heading, Text, VStack, useToast } from '@chakra-ui/react';
+import { Alert, AlertIcon, Badge, Box, Button, HStack, Heading, Text, VStack, useToast } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { ErrorState, Loading } from '../components/common';
+import { DeadlineCountdown, ErrorState, Loading } from '../components/common';
+import { formatDateTime } from '../format';
 import FormRenderer from '../components/FormRenderer';
 
 /** A class member filling in (or re-filling) a published form. */
@@ -83,27 +84,37 @@ export default function FormFill() {
   return (
     <VStack align="stretch" spacing={4} maxW="640px">
       <Box>
-        <Heading size="md">{form.title}</Heading>
+        <HStack>
+          <Heading size="md">{form.title}</Heading>
+          {!form.closed && form.dueDate && <DeadlineCountdown dueDate={form.dueDate} prefix="Closes in" />}
+        </HStack>
         {form.description && (
           <Text fontSize="sm" color="lmFg.muted" mt={1}>
             {form.description}
           </Text>
         )}
-        {existingResponse && (
+        {!form.closed && existingResponse && (
           <Badge colorScheme="green" mt={2}>
             You can update your response below
           </Badge>
         )}
       </Box>
 
-      <FormRenderer
-        form={form}
-        existingResponse={existingResponse}
-        onSubmit={submit}
-        submitting={submitting}
-        canUploadFiles
-        classId={classId}
-      />
+      {form.closed ? (
+        <Alert status="warning" borderRadius="md">
+          <AlertIcon />
+          This form closed on {formatDateTime(form.dueDate)} and is no longer accepting responses.
+        </Alert>
+      ) : (
+        <FormRenderer
+          form={form}
+          existingResponse={existingResponse}
+          onSubmit={submit}
+          submitting={submitting}
+          canUploadFiles
+          classId={classId}
+        />
+      )}
     </VStack>
   );
 }

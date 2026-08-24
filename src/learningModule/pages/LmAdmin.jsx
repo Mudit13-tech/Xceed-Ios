@@ -362,6 +362,11 @@ function SharedSebCard() {
  * used to turn "which version did you install" into the reason an exam
  * would not start.
  */
+// Mirrors `MAX_INSTALLER_BYTES` in the server's `sebInstallerController.js`.
+// Checked here as well so an oversized file is refused before the browser
+// spends minutes pushing it up only to be turned away at the far end.
+const MAX_INSTALLER_MB = 1024;
+
 function SebInstallerRow({ platform, label, accept, info, onUploaded }) {
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -369,6 +374,10 @@ function SebInstallerRow({ platform, label, accept, info, onUploaded }) {
   const [saved, setSaved] = useState(false);
 
   const upload = async () => {
+    if (file && file.size > MAX_INSTALLER_MB * 1024 * 1024) {
+      setError(`The installer must be under ${MAX_INSTALLER_MB} MB.`);
+      return;
+    }
     setBusy(true);
     setError('');
     setSaved(false);
