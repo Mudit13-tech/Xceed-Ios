@@ -13,37 +13,7 @@ export const initializePushNotifications = async (navigate) => {
   }
 
   try {
-    // Request permission to use push notifications
-    let permStatus = await PushNotifications.checkPermissions();
-
-    if (permStatus.receive === 'prompt') {
-      permStatus = await PushNotifications.requestPermissions();
-    }
-
-    if (permStatus.receive !== 'granted') {
-      console.warn('User denied push notification permissions.');
-      return;
-    }
-
-    // Register custom action types for interactive push notifications
-    await PushNotifications.registerActionTypes({
-      types: [
-        {
-          id: 'EXAM_TERMINATED_ACTIONS',
-          actions: [
-            {
-              id: 'let_back_in',
-              title: 'Let back in now',
-              foreground: true // Brings app to foreground to ensure cookies/network are active
-            }
-          ]
-        }
-      ]
-    });
-
-    // Register with Apple / Google to receive push via APNS/FCM
-    await PushNotifications.register();
-
+    // 1. REGISTER LISTENERS FIRST
     // On success, we should be able to receive notifications
     PushNotifications.addListener('registration', async (token) => {
       console.log('Push registration success, token: ' + token.value);
@@ -128,6 +98,38 @@ export const initializePushNotifications = async (navigate) => {
         }
       }
     });
+
+    // 2. CHECK PERMISSIONS & REGISTER
+    // Request permission to use push notifications
+    let permStatus = await PushNotifications.checkPermissions();
+
+    if (permStatus.receive === 'prompt') {
+      permStatus = await PushNotifications.requestPermissions();
+    }
+
+    if (permStatus.receive !== 'granted') {
+      console.warn('User denied push notification permissions.');
+      return;
+    }
+
+    // Register custom action types for interactive push notifications
+    await PushNotifications.registerActionTypes({
+      types: [
+        {
+          id: 'EXAM_TERMINATED_ACTIONS',
+          actions: [
+            {
+              id: 'let_back_in',
+              title: 'Let back in now',
+              foreground: true // Brings app to foreground to ensure cookies/network are active
+            }
+          ]
+        }
+      ]
+    });
+
+    // Register with Apple / Google to receive push via APNS/FCM
+    await PushNotifications.register();
 
   } catch (error) {
     console.error('Error initializing push notifications:', error);
