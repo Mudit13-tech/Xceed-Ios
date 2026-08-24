@@ -66,11 +66,10 @@ function ReportForm({ classes, pointsPerReport, onSent }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [classId, setClassId] = useState('');
-  // Pre-filled with where they are now, but editable — the auto-captured URL
-  // is often not where the bug actually is (they may have navigated away, or
-  // the trouble was a step/modal the URL alone does not show), and a reporter
-  // could not previously correct or add to it at all.
-  const [pageUrl, setPageUrl] = useState(() => window.location.href);
+  // Left blank on purpose: the current URL is often not where the trouble
+  // actually is (they may have navigated away, or it was a step/modal the URL
+  // alone does not show), so the reporter names the module or pastes the link.
+  const [pageUrl, setPageUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const toast = useToast();
 
@@ -89,7 +88,7 @@ function ReportForm({ classes, pointsPerReport, onSent }) {
       setTitle('');
       setDescription('');
       setClassId('');
-      setPageUrl(window.location.href);
+      setPageUrl('');
       onSent();
     } catch (err) {
       toast({ status: 'error', title: err.message, duration: 6000 });
@@ -117,7 +116,7 @@ function ReportForm({ classes, pointsPerReport, onSent }) {
         onChange={(event) => setDescription(event.target.value)}
       />
       <Input
-        placeholder="Where exactly? (optional — page, tab, or step)"
+        placeholder="Enter the module or link (optional)"
         value={pageUrl}
         maxLength={500}
         onChange={(event) => setPageUrl(event.target.value)}

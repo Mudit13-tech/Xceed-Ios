@@ -11,6 +11,7 @@ import {
   FormHelperText,
   FormLabel,
   HStack,
+  Input,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -357,6 +358,12 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
   const [minutesById, setMinutesById] = useState({});
   const [busyId, setBusyId] = useState(null);
   const [sebExempt, setSebExempt] = useState(false);
+  const [search, setSearch] = useState('');
+  // Who the invigilator has asked to stop, held until they confirm. Ending a
+  // paper by hand is the one irreversible-feeling act on this panel — it is
+  // undoable, but the student watches their exam vanish first — so it does not
+  // happen on a single tap in a list that is re-sorting under the finger.
+  const [confirmEnd, setConfirmEnd] = useState(null);
   useSecondTick(isOpen);
 
   useEffect(() => {
@@ -377,6 +384,39 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
   const lockedOut = attempts
     .filter((attempt) => attempt.status === 'terminated' || attempt.status === 'expired')
     .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
+
+  // One box over both lists. An invigilator searching mid-exam is holding a
+  // name, not a category — they should not have to know whether that name is
+  // still writing or already shut out to find it.
+  const term = search.trim().toLowerCase();
+  const matches = (attempt) =>
+    !term ||
+    [attempt.studentName, attempt.studentEmail, attempt.rollNumber]
+      .filter(Boolean)
+      .some((field) => String(field).toLowerCase().includes(term));
+
+  const endPaper = async (attempt) => {
+    setBusyId(attempt._id);
+    try {
+      // No reason sent: the server writes "Ended by <teacher>", which is the
+      // one fact worth recording here and the only one the browser cannot get
+      // wrong. A free-text box belongs on the results page, not on a control
+      // being used one-handed in a hall.
+      await lmApi.terminateQuizAttempt(classId, attempt._id);
+      toast({
+        title: `${nameOf(attempt)}'s test was ended`,
+        description: 'Their answers are kept. They now appear under Shut out, where you can let them back in.',
+        status: 'success',
+        duration: 6000,
+      });
+      setConfirmEnd(null);
+      onDone();
+    } catch (err) {
+      toast({ title: err.message || 'Could not end that sitting', status: 'error', duration: 6000 });
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const letIn = async (attempt) => {
     const minutes =
@@ -431,6 +471,110 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
         </ModalHeader>
         <ModalCloseButton />
         <ModalBody pb={6}>
+          {/* One box, filtering every list below it. In a hall of two hundred
+              the panel is opened because one person put their hand up, and the
+              only thing staff know about them is their name. */}
+          <FormControl mb={4}>
+            <Input
+              size="sm"
+              placeholder="Search by name, email or roll number"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              aria-label="Search students"
+            />
+          </FormControl>
+
+          {/* ---- who is writing right now ---- */}
+          <SectionCard
+            title={`Writing now (${writing.length})`}
+            subtitle="Ending a paper keeps every answer. They move to Shut out, where Let in hands it straight back."
+            mb={4}
+          >
+            {writing.length === 0 ? (
+              <Text fontSize="sm" color="lmFg.muted">
+                Nobody is sitting the test at the moment.
+              </Text>
+            ) : writing.filter(matches).length === 0 ? (
+              <Text fontSize="sm" color="lmFg.muted">
+                No student writing now matches “{search}”.
+              </Text>
+            ) : (
+              <Stack spacing={2}>
+                {writing.filter(matches).map((attempt) => {
+                  const total = attempt.questionCount || quiz.questions.length || 1;
+                  const confirming = confirmEnd === attempt._id;
+                  return (
+                    <Flex
+                      key={attempt._id}
+                      gap={3}
+                      align={{ base: 'stretch', md: 'center' }}
+                      direction={{ base: 'column', md: 'row' }}
+                      borderWidth="1px"
+                      borderRadius="md"
+                      p={3}
+                    >
+                      <Box flex="1" minW={0}>
+                        <Flex align="center" gap={2} wrap="wrap">
+                          <Text fontSize="sm" fontWeight="600">
+                            {nameOf(attempt)}
+                          </Text>
+                          {attempt.rollNumber && (
+                            <Badge fontSize="0.6rem">{attempt.rollNumber}</Badge>
+                          )}
+                          <AttemptFlags attempt={attempt} />
+                        </Flex>
+                        <Text fontSize="xs" color="lmFg.subtle" wordBreak="break-all">
+                          {attempt.studentEmail || 'no email on file'}
+                        </Text>
+                        <Text fontSize="xs" color="lmFg.muted">
+                          {attempt.answeredCount}/{total} answered
+                          {attempt.startedAt ? ` · started ${relativeTime(attempt.startedAt)}` : ''}
+                        </Text>
+                      </Box>
+
+                      {/* Two taps, and the second one says what it does. The
+                          first tap only arms this row — nothing has reached the
+                          server yet, and tapping any other row disarms it. */}
+                      {confirming ? (
+                        <HStack spacing={2} w={{ base: '100%', md: 'auto' }}>
+                          <Button
+                            size={{ base: 'md', md: 'sm' }}
+                            minH={{ base: '44px', md: 'auto' }}
+                            colorScheme="red"
+                            onClick={() => endPaper(attempt)}
+                            isLoading={busyId === attempt._id}
+                            flex={{ base: '1', md: 'none' }}
+                          >
+                            End {nameOf(attempt).split(' ')[0]}’s test
+                          </Button>
+                          <Button
+                            size={{ base: 'md', md: 'sm' }}
+                            minH={{ base: '44px', md: 'auto' }}
+                            variant="ghost"
+                            onClick={() => setConfirmEnd(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </HStack>
+                      ) : (
+                        <Button
+                          size={{ base: 'md', md: 'sm' }}
+                          minH={{ base: '44px', md: 'auto' }}
+                          colorScheme="red"
+                          variant="outline"
+                          onClick={() => setConfirmEnd(attempt._id)}
+                          w={{ base: '100%', md: 'auto' }}
+                        >
+                          Terminate
+                        </Button>
+                      )}
+                    </Flex>
+                  );
+                })}
+              </Stack>
+            )}
+          </SectionCard>
+
           {/* ---- who has been shut out ---- */}
           <SectionCard
             title={`Shut out (${lockedOut.length})`}
@@ -460,7 +604,7 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
                   </FormControl>
                 )}
                 <Stack spacing={3}>
-                  {lockedOut.map((attempt) => {
+                  {lockedOut.filter(matches).map((attempt) => {
                     const auto = minutesLostSinceTermination(quiz, attempt, now);
                     const minutes = minutesById[attempt._id] ?? String(auto);
                     return (

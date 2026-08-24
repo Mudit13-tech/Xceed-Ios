@@ -24,6 +24,7 @@ import {
 import { Link as RouterLink } from 'react-router-dom';
 
 import lmApi from '../learningModule/api/lmApi';
+import { githubIssueUrl } from '../learningModule/githubIssue';
 
 /**
  * Bugs and suggestions, for the people who can act on them.
@@ -188,6 +189,26 @@ function ReportCard({ report, onDecide, onSendNote }) {
           onClick={() => decide('rejected')}
         >
           Reject
+        </Button>
+        {/* Escalation, not a decision: it opens a prefilled issue on the
+            tracker and leaves this report's status alone, so approving it
+            (and paying the reporter) stays a separate, deliberate click. */}
+        <Button
+          as="a"
+          size="sm"
+          variant="outline"
+          colorScheme="purple"
+          href={githubIssueUrl({
+            kind: report.kind,
+            title: report.title,
+            description: report.description,
+            pageUrl: report.pageUrl,
+            className: report.className,
+          })}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Raise on GitHub ↗
         </Button>
       </HStack>
     </Box>

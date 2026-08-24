@@ -55,6 +55,17 @@ const QUESTION_TYPES = [
 
 const HAS_OPTIONS = ['multiple_choice', 'checkboxes', 'dropdown'];
 
+// `datetime-local` wants "YYYY-MM-DDTHH:mm" in the browser's own timezone,
+// not an ISO string — Date's own getters already return local components, so
+// this is just formatting them, not converting a timezone.
+const toDatetimeLocal = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 const blankQuestion = (type = 'short_answer') => ({
   _key: Math.random().toString(36).slice(2),
   type,
@@ -426,6 +437,36 @@ export default function FormEditor() {
               <option value="anyone">Anyone with the link, including guests</option>
             </Select>
           </FormControl>
+
+          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+            <FormControl>
+              <FormLabel fontSize="sm">Submission deadline (optional)</FormLabel>
+              <Input
+                type="datetime-local"
+                value={toDatetimeLocal(form.settings?.dueDate)}
+                onChange={(event) =>
+                  setSetting('dueDate', event.target.value ? new Date(event.target.value).toISOString() : null)
+                }
+              />
+              <FormHelperText fontSize="xs">Leave blank to keep this form open indefinitely.</FormHelperText>
+            </FormControl>
+            {form.settings?.dueDate && (
+              <FormControl>
+                <FormLabel fontSize="sm">After the deadline</FormLabel>
+                <Select
+                  value={form.settings?.allowLateResponses ? 'allow' : 'stop'}
+                  onChange={(event) => setSetting('allowLateResponses', event.target.value === 'allow')}
+                >
+                  <option value="stop">Stop accepting responses</option>
+                  <option value="allow">Keep accepting late responses</option>
+                </Select>
+                <FormHelperText fontSize="xs">
+                  &ldquo;Stop&rdquo; closes the form to everyone the moment the deadline passes — nobody can
+                  submit or update a response after that, even if they already had the page open.
+                </FormHelperText>
+              </FormControl>
+            )}
+          </SimpleGrid>
 
           <SimpleGrid columns={{ base: 1, md: 2 }} spacingY={3} spacingX={6}>
             {[

@@ -212,11 +212,11 @@ export default function ClassSettings() {
       toast({ status: 'error', title: error.message });
     }
   };
-  const achieve = async () => {
-  const achieving = klass.status !== 'achieved';
+  const complete = async () => {
+  const completing = klass.status !== 'completed';
   try {
-    await lmApi.achieveClass(classId, achieving);
-    toast({ status: 'success', title: achieving ? 'Class marked as achieved' : 'Class restored' });
+    await lmApi.completeClass(classId, completing);
+    toast({ status: 'success', title: completing ? 'Class marked as completed' : 'Class restored' });
     reloadClass();
   } catch (error) {
     toast({ status: 'error', title: error.message });
@@ -457,14 +457,14 @@ export default function ClassSettings() {
         <Flex justify="space-between" align="center" gap={3} wrap="wrap" py={2}>
           <Box>
             <Text fontSize="sm" fontWeight="600">
-              {klass.status === 'achieved' ? 'Unmark as achieved' : 'Mark as achieved'}
+              {klass.status === 'completed' ? 'Unmark as completed' : 'Mark as completed'}
             </Text>
             <Text fontSize="xs" color="lmFg.muted">
               Signals the class has been completed successfully. Stays readable, drops out of the main list.
             </Text>
           </Box>
-          <Button size="sm" variant="outline" colorScheme="green" onClick={achieve}>
-            {klass.status === 'achieved' ? 'Unmark' : 'Achieve'}
+          <Button size="sm" variant="outline" colorScheme="green" onClick={complete}>
+            {klass.status === 'completed' ? 'Unmark' : 'Complete'}
           </Button>
         </Flex>
         <Divider my={3} />

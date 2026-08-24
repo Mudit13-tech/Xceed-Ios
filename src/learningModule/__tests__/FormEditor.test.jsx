@@ -107,3 +107,36 @@ it('does not offer a share link before the form is published', async () => {
   await open();
   expect(screen.queryByText(/^share$/i)).toBeNull();
 });
+
+describe('submission deadline', () => {
+  it('hides the after-deadline choice until a deadline is actually set', async () => {
+    await open();
+    expect(screen.queryByLabelText(/after the deadline/i)).toBeNull();
+    fireEvent.change(screen.getByLabelText(/submission deadline/i), { target: { value: '2099-01-01T10:00' } });
+    expect(await screen.findByLabelText(/after the deadline/i)).toBeInTheDocument();
+  });
+
+  it('defaults the after-deadline choice to stopping responses', async () => {
+    await open();
+    fireEvent.change(screen.getByLabelText(/submission deadline/i), { target: { value: '2099-01-01T10:00' } });
+    expect(await screen.findByLabelText(/after the deadline/i)).toHaveValue('stop');
+  });
+
+  it('saves the deadline and the chosen late-response behaviour', async () => {
+    updateForm.mockResolvedValue(baseForm());
+    await open();
+    fireEvent.change(screen.getByLabelText(/submission deadline/i), { target: { value: '2099-01-01T10:00' } });
+    fireEvent.change(await screen.findByLabelText(/after the deadline/i), { target: { value: 'allow' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => expect(updateForm).toHaveBeenCalled());
+    const [, , body] = updateForm.mock.calls[0];
+    expect(body.settings.allowLateResponses).toBe(true);
+    expect(new Date(body.settings.dueDate).getFullYear()).toBe(2099);
+  });
+
+  it('shows the existing deadline pre-filled when editing a form that already has one', async () => {
+    await open(baseForm({ settings: { accessMode: 'class', dueDate: '2099-06-15T09:30:00.000Z' } }));
+    expect(await screen.findByLabelText(/after the deadline/i)).toBeInTheDocument();
+  });
+});

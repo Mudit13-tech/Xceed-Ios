@@ -648,21 +648,21 @@ export default function Dashboard() {
   });
 
   const {
-    data: achieved = [],
-    isLoading: loadingAchieved,
-    error: achievedError,
-    refetch: refetchAchieved,
+    data: completed = [],
+    isLoading: loadingCompleted,
+    error: completedError,
+    refetch: refetchCompleted,
   } = useQuery({
-    queryKey: ['learning', 'classes', 'achieved'],
-    queryFn: () => lmApi.listClasses('achieved'),
+    queryKey: ['learning', 'classes', 'completed'],
+    queryFn: () => lmApi.listClasses('completed'),
   });
 
-  const loading = loadingClasses || loadingArchived || loadingAchieved;
-  const error = activeError || archivedError || achievedError;
+  const loading = loadingClasses || loadingArchived || loadingCompleted;
+  const error = activeError || archivedError || completedError;
 
   const load = useCallback(async () => {
-    await Promise.all([refetchActive(), refetchArchived(), refetchAchieved()]);
-  }, [refetchActive, refetchArchived, refetchAchieved]);
+    await Promise.all([refetchActive(), refetchArchived(), refetchCompleted()]);
+  }, [refetchActive, refetchArchived, refetchCompleted]);
 
   useEffect(() => {
     reloadOverview?.();
@@ -736,7 +736,7 @@ export default function Dashboard() {
         <Tabs colorScheme="blue" variant="soft-rounded">
           <TabList mb={4}>
             <Tab fontSize="sm">Active ({classes.length})</Tab>
-            <Tab fontSize="sm">Achieved ({achieved.length})</Tab>
+            <Tab fontSize="sm">Completed ({completed.length})</Tab>
             <Tab fontSize="sm">Archived ({archived.length})</Tab>
           </TabList>
           <TabPanels>
@@ -765,33 +765,11 @@ export default function Dashboard() {
               )}
             </TabPanel>
             <TabPanel px={0}>
-              {achieved.length === 0 ? (
-                <EmptyState icon="🏆" title="Nothing achieved yet" description="Classes marked as achieved will show up here." />
+              {completed.length === 0 ? (
+                <EmptyState icon="🏆" title="Nothing completed yet" description="Classes marked as completed will show up here." />
               ) : (
                 <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5}>
-                  {achieved.map((klass) => (
-                    <ClassCard key={klass._id} klass={klass} onOpen={openClass} />
-                  ))}
-                </SimpleGrid>
-              )}
-            </TabPanel>
-            <TabPanel px={0}>
-              {achieved.length === 0 ? (
-                <EmptyState icon="🏆" title="Nothing achieved yet" description="Classes marked as achieved will show up here." />
-              ) : (
-                <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5}>
-                  {achieved.map((klass) => (
-                    <ClassCard key={klass._id} klass={klass} onOpen={openClass} />
-                  ))}
-                </SimpleGrid>
-              )}
-            </TabPanel>
-            <TabPanel px={0}>
-              {achieved.length === 0 ? (
-                <EmptyState icon="🏆" title="Nothing achieved yet" description="Classes marked as achieved will show up here." />
-              ) : (
-                <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5}>
-                  {achieved.map((klass) => (
+                  {completed.map((klass) => (
                     <ClassCard key={klass._id} klass={klass} onOpen={openClass} />
                   ))}
                 </SimpleGrid>

@@ -125,3 +125,31 @@ describe('re-opening a form already answered', () => {
     expect(screen.getByRole('button', { name: /update response/i })).toBeInTheDocument();
   });
 });
+
+describe('a form that has closed', () => {
+  it('shows a closed notice instead of the form, and does not offer a Submit button', async () => {
+    await open({
+      _id: 'f1',
+      title: 'Feedback',
+      questions: [q('short_answer', { title: 'Your name' })],
+      settings: {},
+      closed: true,
+      dueDate: new Date('2020-01-01T00:00:00Z').toISOString(),
+    });
+    expect(await screen.findByText(/no longer accepting responses/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/your name/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /^submit$/i })).toBeNull();
+  });
+
+  it('shows a live countdown while the form is still open', async () => {
+    await open({
+      _id: 'f1',
+      title: 'Feedback',
+      questions: [q('short_answer', { title: 'Your name' })],
+      settings: {},
+      closed: false,
+      dueDate: new Date(Date.now() + 3600_000).toISOString(),
+    });
+    expect(await screen.findByText(/closes in/i)).toBeInTheDocument();
+  });
+});

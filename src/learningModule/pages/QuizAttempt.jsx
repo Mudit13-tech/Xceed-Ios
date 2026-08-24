@@ -833,7 +833,6 @@ export default function QuizAttempt() {
                 />
                 <StatTile label="Correct" value={attempt.totalCorrect ?? '—'} accent="green.500" />
                 <StatTile label="Wrong" value={attempt.totalWrong ?? '—'} accent="red.500" />
-                <StatTile label="Unattempted" value={attempt.totalUnattempted ?? '—'} accent="gray.500" />
                 {attempt.negativeApplied > 0 && (
                   <StatTile label="Negative" value={`−${attempt.negativeApplied}`} accent="red.500" />
                 )}
@@ -857,7 +856,6 @@ export default function QuizAttempt() {
                       <HStack spacing={3}>
                         <Text color="green.600">{section.correct} ✓</Text>
                         <Text color="red.600">{section.wrong} ✗</Text>
-                        <Text color="lmFg.muted">{section.unattempted} —</Text>
                         <Text fontWeight="600">
                           {section.score}/{section.maxScore}
                         </Text>
