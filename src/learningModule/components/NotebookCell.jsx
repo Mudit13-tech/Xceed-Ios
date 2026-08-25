@@ -3,13 +3,21 @@ import {
   Badge,
   Box,
   Button,
+  Collapse,
   Flex,
   HStack,
   IconButton,
   Image,
   Spinner,
+  Table,
+  Tbody,
+  Td,
   Text,
   Textarea,
+  Th,
+  Thead,
+  Tr,
+  VStack,
   useColorMode,
   useColorModeValue,
 } from '@chakra-ui/react';
@@ -18,10 +26,14 @@ import {
   FiArrowDown,
   FiArrowUp,
   FiCheckCircle,
+  FiCheckSquare,
+  FiChevronDown,
+  FiChevronUp,
   FiEdit2,
   FiEye,
   FiLock,
   FiPlay,
+  FiPlus,
   FiSquare,
   FiTerminal,
   FiTrash2,
@@ -38,11 +50,7 @@ import RichText from './RichText';
 /**
  * One notebook cell: source on top, output underneath.
  *
- * The output pane is deliberately *below* the editor rather than beside it,
- * despite the "code on one side, output on the other" framing. Side-by-side
- * halves the width available to both, and Python output is overwhelmingly wide
- * — a pandas DataFrame or a traceback wraps into unreadable soup at half a
- * screen. Stacked also survives a phone, which a split pane does not.
+ * Stacked output pane below editor for maximum readability.
  */
 
 /** stderr and tracebacks read as errors; everything else gets its own tint. */
@@ -53,15 +61,6 @@ const OUTPUT_COLOUR = {
   stdout: 'green.400',
 };
 
-/**
- * The output pane. Absent until there is something to put in it — "this cell is
- * running" is the gutter's job now, and saying it in both places produced two
- * spinners for one run.
- *
- * `onClear` wipes the outputs via the same onChange mechanism the editor uses
- * for source edits, so it goes through whatever save/persistence path already
- * exists rather than needing a new one.
- */
 function OutputBlock({ outputs, onClear }) {
   const bg = useColorModeValue('gray.50', 'blackAlpha.400');
   const border = useColorModeValue('gray.200', 'whiteAlpha.200');
@@ -125,17 +124,6 @@ function OutputBlock({ outputs, onClear }) {
   );
 }
 
-/**
- * A markdown cell, read as prose rather than as source.
- *
- * It used to sit permanently open in the editor, so the explanation around an
- * exercise — the headings, the emphasis, the tables — arrived as a wall of `##`
- * and `**` that the reader had to render in their head. Prose is the point of
- * the cell; the source is the exception.
- *
- * Edit toggles back, and double-clicking the text does too, which is the
- * gesture Jupyter and Colab have trained everyone to expect.
- */
 function MarkdownCell({ cell, index, total, locked, readOnly, onChange, onMove, onDelete }) {
   const { colorMode } = useColorMode();
   const border = useColorModeValue('gray.200', 'whiteAlpha.200');
@@ -199,18 +187,6 @@ function MarkdownCell({ cell, index, total, locked, readOnly, onChange, onMove, 
   );
 }
 
-/**
- * Whether the last run worked, in the cell's own gutter.
- *
- * Colab's green tick, and for the same reason: a cell that ends in an
- * assignment or a `def` displays nothing at all when it succeeds, which is
- * correct notebook behaviour and completely indistinguishable from a cell that
- * did not run. The `[n]` counter beside it is the Jupyter answer to that, but a
- * number going from blank to 1 is not something anyone notices.
- *
- * `running` wins over the stored result: a re-run clears the outputs before it
- * starts, so the previous tick would otherwise sit there through the new run.
- */
 function CellStatus({ running, cell }) {
   if (running) {
     return (
@@ -244,6 +220,218 @@ function CellStatus({ running, cell }) {
   );
 }
 
+/**
+ * Panel for Faculty authoring of hidden test cases per cell
+ */
+function TestCasesEditorPanel({
+  testCases = [],
+  onChange,
+  onRunTestCases,
+  testing = false,
+  testSummary,
+}) {
+  const bg = useColorModeValue('purple.50', 'blackAlpha.300');
+  const border = useColorModeValue('purple.200', 'purple.800');
+
+  const addTestCase = () => {
+    onChange([...testCases, { input: '', output: '' }]);
+  };
+
+  const updateTestCase = (index, patch) => {
+    const next = [...testCases];
+    next[index] = { ...next[index], ...patch };
+    onChange(next);
+  };
+
+  const removeTestCase = (index) => {
+    onChange(testCases.filter((_, i) => i !== index));
+  };
+
+  return (
+    <Box bg={bg} borderTopWidth="1px" borderColor={border} p={3}>
+      <Flex align="center" justify="space-between" mb={2} wrap="wrap" gap={2}>
+        <HStack spacing={2}>
+          <Text fontSize="xs" fontWeight="700" color="purple.600" textTransform="uppercase">
+            Hidden Test Cases ({testCases.length})
+          </Text>
+          {testSummary?.total > 0 && (
+            <Badge colorScheme={testSummary.passedAll ? 'green' : 'red'} fontSize="2xs">
+              {testSummary.passedAll ? 'Completed (Yes)' : `Failed (No - ${testSummary.passed}/${testSummary.total})`}
+            </Badge>
+          )}
+        </HStack>
+        <HStack spacing={2}>
+          {typeof onRunTestCases === 'function' && testCases.length > 0 && (
+            <Button
+              size="xs"
+              colorScheme="purple"
+              leftIcon={testing ? <Spinner size="xs" /> : <FiPlay />}
+              isLoading={testing}
+              onClick={onRunTestCases}
+            >
+              Test Solution on Cell
+            </Button>
+          )}
+          <Button size="xs" variant="outline" colorScheme="purple" leftIcon={<FiPlus />} onClick={addTestCase}>
+            Add Test Case
+          </Button>
+        </HStack>
+      </Flex>
+      <Text fontSize="2xs" opacity={0.7} mb={3}>
+        Students will not see these inputs or expected outputs directly. They will click &quot;Run Hidden Test Case&quot; to test their code and receive Yes/No feedback.
+      </Text>
+
+      {testCases.length === 0 ? (
+        <Text fontSize="xs" fontStyle="italic" opacity={0.6} py={1}>
+          No test cases added yet. Click &quot;Add Test Case&quot; above.
+        </Text>
+      ) : (
+        <VStack align="stretch" spacing={3}>
+          {testCases.map((tc, idx) => (
+            <Box
+              key={tc._id || idx}
+              p={2.5}
+              borderWidth="1px"
+              borderRadius="md"
+              borderColor={border}
+              bg={useColorModeValue('white', 'gray.800')}
+            >
+              <Flex justify="space-between" align="center" mb={1.5}>
+                <Text fontSize="xs" fontWeight="600">
+                  Test Case #{idx + 1}
+                </Text>
+                <IconButton
+                  aria-label="Remove test case"
+                  icon={<FiTrash2 />}
+                  size="xs"
+                  variant="ghost"
+                  colorScheme="red"
+                  onClick={() => removeTestCase(idx)}
+                />
+              </Flex>
+              <Flex gap={3} direction={{ base: 'column', sm: 'row' }}>
+                <Box flex="1">
+                  <Text fontSize="2xs" fontWeight="600" opacity={0.6} mb={0.5}>
+                    Input (stdin)
+                  </Text>
+                  <Textarea
+                    size="xs"
+                    fontFamily="mono"
+                    rows={2}
+                    placeholder="Input passed to stdin (e.g. 5 10)"
+                    value={tc.input || ''}
+                    onChange={(e) => updateTestCase(idx, { input: e.target.value })}
+                  />
+                </Box>
+                <Box flex="1">
+                  <Text fontSize="2xs" fontWeight="600" opacity={0.6} mb={0.5}>
+                    Expected Output (stdout)
+                  </Text>
+                  <Textarea
+                    size="xs"
+                    fontFamily="mono"
+                    rows={2}
+                    placeholder="Expected output on stdout (e.g. 15)"
+                    value={tc.output || ''}
+                    onChange={(e) => updateTestCase(idx, { output: e.target.value })}
+                  />
+                </Box>
+              </Flex>
+            </Box>
+          ))}
+        </VStack>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * Interactive Test Results display for Student and Teacher
+ */
+function TestResultsPanel({ testResults = [], testSummary, isTeacher = false }) {
+  const bg = useColorModeValue('gray.50', 'blackAlpha.300');
+  const border = useColorModeValue('gray.200', 'whiteAlpha.200');
+
+  if (!testResults || testResults.length === 0) return null;
+
+  return (
+    <Box bg={bg} borderTopWidth="1px" borderColor={border} p={3}>
+      <Flex align="center" justify="space-between" mb={2}>
+        <HStack spacing={2}>
+          <Text fontSize="xs" fontWeight="700" textTransform="uppercase" opacity={0.7}>
+            Test Case Results
+          </Text>
+          <Badge
+            colorScheme={testSummary?.passedAll ? 'green' : 'red'}
+            fontSize="xs"
+            px={2}
+            py={0.5}
+            borderRadius="full"
+          >
+            {testSummary?.passedAll
+              ? 'Passed (Yes - All Completed)'
+              : `Failed (No - ${testSummary?.passed || 0}/${testSummary?.total || testResults.length} Passed)`}
+          </Badge>
+        </HStack>
+      </Flex>
+
+      <VStack align="stretch" spacing={2}>
+        {testResults.map((result, idx) => (
+          <Box
+            key={idx}
+            p={2}
+            borderWidth="1px"
+            borderRadius="md"
+            borderColor={result.passed ? 'green.200' : 'red.200'}
+            bg={result.passed ? useColorModeValue('green.50', 'rgba(72,187,120,0.1)') : useColorModeValue('red.50', 'rgba(245,101,101,0.1)')}
+          >
+            <Flex justify="space-between" align="center">
+              <HStack spacing={2}>
+                <Box color={result.passed ? 'green.500' : 'red.500'} fontSize="14px">
+                  {result.passed ? <FiCheckCircle /> : <FiXCircle />}
+                </Box>
+                <Text fontSize="xs" fontWeight="600">
+                  Test #{idx + 1}:
+                </Text>
+                <Badge colorScheme={result.passed ? 'green' : 'red'} fontSize="2xs">
+                  {result.passed ? 'Yes (Passed)' : 'No (Failed)'}
+                </Badge>
+              </HStack>
+              {result.executedAt && (
+                <Text fontSize="2xs" opacity={0.5}>
+                  {new Date(result.executedAt).toLocaleTimeString()}
+                </Text>
+              )}
+            </Flex>
+
+            {!result.passed && (
+              <Box mt={1.5} pt={1.5} borderTopWidth="1px" borderColor={result.passed ? 'green.200' : 'red.200'}>
+                {result.error ? (
+                  <Text fontSize="2xs" fontFamily="mono" color="red.500">
+                    Error: {result.error}
+                  </Text>
+                ) : (
+                  <VStack align="stretch" spacing={1} fontSize="2xs" fontFamily="mono">
+                    {isTeacher && (
+                      <>
+                        {result.input && <Text opacity={0.8}>Input: {result.input}</Text>}
+                        <Text color="green.600">Expected: {result.expectedOutput}</Text>
+                      </>
+                    )}
+                    <Text color="red.500">
+                      {isTeacher ? `Actual: ${result.actualOutput || '(empty)'}` : 'Output did not match expected result.'}
+                    </Text>
+                  </VStack>
+                )}
+              </Box>
+            )}
+          </Box>
+        ))}
+      </VStack>
+    </Box>
+  );
+}
+
 export default function NotebookCell({
   cell,
   index,
@@ -251,12 +439,16 @@ export default function NotebookCell({
   language = 'python',
   readOnly = false,
   running = false,
+  testing = false,
   canRun = true,
+  isEditor = false,
+  testCases = null,
   onChange,
   onRun,
   onStop,
   onMove,
   onDelete,
+  onRunTests,
 }) {
   const { colorMode } = useColorMode();
   const border = useColorModeValue('gray.200', 'whiteAlpha.200');
@@ -283,15 +475,9 @@ export default function NotebookCell({
   const extensions = useMemo(() => [isC ? cpp() : python(), runKeymap], [isC, runKeymap]);
   const locked = cell.locked || readOnly;
 
-  /**
-   * Whether the stdin box is showing.
-   *
-   * Open by default for C, where reading input with `scanf` is most of what a
-   * first-year exercise does, and for any cell that already has input saved —
-   * hiding a value the student typed would read as having lost it. Python cells
-   * start closed, because `input()` is the exception there rather than the rule.
-   */
   const [showStdin, setShowStdin] = useState(() => isC || Boolean(cell.stdin));
+  const [showTestCases, setShowTestCases] = useState(false);
+  const [showTestResults, setShowTestResults] = useState(true);
 
   if (cell.type === 'markdown') {
     return (
@@ -308,9 +494,15 @@ export default function NotebookCell({
     );
   }
 
+  // Active test cases from either cell definition or passed testCases prop
+  const activeTestCases = testCases || cell.testCases || [];
+  const hasTestCases = activeTestCases.length > 0;
+  const testResults = cell.testResults || [];
+  const testSummary = cell.testSummary;
+
   return (
     <Box borderWidth="1px" borderColor={border} borderRadius="md" overflow="hidden">
-      <Flex align="center" gap={2} px={3} py={1} bg={gutter} borderBottomWidth="1px" borderColor={border}>
+      <Flex align="center" gap={2} px={3} py={1.5} bg={gutter} borderBottomWidth="1px" borderColor={border} wrap="wrap">
         <HintTooltip label={running ? 'Stop the kernel' : 'Run this cell'}>
           <IconButton
             aria-label={running ? 'Stop' : 'Run cell'}
@@ -323,7 +515,7 @@ export default function NotebookCell({
           />
         </HintTooltip>
 
-        <Text fontSize="xs" fontFamily="mono" opacity={0.55} minW="42px">
+        <Text fontSize="xs" fontFamily="mono" opacity={0.55} minW="36px">
           [{cell.runCount || ' '}]
         </Text>
 
@@ -335,6 +527,45 @@ export default function NotebookCell({
               <FiLock /> locked
             </Badge>
           </HintTooltip>
+        )}
+
+        {/* Hidden Test Case badges & Execution action */}
+        {hasTestCases && (
+          <HStack spacing={1.5}>
+            <Badge colorScheme="purple" fontSize="2xs" px={1.5}>
+              Hidden Tests ({activeTestCases.length})
+            </Badge>
+            {testSummary?.total > 0 && (
+              <Badge
+                colorScheme={testSummary.passedAll ? 'green' : 'red'}
+                display="flex"
+                alignItems="center"
+                gap={1}
+                fontSize="2xs"
+                px={1.5}
+              >
+                {testSummary.passedAll ? <FiCheckCircle /> : <FiXCircle />}
+                {testSummary.passedAll
+                  ? 'Completed (Yes)'
+                  : `Failed (No - ${testSummary.passed}/${testSummary.total})`}
+              </Badge>
+            )}
+            {typeof onRunTests === 'function' && !cell.hidden && (
+              <HintTooltip label="Evaluate cell against hidden test cases">
+                <Button
+                  size="xs"
+                  colorScheme={testSummary?.passedAll ? 'green' : 'purple'}
+                  variant="solid"
+                  leftIcon={testing ? <Spinner size="xs" /> : <FiCheckSquare />}
+                  isLoading={testing}
+                  isDisabled={!canRun || testing || running}
+                  onClick={() => onRunTests(cell)}
+                >
+                  Run Hidden Test Case
+                </Button>
+              </HintTooltip>
+            )}
+          </HStack>
         )}
 
         <HintTooltip
@@ -354,6 +585,29 @@ export default function NotebookCell({
           </Button>
         </HintTooltip>
 
+        {isEditor && !cell.hidden && (
+          <Button
+            size="xs"
+            variant={showTestCases ? 'solid' : 'ghost'}
+            colorScheme="purple"
+            leftIcon={<FiCheckSquare />}
+            onClick={() => setShowTestCases((current) => !current)}
+          >
+            Test Cases ({activeTestCases.length})
+          </Button>
+        )}
+
+        {testResults.length > 0 && (
+          <Button
+            size="xs"
+            variant="ghost"
+            rightIcon={showTestResults ? <FiChevronUp /> : <FiChevronDown />}
+            onClick={() => setShowTestResults((c) => !c)}
+          >
+            Test Results
+          </Button>
+        )}
+
         <Box flex="1" />
         <CellControls index={index} total={total} onMove={onMove} onDelete={onDelete} readOnly={readOnly || cell.locked} />
       </Flex>
@@ -368,9 +622,6 @@ export default function NotebookCell({
         minHeight="72px"
       />
 
-      {/* Editable even when the cell is locked: the code is the teacher's, but
-          feeding a fixed program different input is usually the exercise. The
-          server agrees — `applyStudentCells` takes stdin regardless of lock. */}
       {showStdin && (
         <Box px={3} py={2} borderTopWidth="1px" borderColor={border}>
           <Text fontSize="2xs" fontWeight="600" opacity={0.5} textTransform="uppercase" mb={1}>
@@ -386,6 +637,22 @@ export default function NotebookCell({
             fontSize="13px"
           />
         </Box>
+      )}
+
+      {/* Editor Test Cases Panel */}
+      {isEditor && showTestCases && (
+        <TestCasesEditorPanel
+          testCases={cell.testCases || []}
+          onChange={(newTestCases) => onChange({ testCases: newTestCases })}
+          onRunTestCases={onRunTests ? () => onRunTests(cell) : null}
+          testing={testing}
+          testSummary={testSummary}
+        />
+      )}
+
+      {/* Test Results Output */}
+      {showTestResults && testResults.length > 0 && (
+        <TestResultsPanel testResults={testResults} testSummary={testSummary} isTeacher={isEditor} />
       )}
 
       <OutputBlock outputs={cell.outputs} onClear={() => onChange({ outputs: [] })} />

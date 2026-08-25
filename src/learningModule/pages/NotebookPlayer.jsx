@@ -22,6 +22,7 @@ import NotebookCell from '../components/NotebookCell';
 import RichText from '../components/RichText';
 import useNotebookKernel from '../hooks/useNotebookKernel';
 import { formatDateTime } from '../format';
+import { runCellTestCases } from '../utils/testRunner';
 
 /**
  * A student working through a coding notebook.
@@ -59,6 +60,8 @@ export default function NotebookPlayer() {
   const [notebook, setNotebook] = useState(null);
   const [attempt, setAttempt] = useState(null);
   const [cells, setCells] = useState([]);
+  const [cellTestCases, setCellTestCases] = useState({});
+  const [busyTestKey, setBusyTestKey] = useState(null);
   const [hiddenSetup, setHiddenSetup] = useState([]);
   const [solution, setSolution] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -96,6 +99,25 @@ export default function NotebookPlayer() {
     sources,
   );
 
+  const totalNotebookTests = useMemo(
+    () =>
+      cells.reduce(
+        (acc, c) => acc + (cellTestCases[String(c.sourceCellId)]?.length || c.testCases?.length || 0),
+        0,
+      ),
+    [cells, cellTestCases],
+  );
+
+  const passedNotebookTests = useMemo(
+    () =>
+      cells.reduce(
+        (acc, c) =>
+          acc + (c.testSummary?.passed ?? (c.testResults || []).filter((r) => r.passed).length ?? 0),
+        0,
+      ),
+    [cells],
+  );
+
   const load = useCallback(async () => {
     setError(null);
     try {
@@ -103,6 +125,11 @@ export default function NotebookPlayer() {
       setNotebook(data.notebook);
       setAttempt(data.attempt);
       setCells(withKeys(data.attempt.cells));
+      const testCasesMap = {};
+      (data.cellTestCases || []).forEach((entry) => {
+        testCasesMap[String(entry.sourceCellId)] = entry.testCases;
+      });
+      setCellTestCases(testCasesMap);
       setHiddenSetup(data.hiddenSetup || []);
       setSolution(data.solution);
       revisionRef.current = data.attempt.revision || 0;
@@ -329,6 +356,55 @@ export default function NotebookPlayer() {
     [ensureSetup, hiddenSetup, isC, label, patchCell, runCell, scheduleSave, status, toast],
   );
 
+  const runTestsForCell = useCallback(
+    async (cell) => {
+      if (status !== 'ready') {
+        toast({ status: 'info', title: `${label} is still starting.`, duration: 2000 });
+        return;
+      }
+      const tcs = cellTestCases[String(cell.sourceCellId)] || cell.testCases || [];
+      if (!tcs.length) {
+        toast({ status: 'info', title: 'This cell has no hidden test cases.', duration: 2000 });
+        return;
+      }
+
+      setBusyTestKey(cell.key);
+      try {
+        await ensureSetup();
+        const { testResults, testSummary } = await runCellTestCases({
+          cell,
+          testCases: tcs,
+          isC,
+          prelude: isC ? hiddenSetup : [],
+          runCell,
+        });
+
+        patchCell(cell.key, (current) => ({
+          testResults,
+          testSummary,
+          executedAt: new Date().toISOString(),
+          outputs: testSummary.passedAll
+            ? (current.outputs || []).filter((o) => o.type !== 'error' || !o.text.includes('EOFError'))
+            : current.outputs,
+        }));
+        scheduleSave();
+
+        toast({
+          status: testSummary.passedAll ? 'success' : 'warning',
+          title: testSummary.passedAll
+            ? 'All hidden test cases passed! (Yes)'
+            : `${testSummary.passed}/${testSummary.total} hidden test cases passed (No)`,
+          duration: 3000,
+        });
+      } catch (err) {
+        toast({ status: 'error', title: 'Test execution failed', description: err.message });
+      } finally {
+        setBusyTestKey(null);
+      }
+    },
+    [cellTestCases, ensureSetup, hiddenSetup, isC, label, patchCell, runCell, scheduleSave, status, toast],
+  );
+
   const runAll = useCallback(async () => {
     if (status !== 'ready') return;
     for (const cell of cellsRef.current) {
@@ -337,8 +413,13 @@ export default function NotebookPlayer() {
       // the whole contract.
       // eslint-disable-next-line no-await-in-loop
       await executeCell(cell);
+      const tcs = cellTestCases[String(cell.sourceCellId)] || cell.testCases || [];
+      if (tcs.length > 0) {
+        // eslint-disable-next-line no-await-in-loop
+        await runTestsForCell(cell);
+      }
     }
-  }, [executeCell, status]);
+  }, [cellTestCases, executeCell, runTestsForCell, status]);
 
   const restartKernel = useCallback(() => {
     setupRef.current = null;
@@ -437,6 +518,17 @@ export default function NotebookPlayer() {
           <HStack spacing={2} mt={2} wrap="wrap">
             <Badge colorScheme={kernelBadge[0]}>{label} {kernelBadge[1]}</Badge>
             {notebook.packages?.length ? <Badge>{notebook.packages.join(', ')}</Badge> : null}
+            {totalNotebookTests > 0 && (
+              <Badge
+                colorScheme={passedNotebookTests === totalNotebookTests ? 'green' : 'purple'}
+                variant="subtle"
+                px={2}
+                py={0.5}
+                borderRadius="full"
+              >
+                Hidden Tests: {passedNotebookTests}/{totalNotebookTests} Passed
+              </Badge>
+            )}
             {/* A live counter rather than a date, and dropped once they have
                 turned it in — a clock still ticking down on submitted work
                 reads as though something is still owed. */}
@@ -475,7 +567,7 @@ export default function NotebookPlayer() {
                 size="sm"
                 leftIcon={<FiFastForward />}
                 onClick={runAll}
-                isDisabled={status !== 'ready' || Boolean(busyCellId)}
+                isDisabled={status !== 'ready' || Boolean(busyCellId) || Boolean(busyTestKey)}
               >
                 Run all
               </Button>
@@ -545,13 +637,16 @@ export default function NotebookPlayer() {
               total={cells.length}
               language={language}
               readOnly={submitted}
+              testCases={cellTestCases[String(cell.sourceCellId)] || cell.testCases || []}
+              testing={busyTestKey === cell.key}
               running={busyCellId === cell.key}
-              canRun={status === 'ready' && !busyCellId}
+              canRun={status === 'ready' && !busyCellId && !busyTestKey}
               onChange={(patch) => {
                 patchCell(cell.key, patch);
                 scheduleSave();
               }}
               onRun={() => executeCell(cell)}
+              onRunTests={() => runTestsForCell(cell)}
               onStop={stopKernel}
               onMove={(delta) => moveCell(index, delta)}
               onDelete={() => {

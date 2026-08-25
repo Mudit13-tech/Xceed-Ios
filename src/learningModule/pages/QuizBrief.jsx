@@ -24,6 +24,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
+import serverClock from '../serverClock';
 import { sebDiagnosis } from '../sebDiagnosis';
 import QuizStage from '../components/QuizStage';
 import RichText from '../components/RichText';
@@ -39,6 +40,21 @@ const formatDuration = (seconds) => {
   return secs ? `${mins}m ${secs}s` : `${mins} min`;
 };
 
+/**
+ * Counts down against the server's clock, not this browser's own.
+ *
+ * `target` (opensAt/closesAt/startDeadline) is a server timestamp; comparing
+ * it against a raw `Date.now()` puts this browser's own clock drift directly
+ * on the number a student watches. Reaching "0:00" here is also what fires
+ * the one-shot reload that is supposed to unlock the Start button — so on a
+ * machine whose clock runs behind the server's, this used to hit zero and
+ * reload while the window had not actually opened yet by the server's own
+ * clock, refetch a brief that still said `notYetOpen`, and then never try
+ * again (the effect below only fires when this value *changes* to zero).
+ * `serverClock.now()` is corrected using `serverTime` on every quiz-brief
+ * response — see serverClock.js — so this reaches zero exactly when the
+ * server agrees it should.
+ */
 const useCountdown = (target) => {
   const [remaining, setRemaining] = useState(null);
 
@@ -47,7 +63,7 @@ const useCountdown = (target) => {
       setRemaining(null);
       return undefined;
     }
-    const tick = () => setRemaining(Math.max(0, Math.round((new Date(target) - Date.now()) / 1000)));
+    const tick = () => setRemaining(Math.max(0, Math.round((new Date(target).getTime() - serverClock.now()) / 1000)));
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);

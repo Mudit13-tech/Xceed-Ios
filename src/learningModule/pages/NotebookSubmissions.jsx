@@ -383,6 +383,7 @@ export default function NotebookSubmissions() {
                 <Th>Status</Th>
                 <Th isNumeric>Cells run</Th>
                 <Th>Worked through</Th>
+                <Th>Hidden tests</Th>
                 <Th isNumeric>Grade</Th>
                 <Th />
               </Tr>
@@ -420,6 +421,17 @@ export default function NotebookSubmissions() {
                       <Badge colorScheme="yellow">
                         {row.cellsErrored ? `${row.cellsErrored} errored` : 'cells left unrun'}
                       </Badge>
+                    )}
+                  </Td>
+                  <Td>
+                    {row.totalTestCases === null || row.totalTestCases === undefined || row.totalTestCases === 0 ? (
+                      <Text fontSize="xs" opacity={0.5}>
+                        —
+                      </Text>
+                    ) : row.passedTestCases === row.totalTestCases ? (
+                      <Badge colorScheme="green">All Passed ({row.passedTestCases}/{row.totalTestCases})</Badge>
+                    ) : (
+                      <Badge colorScheme="red">{row.passedTestCases}/{row.totalTestCases} Passed</Badge>
                     )}
                   </Td>
                   <Td isNumeric>
@@ -520,6 +532,40 @@ export default function NotebookSubmissions() {
                             </Box>
                           ),
                         )}
+                      </Box>
+                    )}
+                    {cell.testResults && cell.testResults.length > 0 && (
+                      <Box bg={useColorModeValue('purple.50', 'blackAlpha.300')} borderTopWidth="1px" px={4} py={2}>
+                        <Text fontSize="2xs" fontWeight="700" color="purple.600" textTransform="uppercase" mb={1.5}>
+                          Hidden Test Results ({cell.testResults.filter((r) => r.passed).length}/{cell.testResults.length} Passed)
+                        </Text>
+                        <VStack align="stretch" spacing={1.5}>
+                          {cell.testResults.map((tr, i) => (
+                            <Box
+                              key={i}
+                              p={2}
+                              borderRadius="sm"
+                              borderWidth="1px"
+                              borderColor={tr.passed ? 'green.200' : 'red.200'}
+                              bg={useColorModeValue('white', 'gray.800')}
+                              fontSize="xs"
+                            >
+                              <Flex justify="space-between" align="center">
+                                <Text fontWeight="600">Test #{i + 1}</Text>
+                                <Badge colorScheme={tr.passed ? 'green' : 'red'} fontSize="2xs">
+                                  {tr.passed ? 'Yes (Passed)' : 'No (Failed)'}
+                                </Badge>
+                              </Flex>
+                              {!tr.passed && (
+                                <Box mt={1} pt={1} borderTopWidth="1px" borderColor="red.100" fontSize="2xs" fontFamily="mono">
+                                  {tr.input && <Text opacity={0.8}>Input: {tr.input}</Text>}
+                                  <Text color="green.600">Expected: {tr.expectedOutput}</Text>
+                                  <Text color="red.500">Actual: {tr.actualOutput || tr.error || '(empty)'}</Text>
+                                </Box>
+                              )}
+                            </Box>
+                          ))}
+                        </VStack>
                       </Box>
                     )}
                   </>

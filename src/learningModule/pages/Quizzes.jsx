@@ -117,7 +117,7 @@ const METHODS = {
   exam_paper_timer: {
     label: 'Exam — one question at a time, one timer',
     icon: '🎓',
-    hint: 'Questions are handed out one at a time with a single countdown over the whole paper. Results are held until you release them.',
+    hint: 'Questions are handed out one at a time with a single countdown over the whole paper. Each student sees their score as they submit; the worked answers stay held back until you release them.',
     timerField: 'Time limit for the whole paper (minutes)',
     timerPlaceholder: 'e.g. 60',
     timerHelp: 'Leave blank or 0 for an untimed paper.',
@@ -125,8 +125,13 @@ const METHODS = {
     settings: {
       deliveryMode: 'one_at_a_time',
       perQuestionTiming: false,
+      // The score and the worked answers are two different questions to a
+      // student — "how did I do" versus "what were the right answers" — and
+      // an exam has reason to withhold only the second: the answer key is
+      // reusable by whoever sits a make-up paper later, a raw mark is not.
+      // Both stay editable per quiz from the Marking tab.
       showAnswersAfterSubmit: false,
-      showScoreImmediately: false,
+      showScoreImmediately: true,
       allowReviewBeforeSubmit: false,
       shuffleQuestions: true,
       shuffleOptions: true,
@@ -147,8 +152,11 @@ const METHODS = {
     settings: {
       deliveryMode: 'one_at_a_time',
       perQuestionTiming: true,
+      // See the note on the other exam preset — the score and the answer key
+      // are withheld on two different grounds, and only the second is what an
+      // exam actually has reason to hold back by default.
       showAnswersAfterSubmit: false,
-      showScoreImmediately: false,
+      showScoreImmediately: true,
       allowReviewBeforeSubmit: false,
       shuffleQuestions: true,
       shuffleOptions: true,
