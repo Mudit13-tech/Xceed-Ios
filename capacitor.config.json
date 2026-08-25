@@ -6,5 +6,10 @@
     "hostname": "xceed.learning.app",
     "cleartext": true,
     "androidScheme": "http"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
   }
 }
