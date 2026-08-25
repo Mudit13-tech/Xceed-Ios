@@ -134,7 +134,7 @@ const LoginForm = () => {
       // A full load rather than a client-side navigation: the platform navbar
       // reads the session once on mount, so a router push would land on the
       // target with a stale "signed out" navbar that bounces straight back.
-      window.location.href = redirectTargetFrom(location.search);
+      window.location.href = redirectTargetFrom(location.search, responseData.user);
     } catch (error) {
       console.error('An error occurred', error)
       setMessage('An error occurred. Please try again.')

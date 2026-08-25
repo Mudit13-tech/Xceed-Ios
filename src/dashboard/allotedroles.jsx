@@ -22,76 +22,81 @@ import {
   FiUserCheck,
 } from 'react-icons/fi';
 import getEnvironment from '../getenvironment';
+import {
+  ROLE_DESTINATIONS,
+  EXCLUDED_ROLES,
+  singleRoleTarget,
+} from '../authRedirect';
 
 const apiUrl = getEnvironment();
 
 const ROLE_META = {
   ITTC: {
     name: 'Institute Time Table Coordinator',
-    link: '/tt/admin',
+    link: ROLE_DESTINATIONS.ITTC,
     description: 'Manage institute-wide timetables',
     icon: FiCalendar,
     accent: 'blue',
   },
   DTTI: {
     name: 'Department Time Table Coordinator',
-    link: '/tt/dashboard',
+    link: ROLE_DESTINATIONS.DTTI,
     description: 'Manage department timetables',
     icon: FiCalendar,
     accent: 'blue',
   },
   CM: {
     name: 'Event Certificate Manager',
-    link: '/cm/dashboard',
+    link: ROLE_DESTINATIONS.CM,
     description: 'Create and manage certificates',
     icon: FiAward,
     accent: 'green',
   },
   admin: {
     name: 'XCEED Super User',
-    link: '/superadmin',
+    link: ROLE_DESTINATIONS.admin,
     description: 'Full system administration',
     icon: FiShield,
     accent: 'red',
   },
   EO: {
     name: 'Event Organiser',
-    link: '/cf/dashboard',
+    link: ROLE_DESTINATIONS.EO,
     description: 'Organize and manage events',
     icon: FiMic,
     accent: 'purple',
   },
   FACULTY: {
     name: 'Faculty',
-    link: '/learning',
+    link: ROLE_DESTINATIONS.FACULTY,
     description: 'Your classes and coursework',
     icon: FiUser,
     accent: 'orange',
   },
   'iams-admin': {
     name: 'iLEED Admin',
-    link: '/iams-admin',
+    link: ROLE_DESTINATIONS['iams-admin'],
     description: 'Manage face recognition attendance system',
     icon: FiUserCheck,
     accent: 'cyan',
   },
   'iams-dept-admin': {
     name: 'iLEED Department Admin',
-    link: '/dept-admin/dashboard',
+    link: ROLE_DESTINATIONS['iams-dept-admin'],
     description: 'Department-level attendance management',
     icon: FiUserCheck,
     accent: 'cyan',
   },
   STUDENT: {
     name: 'Student',
-    link: '/learning',
+    link: ROLE_DESTINATIONS.STUDENT,
     description: 'Your classes, coursework and tutorials',
     icon: FiBookOpen,
     accent: 'teal',
   },
   'lm-admin': {
     name: 'Learning Module Admin',
-    link: '/learning/lm-admin',
+    link: ROLE_DESTINATIONS['lm-admin'],
     description: 'Bug reports, feedback and usage stats for the Learning module',
     icon: FiShield,
     accent: 'purple',
@@ -101,14 +106,14 @@ const ROLE_META = {
   // so they never displace a real role or the single-role auto-redirect.
   'learning-teacher': {
     name: 'Learning — Teacher',
-    link: '/learning',
+    link: ROLE_DESTINATIONS['learning-teacher'],
     description: 'Classes you teach',
     icon: FiBookOpen,
     accent: 'teal',
   },
   'learning-student': {
     name: 'Learning — Student',
-    link: '/learning',
+    link: ROLE_DESTINATIONS['learning-student'],
     description: 'Classes you are enrolled in',
     icon: FiBookOpen,
     accent: 'teal',
@@ -123,11 +128,6 @@ const roleMeta = (role) =>
     icon: FiUser,
     accent: 'gray',
   };
-
-const singleRoleTarget = (role, user) => {
-  if (user?.name?.toLowerCase() === 'coe@nitj.ac.in') return '/tt/coe/facultyload';
-  return roleMeta(role).link;
-};
 
 const RoleItem = ({ role, index, onOpen, descriptionOverride }) => {
   const meta = roleMeta(role);
@@ -258,17 +258,8 @@ const AllocatedRolesPage = () => {
         // issued still sit on existing user records — hide them rather than
         // offering a card that leads to a route that no longer exists.
         // Matched case-insensitively: 'editor' was stored with either casing.
-        const excludedRoles = [
-          'reviewer',
-          'author',
-          'editor',
-          'prm',
-          'doctor',
-          'patient',
-          'dm-admin',
-        ];
         const platformRoles = (userdetails.user.role || []).filter(
-          (role) => !excludedRoles.includes(String(role).toLowerCase()),
+          (role) => !EXCLUDED_ROLES.includes(String(role).toLowerCase()),
         );
         setAllocatedRoles(platformRoles);
         setUser(userdetails.user);
