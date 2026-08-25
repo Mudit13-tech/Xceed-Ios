@@ -32,6 +32,7 @@ import ImportQuestionsModal from '../components/ImportQuestionsModal';
 import { toDateTimeInput } from '../format';
 import useNotebookKernel from '../hooks/useNotebookKernel';
 import { MAX_IMPORT_CELLS, cellsFromFile } from '../notebookImport';
+import { runCellTestCases } from '../utils/testRunner';
 
 /**
  * Authoring a coding notebook.
@@ -49,6 +50,9 @@ const newCell = (type) => ({
   stdin: '',
   locked: false,
   hidden: false,
+  testCases: [],
+  testResults: [],
+  testSummary: { total: 0, passed: 0, failed: 0, passedAll: false },
   outputs: [],
   runCount: 0,
 });
@@ -64,6 +68,7 @@ export default function NotebookEditor() {
   const [packagesText, setPackagesText] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [busyTestCellId, setBusyTestCellId] = useState(null);
   // Which button is working: 'save' | 'publish' | null. One shared boolean put a
   // spinner on both of them at once, so a plain Save looked like it was
   // publishing too.
@@ -206,6 +211,55 @@ export default function NotebookEditor() {
     }
   };
 
+  /** Evaluates cell code against all its configured test cases */
+  const runTestsForCell = async (cell) => {
+    if (status !== 'ready') {
+      toast({ status: 'info', title: `Start ${label} first.`, duration: 2000 });
+      return;
+    }
+    if (!cell.testCases || cell.testCases.length === 0) {
+      toast({ status: 'info', title: 'Add at least one test case first.', duration: 2000 });
+      return;
+    }
+    if (!isC && !setupDone) {
+      for (const setup of cellsRef.current.filter((entry) => entry.hidden && entry.type === 'code')) {
+        // eslint-disable-next-line no-await-in-loop
+        await runCell('__setup__', setup.source, () => {});
+      }
+      setSetupDone(true);
+    }
+    setBusyTestCellId(cell._id);
+    try {
+      const { testResults, testSummary } = await runCellTestCases({
+        cell,
+        testCases: cell.testCases,
+        isC,
+        prelude: isC
+          ? cellsRef.current.filter((entry) => entry.hidden && entry.type === 'code').map((entry) => entry.source)
+          : [],
+        runCell,
+      });
+      patchCell(cell._id, (current) => ({
+        testResults,
+        testSummary,
+        outputs: testSummary.passedAll
+          ? (current.outputs || []).filter((o) => o.type !== 'error' || !o.text.includes('EOFError'))
+          : current.outputs,
+      }));
+      toast({
+        status: testSummary.passedAll ? 'success' : 'warning',
+        title: testSummary.passedAll
+          ? 'All test cases passed! (Yes)'
+          : `${testSummary.passed}/${testSummary.total} test cases passed (No)`,
+        duration: 3000,
+      });
+    } catch (err) {
+      toast({ status: 'error', title: 'Test execution failed', description: err.message });
+    } finally {
+      setBusyTestCellId(null);
+    }
+  };
+
   /**
    * Brings a `.py` or `.ipynb` file in as cells.
    *
@@ -312,6 +366,11 @@ export default function NotebookEditor() {
           stdin: cell.stdin || '',
           locked: cell.locked,
           hidden: cell.hidden,
+          testCases: (cell.testCases || []).map((tc) => ({
+            _id: String(tc._id || '').startsWith('new-') ? undefined : tc._id,
+            input: tc.input || '',
+            output: tc.output || '',
+          })),
           order,
         })),
       });
@@ -641,10 +700,13 @@ export default function NotebookEditor() {
               index={index}
               total={cells.length}
               language={language}
+              isEditor={true}
+              testing={String(busyTestCellId) === String(cell._id)}
               running={String(busyCellId) === String(cell._id)}
-              canRun={status === 'ready' && !busyCellId}
+              canRun={status === 'ready' && !busyCellId && !busyTestCellId}
               onChange={(patch) => patchCell(cell._id, patch)}
               onRun={() => executeCell(cell)}
+              onRunTests={() => runTestsForCell(cell)}
               onStop={stopKernel}
               onMove={(delta) => moveCell(index, delta)}
               onDelete={() => setCells((current) => current.filter((entry) => entry._id !== cell._id))}
