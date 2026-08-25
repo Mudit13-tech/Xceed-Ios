@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { loginPathFor, redirectTargetFrom } from '../authRedirect';
+import {
+  loginPathFor,
+  redirectTargetFrom,
+  defaultTargetForUser,
+  singleRoleTarget,
+} from '../authRedirect';
 
 describe('loginPathFor', () => {
   it('remembers the interrupted page, query and hash included', () => {
@@ -15,6 +20,8 @@ describe('loginPathFor', () => {
     expect(loginPathFor({ pathname: '/login', search: '', hash: '' })).toBe('/login');
     expect(loginPathFor({ pathname: '/', search: '', hash: '' })).toBe('/login');
     expect(loginPathFor({ pathname: '/userroles', search: '', hash: '' })).toBe('/login');
+    expect(loginPathFor({ pathname: '/learning', search: '', hash: '' })).toBe('/login');
+    expect(loginPathFor({ pathname: '/learning/', search: '', hash: '' })).toBe('/login');
     expect(loginPathFor(null)).toBe('/login');
   });
 
@@ -28,6 +35,59 @@ describe('loginPathFor', () => {
   });
 });
 
+describe('singleRoleTarget', () => {
+  it('maps single roles to their dedicated dashboards', () => {
+    expect(singleRoleTarget('STUDENT')).toBe('/learning');
+    expect(singleRoleTarget('student')).toBe('/learning');
+    expect(singleRoleTarget('FACULTY')).toBe('/learning');
+    expect(singleRoleTarget('faculty')).toBe('/learning');
+    expect(singleRoleTarget('admin')).toBe('/superadmin');
+    expect(singleRoleTarget('ITTC')).toBe('/tt/admin');
+    expect(singleRoleTarget('ittc')).toBe('/tt/admin');
+    expect(singleRoleTarget('DTTI')).toBe('/tt/dashboard');
+    expect(singleRoleTarget('CM')).toBe('/cm/dashboard');
+    expect(singleRoleTarget('EO')).toBe('/cf/dashboard');
+    expect(singleRoleTarget('iams-admin')).toBe('/iams-admin');
+    expect(singleRoleTarget('iams-dept-admin')).toBe('/dept-admin/dashboard');
+    expect(singleRoleTarget('lm-admin')).toBe('/learning/lm-admin');
+  });
+
+  it('routes COE user to coe faculty load page', () => {
+    expect(singleRoleTarget('FACULTY', { name: 'coe@nitj.ac.in' })).toBe('/tt/coe/facultyload');
+    expect(singleRoleTarget('ITTC', { email: 'coe@nitj.ac.in' })).toBe('/tt/coe/facultyload');
+  });
+});
+
+describe('defaultTargetForUser', () => {
+  it('routes a single-role student directly to /learning', () => {
+    expect(defaultTargetForUser({ role: ['STUDENT'] })).toBe('/learning');
+    expect(defaultTargetForUser({ role: 'STUDENT' })).toBe('/learning');
+  });
+
+  it('routes a single-role faculty directly to /learning', () => {
+    expect(defaultTargetForUser({ role: ['FACULTY'] })).toBe('/learning');
+  });
+
+  it('routes a single-role admin directly to /superadmin', () => {
+    expect(defaultTargetForUser({ role: ['admin'] })).toBe('/superadmin');
+  });
+
+  it('filters out obsolete / deprecated roles and routes accordingly', () => {
+    expect(defaultTargetForUser({ role: ['STUDENT', 'editor', 'reviewer'] })).toBe('/learning');
+  });
+
+  it('routes multi-role users to /userroles', () => {
+    expect(defaultTargetForUser({ role: ['FACULTY', 'DTTI'] })).toBe('/userroles');
+    expect(defaultTargetForUser({ role: ['admin', 'ITTC'] })).toBe('/userroles');
+  });
+
+  it('falls back to /userroles for empty or null user', () => {
+    expect(defaultTargetForUser(null)).toBe('/userroles');
+    expect(defaultTargetForUser({})).toBe('/userroles');
+    expect(defaultTargetForUser({ role: [] })).toBe('/userroles');
+  });
+});
+
 describe('redirectTargetFrom', () => {
   it('round-trips a path stashed by loginPathFor', () => {
     const search = loginPathFor({ pathname: '/tt/dashboard', search: '?dept=CSE', hash: '' })
@@ -35,9 +95,20 @@ describe('redirectTargetFrom', () => {
     expect(redirectTargetFrom(search)).toBe('/tt/dashboard?dept=CSE');
   });
 
-  it('falls back to the roles picker when nothing was remembered', () => {
+  it('falls back to the roles picker when nothing was remembered and no user given', () => {
     expect(redirectTargetFrom('')).toBe('/userroles');
     expect(redirectTargetFrom('?other=1')).toBe('/userroles');
+  });
+
+  it('resolves directly to the single role destination when user object is provided', () => {
+    expect(redirectTargetFrom('', { role: ['STUDENT'] })).toBe('/learning');
+    expect(redirectTargetFrom('?other=1', { role: ['STUDENT'] })).toBe('/learning');
+    expect(redirectTargetFrom('', { role: ['admin'] })).toBe('/superadmin');
+    expect(redirectTargetFrom('', { role: ['FACULTY', 'DTTI'] })).toBe('/userroles');
+  });
+
+  it('prefers an explicit safe redirect query over user role default', () => {
+    expect(redirectTargetFrom('?redirect=%2Ftimetable', { role: ['STUDENT'] })).toBe('/timetable');
   });
 
   it('refuses off-site targets so login cannot be used as an open redirect', () => {
@@ -45,5 +116,7 @@ describe('redirectTargetFrom', () => {
     expect(redirectTargetFrom('?redirect=%2F%2Fevil.com')).toBe('/userroles');
     expect(redirectTargetFrom('?redirect=%2F%5Cevil.com')).toBe('/userroles');
     expect(redirectTargetFrom('?redirect=javascript%3Aalert(1)')).toBe('/userroles');
+    expect(redirectTargetFrom('?redirect=https%3A%2F%2Fevil.com', { role: ['STUDENT'] })).toBe('/learning');
   });
 });
+

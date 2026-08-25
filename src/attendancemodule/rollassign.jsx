@@ -1425,9 +1425,10 @@ function ImageStatsPanel({ fixedDepartment, showToast }) {
     const [error,       setError]       = useState(null);
     const [generatedAt, setGeneratedAt] = useState(null);
 
+    const { batchYears, batchYearsLoading } = useBatchYears();
+
     const [deptFilter, setDeptFilter] = useState('');
     const [yearFilter, setYearFilter] = useState('');
-    const [expanded,   setExpanded]   = useState(null);   // batch name, or null
     const [details,    setDetails]    = useState({});     // batch → { loading, error, students }
 
     // Roll-no search runs against every batch the user may see, so a student
@@ -1454,6 +1455,30 @@ function ImageStatsPanel({ fixedDepartment, showToast }) {
 
     useEffect(() => { load(); }, [load]);
 
+    // Department + batch-year scope. Computed above the early returns so the
+    // auto-load effect below (and the render) can rely on it.
+    const inScope = rows.filter(r => !fixedDepartment || (r.department || '').toLowerCase() === fixedDepartment.toLowerCase());
+    const visible = inScope.filter(r => (
+        (!deptFilter || r.department === deptFilter)
+        && (!yearFilter || r.year === yearFilter)
+    ));
+
+    // When a department AND a batch year are both selected, load the student
+    // image-count tables right away so they render directly — no row-expand step.
+    // (When a department is fixed by the route, only the batch year is needed.)
+    useEffect(() => {
+        if ((!deptFilter && !fixedDepartment) || !yearFilter) return;
+        visible.forEach(r => {
+            if (details[r.batch]?.students || details[r.batch]?.loading) return;
+            setDetails(prev => ({ ...prev, [r.batch]: { loading: true } }));
+            fetch(`${RA_BASE}/image-stats/${encodeURIComponent(r.batch)}`)
+                .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to load students')))
+                .then(d => setDetails(prev => ({ ...prev, [r.batch]: { loading: false, students: d.students || [] } })))
+                .catch(e => setDetails(prev => ({ ...prev, [r.batch]: { loading: false, error: e.message } })));
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [deptFilter, yearFilter, visible]);
+
     // Re-read one batch straight from disk and fold the new numbers into both
     // the expanded student list and its rollup row.
     const refreshBatch = useCallback(async (batch) => {
@@ -1478,18 +1503,6 @@ function ImageStatsPanel({ fixedDepartment, showToast }) {
             setDetails(prev => ({ ...prev, [batch]: { loading: false, error: e.message } }));
         }
     }, []);
-
-    const toggleRow = (batch) => {
-        if (expanded === batch) { setExpanded(null); return; }
-        setExpanded(batch);
-        if (details[batch]?.students && !details[batch].error) return;
-
-        setDetails(prev => ({ ...prev, [batch]: { loading: true } }));
-        fetch(`${RA_BASE}/image-stats/${encodeURIComponent(batch)}`)
-            .then(r => r.ok ? r.json() : Promise.reject(new Error('Failed to load students')))
-            .then(d => setDetails(prev => ({ ...prev, [batch]: { loading: false, students: d.students || [] } })))
-            .catch(e => setDetails(prev => ({ ...prev, [batch]: { loading: false, error: e.message } })));
-    };
 
     const runSearch = (raw) => {
         const q = String(raw ?? searchInput).trim();
@@ -1527,20 +1540,14 @@ function ImageStatsPanel({ fixedDepartment, showToast }) {
         <div style={{ ...styles.card, color: '#ef4444', padding: 20, fontSize: '13px' }}>Error: {error}</div>
     );
 
-    const inScope = rows.filter(r => !fixedDepartment || (r.department || '').toLowerCase() === fixedDepartment.toLowerCase());
-    const visible = inScope.filter(r => (
-        (!deptFilter || r.department === deptFilter)
-        && (!yearFilter || r.year === yearFilter)
-    ));
-
     const allDepts = [...new Set(inScope.map(r => r.department).filter(Boolean))].sort();
-    const allYears = [...new Set(inScope.map(r => r.year).filter(Boolean))].sort().reverse();
-
-    const grand = sumCategories(visible);
-
-    const num = (val, color) => (
-        <span style={{ fontWeight: val > 0 ? 700 : 400, color: val > 0 ? color : theme.textMuted }}>{val}</span>
-    );
+    // Batch Year dropdown — mirror the ERP photo page: list configured batch
+    // years from the settings API (Batch Management), falling back to any years
+    // that actually have ground-truth rows on disk.
+    const allYears = [...new Set([
+        ...(batchYears || []),
+        ...inScope.map(r => r.year).filter(Boolean),
+    ])].filter(Boolean).sort().reverse();
 
     return (
         <div>
@@ -1560,7 +1567,7 @@ function ImageStatsPanel({ fixedDepartment, showToast }) {
                     {!fixedDepartment && (
                         <div style={{ minWidth: 180, flex: '1 1 180px' }}>
                             <label style={styles.label}>Department</label>
-                            <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)} style={styles.select}>
+                            <select value={deptFilter} onChange={e => { setDeptFilter(e.target.value); setYearFilter(''); }} style={styles.select}>
                                 <option value="">All departments</option>
                                 {allDepts.map(d => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
                             </select>
@@ -1568,8 +1575,13 @@ function ImageStatsPanel({ fixedDepartment, showToast }) {
                     )}
                     <div style={{ minWidth: 130, flex: '0 1 150px' }}>
                         <label style={styles.label}>Batch Year</label>
-                        <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} style={styles.select}>
-                            <option value="">All years</option>
+                        <select
+                            value={yearFilter}
+                            onChange={e => setYearFilter(e.target.value)}
+                            style={styles.select}
+                            disabled={batchYearsLoading}
+                        >
+                            <option value="">{batchYearsLoading ? 'Loading…' : 'All years'}</option>
                             {allYears.map(y => <option key={y} value={y}>{y}</option>)}
                         </select>
                     </div>
@@ -1596,14 +1608,6 @@ function ImageStatsPanel({ fixedDepartment, showToast }) {
                     </button>
                 </div>
 
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
-                    <StatTile label="Batches"  value={visible.length} color={theme.text} />
-                    <StatTile label="Students" value={grand.students} color={theme.text} />
-                    {IMG_CATEGORIES.map(c => (
-                        <StatTile key={c.key} label={c.label} value={grand[c.key]} color={c.color} hint={c.hint} />
-                    ))}
-                </div>
-
                 {generatedAt && (
                     <div style={{ fontSize: '11px', color: theme.textMuted, marginTop: 12 }}>
                         Counted from disk at {new Date(generatedAt).toLocaleString()} — click Recount for fresh numbers.
@@ -1620,126 +1624,43 @@ function ImageStatsPanel({ fixedDepartment, showToast }) {
                 />
             )}
 
-            {!visible.length ? (
+            {(!deptFilter && !fixedDepartment) || !yearFilter ? (
+                <div style={{ ...styles.card, textAlign: 'center', padding: '60px 20px', borderStyle: 'dashed' }}>
+                    <div style={{ fontSize: '36px', opacity: 0.3, marginBottom: 12 }}>🗂️</div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: 6 }}>Select a department and batch year to view tables</div>
+                    <div style={{ fontSize: '13px', color: theme.textMuted }}>Choose both filters above to see per-student image counts.</div>
+                </div>
+            ) : !visible.length ? (
                 <div style={{ ...styles.card, textAlign: 'center', padding: '60px 20px', borderStyle: 'dashed' }}>
                     <div style={{ fontSize: '36px', opacity: 0.3, marginBottom: 12 }}>🖼️</div>
-                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: 6 }}>No ground truth images found</div>
-                    <div style={{ fontSize: '13px', color: theme.textMuted }}>Acquire ground truth for a batch to see per-student image counts</div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: 6 }}>No ground truth images found for this batch</div>
+                    <div style={{ fontSize: '13px', color: theme.textMuted }}>Pick another department or batch year.</div>
                 </div>
             ) : (
-                <div style={{ ...styles.card, overflow: 'hidden', padding: 0 }}>
-                    <div style={{ padding: '14px 18px', borderBottom: `1px solid ${theme.border}`, background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                        <div style={{ fontWeight: 700, fontSize: '14px', color: theme.text }}>Images per Batch</div>
-                        <div style={{ fontSize: '12px', color: theme.textMuted }}>
-                            {visible.length} batch{visible.length !== 1 ? 'es' : ''} · {grand.students} students · {grand.total} images
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    {visible.map(r => (
+                        <div key={r.batch} style={{ ...styles.card, overflow: 'hidden', padding: 0 }}>
+                            <div style={{ padding: '14px 18px', borderBottom: `1px solid ${theme.border}`, background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                                <div style={{ fontWeight: 700, fontSize: '14px', color: theme.text }}>{batchLabel(r)}</div>
+                                <div style={{ fontSize: '12px', color: theme.textMuted }}>
+                                    {r.studentCount} student{r.studentCount !== 1 ? 's' : ''} · {r.total} images
+                                </div>
+                            </div>
+                            <div style={{ padding: '14px 18px' }}>
+                                <StudentImageTable
+                                    batch={r.batch}
+                                    detail={details[r.batch]}
+                                    onOpenGt={(rollNo) => setGtTarget({ batch: r.batch, rollNo })}
+                                />
+                            </div>
                         </div>
-                    </div>
-                    <div className="roll-summary-scroll">
-                        <table className="ams-table roll-summary-table">
-                            <thead>
-                                <tr>
-                                    <th>Batch</th>
-                                    <th style={{ textAlign: 'right' }}>Students</th>
-                                    {IMG_CATEGORIES.map(c => (
-                                        <th key={c.key} style={{ textAlign: 'right', color: c.color }} title={c.hint}>{c.label}</th>
-                                    ))}
-                                    <th style={{ textAlign: 'right' }}>Avg / Student</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {visible.map(r => {
-                                    const isExpanded = expanded === r.batch;
-                                    return (
-                                        <Fragment key={r.batch}>
-                                            <tr>
-                                                <td>
-                                                    <span style={{ fontWeight: 600 }}>{batchLabel(r)}</span>
-                                                    {r.emptyStudents > 0 && (
-                                                        <span title="Students with an assigned roll number but no images on disk"
-                                                            style={{ marginLeft: 8, fontSize: '10px', padding: '1px 6px', borderRadius: 99, background: theme.dangerDim, color: theme.danger }}>
-                                                            {r.emptyStudents} empty
-                                                        </span>
-                                                    )}
-                                                    {r.unassignedClusters > 0 && (
-                                                        <span title={`${r.unassignedClusters} unassigned person_XXX clusters holding ${r.unassignedImages} images`}
-                                                            style={{ marginLeft: 8, fontSize: '10px', padding: '1px 6px', borderRadius: 99, background: theme.accentDim, color: theme.accent }}>
-                                                            {r.unassignedClusters} unassigned
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td style={{ textAlign: 'right' }}>{r.studentCount}</td>
-                                                {IMG_CATEGORIES.map(c => (
-                                                    <td key={c.key} style={{ textAlign: 'right' }}>{num(r[c.key] || 0, c.color)}</td>
-                                                ))}
-                                                <td style={{ textAlign: 'right', color: theme.textMuted }}>
-                                                    {r.studentCount ? (r.total / r.studentCount).toFixed(1) : '—'}
-                                                </td>
-                                                <td style={{ textAlign: 'right' }}>
-                                                    <button
-                                                        onClick={() => toggleRow(r.batch)}
-                                                        style={{
-                                                            padding: '3px 10px', fontSize: '11px', fontWeight: 600,
-                                                            borderRadius: 6, border: `1px solid ${theme.border}`,
-                                                            background: isExpanded ? theme.accent : 'transparent',
-                                                            color: isExpanded ? '#fff' : theme.accent, cursor: 'pointer',
-                                                        }}
-                                                    >
-                                                        Students {isExpanded ? '▲' : '▼'}
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                            {isExpanded && (
-                                                <tr>
-                                                    <td colSpan={IMG_CATEGORIES.length + 4} style={{ background: theme.bg, padding: '12px 18px' }}>
-                                                        <StudentImageTable
-                                                            batch={r.batch}
-                                                            detail={details[r.batch]}
-                                                            onOpenGt={(rollNo) => setGtTarget({ batch: r.batch, rollNo })}
-                                                        />
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </Fragment>
-                                    );
-                                })}
-                            </tbody>
-                            <tfoot>
-                                <tr>
-                                    <td style={{ fontSize: '11px', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total</td>
-                                    <td style={{ textAlign: 'right' }}>{grand.students}</td>
-                                    {IMG_CATEGORIES.map(c => (
-                                        <td key={c.key} style={{ textAlign: 'right' }}>{num(grand[c.key], c.color)}</td>
-                                    ))}
-                                    <td style={{ textAlign: 'right', color: theme.textMuted }}>
-                                        {grand.students ? (grand.total / grand.students).toFixed(1) : '—'}
-                                    </td>
-                                    <td></td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
+                    ))}
                 </div>
             )}
         </div>
     );
 }
 
-function StatTile({ label, value, color, hint }) {
-    return (
-        <div title={hint} style={{
-            flex: '1 1 100px', minWidth: 92, padding: '10px 14px', borderRadius: 8,
-            background: theme.bg, border: `1px solid ${theme.border}`,
-        }}>
-            <div style={{ fontSize: '11px', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color, fontFamily: theme.fontMono }}>{value}</div>
-        </div>
-    );
-}
-
-// One count cell. The Total column is tinted by how thin the student's ground
-// truth is (red = nothing on disk, amber = under the embedding target) so the
-// students needing photos stand out even when sorted by roll number.
 function StudentCountCell({ category, student }) {
     const value = student[category.key] || 0;
     const color = category.key === 'total'

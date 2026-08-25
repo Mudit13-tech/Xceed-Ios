@@ -18,7 +18,7 @@ const isInternalPath = (path) =>
 // Where the user would end up after signing in anyway — carrying these adds a
 // query string for no benefit. (The login page itself is handled separately
 // below, because it may already carry a destination worth keeping.)
-const NOT_WORTH_RETURNING_TO = ['/', '/userroles'];
+const NOT_WORTH_RETURNING_TO = ['/', '/userroles', '/learning', '/learning/'];
 
 /**
  * The login URL to send an unauthenticated visitor to, remembering where they
@@ -39,12 +39,83 @@ export const loginPathFor = (location) => {
   return `/login?${REDIRECT_PARAM}=${encodeURIComponent(from)}`;
 };
 
+export const ROLE_DESTINATIONS = {
+  ITTC: '/tt/admin',
+  DTTI: '/tt/dashboard',
+  CM: '/cm/dashboard',
+  admin: '/superadmin',
+  EO: '/cf/dashboard',
+  FACULTY: '/learning',
+  'iams-admin': '/iams-admin',
+  'iams-dept-admin': '/dept-admin/dashboard',
+  STUDENT: '/learning',
+  'lm-admin': '/learning/lm-admin',
+  'learning-teacher': '/learning',
+  'learning-student': '/learning',
+};
+
+export const EXCLUDED_ROLES = [
+  'reviewer',
+  'author',
+  'editor',
+  'prm',
+  'doctor',
+  'patient',
+  'dm-admin',
+];
+
+/**
+ * Returns the target URL for a user with a single confirmed role.
+ */
+export const singleRoleTarget = (role, user) => {
+  const emailOrName = (user?.name || user?.email || '').toLowerCase();
+  if (emailOrName === 'coe@nitj.ac.in') return '/tt/coe/facultyload';
+  if (!role) return '#';
+  if (ROLE_DESTINATIONS[role]) return ROLE_DESTINATIONS[role];
+  const lower = String(role).toLowerCase();
+  const matchedKey = Object.keys(ROLE_DESTINATIONS).find(
+    (k) => k.toLowerCase() === lower,
+  );
+  return matchedKey ? ROLE_DESTINATIONS[matchedKey] : '#';
+};
+
+/**
+ * Resolves the immediate landing page for a user object: single-role users go
+ * straight to their respective module dashboard (e.g. /learning for students),
+ * while multi-role users go to /userroles to choose.
+ */
+export const defaultTargetForUser = (user) => {
+  if (!user) return '/userroles';
+  const rawRoles = Array.isArray(user.role)
+    ? user.role
+    : user.role
+    ? [user.role]
+    : [];
+  const activeRoles = rawRoles.filter(
+    (r) => r && !EXCLUDED_ROLES.includes(String(r).toLowerCase()),
+  );
+  if (activeRoles.length === 1) {
+    const target = singleRoleTarget(activeRoles[0], user);
+    if (target && target !== '#') return target;
+  }
+  return '/userroles';
+};
+
 /**
  * Where to go once login succeeds: the remembered page if there is a safe one,
+ * or the user's role-based landing destination (e.g. /learning for students),
  * otherwise the roles picker.
  */
-export const redirectTargetFrom = (search, fallback = '/userroles') => {
+export const redirectTargetFrom = (search, userOrFallback = '/userroles') => {
   const raw = new URLSearchParams(search || '').get(REDIRECT_PARAM);
-  if (!raw || !isInternalPath(raw)) return fallback;
-  return raw;
+  if (raw && isInternalPath(raw)) return raw;
+
+  if (typeof userOrFallback === 'object' && userOrFallback !== null) {
+    return defaultTargetForUser(userOrFallback);
+  }
+  if (typeof userOrFallback === 'string') {
+    return userOrFallback;
+  }
+  return '/userroles';
 };
+
