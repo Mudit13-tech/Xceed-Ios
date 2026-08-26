@@ -300,10 +300,20 @@ const AllocatedRolesPage = () => {
   }
 
   // Single-role users skip the picker and land on their dashboard directly.
+  //
+  // Wrapped defensively: there is no error boundary anywhere in this app, so
+  // an exception thrown from an effect unmounts the whole tree and leaves the
+  // page blank with no way back — exactly what happened when singleRoleTarget
+  // crashed on an unexpected user shape. Falling through to the picker below
+  // on any failure here keeps that a recoverable dead end instead of a wall.
   useEffect(() => {
     if (!isLoading && allocatedRoles.length === 1 && user) {
-      const target = singleRoleTarget(allocatedRoles[0], user);
-      if (target !== '#') navigate(target);
+      try {
+        const target = singleRoleTarget(allocatedRoles[0], user);
+        if (target !== '#') navigate(target);
+      } catch (error) {
+        console.error('Error resolving single-role destination:', error.message);
+      }
     }
   }, [isLoading, allocatedRoles, user, navigate]);
 

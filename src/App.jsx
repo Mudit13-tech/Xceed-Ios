@@ -57,6 +57,7 @@ const MessagesPage = lazyWithPreload(() => import('./timetableadmin/viewMessages
 // import LockedView from './timetableviewer/viewer';
 const Note = lazyWithPreload(() => import('./timetableadmin/addnote'));
 import Navbar from './components/home/Navbar';
+import ErrorBoundary from './components/ErrorBoundary';
 const PrintSummary = lazyWithPreload(() => import('./timetableadmin/printSummary'));
 const LoadDistribution = lazyWithPreload(() => import('./timetableadmin/loaddistribution'));
 const RegistrationForm = lazyWithPreload(() => import('./dashboard/register'));
@@ -719,9 +720,15 @@ function App() {
           cannot be forgotten when a route is added. The fallback is deliberately
           plain — it shows for the length of one chunk fetch, and anything
           heavier would need its own bytes to render. */}
-      <Suspense fallback={<RouteFallback />}>
-{APP_ROUTES}
-      </Suspense>
+      {/* ErrorBoundary sits outside Suspense (Suspense only catches a pending
+          lazy import, not a render crash) and outside the routes but inside
+          Navbar, so a page that crashes still leaves the navbar clickable —
+          the whole reason "reload" used to be the only way out. */}
+      <ErrorBoundary>
+        <Suspense fallback={<RouteFallback />}>
+        {APP_ROUTES}
+        </Suspense>
+      </ErrorBoundary>
       {/* <Footer/> */}
       {/* </div> */}
     </Router>
