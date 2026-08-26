@@ -88,7 +88,7 @@ export async function setupOtaUpdater() {
       console.log(`[OTA] App is up to date (Running Version ${activeVersion}).`);
     }
   } catch (error) {
-    alert('OTA CRASHED: ' + (error.message || String(error)));
+    alert('OTA CRASHED: server is down. Use NITJ WIFI');
     console.error('[OTA] Update check failed', error);
   }
 }
