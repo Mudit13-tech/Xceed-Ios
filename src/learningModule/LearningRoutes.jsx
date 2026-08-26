@@ -72,6 +72,11 @@ const BugReports = lazyWithPreload(() => import('./pages/BugReports'));
 const DevTeam = lazyWithPreload(() => import('./pages/DevTeam'));
 const LmAdmin = lazyWithPreload(() => import('./pages/LmAdmin'));
 const LmAdminFaculty = lazyWithPreload(() => import('./pages/LmAdminFaculty'));
+const QuizManual = lazyWithPreload(() => import('./pages/QuizManual'));
+const ShortsManual = lazyWithPreload(() => import('./pages/ShortsManual'));
+const AssignmentManual = lazyWithPreload(() => import('./pages/AssignmentManual'));
+const TutorialManual = lazyWithPreload(() => import('./pages/TutorialManual'));
+const CodingManual = lazyWithPreload(() => import('./pages/CodingManual'));
 
 /**
  * The whole learning module hangs off one route in App.jsx (`/learning/*`),
@@ -102,6 +107,16 @@ const LEARNING_ROUTES = (
           user and would bounce to a login page, and a student being shown "you may
           close this" has nothing left to sign in for. */}
       <Route path="seb-exit" element={<SebExit />} />
+
+      {/* Teacher manuals — public, no auth required, so they can be linked to
+          staff who have not signed in yet. Outside LearningLayout for the same
+          reason as the routes above: the layout's bootstrap fetch would bounce an
+          unauthenticated reader to the login page before they ever saw the page. */}
+      <Route path="quizmanual" element={<QuizManual standalone />} />
+      <Route path="shortsmanual" element={<ShortsManual standalone />} />
+      <Route path="assignmentmanual" element={<AssignmentManual standalone />} />
+      <Route path="tutorialmanual" element={<TutorialManual standalone />} />
+      <Route path="codingmanual" element={<CodingManual standalone />} />
 
       {/* `seb-check` is deliberately NOT a route here. It is served as plain HTML
           by the server, above the app's catch-all — see

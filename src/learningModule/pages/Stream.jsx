@@ -231,6 +231,9 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
           </Flex>
           <Text fontSize="xs" color="lmFg.muted" mt={0.5}>
             {relativeTime(item.publishedAt)}
+            {item.updated_at && new Date(item.updated_at) - new Date(item.publishedAt) > 1000 && (
+              <> · edited {relativeTime(item.updated_at)}</>
+            )}
           </Text>
           {editing ? (
             <Box mt={3}>

@@ -185,9 +185,14 @@ export default function Shorts() {
           Join with a code
         </Button>
         {isTeacher && (
-          <Button colorScheme="purple" size="sm" onClick={create} isLoading={busy === 'new'}>
-            New short
-          </Button>
+          <>
+            <Button as="a" href="/learning/shortsmanual" target="_blank" rel="noreferrer" variant="ghost" size="sm">
+              📖 Manual
+            </Button>
+            <Button colorScheme="purple" size="sm" onClick={create} isLoading={busy === 'new'}>
+              New short
+            </Button>
+          </>
         )}
       </Flex>
 

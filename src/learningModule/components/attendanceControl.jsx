@@ -59,6 +59,13 @@ const ATTENDANCE_STYLE = {
  * lands in the live panel's shut-out list with its answers, and Let in hands
  * it back — but the student watches their exam disappear, which is not
  * something to do on a mis-tap in a scrolling list.
+ *
+ * Terminate sits on the same rows for the same reason, and takes the same two
+ * taps. It used to live in the live panel, but the hand that stops a paper is
+ * the hand already holding the register: staff are walking the roster when they
+ * catch somebody, and the row in front of them is the one to act on. It ends
+ * the sitting and leaves the attendance mark alone — a student stopped for
+ * cheating was present, and the register should still say so.
  */
 export function AttendanceModal({ isOpen, onClose, classId, quiz, toast, onDone }) {
   const [rows, setRows] = useState([]);
@@ -67,10 +74,12 @@ export function AttendanceModal({ isOpen, onClose, classId, quiz, toast, onDone 
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState(null);
-  // The one row whose "Absent" has been armed but not yet confirmed. Only ever
-  // set for a student who is actually writing — marking an absence for someone
-  // who never appeared takes nothing away and needs no ceremony.
-  const [confirmId, setConfirmId] = useState(null);
+  // The one row that has been armed but not yet confirmed, and which of the two
+  // destructive acts it was armed for: `{ studentId, action }`, where action is
+  // 'absent' or 'terminate'. Only ever set for a student who is actually
+  // writing — marking an absence for someone who never appeared takes nothing
+  // away and needs no ceremony.
+  const [confirm, setConfirm] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -110,11 +119,45 @@ export function AttendanceModal({ isOpen, onClose, classId, quiz, toast, onDone 
         status: status === 'absent' ? 'warning' : 'success',
         duration: 5000,
       });
-      setConfirmId(null);
+      setConfirm(null);
       await load();
       if (onDone) onDone();
     } catch (err) {
       toast({ title: err.message || 'Could not mark that student', status: 'error', duration: 6000 });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /*
+   * Taking the paper off a student without touching the register.
+   *
+   * It lives here rather than in the live panel because this is the list staff
+   * already have open while they walk the hall: the person being stopped is
+   * being looked at, and the row under the thumb is theirs. Marking them absent
+   * would end the paper too, but the two are different records — somebody
+   * caught cheating was present — so ending the sitting is its own button and
+   * leaves the attendance mark alone.
+   *
+   * No reason is sent: the server writes "Ended by <teacher>", which is the one
+   * fact worth recording here and the only one the browser cannot get wrong.
+   */
+  const endPaper = async (row) => {
+    setBusyId(row.studentId);
+    try {
+      await lmApi.terminateQuizAttempt(classId, row.attemptId);
+      toast({
+        title: `${nameOf(row)}'s test was ended`,
+        description:
+          'Their answers are kept. They now appear under Shut out in Live control, where you can let them back in.',
+        status: 'success',
+        duration: 6000,
+      });
+      setConfirm(null);
+      await load();
+      if (onDone) onDone();
+    } catch (err) {
+      toast({ title: err.message || 'Could not end that sitting', status: 'error', duration: 6000 });
     } finally {
       setBusyId(null);
     }
@@ -160,8 +203,9 @@ export function AttendanceModal({ isOpen, onClose, classId, quiz, toast, onDone 
         <ModalHeader>
           Attendance — {quiz.title}
           <Text fontSize="xs" fontWeight="400" color="lmFg.muted">
-            Marking a student absent ends the paper they are writing. Answers are kept, and Live
-            control can let them back in.
+            Marking a student absent ends the paper they are writing, and Terminate ends it without
+            touching the register. Answers are kept either way, and Live control can let them back
+            in.
           </Text>
           {summary && (
             <HStack spacing={4} mt={2} fontWeight="400">
@@ -249,7 +293,7 @@ export function AttendanceModal({ isOpen, onClose, classId, quiz, toast, onDone 
               {shown.map((row) => {
                 const style = ATTENDANCE_STYLE[row.attendance] || ATTENDANCE_STYLE.unmarked;
                 const writing = row.attemptStatus === 'in_progress';
-                const confirming = confirmId === row.studentId;
+                const armed = confirm?.studentId === row.studentId ? confirm.action : null;
                 return (
                   <Flex
                     key={row.studentId}
@@ -290,23 +334,27 @@ export function AttendanceModal({ isOpen, onClose, classId, quiz, toast, onDone 
                       </Text>
                     </Box>
 
-                    {confirming ? (
+                    {armed ? (
                       <HStack spacing={2} w={{ base: '100%', md: 'auto' }}>
                         <Button
                           size={{ base: 'md', md: 'sm' }}
                           minH={{ base: '44px', md: 'auto' }}
                           colorScheme="red"
-                          onClick={() => mark(row, 'absent')}
+                          onClick={() =>
+                            armed === 'terminate' ? endPaper(row) : mark(row, 'absent')
+                          }
                           isLoading={busyId === row.studentId}
                           flex={{ base: '1', md: 'none' }}
                         >
-                          Absent — end their test
+                          {armed === 'terminate'
+                            ? `End ${nameOf(row).split(' ')[0]}’s test`
+                            : 'Absent — end their test'}
                         </Button>
                         <Button
                           size={{ base: 'md', md: 'sm' }}
                           minH={{ base: '44px', md: 'auto' }}
                           variant="ghost"
-                          onClick={() => setConfirmId(null)}
+                          onClick={() => setConfirm(null)}
                         >
                           Cancel
                         </Button>
@@ -333,12 +381,34 @@ export function AttendanceModal({ isOpen, onClose, classId, quiz, toast, onDone 
                              nothing to take away from a student who never
                              started, and asking anyway makes walking a roster
                              twice the work. */
-                          onClick={() => (writing ? setConfirmId(row.studentId) : mark(row, 'absent'))}
+                          onClick={() =>
+                            writing
+                              ? setConfirm({ studentId: row.studentId, action: 'absent' })
+                              : mark(row, 'absent')
+                          }
                           isLoading={busyId === row.studentId}
                           flex={{ base: '1', md: 'none' }}
                         >
                           Absent
                         </Button>
+                        {/* Only offered where there is a paper to take: a row
+                            with no live sitting has nothing to end, and the
+                            register is mostly such rows. */}
+                        {writing && row.attemptId && (
+                          <Button
+                            size={{ base: 'md', md: 'sm' }}
+                            minH={{ base: '44px', md: 'auto' }}
+                            colorScheme="orange"
+                            variant="outline"
+                            onClick={() =>
+                              setConfirm({ studentId: row.studentId, action: 'terminate' })
+                            }
+                            isLoading={busyId === row.studentId}
+                            flex={{ base: '1', md: 'none' }}
+                          >
+                            Terminate
+                          </Button>
+                        )}
                       </HStack>
                     )}
                   </Flex>

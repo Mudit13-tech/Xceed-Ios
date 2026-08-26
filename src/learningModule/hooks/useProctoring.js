@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isInFullscreen, onFullscreenChange } from '../quizStage';
+import probeEnvironment from '../environmentProbe';
 
 /**
  * Client half of the quiz proctoring options.
@@ -50,6 +51,21 @@ import { isInFullscreen, onFullscreenChange } from '../quizStage';
 // hiccup costs nothing while a blocked client is visible within a couple of
 // minutes.
 const HEARTBEAT_MS = 30 * 1000;
+
+/**
+ * How often the machine is asked to describe itself, in heartbeats.
+ *
+ * Ten beats is five minutes. The fingerprint answers the same thing every time
+ * on a machine nobody is touching, so sending it on all of them would multiply
+ * the cost of the hottest request in a sitting for no signal at all — and the
+ * server writes it only when it changes anyway.
+ *
+ * Not so rare that it is useless, either: the case worth catching is a student
+ * who starts the paper on the real machine and moves it into a VM once the
+ * invigilator has walked past, and five minutes is well inside the window where
+ * finding that out still lets somebody act on it.
+ */
+const ENV_PROBE_EVERY = 10;
 
 /**
  * Departures that could not be reported when they happened.
@@ -346,10 +362,28 @@ export default function useProctoring({
     if (!active || !handlers.current.onHeartbeat) return undefined;
 
     let cancelled = false;
+    // Counts beats so the environment probe rides every ENV_PROBE_EVERY-th one.
+    // Starts at 0 so the very first beat of a sitting carries a fingerprint:
+    // that is the reading an invigilator wants before the exam has settled, not
+    // five minutes into it.
+    let beatCount = 0;
+
     const beat = async () => {
       if (cancelled || terminatedRef.current) return;
+
+      /* Probed before the request rather than inside it, and never allowed to
+         fail: `probeEnvironment` resolves to null on anything it cannot read, so
+         a browser missing an API sends a heartbeat without a fingerprint instead
+         of sending no heartbeat at all. A missing heartbeat ends sittings. */
+      let env = null;
+      if (beatCount % ENV_PROBE_EVERY === 0) {
+        env = await probeEnvironment();
+        if (cancelled) return;
+      }
+      beatCount += 1;
+
       try {
-        const result = await handlers.current.onHeartbeat();
+        const result = await handlers.current.onHeartbeat(env);
         if (cancelled) return;
         // The server may have finalised the paper on its own clock — a tab left
         // open past the deadline finds out here rather than on the next click.

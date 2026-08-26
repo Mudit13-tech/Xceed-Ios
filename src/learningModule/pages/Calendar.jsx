@@ -138,7 +138,7 @@ function DayDetailModal({ date, items, holiday, onClose }) {
                   {holiday.remark}
                 </Text>
                 <Text fontSize="xs" color="lmFg.muted">
-                  Non-working day{holiday.session ? ` · ${holiday.session}` : ''}
+                  Non-teaching day{holiday.session ? ` · ${holiday.session}` : ''}
                 </Text>
               </Box>
               <Badge colorScheme="red">Off</Badge>
@@ -342,7 +342,7 @@ export default function Calendar() {
       ...classEntries,
       { color: 'purple.500', label: 'Quiz' },
       { color: 'teal.500', label: 'Short' },
-      { color: 'blue.200', label: 'Non-working day' },
+      { color: 'blue.200', label: 'Non-teaching day' },
     ];
   }, [data.coursework]);
 
@@ -637,7 +637,7 @@ export default function Calendar() {
 
           <Box mt={5}>
             <SectionCard
-              title="Non-working days"
+              title="Non-teaching days"
               subtitle="From the attendance module's academic session calendar."
             >
               {data.nonWorkingDays.length === 0 ? (

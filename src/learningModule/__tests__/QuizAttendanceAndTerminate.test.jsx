@@ -12,8 +12,11 @@ import { renderWithProviders } from '../../test/renderWithProviders';
  * control, because it is walked once down the whole roster — including the
  * students with no attempt at all, who are exactly the people an absence is
  * recorded for and who the live panel, built from attempts, cannot show.
- * **Terminate** lives inside Live control, next to the shut-out list it feeds:
- * ending a paper and handing it back are the same conversation.
+ * **Terminate** lives on those same register rows: the hand that stops a paper
+ * is the hand already holding the roster, and stopping somebody is not the same
+ * record as marking them absent — a student caught cheating was present — so
+ * it ends the sitting and leaves the attendance mark alone. Live control keeps
+ * the shut-out list and "Let in", and is otherwise read-only.
  *
  * What matters most here is that neither is a one-tap accident and neither is
  * final. Ending a live paper asks twice; the student lands in the shut-out list
@@ -172,7 +175,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('ending a live paper from the control panel', () => {
+describe('watching a live paper from the control panel', () => {
   it('lists who is writing, with how far through they are', async () => {
     const dialog = await openLivePanel([writing()]);
 
@@ -181,33 +184,10 @@ describe('ending a live paper from the control panel', () => {
     expect(within(dialog).getAllByText(/1\/2 answered/).length).toBeGreaterThan(0);
   });
 
-  it('asks a second time before ending a paper, and sends nothing on the first tap', async () => {
+  it('offers no way to end a paper — that moved to the register', async () => {
     const dialog = await openLivePanel([writing()]);
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Terminate' }));
-
-    expect(terminateQuizAttempt).not.toHaveBeenCalled();
-    expect(within(dialog).getByRole('button', { name: /end asha.s test/i })).toBeTruthy();
-  });
-
-  it('ends the sitting once the second tap confirms it', async () => {
-    terminateQuizAttempt.mockResolvedValue({ terminated: true });
-    const dialog = await openLivePanel([writing()]);
-
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Terminate' }));
-    fireEvent.click(within(dialog).getByRole('button', { name: /end asha.s test/i }));
-
-    await waitFor(() => expect(terminateQuizAttempt).toHaveBeenCalledWith('c1', 'a1'));
-  });
-
-  it('backs out cleanly, leaving the paper running', async () => {
-    const dialog = await openLivePanel([writing()]);
-
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Terminate' }));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-
-    expect(terminateQuizAttempt).not.toHaveBeenCalled();
-    expect(within(dialog).getByRole('button', { name: 'Terminate' })).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Terminate' })).toBeNull();
   });
 
   it('narrows both lists to the name searched for', async () => {
@@ -321,6 +301,50 @@ describe('the register', () => {
     const dialog = await openRegister([rosterRow()]);
 
     expect(within(dialog).queryByRole('button', { name: /mark all .*absent/i })).toBeNull();
+  });
+
+  it('offers Terminate on the row of somebody mid-paper', async () => {
+    const dialog = await openRegister([rosterRow()]);
+
+    expect(within(dialog).getByRole('button', { name: 'Terminate' })).toBeTruthy();
+  });
+
+  it('offers no Terminate for somebody who never started — there is no paper to take', async () => {
+    const dialog = await openRegister([
+      rosterRow({ attemptId: null, attemptStatus: null, startedAt: null }),
+    ]);
+
+    expect(within(dialog).queryByRole('button', { name: 'Terminate' })).toBeNull();
+  });
+
+  it('asks a second time before ending a paper, and sends nothing on the first tap', async () => {
+    const dialog = await openRegister([rosterRow()]);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Terminate' }));
+
+    expect(terminateQuizAttempt).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole('button', { name: /end asha.s test/i })).toBeTruthy();
+  });
+
+  it('ends the sitting once the second tap confirms it, leaving the register mark alone', async () => {
+    terminateQuizAttempt.mockResolvedValue({ terminated: true });
+    const dialog = await openRegister([rosterRow()]);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Terminate' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /end asha.s test/i }));
+
+    await waitFor(() => expect(terminateQuizAttempt).toHaveBeenCalledWith('c1', 'a1'));
+    expect(markQuizAttendance).not.toHaveBeenCalled();
+  });
+
+  it('backs out cleanly, leaving the paper running', async () => {
+    const dialog = await openRegister([rosterRow()]);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Terminate' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(terminateQuizAttempt).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole('button', { name: 'Terminate' })).toBeTruthy();
   });
 
   it('narrows the roster to the name searched for', async () => {
