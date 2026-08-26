@@ -55,6 +55,17 @@ describe('singleRoleTarget', () => {
   it('routes COE user to coe faculty load page', () => {
     expect(singleRoleTarget('FACULTY', { name: 'coe@nitj.ac.in' })).toBe('/tt/coe/facultyload');
     expect(singleRoleTarget('ITTC', { email: 'coe@nitj.ac.in' })).toBe('/tt/coe/facultyload');
+    expect(singleRoleTarget('ITTC', { email: ['coe@nitj.ac.in'] })).toBe('/tt/coe/facultyload');
+  });
+
+  // `email` is an array on the user schema and `name` is optional, so an
+  // account created without a name used to throw here and leave the role card
+  // on /userroles doing nothing when clicked.
+  it('resolves a target for a user with an array email and no name', () => {
+    const user = { role: ['ITTC', 'DTTI'], email: ['ttc@nitj.ac.in'] };
+    expect(singleRoleTarget('ITTC', user)).toBe('/tt/admin');
+    expect(singleRoleTarget('DTTI', user)).toBe('/tt/dashboard');
+    expect(defaultTargetForUser({ role: ['DTTI'], email: ['ttc@nitj.ac.in'] })).toBe('/tt/dashboard');
   });
 });
 

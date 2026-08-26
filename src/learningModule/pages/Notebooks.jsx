@@ -170,6 +170,11 @@ export default function Notebooks() {
         </Box>
         <Box flex="1" />
         {isTeacher && (
+          <Button as="a" href="/learning/codingmanual" target="_blank" rel="noreferrer" variant="ghost" size="sm">
+            📖 Manual
+          </Button>
+        )}
+        {isTeacher && (
           <Menu>
             <MenuButton
               as={Button}

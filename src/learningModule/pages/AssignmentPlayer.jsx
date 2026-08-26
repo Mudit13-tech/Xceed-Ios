@@ -188,6 +188,12 @@ export default function AssignmentPlayer() {
     [attempt],
   );
 
+  // Declared before checkOne below, which closes over it: hooks run
+  // unconditionally on every render, before the `!attempt` early return, so
+  // this cannot be pushed down next to its other use without a
+  // temporal-dead-zone crash on first render.
+  const submitted = attempt?.status !== 'in_progress';
+
   const saveDraft = async () => {
     if (!attempt || attempt.status !== 'in_progress') return;
     setBusy('save');
@@ -311,7 +317,6 @@ export default function AssignmentPlayer() {
     );
   }
 
-  const submitted = attempt.status !== 'in_progress';
   const answeredCount = responses.length;
   const byKey = new Map((attempt.responses || []).map((r) => [answerId(r.questionId, r.answerKey), r]));
 

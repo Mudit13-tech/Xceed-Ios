@@ -165,6 +165,9 @@ export default function Tutorials() {
             style={{ display: 'none' }}
             onChange={(event) => startImport([...event.target.files])}
           />
+          <Button as="a" href="/learning/tutorialmanual" target="_blank" rel="noreferrer" variant="ghost">
+            📖 Manual
+          </Button>
           <Button colorScheme="teal" onClick={create}>
             + New tutorial
           </Button>

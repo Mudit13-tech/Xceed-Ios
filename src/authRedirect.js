@@ -64,12 +64,19 @@ export const EXCLUDED_ROLES = [
   'dm-admin',
 ];
 
+// `email` is an array on the user schema and `name` is optional, so neither can
+// be lowercased directly: an account with no name would throw on `.toLowerCase`
+// and take the click handler down with it, leaving the role card doing nothing.
+const identifiers = (user) => {
+  const values = [user?.name, ...(Array.isArray(user?.email) ? user.email : [user?.email])];
+  return values.filter((v) => typeof v === 'string' && v).map((v) => v.toLowerCase());
+};
+
 /**
  * Returns the target URL for a user with a single confirmed role.
  */
 export const singleRoleTarget = (role, user) => {
-  const emailOrName = (user?.name || user?.email || '').toLowerCase();
-  if (emailOrName === 'coe@nitj.ac.in') return '/tt/coe/facultyload';
+  if (identifiers(user).includes('coe@nitj.ac.in')) return '/tt/coe/facultyload';
   if (!role) return '#';
   if (ROLE_DESTINATIONS[role]) return ROLE_DESTINATIONS[role];
   const lower = String(role).toLowerCase();

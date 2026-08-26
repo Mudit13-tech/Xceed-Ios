@@ -36,7 +36,7 @@ const ViewTimetable = ({ timetableData, tableSummary, headerDetails }) => {
     { bg: 'orange.100', text: 'orange.800', border: 'orange.300' },
     { bg: 'green.100', text: 'green.800', border: 'green.300' },
     { bg: 'red.100', text: 'red.800', border: 'red.300' },
-    { bg: 'indigo.100', text: 'indigo.800', border: 'indigo.300' },
+    { bg: 'purple.200', text: 'purple.900', border: 'purple.400' },
     { bg: 'yellow.100', text: 'yellow.800', border: 'yellow.300' },
   ];
 

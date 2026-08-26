@@ -469,7 +469,9 @@ export default function QuizAttempt() {
     active: sitting,
     attemptId,
     onViolation: (type, at, detail) => lmApi.recordViolation(classId, attemptId, type, at, detail),
-    onHeartbeat: () => lmApi.heartbeat(classId, attemptId),
+    // `env` is present only on the beats that carry a machine fingerprint; see
+    // ENV_PROBE_EVERY in useProctoring.
+    onHeartbeat: (env) => lmApi.heartbeat(classId, attemptId, env),
     onTerminated: () => reconcile(),
     // Gets whatever autosave is still holding onto the wire before the
     // violation report ends the sitting — see the note on `report` in

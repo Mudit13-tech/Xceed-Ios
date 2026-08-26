@@ -410,6 +410,12 @@ const lmApi = {
   publishQuiz: (classId, quizId, body) =>
     request(`/classes/${classId}/quizzes/${quizId}/publish`, { method: 'POST', body: body || {} }),
   quizResults: (classId, quizId) => request(`/classes/${classId}/quizzes/${quizId}/results`),
+
+  /* An invigilator confirming they have physically looked at a flagged laptop.
+     Clears the alert off the live panel without judging what they found — see
+     quizController.clearVmFlag. */
+  markVmChecked: (classId, attemptId) =>
+    request(`/classes/${classId}/attempts/${attemptId}/vm-checked`, { method: 'POST', body: {} }),
   setQuizCollaborators: (classId, quizId, emails) =>
     request(`/classes/${classId}/quizzes/${quizId}/collaborators`, { method: 'POST', body: { emails } }),
   deleteQuizResponses: (classId, quizId) =>
@@ -498,8 +504,15 @@ const lmApi = {
   // Sent on a timer while a paper is open. Its absence is the signal — a client
   // that has had its reporting blocked stops sending these, and the server notes
   // the silence.
-  heartbeat: (classId, attemptId) =>
-    request(`/classes/${classId}/attempts/${attemptId}/heartbeat`, { method: 'POST', body: {} }),
+  // `env` is the machine fingerprint from `environmentProbe`, sent on the first
+  // beat of a sitting and every few minutes after rather than on all of them —
+  // it is the same answer each time, and this is the hottest request in an exam.
+  // Omitted entirely when there is nothing new to say, so the body stays `{}`.
+  heartbeat: (classId, attemptId, env) =>
+    request(`/classes/${classId}/attempts/${attemptId}/heartbeat`, {
+      method: 'POST',
+      body: env ? { env } : {},
+    }),
   submitAttempt: (classId, attemptId, answers, expired = false) =>
     request(`/classes/${classId}/attempts/${attemptId}/submit`, {
       method: 'POST',

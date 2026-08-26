@@ -372,7 +372,7 @@ const AdminPage = () => {
       path: '/tt-manual',
       label: 'User Manual',
       icon: FiHelpCircle,
-      gradient: 'linear(to-br, indigo.500, purple.700)',
+      gradient: 'linear(to-br, blue.500, purple.700)',
       target: '_blank',
       isNew: true,
     },
@@ -385,7 +385,7 @@ const AdminPage = () => {
       path: '/tt/admin/mergeddownload',
       label: 'Institute-wide Merged PDF',
       icon: FiFileText,
-      gradient: 'linear(to-br, purple.600, indigo.800)',
+      gradient: 'linear(to-br, purple.600, blue.800)',
       isNew: true,
     },
   ];

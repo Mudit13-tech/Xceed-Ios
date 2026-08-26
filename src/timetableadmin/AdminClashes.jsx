@@ -573,208 +573,6 @@ const AdminClashes = () => {
               </Box>
             )}
 
-            {/* Departments Needing Attention (Incomplete Slots) */}
-            {clashData && Object.entries(clashData.needsAttention || {}).map(([code, deptData]) => {
-              const isExpanded = expandedAttentionDepts[code];
-              const departmentName = deptData.department || code;
-
-              return (
-                <Box 
-                  key={`attention-${code}`}
-                  bg={cardBg}
-                  borderRadius="2xl"
-                  shadow="xl"
-                  overflow="hidden"
-                  border="2px"
-                  borderColor="yellow.300"
-                >
-                  {/* Department Header */}
-                  <Flex
-                    p={{ base: 4, md: 5 }}
-                    direction={{ base: "column", sm: "row" }}
-                    gap={{ base: 3, sm: 0 }}
-                    bgGradient="linear(to-r, yellow.400, orange.500)"
-                    color="white"
-                    align="center"
-                    justify="space-between"
-                    cursor="pointer"
-                    onClick={() => toggleAttentionDepartment(code)}
-                    _hover={{ bgGradient: 'linear(to-r, yellow.500, orange.600)' }}
-                    transition="all 0.2s"
-                  >
-                    <VStack align="start" spacing={1}>
-                      <HStack>
-                        <InfoIcon />
-                        <Heading size={{ base: "md", md: "lg" }}>{departmentName}</Heading>
-                      </HStack>
-                      <Text fontSize={{ base: "xs", md: "sm" }} opacity={0.9}>
-                        Code: {code} • Incomplete Assignments
-                      </Text>
-                    </VStack>
-
-                    <HStack spacing={4} w={{ base: "100%", sm: "auto" }} justify={{ base: "space-between", sm: "flex-end" }}>
-                      <VStack align="end" spacing={0}>
-                        <Text fontSize={{ base: "2xl", md: "3xl" }} fontWeight="bold">
-                          {deptData.incompleteSlots?.length || 0}
-                        </Text>
-                        <Text fontSize={{ base: "xs", md: "sm" }} opacity={0.9}>
-                          Slot{deptData.incompleteSlots?.length !== 1 ? 's' : ''} Need{deptData.incompleteSlots?.length === 1 ? 's' : ''} Attention
-                        </Text>
-                      </VStack>
-                      <IconButton
-                        icon={isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
-                        variant="ghost"
-                        color="white"
-                        size="lg"
-                        _hover={{ bg: 'orange.500' }}
-                        aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                      />
-                    </HStack>
-                  </Flex>
-
-                  {/* Incomplete Slot Details */}
-                  <Collapse in={isExpanded} animateOpacity>
-                    <Box p={6} bg="yellow.50">
-                      <VStack spacing={4} align="stretch">
-                        {(() => {
-                          // Group consecutive periods with identical incomplete data
-                          const groupedSlots = [];
-                          const slots = deptData.incompleteSlots || [];
-                          
-                          if (slots.length === 0) return null;
-                          
-                          let currentGroup = [slots[0]];
-                          
-                          for (let i = 1; i < slots.length; i++) {
-                            const prev = slots[i - 1];
-                            const curr = slots[i];
-                            
-                            // Check if same day, consecutive slots, and identical data
-                            const sameDay = prev.day === curr.day;
-                            const prevSlotNum = parseInt(prev.slot.match(/\d+/)?.[0] || 0);
-                            const currSlotNum = parseInt(curr.slot.match(/\d+/)?.[0] || 0);
-                            const consecutive = currSlotNum === prevSlotNum + 1;
-                            const sameData = 
-                              (prev.subject || '') === (curr.subject || '') &&
-                              (prev.faculty || '') === (curr.faculty || '') &&
-                              (prev.room || '') === (curr.room || '');
-                            
-                            if (sameDay && consecutive && sameData) {
-                              currentGroup.push(curr);
-                            } else {
-                              groupedSlots.push(currentGroup);
-                              currentGroup = [curr];
-                            }
-                          }
-                          groupedSlots.push(currentGroup);
-                          
-                          return groupedSlots.map((group, idx) => {
-                            const firstSlot = group[0];
-                            const isMultiPeriod = group.length > 1;
-                            const slotRange = isMultiPeriod 
-                              ? `${group[0].slot} - ${group[group.length - 1].slot}`
-                              : firstSlot.slot;
-                            
-                            return (
-                          <Card key={idx} bg="white" borderColor="yellow.300" borderWidth="2px">
-                            <CardBody>
-                              <VStack align="stretch" spacing={3}>
-                                {/* Slot Info */}
-                                <Flex justify="space-between" align="center" flexWrap="wrap" gap={2}>
-                                  <HStack spacing={3} flexWrap="wrap">
-                                    <Badge
-                                      colorScheme="yellow"
-                                      fontSize="sm"
-                                      px={3}
-                                      py={1}
-                                      borderRadius="full"
-                                      textTransform="uppercase"
-                                    >
-                                      Incomplete
-                                    </Badge>
-                                    <Text fontWeight="bold" color="gray.700" fontSize="md">
-                                      {firstSlot.day} - {slotRange}
-                                    </Text>
-                                    {isMultiPeriod && (
-                                      <Badge colorScheme="purple" fontSize="sm" px={3} py={1}>
-                                        {group.length} Periods
-                                      </Badge>
-                                    )}
-                                    <Badge colorScheme="blue" fontSize="sm" px={3} py={1}>
-                                      Semester {firstSlot.sem}
-                                    </Badge>
-                                  </HStack>
-                                  <InfoIcon color="yellow.500" boxSize={6} />
-                                </Flex>
-
-                                {/* Current Details */}
-                                <Box bg="gray.50" p={4} borderRadius="md">
-                                  <Text fontSize="xs" color="gray.600" fontWeight="bold" mb={2}>
-                                    CURRENT ASSIGNMENT:
-                                  </Text>
-                                  <Grid templateColumns={{ base: '1fr', md: 'repeat(3, 1fr)' }} gap={4}>
-                                    <Box>
-                                      <Text fontSize="xs" color="gray.600" fontWeight="bold" mb={1}>
-                                        SUBJECT
-                                      </Text>
-                                      <Text 
-                                        fontSize="sm" 
-                                        color={firstSlot.subject ? "gray.800" : "red.500"} 
-                                        fontWeight="semibold"
-                                      >
-                                        {firstSlot.subject || '❌ Missing'}
-                                      </Text>
-                                    </Box>
-                                    <Box>
-                                      <Text fontSize="xs" color="gray.600" fontWeight="bold" mb={1}>
-                                        FACULTY
-                                      </Text>
-                                      <Text 
-                                        fontSize="sm" 
-                                        color={firstSlot.faculty ? "gray.800" : "red.500"} 
-                                        fontWeight="semibold"
-                                      >
-                                        {firstSlot.faculty || '❌ Missing'}
-                                      </Text>
-                                    </Box>
-                                    <Box>
-                                      <Text fontSize="xs" color="gray.600" fontWeight="bold" mb={1}>
-                                        ROOM
-                                      </Text>
-                                      <Text 
-                                        fontSize="sm" 
-                                        color={firstSlot.room ? "gray.800" : "red.500"} 
-                                        fontWeight="semibold"
-                                      >
-                                        {firstSlot.room || '❌ Missing'}
-                                      </Text>
-                                    </Box>
-                                  </Grid>
-                                </Box>
-
-                                {/* Issue Description */}
-                                <Alert status="warning" borderRadius="md">
-                                  <AlertIcon />
-                                  <Box>
-                                    <AlertTitle fontSize="sm">Action Required</AlertTitle>
-                                    <AlertDescription fontSize="sm">
-                                      {firstSlot.issue}
-                                    </AlertDescription>
-                                  </Box>
-                                </Alert>
-                              </VStack>
-                            </CardBody>
-                          </Card>
-                            );
-                          });
-                        })()}
-                      </VStack>
-                    </Box>
-                  </Collapse>
-                </Box>
-              );
-            })}
-
             {/* Departments with Clashes */}
             {clashData && Object.entries(clashData.clashes || {}).map(([code, deptData]) => {
               const filteredClashes = getFilteredClashes(deptData.clashes);
@@ -1019,6 +817,208 @@ const AdminClashes = () => {
                             </CardBody>
                           </Card>
                         ))}
+                      </VStack>
+                    </Box>
+                  </Collapse>
+                </Box>
+              );
+            })}
+
+            {/* Departments Needing Attention (Incomplete Slots) */}
+            {clashData && Object.entries(clashData.needsAttention || {}).map(([code, deptData]) => {
+              const isExpanded = expandedAttentionDepts[code];
+              const departmentName = deptData.department || code;
+
+              return (
+                <Box 
+                  key={`attention-${code}`}
+                  bg={cardBg}
+                  borderRadius="2xl"
+                  shadow="xl"
+                  overflow="hidden"
+                  border="2px"
+                  borderColor="yellow.300"
+                >
+                  {/* Department Header */}
+                  <Flex
+                    p={{ base: 4, md: 5 }}
+                    direction={{ base: "column", sm: "row" }}
+                    gap={{ base: 3, sm: 0 }}
+                    bgGradient="linear(to-r, yellow.400, orange.500)"
+                    color="white"
+                    align="center"
+                    justify="space-between"
+                    cursor="pointer"
+                    onClick={() => toggleAttentionDepartment(code)}
+                    _hover={{ bgGradient: 'linear(to-r, yellow.500, orange.600)' }}
+                    transition="all 0.2s"
+                  >
+                    <VStack align="start" spacing={1}>
+                      <HStack>
+                        <InfoIcon />
+                        <Heading size={{ base: "md", md: "lg" }}>{departmentName}</Heading>
+                      </HStack>
+                      <Text fontSize={{ base: "xs", md: "sm" }} opacity={0.9}>
+                        Code: {code} • Incomplete Assignments
+                      </Text>
+                    </VStack>
+
+                    <HStack spacing={4} w={{ base: "100%", sm: "auto" }} justify={{ base: "space-between", sm: "flex-end" }}>
+                      <VStack align="end" spacing={0}>
+                        <Text fontSize={{ base: "2xl", md: "3xl" }} fontWeight="bold">
+                          {deptData.incompleteSlots?.length || 0}
+                        </Text>
+                        <Text fontSize={{ base: "xs", md: "sm" }} opacity={0.9}>
+                          Slot{deptData.incompleteSlots?.length !== 1 ? 's' : ''} Need{deptData.incompleteSlots?.length === 1 ? 's' : ''} Attention
+                        </Text>
+                      </VStack>
+                      <IconButton
+                        icon={isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
+                        variant="ghost"
+                        color="white"
+                        size="lg"
+                        _hover={{ bg: 'orange.500' }}
+                        aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                      />
+                    </HStack>
+                  </Flex>
+
+                  {/* Incomplete Slot Details */}
+                  <Collapse in={isExpanded} animateOpacity>
+                    <Box p={6} bg="yellow.50">
+                      <VStack spacing={4} align="stretch">
+                        {(() => {
+                          // Group consecutive periods with identical incomplete data
+                          const groupedSlots = [];
+                          const slots = deptData.incompleteSlots || [];
+                          
+                          if (slots.length === 0) return null;
+                          
+                          let currentGroup = [slots[0]];
+                          
+                          for (let i = 1; i < slots.length; i++) {
+                            const prev = slots[i - 1];
+                            const curr = slots[i];
+                            
+                            // Check if same day, consecutive slots, and identical data
+                            const sameDay = prev.day === curr.day;
+                            const prevSlotNum = parseInt(prev.slot.match(/\d+/)?.[0] || 0);
+                            const currSlotNum = parseInt(curr.slot.match(/\d+/)?.[0] || 0);
+                            const consecutive = currSlotNum === prevSlotNum + 1;
+                            const sameData = 
+                              (prev.subject || '') === (curr.subject || '') &&
+                              (prev.faculty || '') === (curr.faculty || '') &&
+                              (prev.room || '') === (curr.room || '');
+                            
+                            if (sameDay && consecutive && sameData) {
+                              currentGroup.push(curr);
+                            } else {
+                              groupedSlots.push(currentGroup);
+                              currentGroup = [curr];
+                            }
+                          }
+                          groupedSlots.push(currentGroup);
+                          
+                          return groupedSlots.map((group, idx) => {
+                            const firstSlot = group[0];
+                            const isMultiPeriod = group.length > 1;
+                            const slotRange = isMultiPeriod 
+                              ? `${group[0].slot} - ${group[group.length - 1].slot}`
+                              : firstSlot.slot;
+                            
+                            return (
+                          <Card key={idx} bg="white" borderColor="yellow.300" borderWidth="2px">
+                            <CardBody>
+                              <VStack align="stretch" spacing={3}>
+                                {/* Slot Info */}
+                                <Flex justify="space-between" align="center" flexWrap="wrap" gap={2}>
+                                  <HStack spacing={3} flexWrap="wrap">
+                                    <Badge
+                                      colorScheme="yellow"
+                                      fontSize="sm"
+                                      px={3}
+                                      py={1}
+                                      borderRadius="full"
+                                      textTransform="uppercase"
+                                    >
+                                      Incomplete
+                                    </Badge>
+                                    <Text fontWeight="bold" color="gray.700" fontSize="md">
+                                      {firstSlot.day} - {slotRange}
+                                    </Text>
+                                    {isMultiPeriod && (
+                                      <Badge colorScheme="purple" fontSize="sm" px={3} py={1}>
+                                        {group.length} Periods
+                                      </Badge>
+                                    )}
+                                    <Badge colorScheme="blue" fontSize="sm" px={3} py={1}>
+                                      Semester {firstSlot.sem}
+                                    </Badge>
+                                  </HStack>
+                                  <InfoIcon color="yellow.500" boxSize={6} />
+                                </Flex>
+
+                                {/* Current Details */}
+                                <Box bg="gray.50" p={4} borderRadius="md">
+                                  <Text fontSize="xs" color="gray.600" fontWeight="bold" mb={2}>
+                                    CURRENT ASSIGNMENT:
+                                  </Text>
+                                  <Grid templateColumns={{ base: '1fr', md: 'repeat(3, 1fr)' }} gap={4}>
+                                    <Box>
+                                      <Text fontSize="xs" color="gray.600" fontWeight="bold" mb={1}>
+                                        SUBJECT
+                                      </Text>
+                                      <Text 
+                                        fontSize="sm" 
+                                        color={firstSlot.subject ? "gray.800" : "red.500"} 
+                                        fontWeight="semibold"
+                                      >
+                                        {firstSlot.subject || '❌ Missing'}
+                                      </Text>
+                                    </Box>
+                                    <Box>
+                                      <Text fontSize="xs" color="gray.600" fontWeight="bold" mb={1}>
+                                        FACULTY
+                                      </Text>
+                                      <Text 
+                                        fontSize="sm" 
+                                        color={firstSlot.faculty ? "gray.800" : "red.500"} 
+                                        fontWeight="semibold"
+                                      >
+                                        {firstSlot.faculty || '❌ Missing'}
+                                      </Text>
+                                    </Box>
+                                    <Box>
+                                      <Text fontSize="xs" color="gray.600" fontWeight="bold" mb={1}>
+                                        ROOM
+                                      </Text>
+                                      <Text 
+                                        fontSize="sm" 
+                                        color={firstSlot.room ? "gray.800" : "red.500"} 
+                                        fontWeight="semibold"
+                                      >
+                                        {firstSlot.room || '❌ Missing'}
+                                      </Text>
+                                    </Box>
+                                  </Grid>
+                                </Box>
+
+                                {/* Issue Description */}
+                                <Alert status="warning" borderRadius="md">
+                                  <AlertIcon />
+                                  <Box>
+                                    <AlertTitle fontSize="sm">Action Required</AlertTitle>
+                                    <AlertDescription fontSize="sm">
+                                      {firstSlot.issue}
+                                    </AlertDescription>
+                                  </Box>
+                                </Alert>
+                              </VStack>
+                            </CardBody>
+                          </Card>
+                            );
+                          });
+                        })()}
                       </VStack>
                     </Box>
                   </Collapse>

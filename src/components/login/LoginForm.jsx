@@ -109,10 +109,27 @@ const LoginForm = () => {
         credentials: 'include',
       })
 
-      const responseData = await response.json()
+      // Read the body as text first, then parse. `response.json()` throws on an
+      // empty or non-JSON body — a gateway's HTML 502 page, a proxy timeout, a
+      // response cut short — and that throw lands in the catch below, where it
+      // used to be reported as the same blank "An error occurred" as a dropped
+      // connection. Those are different faults with different fixes, so they are
+      // told apart here and the status is shown rather than swallowed.
+      const rawBody = await response.text()
+      let responseData
+      try {
+        responseData = rawBody ? JSON.parse(rawBody) : {}
+      } catch (parseError) {
+        console.error('Login: non-JSON response', response.status, rawBody.slice(0, 500))
+        setMessage(
+          `Login failed: the server replied with ${response.status} ${response.statusText || ''} `.trim() +
+            ' (not a valid response). Please tell an administrator.',
+        )
+        return
+      }
 
       if (!response.ok) {
-        setMessage(`Login failed: ${responseData.message}`);
+        setMessage(`Login failed: ${responseData.message || `${response.status} ${response.statusText}`}`);
         if (responseData.captchaRequired) {
           // A fresh image when the last one expired or was already spent; the
           // same one stays put after a simple typo, so the user is not made to
@@ -131,13 +148,37 @@ const LoginForm = () => {
       queryClient.clear();
 
       setMessage(responseData.message);
+
+      // Working out *where* to go must not be able to fail the sign-in that has
+      // already succeeded. This block used to sit in the same `try` as the fetch,
+      // so anything thrown while resolving the destination — a role shape the
+      // redirect map does not expect, a user object missing a field it reads —
+      // surfaced as the network error below: the account was signed in, the token
+      // was stored, and the form still said the request had failed. The worst case
+      // here is landing on the roles picker, which every account can use.
+      let target = '/userroles'
+      try {
+        target = redirectTargetFrom(location.search, responseData.user) || '/userroles'
+      } catch (redirectError) {
+        console.error('Login: could not resolve redirect target', redirectError, responseData.user)
+      }
       // A full load rather than a client-side navigation: the platform navbar
       // reads the session once on mount, so a router push would land on the
       // target with a stale "signed out" navbar that bounces straight back.
-      window.location.href = redirectTargetFrom(location.search, responseData.user);
+      window.location.href = target;
     } catch (error) {
       console.error('An error occurred', error)
-      setMessage('An error occurred. Please try again.')
+      // A rejected fetch is the browser saying the request never completed:
+      // the server is unreachable, the origin is not on the CORS allow-list, or
+      // the connection was dropped. It is never a wrong password — the server
+      // answers those with a 401 and a message — so saying so saves the user
+      // retrying credentials that were fine.
+      const unreachable = error instanceof TypeError
+      setMessage(
+        unreachable
+          ? 'Could not reach the sign-in service. This is not a password problem — check your connection, or tell an administrator the server did not respond.'
+          : 'An error occurred. Please try again.',
+      )
     } finally {
       setIsLoading(false)
     }

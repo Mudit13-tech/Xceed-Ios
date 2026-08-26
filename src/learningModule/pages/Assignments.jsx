@@ -166,6 +166,9 @@ export default function Assignments() {
               style={{ display: 'none' }}
               onChange={(event) => startImport([...event.target.files])}
             />
+            <Button as="a" href="/learning/assignmentmanual" target="_blank" rel="noreferrer" variant="ghost">
+              📖 Manual
+            </Button>
             <Button colorScheme="teal" onClick={create}>
               + New assignment
             </Button>

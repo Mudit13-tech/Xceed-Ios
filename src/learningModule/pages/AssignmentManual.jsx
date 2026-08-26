@@ -1,0 +1,443 @@
+import { useState, useEffect } from 'react';
+import getEnvironment from '../../getenvironment';
+
+import shotList from '../manualAssets/assignments/list.png';
+import shotEditor from '../manualAssets/assignments/editor.png';
+import shotPreview from '../manualAssets/assignments/preview.png';
+import shotPlayer from '../manualAssets/assignments/player.png';
+import shotResults from '../manualAssets/assignments/results.png';
+import shotImport from '../manualAssets/assignments/import.png';
+
+// ── design tokens ─────────────────────────────────────────────────────────────
+const T = {
+    text: '#1a1f3c', textMuted: '#7b84ab', accent: '#c2410c',
+    border: '#e4e8f5', bg: '#f5f6fb', fontBody: "'Inter', system-ui, sans-serif",
+    success: '#10b981', danger: '#ef4444', warning: '#f59e0b',
+};
+
+const cssReset = `
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: ${T.bg}; }
+    code { font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: #eef0fb; padding: 1px 5px; border-radius: 4px; }
+    .agm-page { padding: 24px 28px; max-width: 900px; margin: 0 auto; }
+    .agm-card { padding: 28px 32px; }
+    .agm-topbar { padding: 10px 28px; }
+    .agm-title { font-size: 20px; }
+    .agm-subtitle { font-size: 13px; }
+    @media (max-width: 640px) {
+        .agm-page { padding: 16px 12px; }
+        .agm-card { padding: 16px 14px; }
+        .agm-topbar { padding: 10px 12px; }
+        .agm-title { font-size: 16px; }
+        .agm-subtitle { font-size: 11px; }
+        .agm-header { flex-wrap: wrap; }
+        code { word-break: break-word; }
+    }
+`;
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+function Note({ type = 'info', children }) {
+    const cfg = {
+        info:    { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8', icon: 'ℹ' },
+        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: '⚠' },
+        tip:     { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: '💡' },
+        key:     { bg: '#fff7ed', border: '#fed7aa', color: '#9a3412', icon: '🔑' },
+        danger:  { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: '⛔' },
+    };
+    const s = cfg[type] || cfg.info;
+    return (
+        <div style={{
+            background: s.bg, border: `1px solid ${s.border}`, borderRadius: 8,
+            padding: '10px 14px', marginBottom: 16,
+            display: 'flex', gap: 10, alignItems: 'flex-start',
+        }}>
+            <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{s.icon}</span>
+            <div style={{ fontSize: 13, color: s.color, lineHeight: 1.65 }}>{children}</div>
+        </div>
+    );
+}
+
+function SectionTitle({ children }) {
+    return (
+        <div style={{
+            fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+            letterSpacing: '0.08em', color: T.textMuted,
+            borderBottom: `1px solid ${T.border}`,
+            paddingBottom: 6, marginBottom: 16, marginTop: 28,
+        }}>{children}</div>
+    );
+}
+
+function Shot({ src, alt, caption }) {
+    return (
+        <div style={{ margin: '10px 0 22px' }}>
+            <img src={src} alt={alt} style={{
+                width: '100%', display: 'block', borderRadius: 10,
+                border: '1px solid #e4e8f5', boxShadow: '0 1px 8px rgba(26,31,60,0.10)',
+            }} />
+            {caption && (
+                <div style={{ fontSize: 12, color: T.textMuted, marginTop: 8, textAlign: 'center' }}>{caption}</div>
+            )}
+        </div>
+    );
+}
+
+// ── tabs ──────────────────────────────────────────────────────────────────────
+
+const TABS = [
+    { id: 'overview', label: 'Overview',         icon: '📐' },
+    { id: 'create',   label: 'Create & Author',   icon: '✏️' },
+    { id: 'settings', label: 'Settings',          icon: '⚙️' },
+    { id: 'import',   label: 'Import a Paper',    icon: '📄' },
+    { id: 'student',  label: 'What Students See', icon: '👀' },
+    { id: 'grade',    label: 'Grading & Results', icon: '✅' },
+    { id: 'gotchas',  label: 'Gotchas',           icon: '⚠️' },
+];
+
+// ── tab content ───────────────────────────────────────────────────────────────
+
+function TabOverview() {
+    return (
+        <div>
+            <Note type="key">
+                An Assignment is <strong>assessed numerical work</strong>: every student gets their own
+                randomly-drawn variables in the same question, and their answer is marked automatically by
+                evaluating your formula against their own numbers — not by comparing to one shared answer
+                key. It is the graded counterpart of Tutorials, built on the exact same engine.
+            </Note>
+
+            <Shot src={shotList} alt="Assignments list for a class"
+                caption="The Assignments tab. Note the subtitle — this module is not file/text coursework; it's formula-graded numeric problems." />
+
+            <SectionTitle>Not the Same as "Coursework"</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                If you're looking for open-ended, file-or-text submissions with a rubric and manual grading,
+                that's the separate <strong>Coursework</strong> area of the class, not this one. Assignments
+                here means specifically: one formula, one set of variables, auto-graded, every student sees
+                different numbers.
+            </div>
+
+            <SectionTitle>How This Differs from a Tutorial</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9 }}>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    <li>Typically <strong>one attempt</strong>, not several — this is meant to count.</li>
+                    <li><strong>Instant feedback defaults off</strong>, and turning it on is a deliberate trade-off you make per assignment (see Settings).</li>
+                    <li>There is no separate "results release" gate — a submission is marked and visible the moment it lands.</li>
+                </ul>
+                Everything else — variables, formulas, tolerances, the editor, the paper-import pipeline —
+                is identical to Tutorials. If a step below feels familiar, that's why.
+            </div>
+        </div>
+    );
+}
+
+function TabCreate() {
+    return (
+        <div>
+            <SectionTitle>Starting a New Assignment</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, marginBottom: 8 }}>
+                Click <strong>+ New assignment</strong>. As with Tutorials, this doesn't open a blank form —
+                it creates the assignment immediately with a fully worked example (variables, a formula,
+                tolerances, all filled in) so you're editing something real from the first click.
+            </div>
+
+            <SectionTitle>Authoring a Question</SectionTitle>
+            <Shot src={shotEditor} alt="Assignment editor showing a question with variables, answers and a sub-question"
+                caption="The question editor — identical shape to Tutorials: Prompt, Variables, Answers, an optional sub-question, Constraint, Hint, Worked solution." />
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    <li><strong>Prompt</strong> — write with <code>{'{{name}}'}</code> placeholders, inserted via the toolbar buttons rather than typed by hand (typing braces directly into the rich-text editor risks invisible formatting breaking the substitution).</li>
+                    <li><strong>Variables</strong> — Integer, Decimal, or From a list, each with a range/step and a unit.</li>
+                    <li><strong>Answers</strong> — a formula, evaluated per student; set <strong>Tol %</strong> and/or <strong>Tol ±</strong> (whichever is looser wins).</li>
+                    <li><strong>Sub-questions</strong> — optional parts sharing the same drawn variables, each independently marked.</li>
+                    <li><strong>Constraint</strong> — re-draws values until it's true; use it to exclude divide-by-zero or nonsensical combinations.</li>
+                </ul>
+            </div>
+
+            <SectionTitle>Rolling Sample Papers</SectionTitle>
+            <Shot src={shotPreview} alt="Preview panel showing three rolled sample assignment papers"
+                caption="Roll samples before publishing — three different draws with their computed answers, so you catch a bad formula before a class sees it." />
+            <Note type="warning">
+                Preview rolls against the <strong>saved</strong> assignment, never unsaved edits — save first,
+                or a fix you just made won't show up in the sample.
+            </Note>
+
+            <SectionTitle>Reusing Questions</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
+                <strong>📥 Import questions</strong> copies whole questions from another assignment — this
+                class or any other you teach — as independent copies with no shared history.
+            </div>
+        </div>
+    );
+}
+
+function TabSettings() {
+    return (
+        <div>
+            <SectionTitle>Assignment Details</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    <li><strong>Attempts allowed</strong> — usually left at 1 for something assessed, but the field is there if you want a second chance policy.</li>
+                    <li><strong>Pass mark (%)</strong> — feeds the pass-rate stat in Results.</li>
+                    <li><strong>Due date</strong> — advisory only. Nothing locks submission at this time; a late submission is simply flagged.</li>
+                    <li><strong>Fresh numbers on each retry</strong>, <strong>Show the worked solution after submitting</strong>, <strong>Show hints</strong> — same meaning as in Tutorials.</li>
+                </ul>
+            </div>
+            <Note type="warning">
+                Two different due-date fields exist and don't automatically sync: the one inside the
+                editor's Settings is the persisted value, saved by the normal Save button. The list page also
+                shows an inline date picker next to an unpublished assignment's row — that one is only sent
+                when you click Publish from the list, and it will silently override whatever you set in the
+                editor if you fill it in there too. Set the due date in one place, not both.
+            </Note>
+
+            <SectionTitle>Instant Feedback</SectionTitle>
+            <Note type="danger">
+                <strong>Tick each answer as the student types it</strong> is <strong>off by default</strong>
+                for exactly the reason it matters more here than in a tutorial: a numeric free-response
+                answer with live correctness feedback can be brute-forced by trial and error, and this is
+                supposed to be a real assessment. If you do turn it on, set a sensible
+                <strong> Checks allowed per answer</strong> — the expected value itself is never revealed
+                through this channel, only right/wrong and remaining tries, and every attempt is still
+                recorded so you can see who worked through it honestly.
+            </Note>
+        </div>
+    );
+}
+
+function TabImport() {
+    return (
+        <div>
+            <Note type="key">
+                Identical pipeline to Tutorials: read the paper, choose variables, derive answers, merge —
+                and the merge always produces an <strong>unpublished</strong> assignment you still have to
+                open, check, and release yourself.
+            </Note>
+
+            <Shot src={shotImport} alt="Reviewing an imported assignment draft, with verified and mismatched answer badges"
+                caption="One verified answer (green — reproduced the paper's own printed value) and one mismatch (red) in the same import. Treat the mismatch as a hold, not a suggestion." />
+
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <ol style={{ margin: 0, paddingLeft: 18 }}>
+                    <li><strong>Upload</strong> one or more PDF/image files via <strong>📄 Import from a paper</strong>.</li>
+                    <li><strong>✨ Suggest variables</strong> — the model proposes which numbers to turn into variables, showing what the paper originally used.</li>
+                    <li><strong>✨ Derive answers from the paper</strong> — writes the formula and checks it by substituting the paper's own numbers back in.</li>
+                    <li>Read every verification badge: <strong style={{ color: '#166534' }}>✓ matches the paper</strong>, or one of the not-yet-trustworthy states (mismatch / not checkable / will not parse). <strong>Nothing blocks merging an unverified answer</strong> — this is a check for you to act on, not a safeguard the system enforces.</li>
+                    <li><strong>Roll samples</strong> here shows the answer key alongside the draws — deliberately, since this screen is teacher-only.</li>
+                    <li><strong>Merge</strong> your selected questions into a new, unpublished assignment.</li>
+                </ol>
+            </div>
+        </div>
+    );
+}
+
+function TabStudent() {
+    return (
+        <div>
+            <Shot src={shotPlayer} alt="Student view of an assignment in progress, with their own drawn values"
+                caption="A student's paper — one attempt allowed, their own numbers, an explicit warning before submitting." />
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    <li>Students see their own drawn values and may type an unevaluated expression (e.g. <code>2*pi*3</code>) instead of a decimal.</li>
+                    <li><strong>Submitting asks for confirmation and warns marking is immediate</strong> — "Submit this assignment? Your answers will be marked immediately." Once accepted, it's final for that attempt.</li>
+                    <li>A standing note reminds them their figures are unique — comparing final answers with a classmate tells them nothing, comparing method does.</li>
+                </ul>
+            </div>
+        </div>
+    );
+}
+
+function TabGrade() {
+    return (
+        <div>
+            <Shot src={shotResults} alt="Assignment results page showing method analysis and per-student attempts"
+                caption="Results. Because there's no single correct answer across the class, Method analysis reports success per answer slot rather than per option." />
+
+            <SectionTitle>What "Grading" Means Here</SectionTitle>
+            <Note type="warning">
+                There is <strong>no rubric and no per-criterion scoring</strong> — marking is entirely
+                automatic, by formula. The only thing you do by hand is a blunt
+                <strong> Adjust marks (+/−)</strong> on a specific attempt, with an optional
+                <strong> Feedback</strong> note that appears on the student's own paper as "Teacher
+                feedback." There's no bulk regrade across the whole cohort — if you find a bad formula after
+                publishing, fix it in the editor for future sittings and adjust the students already
+                affected individually.
+            </Note>
+
+            <SectionTitle>Reading the Method-analysis Table</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
+                A low success rate on one answer slot, across many different numbers, points at the method
+                the class used — not at arithmetic mistakes on any one paper. Use it the same way you'd use
+                a per-question breakdown on a quiz, just aimed at technique rather than a specific value.
+            </div>
+        </div>
+    );
+}
+
+function TabGotchas() {
+    const items = [
+        'Deleting an assignment is irreversible and takes every student\'s attempt with it — there is no separate "delete responses only" option.',
+        'The due date can be set in two places (the editor\'s Settings, or the list page\'s inline picker at publish time) and they don\'t automatically agree — the list page\'s value wins whenever you publish from there.',
+        'Submitting is explicitly a one-way door for the student, and marking happens instantly — there\'s no teacher "release grades" step gating what they see afterward.',
+        'Grading by hand is limited to one additive/subtractive adjustment plus a feedback note per attempt — no rubric, no per-criterion scoring, no bulk regrade.',
+        'Preview — both in the editor and in the import screen — always rolls against the saved server copy, never unsaved changes in front of you.',
+        'A constraint that excludes too much (or is contradictory) doesn\'t error up front — it only ever shows up as an "unanswerable question" warning after a draw, in Preview or in Results.',
+        'The rich-text prompt editor can silently corrupt a hand-typed {{variable}} placeholder with embedded formatting — always use the Insert variable buttons.',
+        'Import verification badges are advisory only; nothing stops a still-unverified or mismatched answer from being merged and later published to the class.',
+        'This is not the same feature as "Coursework" — if you want file/text submissions with a rubric, look there instead.',
+    ];
+    return (
+        <div>
+            <Note type="warning">
+                Nine things worth knowing before an assignment goes out for marks.
+            </Note>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {items.map((text, i) => (
+                    <div key={i} style={{
+                        background: '#fff', border: '1px solid #fde68a', borderLeft: '4px solid #f59e0b',
+                        borderRadius: 8, padding: '10px 14px',
+                        display: 'flex', gap: 10, alignItems: 'flex-start',
+                    }}>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: '#92400e', flexShrink: 0 }}>{i + 1}.</span>
+                        <span style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>{text}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+// ── main component ────────────────────────────────────────────────────────────
+
+export default function AssignmentManual({ standalone = false }) {
+    const [tab, setTab] = useState('overview');
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+    useEffect(() => {
+        if (!standalone) return;
+        fetch(`${getEnvironment()}/user/getuser/`, { credentials: 'include' })
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { if (d) setIsAuthenticated(true); })
+            .catch(() => {});
+    }, [standalone]);
+
+    const TAB_CONTENT = {
+        overview: <TabOverview />,
+        create:   <TabCreate />,
+        settings: <TabSettings />,
+        import:   <TabImport />,
+        student:  <TabStudent />,
+        grade:    <TabGrade />,
+        gotchas:  <TabGotchas />,
+    };
+
+    const activeIdx = TABS.findIndex(t => t.id === tab);
+
+    return (
+        <>
+            <style>{cssReset}</style>
+            {standalone && (
+                <div style={{
+                    position: 'sticky', top: 0, zIndex: 100,
+                    background: '#7c2d12', borderBottom: '1px solid #9a3412',
+                    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                    justifyContent: 'space-between',
+                }} className="agm-topbar">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{
+                            width: 30, height: 30, borderRadius: 8,
+                            background: 'linear-gradient(135deg,#c2410c,#ea580c)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 15,
+                        }}>📐</div>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: '#fed7aa' }}>
+                            Assignments — Teacher Manual
+                        </span>
+                    </div>
+                    {isAuthenticated && (
+                        <a href="/learning" style={{
+                            fontSize: 13, fontWeight: 600, color: '#fdba74',
+                            textDecoration: 'none', padding: '6px 14px',
+                            border: '1px solid #9a3412', borderRadius: 7,
+                        }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#9a3412'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                            ← Go to Dashboard
+                        </a>
+                    )}
+                </div>
+            )}
+            <div className="agm-page" style={{ fontFamily: T.fontBody }}>
+                <div className="agm-header" style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{
+                        width: 42, height: 42, borderRadius: 10,
+                        background: 'linear-gradient(135deg,#c2410c,#ea580c)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 20,
+                    }}>📐</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="agm-title" style={{ fontWeight: 800, color: T.text }}>Assignments — Teacher Manual</div>
+                        <div className="agm-subtitle" style={{ color: T.textMuted, marginTop: 2 }}>
+                            Assessed numerical work, formula-graded per student · XCEED Learning
+                        </div>
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 32, overflowX: 'auto', paddingBottom: 4 }}>
+                    {TABS.map((t, i) => {
+                        const active = tab === t.id;
+                        const done = activeIdx > i;
+                        const bgColor = active ? T.accent : done ? '#10b981' : '#f1f5f9';
+                        const numColor = active || done ? '#fff' : '#94a3b8';
+                        const labelColor = active ? T.accent : done ? '#10b981' : T.textMuted;
+                        return (
+                            <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', flex: i < TABS.length - 1 ? 1 : 'none', minWidth: 0 }}>
+                                <div
+                                    onClick={() => setTab(t.id)}
+                                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', minWidth: 72, flexShrink: 0 }}
+                                >
+                                    <div style={{
+                                        width: 36, height: 36, borderRadius: '50%',
+                                        background: bgColor,
+                                        border: active ? `2px solid ${T.accent}` : done ? '2px solid #10b981' : '2px solid #e2e8f0',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontSize: 13, fontWeight: 800, color: numColor,
+                                        transition: 'all .2s', flexShrink: 0,
+                                        boxShadow: active ? `0 0 0 4px ${T.accent}18` : 'none',
+                                    }}>
+                                        {done ? '✓' : i === 0 ? '★' : i}
+                                    </div>
+                                    <div style={{
+                                        marginTop: 6, fontSize: 10, fontWeight: active ? 700 : 500,
+                                        color: labelColor, textAlign: 'center', lineHeight: 1.3,
+                                        maxWidth: 68, wordBreak: 'break-word',
+                                    }}>
+                                        {t.label}
+                                    </div>
+                                </div>
+                                {i < TABS.length - 1 && (
+                                    <div style={{
+                                        flex: 1, height: 2, marginTop: 17, minWidth: 12,
+                                        background: done ? '#10b981' : '#e2e8f0',
+                                        transition: 'background .2s',
+                                    }} />
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+
+                <div className="agm-card" style={{
+                    background: '#fff', borderRadius: 12,
+                    border: '1px solid #e4e8f5',
+                    boxShadow: '0 1px 6px rgba(26,31,60,0.05)',
+                    overflowX: 'auto',
+                }}>
+                    {TAB_CONTENT[tab]}
+                </div>
+            </div>
+        </>
+    );
+}

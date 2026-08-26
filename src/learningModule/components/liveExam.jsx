@@ -53,6 +53,25 @@ import { formatDateTime, relativeTime } from '../format';
 export const nameOf = (person) => person.studentName || person.studentEmail || 'Unknown student';
 
 
+/**
+ * The roll number, on its own line under the name.
+ *
+ * Below rather than trailing the name because a hall is ordered by roll number,
+ * not alphabetically: staff reading this panel are matching a number off a
+ * seating list, and a badge that starts wherever the name happens to end sits
+ * in a different place on every row. Under the name it forms a column the eye
+ * can run down.
+ */
+export function RollNumber({ value }) {
+  if (!value) return null;
+  return (
+    <Badge fontSize="0.6rem" mt={0.5}>
+      {value}
+    </Badge>
+  );
+}
+
+
 /** How often the invigilation view re-reads the server while it is open. */
 export const LIVE_POLL_MS = 15000;
 
@@ -115,6 +134,23 @@ export function AttemptFlags({ attempt }) {
         <Tooltip label={`Left fullscreen ${fullscreen} time(s)`}>
           <Badge colorScheme="purple" fontSize="0.6rem" mr={1}>
             fs {fullscreen}
+          </Badge>
+        </Tooltip>
+      )}
+      {/* Loudest badge on the row, and the only one that asks staff to leave
+          their seat. A paper requiring SEB refuses to start in a VM at all, so
+          this means SEB itself has been modified — see services/vmSignals. */}
+      {attempt.vmSuspicion?.flaggedAt && !attempt.vmSuspicion?.clearedAt && (
+        <Tooltip label={(attempt.vmSuspicion.reasons || []).join('; ') || 'Environment looks virtual'}>
+          <Badge colorScheme="red" variant="solid" fontSize="0.6rem" mr={1}>
+            check laptop
+          </Badge>
+        </Tooltip>
+      )}
+      {attempt.vmSuspicion?.clearedAt && (
+        <Tooltip label={`Laptop checked by ${attempt.vmSuspicion.clearedBy || 'staff'}`}>
+          <Badge colorScheme="gray" fontSize="0.6rem" mr={1}>
+            checked
           </Badge>
         </Tooltip>
       )}
@@ -353,17 +389,115 @@ export function LiveClock({ quiz, writing, submitted, shutOut, now }) {
  * computed from when their paper was taken off them, so nobody does arithmetic
  * under pressure, and the number stays editable for what the clock cannot know.
  */
+/**
+ * The laptops an invigilator should walk over and look at.
+ *
+ * Sits above everything else in the panel, and is the only section that appears
+ * and disappears on its own — an empty one renders nothing at all rather than
+ * an empty state, because a permanent "no suspicious machines" card is a thing
+ * staff learn to stop reading, and this is the one card that must be noticed the
+ * moment it changes.
+ *
+ * The reasons are spelled out on the row rather than hidden behind a tooltip.
+ * Whoever is holding this is walking towards a student and needs to know what
+ * they are looking for before they arrive: "graphics adapter reports VMware" and
+ * "only 2 CPU cores visible" call for different conversations, and neither is
+ * legible as a score.
+ *
+ * Nothing here can terminate a sitting. That control exists elsewhere in this
+ * panel and stays there deliberately — an alert built from values the suspect
+ * machine reported about itself is a reason to look, never a reason to act, and
+ * putting "end their exam" on this row would invite exactly the mistake the
+ * whole design is arranged to prevent.
+ */
+function SuspectMachines({ attempts, classId, onDone, toast }) {
+  const [busyId, setBusyId] = useState(null);
+
+  const flagged = attempts.filter(
+    (attempt) =>
+      attempt.status === 'in_progress'
+      && attempt.vmSuspicion?.flaggedAt
+      && !attempt.vmSuspicion?.clearedAt,
+  );
+
+  if (flagged.length === 0) return null;
+
+  const markChecked = async (attempt) => {
+    setBusyId(attempt._id);
+    try {
+      await lmApi.markVmChecked(classId, attempt._id);
+      toast({
+        title: `${nameOf(attempt)}'s laptop marked as checked`,
+        description: 'The alert is cleared. Their sitting is untouched — end it from the list below if you need to.',
+        status: 'success',
+        duration: 5000,
+      });
+      onDone();
+    } catch (err) {
+      toast({ title: err.message || 'Could not clear the alert', status: 'error', duration: 6000 });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <Alert status="error" variant="left-accent" flexDirection="column" alignItems="stretch" mb={4} borderRadius="md">
+      <Flex align="center" mb={2}>
+        <AlertIcon />
+        <Text fontSize="sm" fontWeight="700">
+          {flagged.length} laptop{flagged.length === 1 ? '' : 's'} to check now
+        </Text>
+      </Flex>
+      <Text fontSize="xs" color="lmFg.muted" mb={3}>
+        These machines describe themselves as virtual. A paper requiring Safe Exam Browser cannot
+        start inside a VM, so this means SEB has been modified — but the machine is the only witness,
+        so please look at the screen yourself before doing anything.
+      </Text>
+      <Stack spacing={3}>
+        {flagged.map((attempt) => (
+          <Box key={attempt._id} borderWidth="1px" borderRadius="md" p={3} bg="lmBg.surface">
+            <Flex align="center" gap={2} wrap="wrap" mb={1}>
+              <Text fontSize="sm" fontWeight="600">
+                {nameOf(attempt)}
+              </Text>
+              {attempt.rollNumber && (
+                <Badge fontSize="0.6rem" colorScheme="blue">
+                  {attempt.rollNumber}
+                </Badge>
+              )}
+              <Text fontSize="xs" color="lmFg.muted">
+                flagged {relativeTime(attempt.vmSuspicion.flaggedAt)}
+              </Text>
+            </Flex>
+            <Stack spacing={0} mb={2}>
+              {(attempt.vmSuspicion.reasons || []).map((reason) => (
+                <Text key={reason} fontSize="xs" color="lmFg.muted">
+                  • {reason}
+                </Text>
+              ))}
+            </Stack>
+            <Button
+              size="xs"
+              variant="outline"
+              isLoading={busyId === attempt._id}
+              onClick={() => markChecked(attempt)}
+            >
+              I have checked this laptop
+            </Button>
+          </Box>
+        ))}
+      </Stack>
+    </Alert>
+  );
+}
+
+
 export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast }) {
   const { quiz, attempts = [] } = data || { quiz: null };
   const [minutesById, setMinutesById] = useState({});
   const [busyId, setBusyId] = useState(null);
   const [sebExempt, setSebExempt] = useState(false);
   const [search, setSearch] = useState('');
-  // Who the invigilator has asked to stop, held until they confirm. Ending a
-  // paper by hand is the one irreversible-feeling act on this panel — it is
-  // undoable, but the student watches their exam vanish first — so it does not
-  // happen on a single tap in a list that is re-sorting under the finger.
-  const [confirmEnd, setConfirmEnd] = useState(null);
   useSecondTick(isOpen);
 
   useEffect(() => {
@@ -394,29 +528,6 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
     [attempt.studentName, attempt.studentEmail, attempt.rollNumber]
       .filter(Boolean)
       .some((field) => String(field).toLowerCase().includes(term));
-
-  const endPaper = async (attempt) => {
-    setBusyId(attempt._id);
-    try {
-      // No reason sent: the server writes "Ended by <teacher>", which is the
-      // one fact worth recording here and the only one the browser cannot get
-      // wrong. A free-text box belongs on the results page, not on a control
-      // being used one-handed in a hall.
-      await lmApi.terminateQuizAttempt(classId, attempt._id);
-      toast({
-        title: `${nameOf(attempt)}'s test was ended`,
-        description: 'Their answers are kept. They now appear under Shut out, where you can let them back in.',
-        status: 'success',
-        duration: 6000,
-      });
-      setConfirmEnd(null);
-      onDone();
-    } catch (err) {
-      toast({ title: err.message || 'Could not end that sitting', status: 'error', duration: 6000 });
-    } finally {
-      setBusyId(null);
-    }
-  };
 
   const letIn = async (attempt) => {
     const minutes =
@@ -471,6 +582,15 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
         </ModalHeader>
         <ModalCloseButton />
         <ModalBody pb={6}>
+          {/* Above the search box on purpose: this is the one thing in the panel
+              that staff must see without having looked for it. */}
+          <SuspectMachines
+            attempts={attempts}
+            classId={classId}
+            onDone={onDone}
+            toast={toast}
+          />
+
           {/* One box, filtering every list below it. In a hall of two hundred
               the panel is opened because one person put their hand up, and the
               only thing staff know about them is their name. */}
@@ -483,97 +603,6 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
               aria-label="Search students"
             />
           </FormControl>
-
-          {/* ---- who is writing right now ---- */}
-          <SectionCard
-            title={`Writing now (${writing.length})`}
-            subtitle="Ending a paper keeps every answer. They move to Shut out, where Let in hands it straight back."
-            mb={4}
-          >
-            {writing.length === 0 ? (
-              <Text fontSize="sm" color="lmFg.muted">
-                Nobody is sitting the test at the moment.
-              </Text>
-            ) : writing.filter(matches).length === 0 ? (
-              <Text fontSize="sm" color="lmFg.muted">
-                No student writing now matches “{search}”.
-              </Text>
-            ) : (
-              <Stack spacing={2}>
-                {writing.filter(matches).map((attempt) => {
-                  const total = attempt.questionCount || quiz.questions.length || 1;
-                  const confirming = confirmEnd === attempt._id;
-                  return (
-                    <Flex
-                      key={attempt._id}
-                      gap={3}
-                      align={{ base: 'stretch', md: 'center' }}
-                      direction={{ base: 'column', md: 'row' }}
-                      borderWidth="1px"
-                      borderRadius="md"
-                      p={3}
-                    >
-                      <Box flex="1" minW={0}>
-                        <Flex align="center" gap={2} wrap="wrap">
-                          <Text fontSize="sm" fontWeight="600">
-                            {nameOf(attempt)}
-                          </Text>
-                          {attempt.rollNumber && (
-                            <Badge fontSize="0.6rem">{attempt.rollNumber}</Badge>
-                          )}
-                          <AttemptFlags attempt={attempt} />
-                        </Flex>
-                        <Text fontSize="xs" color="lmFg.subtle" wordBreak="break-all">
-                          {attempt.studentEmail || 'no email on file'}
-                        </Text>
-                        <Text fontSize="xs" color="lmFg.muted">
-                          {attempt.answeredCount}/{total} answered
-                          {attempt.startedAt ? ` · started ${relativeTime(attempt.startedAt)}` : ''}
-                        </Text>
-                      </Box>
-
-                      {/* Two taps, and the second one says what it does. The
-                          first tap only arms this row — nothing has reached the
-                          server yet, and tapping any other row disarms it. */}
-                      {confirming ? (
-                        <HStack spacing={2} w={{ base: '100%', md: 'auto' }}>
-                          <Button
-                            size={{ base: 'md', md: 'sm' }}
-                            minH={{ base: '44px', md: 'auto' }}
-                            colorScheme="red"
-                            onClick={() => endPaper(attempt)}
-                            isLoading={busyId === attempt._id}
-                            flex={{ base: '1', md: 'none' }}
-                          >
-                            End {nameOf(attempt).split(' ')[0]}’s test
-                          </Button>
-                          <Button
-                            size={{ base: 'md', md: 'sm' }}
-                            minH={{ base: '44px', md: 'auto' }}
-                            variant="ghost"
-                            onClick={() => setConfirmEnd(null)}
-                          >
-                            Cancel
-                          </Button>
-                        </HStack>
-                      ) : (
-                        <Button
-                          size={{ base: 'md', md: 'sm' }}
-                          minH={{ base: '44px', md: 'auto' }}
-                          colorScheme="red"
-                          variant="outline"
-                          onClick={() => setConfirmEnd(attempt._id)}
-                          w={{ base: '100%', md: 'auto' }}
-                        >
-                          Terminate
-                        </Button>
-                      )}
-                    </Flex>
-                  );
-                })}
-              </Stack>
-            )}
-          </SectionCard>
 
           {/* ---- who has been shut out ---- */}
           <SectionCard
@@ -630,6 +659,7 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
                             </Badge>
                             <AttemptFlags attempt={attempt} />
                           </Flex>
+                          <RollNumber value={attempt.rollNumber} />
                           <Text fontSize="xs" color="lmFg.subtle">
                             {attempt.studentEmail || 'no email on file'}
                           </Text>
@@ -700,6 +730,7 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
                 ? 'Counted over the students writing at this moment.'
                 : 'This quiz does not require Safe Exam Browser.'
             }
+            mb={4}
           >
             {!sebRequired ? (
               <Text fontSize="sm" color="lmFg.muted">
@@ -734,6 +765,7 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
                             <Text fontSize="sm" fontWeight="600">
                               {nameOf(attempt)}
                             </Text>
+                            <RollNumber value={attempt.rollNumber} />
                             <Text fontSize="xs" color="lmFg.muted" wordBreak="break-all">
                               {attempt.studentEmail || '—'}
                             </Text>
@@ -783,6 +815,11 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
                               <Badge colorScheme="red" fontSize="0.6rem" ml={2}>
                                 no SEB
                               </Badge>
+                              {/* Its own line inside the cell, so the column of
+                                  numbers lines up the way the seating list does. */}
+                              <Box>
+                                <RollNumber value={attempt.rollNumber} />
+                              </Box>
                             </Td>
                             <Td fontSize="xs">{attempt.studentEmail || '—'}</Td>
                             <Td>
@@ -808,6 +845,57 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
               </>
             )}
           </SectionCard>
+          {/* ---- who is writing right now ---- */}
+          <SectionCard
+            title={`Writing now (${writing.length})`}
+            subtitle="Read-only. To stop somebody’s paper, use Attendance — the register lists the whole hall. They then appear under Shut out, where Let in hands the paper straight back."
+          >
+            {writing.length === 0 ? (
+              <Text fontSize="sm" color="lmFg.muted">
+                Nobody is sitting the test at the moment.
+              </Text>
+            ) : writing.filter(matches).length === 0 ? (
+              <Text fontSize="sm" color="lmFg.muted">
+                No student writing now matches “{search}”.
+              </Text>
+            ) : (
+              <Stack spacing={2}>
+                {writing.filter(matches).map((attempt) => {
+                  const total = attempt.questionCount || quiz.questions.length || 1;
+                  return (
+                    <Flex
+                      key={attempt._id}
+                      gap={3}
+                      align={{ base: 'stretch', md: 'center' }}
+                      direction={{ base: 'column', md: 'row' }}
+                      borderWidth="1px"
+                      borderRadius="md"
+                      p={3}
+                    >
+                      <Box flex="1" minW={0}>
+                        <Flex align="center" gap={2} wrap="wrap">
+                          <Text fontSize="sm" fontWeight="600">
+                            {nameOf(attempt)}
+                          </Text>
+                          <AttemptFlags attempt={attempt} />
+                        </Flex>
+                        <RollNumber value={attempt.rollNumber} />
+                        <Text fontSize="xs" color="lmFg.subtle" wordBreak="break-all">
+                          {attempt.studentEmail || 'no email on file'}
+                        </Text>
+                        <Text fontSize="xs" color="lmFg.muted">
+                          {attempt.answeredCount}/{total} answered
+                          {attempt.startedAt ? ` · started ${relativeTime(attempt.startedAt)}` : ''}
+                        </Text>
+                      </Box>
+
+                    </Flex>
+                  );
+                })}
+              </Stack>
+            )}
+          </SectionCard>
+
         </ModalBody>
         <ModalFooter>
           <Button size="sm" variant="ghost" onClick={onClose}>

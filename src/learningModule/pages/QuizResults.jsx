@@ -1176,6 +1176,245 @@ function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto
 }
 
 
+/**
+ * Who answered a question far faster than the rest of the cohort did.
+ *
+ * The comparison behind every row is per question and median-based (see the
+ * server's timingAnomalies.js); this panel's job is to keep what that means
+ * legible — above all that an empty table can mean "nothing stood out" *or*
+ * "nothing here could be measured", which are opposite conclusions and must
+ * never be allowed to look alike.
+ */
+function TimingPanel({ report }) {
+  if (!report) {
+    return (
+      <EmptyState
+        title="No timing data"
+        description="Submission timings appear once students have finished the paper."
+      />
+    );
+  }
+
+  const { coverage, flags, questionStats, studentSummary, thresholds } = report;
+  const fmt = (value) => (value === null || value === undefined ? '—' : `${value}s`);
+
+  return (
+    <Stack spacing={4}>
+      {coverage.clientTimedOnly ? (
+        <Alert status="info" borderRadius="md" fontSize="sm">
+          <AlertIcon />
+          <Box>
+            <Text fontWeight="600">Timing anomalies need one-at-a-time delivery.</Text>
+            <Text fontSize="xs" mt={1}>
+              This paper shows every question on one page, so per-question times are
+              reported by the student&apos;s browser rather than measured by the server.
+              A student could send any number they liked, so those times appear in the
+              CSV export but are never used to flag anybody. Switch the quiz to
+              one-at-a-time delivery to compare students on times the server measured
+              itself.
+            </Text>
+          </Box>
+        </Alert>
+      ) : (
+        <Alert status={flags.length ? 'warning' : 'success'} borderRadius="md" fontSize="sm">
+          <AlertIcon />
+          <Box>
+            <Text fontWeight="600">
+              {flags.length
+                ? `${flags.length} submission${flags.length === 1 ? '' : 's'} stood out against the cohort.`
+                : 'No submission stood out against its cohort.'}
+            </Text>
+            <Text fontSize="xs" mt={1}>
+              Measured on {coverage.timedResponses} of {coverage.totalResponses} responses.
+              A question is flagged when a student&apos;s time falls{' '}
+              {thresholds.fastThreshold} deviations below the median for that same
+              question, or under {thresholds.absoluteFastSeconds}s outright. Questions
+              answered by fewer than {thresholds.minSample} students are listed but never
+              flagged — there is no cohort to compare against.
+            </Text>
+          </Box>
+        </Alert>
+      )}
+
+      {flags.length > 0 && (
+        <SectionCard
+          title="Flagged submissions"
+          subtitle="Fast and correct is the combination worth a look: fast and wrong is usually a student giving up on the question, which the arithmetic cannot tell apart but the mark can."
+        >
+          <Box overflowX="auto">
+            <Table size="sm">
+              <Thead>
+                <Tr>
+                  <Th>Student</Th>
+                  <Th>Question</Th>
+                  <Th isNumeric>Took</Th>
+                  <Th isNumeric>Cohort median</Th>
+                  <Th isNumeric>Deviations</Th>
+                  <Th>Correct</Th>
+                  <Th>Flag</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                {flags.map((flag, index) => (
+                  <Tr key={`${flag.studentId}-${flag.questionId}-${index}`}>
+                    <Td fontSize="xs">
+                      <Text fontWeight="600">
+                        {flag.studentName || flag.studentEmail || 'Unknown'}
+                      </Text>
+                      {flag.rollNumber && (
+                        <Text color="lmFg.muted" fontSize="0.65rem">
+                          {flag.rollNumber}
+                        </Text>
+                      )}
+                    </Td>
+                    <Td maxW="240px">
+                      <Text fontSize="xs" noOfLines={2}>
+                        {richTextToPlain(flag.question || '')}
+                      </Text>
+                    </Td>
+                    <Td isNumeric fontSize="xs" fontWeight="700">
+                      {fmt(flag.seconds)}
+                    </Td>
+                    <Td isNumeric fontSize="xs">
+                      {fmt(flag.medianSeconds)}
+                    </Td>
+                    <Td isNumeric fontSize="xs">
+                      {flag.deviations === null ? '—' : flag.deviations}
+                    </Td>
+                    <Td fontSize="xs">{flag.correct ? 'Yes' : 'No'}</Td>
+                    <Td>
+                      <Tooltip label={flag.reason} fontSize="xs">
+                        <Badge
+                          colorScheme={
+                            flag.severity === 'high'
+                              ? 'red'
+                              : flag.severity === 'low'
+                                ? 'orange'
+                                : 'blue'
+                          }
+                          fontSize="0.6rem"
+                        >
+                          {flag.severity === 'high'
+                            ? 'Review'
+                            : flag.kind === 'fast'
+                              ? 'Fast'
+                              : 'Slow'}
+                        </Badge>
+                      </Tooltip>
+                    </Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          </Box>
+        </SectionCard>
+      )}
+
+      {studentSummary.length > 0 && (
+        <SectionCard
+          title="Students flagged more than once"
+          subtitle="One fast answer is noise. A pattern of them across a paper is the thing actually worth acting on."
+        >
+          <Box overflowX="auto">
+            <Table size="sm">
+              <Thead>
+                <Tr>
+                  <Th>Student</Th>
+                  <Th isNumeric>Fast</Th>
+                  <Th isNumeric>Fast and correct</Th>
+                  <Th isNumeric>Unusually slow</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                {studentSummary.map((row) => (
+                  <Tr key={row.studentId}>
+                    <Td fontSize="xs">
+                      <Text fontWeight="600">
+                        {row.studentName || row.studentEmail || 'Unknown'}
+                      </Text>
+                      {row.rollNumber && (
+                        <Text color="lmFg.muted" fontSize="0.65rem">
+                          {row.rollNumber}
+                        </Text>
+                      )}
+                    </Td>
+                    <Td isNumeric fontSize="xs">
+                      {row.fastCount}
+                    </Td>
+                    <Td
+                      isNumeric
+                      fontSize="xs"
+                      fontWeight={row.fastCorrectCount > 1 ? '700' : undefined}
+                    >
+                      {row.fastCorrectCount}
+                    </Td>
+                    <Td isNumeric fontSize="xs">
+                      {row.slowCount}
+                    </Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          </Box>
+        </SectionCard>
+      )}
+
+      {questionStats.length > 0 && (
+        <SectionCard
+          title="Time spent per question"
+          subtitle="The spread each flag is measured against. A question everybody answers in three seconds has a tight spread and flags nobody, which is the point of comparing within a question rather than across the paper."
+        >
+          <Box overflowX="auto">
+            <Table size="sm">
+              <Thead>
+                <Tr>
+                  <Th>Question</Th>
+                  <Th isNumeric>Responses</Th>
+                  <Th isNumeric>Median</Th>
+                  <Th isNumeric>Mean</Th>
+                  <Th isNumeric>Fastest</Th>
+                  <Th isNumeric>Slowest</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                {questionStats.map((stat) => (
+                  <Tr key={stat.questionId}>
+                    <Td maxW="260px">
+                      <Text fontSize="xs" noOfLines={2}>
+                        {richTextToPlain(stat.question || '')}
+                      </Text>
+                      {!stat.cohortSufficient && (
+                        <Badge fontSize="0.55rem" colorScheme="gray">
+                          too few to compare
+                        </Badge>
+                      )}
+                    </Td>
+                    <Td isNumeric fontSize="xs">
+                      {stat.sampleSize}
+                    </Td>
+                    <Td isNumeric fontSize="xs">
+                      {fmt(stat.medianSeconds)}
+                    </Td>
+                    <Td isNumeric fontSize="xs">
+                      {fmt(stat.meanSeconds)}
+                    </Td>
+                    <Td isNumeric fontSize="xs">
+                      {fmt(stat.minSeconds)}
+                    </Td>
+                    <Td isNumeric fontSize="xs">
+                      {fmt(stat.maxSeconds)}
+                    </Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          </Box>
+        </SectionCard>
+      )}
+    </Stack>
+  );
+}
+
 export default function QuizResults() {
   const outlet = useOutletContext();
   const params = useParams();
@@ -1281,6 +1520,10 @@ export default function QuizResults() {
   const perSection = data?.perSection || [];
   const results = data?.results || { released: data?.resultsVisible };
   const distribution = data?.distribution || [];
+  const timingAnomalies = data?.timingAnomalies;
+  // Only the fast ones earn a badge: an unusually slow answer is a study
+  // signal, not something an invigilator needs pulled to the front of the page.
+  const timingFlagCount = (timingAnomalies?.flags || []).filter((flag) => flag.kind === 'fast').length;
 
   const filteredAttempts = useMemo(() => {
     if (!attempts) return [];
@@ -1525,6 +1768,14 @@ export default function QuizResults() {
           </Tab>
           <Tab fontSize="sm">Student analysis ({attempts.length})</Tab>
           <Tab fontSize="sm">Question analysis</Tab>
+          <Tab fontSize="sm">
+            Timing
+            {timingFlagCount > 0 && (
+              <Badge ml={2} colorScheme="red" fontSize="0.6rem">
+                {timingFlagCount}
+              </Badge>
+            )}
+          </Tab>
           {perSection.length > 0 && <Tab fontSize="sm">Sections</Tab>}
           <Tab fontSize="sm">Distribution</Tab>
         </TabList>
@@ -1794,6 +2045,11 @@ export default function QuizResults() {
                 </Table>
               </Box>
             </SectionCard>
+          </TabPanel>
+
+          {/* ---- timing anomalies ---- */}
+          <TabPanel px={0}>
+            <TimingPanel report={timingAnomalies} />
           </TabPanel>
 
           {/* ---- sections ---- */}
