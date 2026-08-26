@@ -19,6 +19,7 @@ import { loginPathFor } from '../../authRedirect';
 import { ErrorState, Loading } from '../components/common';
 import useStableNavigate from '../hooks/useStableNavigate';
 import NotificationPreferencesModal from '../components/NotificationPreferencesModal';
+import SubjectAttendanceStrip from '../components/SubjectAttendanceStrip';
 
 // People and Settings are about the class rather than its work, so they sit in
 // the header beside the class code instead of competing with the teaching tabs.
@@ -242,6 +243,11 @@ export default function ClassLayout() {
         className={klass.name}
         isTeacher={isTeacher}
       />
+
+      {/* ── Single-Line Subject Attendance Strip for Enrolled Students (Issue #1928) ── */}
+      {!isTeacher && (
+        <SubjectAttendanceStrip klass={klass} />
+      )}
 
       <Flex
         gap={1}
