@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   VStack,
   HStack,
@@ -9,69 +9,74 @@ import {
   Heading,
   useToast,
   Link,
-  Box
+  Box,
+  Avatar
 } from '@chakra-ui/react';
-import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { redirectTargetFrom } from '../../authRedirect';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { useBiometricAuth } from '../../utils/useBiometricAuth';
 
-const PinEntry = ({ onCancel, isSetup, onSetupComplete, loginToken }) => {
+const PinEntry = ({
+  onCancel,
+  isSetup,
+  onSetupComplete,
+  activeAccount,
+  saveAccount,
+  removeAccount,
+  updateLastActiveEmail
+}) => {
   const [pin, setPin] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { isAvailable, authenticate } = useBiometricAuth();
 
   const handlePinComplete = async (value) => {
     setPin(value);
   };
 
   const handleSubmit = async (currentPin = pin) => {
-    // If called via onClick, currentPin is a React Event, so fallback to the state 'pin'
     if (typeof currentPin !== 'string') currentPin = pin;
-    
+
     if (currentPin.length !== 4) return;
     setIsLoading(true);
-    
+
     try {
       if (isSetup) {
-        // Save PIN and Token to Secure Storage
-        await SecureStoragePlugin.set({ key: 'user_pin', value: currentPin });
-        await SecureStoragePlugin.set({ key: 'auth_token', value: loginToken });
-        
+        // Save PIN and Token to Secure Storage via account manager
+        await saveAccount({ ...activeAccount, pin: currentPin });
+
         toast({
           title: 'PIN configured successfully.',
           status: 'success',
           duration: 3000,
           isClosable: true,
         });
-        
-        // Also ensure token is in localStorage so rest of app works
-        localStorage.setItem('token', loginToken);
-        
+
+        // Ensure token is in localStorage so rest of app works
+        localStorage.setItem('token', activeAccount.token);
+
         if (onSetupComplete) {
           onSetupComplete();
         } else {
-          window.location.href = '/userroles';
+          window.location.href = redirectTargetFrom(location.search) || '/userroles';
         }
       } else {
         // Verify PIN
-        const storedPinResult = await SecureStoragePlugin.get({ key: 'user_pin' });
-        const storedPin = storedPinResult.value;
-        
+        const storedPin = activeAccount?.pin;
+
         if (currentPin === storedPin) {
           // Success! Restore token to localStorage and navigate
-          const storedTokenResult = await SecureStoragePlugin.get({ key: 'auth_token' });
-          if (storedTokenResult.value) {
-             localStorage.setItem('token', storedTokenResult.value);
-             queryClient.invalidateQueries({ queryKey: ['user', 'details'] });
-             window.location.href = redirectTargetFrom(location.search) || '/userroles';
+          if (activeAccount?.token) {
+            if (updateLastActiveEmail) {
+              await updateLastActiveEmail(activeAccount.email);
+            }
+            localStorage.setItem('token', activeAccount.token);
+            queryClient.invalidateQueries({ queryKey: ['user', 'details'] });
+            window.location.href = redirectTargetFrom(location.search) || '/userroles';
           } else {
-             throw new Error('Token missing');
+            throw new Error('Token missing from saved account');
           }
         } else {
           toast({
@@ -86,7 +91,7 @@ const PinEntry = ({ onCancel, isSetup, onSetupComplete, loginToken }) => {
     } catch (error) {
       console.error(error);
       const errMsg = (error.message || '').toLowerCase();
-      if (errMsg.includes('token') || errMsg.includes('not found') || errMsg.includes('invalid') || errMsg.includes('exist')) {
+      if (errMsg.includes('token') || errMsg.includes('not found')) {
         handleResetPin();
         return;
       }
@@ -105,8 +110,9 @@ const PinEntry = ({ onCancel, isSetup, onSetupComplete, loginToken }) => {
 
   const handleResetPin = async () => {
     try {
-      await SecureStoragePlugin.remove({ key: 'user_pin' });
-      await SecureStoragePlugin.remove({ key: 'auth_token' });
+      if (removeAccount && activeAccount) {
+        await removeAccount(activeAccount.email);
+      }
       localStorage.removeItem('token');
       if (onCancel) onCancel();
     } catch (e) {
@@ -115,25 +121,45 @@ const PinEntry = ({ onCancel, isSetup, onSetupComplete, loginToken }) => {
     }
   };
 
+  const handleSwitchAccount = () => {
+    if (onCancel) onCancel();
+  };
+
   return (
     <VStack spacing={6} align="center" w="100%">
-      <Heading size="md" color="white">{isSetup ? 'Create a 4-Digit PIN' : 'Enter your PIN'}</Heading>
-      <Text color="gray.300" textAlign="center">
-        {isSetup 
+      {activeAccount && (
+        <VStack spacing={1} mb={2}>
+          <Avatar size="lg" name={activeAccount.name || activeAccount.email} bg="blue.500" color="white" />
+          <Heading size="md" color="gray.800" mt={2}>
+            Welcome, {activeAccount.name ? activeAccount.name.split(' ')[0] : 'User'}!
+          </Heading>
+          <Text color="gray.500" fontSize="sm">{activeAccount.email}</Text>
+        </VStack>
+      )}
+
+      <Heading 
+        size="md" 
+        color="gray.800" 
+        display={activeAccount && !isSetup ? 'none' : 'block'}
+      >
+        {isSetup ? 'Create a 4-Digit PIN' : 'Enter your PIN'}
+      </Heading>
+      <Text color="gray.500" textAlign="center">
+        {isSetup
           ? 'Set a PIN for quick access in the future.'
           : 'Use your PIN to quickly access your account.'}
       </Text>
-      
+
       <HStack>
-        <PinInput 
-          type="number" 
-          value={pin} 
+        <PinInput
+          type="number"
+          value={pin}
           onChange={(val) => {
             setPin(val);
             if (val.length === 4 && !isSetup) {
               handleSubmit(val);
             }
-          }} 
+          }}
           onComplete={handlePinComplete}
           mask
           autoFocus
@@ -163,16 +189,17 @@ const PinEntry = ({ onCancel, isSetup, onSetupComplete, loginToken }) => {
             <Link color="blue.300" onClick={handleResetPin} fontSize="sm">
               Forgot PIN? Login with Password
             </Link>
-            <Link color="blue.300" onClick={handleResetPin} fontSize="sm">
+            <Link color="blue.300" onClick={handleSwitchAccount} fontSize="sm">
               Switch Account
             </Link>
           </VStack>
         ) : (
-          <Link color="gray.400" onClick={() => {
-            // Skip PIN setup
-            localStorage.setItem('token', loginToken);
+          <Link color="gray.400" onClick={async () => {
+            // Skip PIN setup - save account without PIN
+            await saveAccount({ ...activeAccount, pin: null });
+            localStorage.setItem('token', activeAccount.token);
             if (onSetupComplete) onSetupComplete();
-            else window.location.href = '/userroles';
+            else window.location.href = redirectTargetFrom(location.search) || '/userroles';
           }} fontSize="sm">
             Skip for now
           </Link>
