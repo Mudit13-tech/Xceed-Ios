@@ -74,6 +74,9 @@ export default function StudentAttendanceMap({
   const todayRingColor = useColorModeValue('blue.500', 'blue.300');
   const tableHoverBg = useColorModeValue('gray.50', 'gray.750');
   const selectedDayBg = useColorModeValue('gray.50', 'gray.700');
+  const presentCellColor = useColorModeValue('green.400', 'green.400');
+  const absentCellColor = useColorModeValue('red.400', 'red.400');
+  const partialCellColor = useColorModeValue('yellow.400', 'yellow.400');
 
   // Build the list of selectable semesters/sessions
   const sessionOptions = useMemo(() => {
@@ -427,9 +430,9 @@ export default function StudentAttendanceMap({
     if (!day || !day.dateStr) return 'transparent';
     if (day.stats && day.stats.total > 0) {
       const ratio = day.stats.present / day.stats.total;
-      if (ratio === 1) return 'green.400';
-      if (ratio === 0) return 'red.400';
-      return 'yellow.400'; // Partial attendance
+      if (ratio === 1) return presentCellColor;
+      if (ratio === 0) return absentCellColor;
+      return partialCellColor; // Partial attendance
     }
     if (day.isHoliday) return holidayCellColor;
     return emptyCellColor;
@@ -518,7 +521,7 @@ export default function StudentAttendanceMap({
         </Box>
       </SimpleGrid>
 
-      {/* ── GitHub Contribution Grid ─────────────────────────────── */}
+      {/* ── GitHub Contribution Grid (Full Width & Responsive) ─────── */}
       {!hasAnyData ? (
         <Box py={8} textAlign="center">
           <Text color={mutedText} fontSize="sm">
@@ -539,14 +542,14 @@ export default function StudentAttendanceMap({
             WebkitOverflowScrolling: 'touch',
           }}
         >
-          <Box minW={`${weeks.length * 15 + 40}px`}>
+          <Box w="100%" minW={{ base: '580px', md: '100%' }}>
             {/* Month Label Row */}
-            <Flex pl="32px" mb={1} position="relative" h="16px">
+            <Flex pl="32px" mb={1} position="relative" h="16px" w="100%">
               {monthHeaders.map((m, idx) => (
                 <Text
                   key={`m-${idx}`}
                   position="absolute"
-                  left={`${m.weekIndex * 15 + 32}px`}
+                  left={`calc(32px + ${(m.weekIndex / Math.max(weeks.length, 1)) * 100}% - ${(m.weekIndex / Math.max(weeks.length, 1)) * 32}px)`}
                   fontSize="xs"
                   fontWeight="600"
                   color={mutedText}
@@ -557,11 +560,12 @@ export default function StudentAttendanceMap({
             </Flex>
 
             {/* Main Grid: Days along Y axis (Sun-Sat), Weeks along X axis */}
-            <Flex gap="3px">
+            <Flex gap="3px" w="100%" align="stretch">
               {/* Day-of-week labels on left side (sticky on mobile scroll) */}
               <VStack
                 spacing="3px"
                 w="28px"
+                minW="28px"
                 pr={1}
                 align="flex-end"
                 justify="space-between"
@@ -581,71 +585,74 @@ export default function StudentAttendanceMap({
                 ))}
               </VStack>
 
-              {/* Week Columns */}
-              {weeks.map((week, wIdx) => (
-                <VStack key={`week-${wIdx}`} spacing="3px">
-                  {week.map((day, dIdx) => {
-                    if (!day || !day.dateStr) {
-                      return <Box key={`empty-${wIdx}-${dIdx}`} w="12px" h="12px" />;
-                    }
+              {/* Week Columns (Stretches across 100% full width) */}
+              <Flex gap="3px" flex="1" w="100%" justify="space-between">
+                {weeks.map((week, wIdx) => (
+                  <VStack key={`week-${wIdx}`} spacing="3px" flex="1" minW="10px" align="center">
+                    {week.map((day, dIdx) => {
+                      if (!day || !day.dateStr) {
+                        return <Box key={`empty-${wIdx}-${dIdx}`} w="100%" maxW="15px" h="12px" />;
+                      }
 
-                    const isSelected = selectedDay && selectedDay.dateStr === day.dateStr;
+                      const isSelected = selectedDay && selectedDay.dateStr === day.dateStr;
 
-                    // Tooltip generation
-                    let tooltipContent = `${formatFullDate(day.dateStr)}: No classes`;
-                    if (day.isHoliday) {
-                      tooltipContent = `${formatFullDate(day.dateStr)}: ${day.holidayRemark || 'Holiday'}`;
-                    }
-                    if (day.stats && day.stats.total > 0) {
-                      const p = day.stats.present;
-                      const t = day.stats.total;
-                      const pct = Math.round((p / t) * 100);
-                      const classDetails = day.stats.records
-                        .map((r) => `${r.subject || 'Class'} (${r.timeSlot || 'Slot'}): ${r.finalStatus === 'P' ? 'Present' : 'Absent'}`)
-                        .join('\n');
-                      tooltipContent = `${formatFullDate(day.dateStr)}\n${p}/${t} classes attended (${pct}%)\n${classDetails}`;
-                    }
+                      // Tooltip generation
+                      let tooltipContent = `${formatFullDate(day.dateStr)}: No classes`;
+                      if (day.isHoliday) {
+                        tooltipContent = `${formatFullDate(day.dateStr)}: ${day.holidayRemark || 'Holiday'}`;
+                      }
+                      if (day.stats && day.stats.total > 0) {
+                        const p = day.stats.present;
+                        const t = day.stats.total;
+                        const pct = Math.round((p / t) * 100);
+                        const classDetails = day.stats.records
+                          .map((r) => `${r.subject || 'Class'} (${r.timeSlot || 'Slot'}): ${r.finalStatus === 'P' ? 'Present' : 'Absent'}`)
+                          .join('\n');
+                        tooltipContent = `${formatFullDate(day.dateStr)}\n${p}/${t} classes attended (${pct}%)\n${classDetails}`;
+                      }
 
-                    return (
-                      <Tooltip
-                        key={day.dateStr}
-                        label={tooltipContent}
-                        placement="top"
-                        hasArrow
-                        whiteSpace="pre-line"
-                        fontSize="xs"
-                        p={2}
-                      >
-                        <Box
-                          w="12px"
-                          h="12px"
-                          borderRadius="2px"
-                          bg={getCellBg(day)}
-                          cursor={day.stats ? 'pointer' : 'default'}
-                          outline={day.isToday ? `2px solid ${todayRingColor}` : undefined}
-                          outlineOffset="1px"
-                          border={isSelected ? '2px solid black' : undefined}
-                          transition="transform 0.15s ease, box-shadow 0.15s ease"
-                          _hover={{
-                            transform: 'scale(1.3)',
-                            zIndex: 2,
-                            boxShadow: 'sm',
-                          }}
-                          onClick={() => {
-                            if (day.stats && day.stats.records.length > 0) {
-                              setSelectedDay(day);
-                            }
-                          }}
-                        />
-                      </Tooltip>
-                    );
-                  })}
-                </VStack>
-              ))}
+                      return (
+                        <Tooltip
+                          key={day.dateStr}
+                          label={tooltipContent}
+                          placement="top"
+                          hasArrow
+                          whiteSpace="pre-line"
+                          fontSize="xs"
+                          p={2}
+                        >
+                          <Box
+                            w="100%"
+                            maxW="15px"
+                            h="12px"
+                            borderRadius="2px"
+                            bg={getCellBg(day)}
+                            cursor={day.stats ? 'pointer' : 'default'}
+                            outline={day.isToday ? `2px solid ${todayRingColor}` : undefined}
+                            outlineOffset="1px"
+                            border={isSelected ? '2px solid black' : undefined}
+                            transition="transform 0.15s ease, box-shadow 0.15s ease"
+                            _hover={{
+                              transform: 'scale(1.25)',
+                              zIndex: 2,
+                              boxShadow: 'sm',
+                            }}
+                            onClick={() => {
+                              if (day.stats && day.stats.records.length > 0) {
+                                setSelectedDay(day);
+                              }
+                            }}
+                          />
+                        </Tooltip>
+                      );
+                    })}
+                  </VStack>
+                ))}
+              </Flex>
             </Flex>
           </Box>
 
-          {/* ── Legends & Status Explanations ───────────────────────── */}
+          {/* ── Legends & Status Explanations (Matching Colors & Texts) ── */}
           <Flex
             mt={4}
             pt={3}
@@ -659,38 +666,27 @@ export default function StudentAttendanceMap({
             fontSize="xs"
             color={mutedText}
           >
-            <HStack spacing={{ base: 2.5, md: 4 }} wrap="wrap">
+            <HStack spacing={{ base: 3, md: 5 }} wrap="wrap">
               <HStack spacing={1.5}>
-                <Box w="10px" h="10px" borderRadius="2px" bg="green.400" />
+                <Box w="11px" h="11px" borderRadius="2px" bg={presentCellColor} />
                 <Text fontSize={{ base: '2xs', sm: 'xs' }} fontWeight="500">Present (100%)</Text>
               </HStack>
               <HStack spacing={1.5}>
-                <Box w="10px" h="10px" borderRadius="2px" bg="yellow.400" />
+                <Box w="11px" h="11px" borderRadius="2px" bg={partialCellColor} />
                 <Text fontSize={{ base: '2xs', sm: 'xs' }} fontWeight="500">Partial (&lt; 100%)</Text>
               </HStack>
               <HStack spacing={1.5}>
-                <Box w="10px" h="10px" borderRadius="2px" bg="red.400" />
+                <Box w="11px" h="11px" borderRadius="2px" bg={absentCellColor} />
                 <Text fontSize={{ base: '2xs', sm: 'xs' }} fontWeight="500">Absent (0%)</Text>
               </HStack>
               <HStack spacing={1.5}>
-                <Box w="10px" h="10px" borderRadius="2px" bg={holidayCellColor} />
+                <Box w="11px" h="11px" borderRadius="2px" bg={holidayCellColor} />
                 <Text fontSize={{ base: '2xs', sm: 'xs' }} fontWeight="500">Holiday / Weekend</Text>
               </HStack>
               <HStack spacing={1.5}>
-                <Box w="10px" h="10px" borderRadius="2px" bg={emptyCellColor} />
+                <Box w="11px" h="11px" borderRadius="2px" bg={emptyCellColor} />
                 <Text fontSize={{ base: '2xs', sm: 'xs' }} fontWeight="500">No Classes</Text>
               </HStack>
-            </HStack>
-
-            <HStack spacing={1.5} alignSelf={{ base: 'flex-end', sm: 'auto' }} fontSize={{ base: '2xs', sm: 'xs' }}>
-              <Text>Less</Text>
-              <HStack spacing="2px">
-                <Box w="10px" h="10px" borderRadius="2px" bg={emptyCellColor} />
-                <Box w="10px" h="10px" borderRadius="2px" bg="red.400" />
-                <Box w="10px" h="10px" borderRadius="2px" bg="yellow.400" />
-                <Box w="10px" h="10px" borderRadius="2px" bg="green.400" />
-              </HStack>
-              <Text>More</Text>
             </HStack>
           </Flex>
         </Box>
