@@ -143,6 +143,14 @@ export default function NotificationBell() {
             onClick={() => setPrefsModalOpen(true)}
             title="Notification settings"
           />
+          <IconButton
+            size="xs"
+            variant="ghost"
+            aria-label="Close notifications"
+            icon={<span>✕</span>}
+            onClick={onClose}
+            title="Close notifications"
+          />
         </Flex>
       </Flex>
       <Box maxH={isMobile ? 'calc(100vh - 88px)' : '420px'} overflowY="auto" px={0}>
@@ -215,7 +223,7 @@ export default function NotificationBell() {
           </Box>
           <Drawer isOpen={isOpen} onClose={onClose} placement="bottom" size="full">
             <DrawerOverlay />
-            <DrawerContent h="100vh" maxH="100vh" borderTopRadius="0">
+            <DrawerContent h="100vh" maxH="100vh" borderTopRadius="0" pt={3}>
               {notificationList}
             </DrawerContent>
           </Drawer>

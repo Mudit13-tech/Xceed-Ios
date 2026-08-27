@@ -135,6 +135,11 @@ function MaterialRow({ item, classId, isTeacher, onChanged, onEdit }) {
             <Text fontSize="xs" color="lmFg.muted">
               Posted {formatDate(item.publishedAt)}
             </Text>
+            {item.updated_at && new Date(item.updated_at) - new Date(item.publishedAt) > 1000 && (
+              <Text fontSize="xs" color="lmFg.muted">
+                · Last updated {formatDate(item.updated_at)}
+              </Text>
+            )}
           </HStack>
         </Box>
 
