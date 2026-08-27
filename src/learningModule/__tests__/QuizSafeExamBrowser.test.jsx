@@ -117,14 +117,17 @@ describe('a quiz with no Safe Exam Browser requirement', () => {
 describe('a quiz that requires Safe Exam Browser and is ready', () => {
   const ready = () => brief({ settings: { deliveryMode: 'all_at_once', requireSafeExamBrowser: true, sebReady: true } });
 
-  it('offers a download link, and it points at the real config endpoint', async () => {
+  // The raw `.seb` download was removed from the brief: students were treating
+  // it as the normal way in and finishing with a file in Downloads rather than
+  // a running exam. The `seb://` launch is the only route offered now.
+  it('does not offer the raw exam file for download', async () => {
     quizBrief.mockResolvedValue(ready());
     const { default: QuizBrief } = await import('../pages/QuizBrief');
     renderWithProviders(<QuizBrief />);
 
-    const link = await screen.findByRole('link', { name: /download the exam file/i });
-    expect(link).toHaveAttribute('href', 'https://api.test/api/v1/learningmodule/classes/c1/quizzes/q1/seb-config');
-    expect(sebConfigUrl).toHaveBeenCalledWith('c1', 'q1');
+    await screen.findByRole('button', { name: /start test/i });
+    expect(screen.queryByRole('link', { name: /download the exam file/i })).toBeNull();
+    expect(sebConfigUrl).not.toHaveBeenCalled();
   });
 
   it('leaves Start enabled — the server decides whether SEB actually let them in', async () => {
@@ -141,7 +144,7 @@ describe('a quiz that requires Safe Exam Browser and is ready', () => {
     const { default: QuizBrief } = await import('../pages/QuizBrief');
     renderWithProviders(<QuizBrief />);
 
-    await screen.findByRole('link', { name: /download the exam file/i });
+    await screen.findByText(/has to be installed on this computer first/i);
     expect(screen.queryByText(/don't have safe exam browser/i)).toBeNull();
   });
 });
@@ -155,7 +158,7 @@ describe('a quiz that requires Safe Exam Browser but is not set up yet', () => {
     renderWithProviders(<QuizBrief />);
 
     expect(await screen.findByText(/has not finished setting this up/i)).toBeTruthy();
-    expect(screen.queryByRole('link', { name: /download the exam file/i })).toBeNull();
+    expect(screen.queryByText(/has to be installed on this computer first/i)).toBeNull();
   });
 
   it('disables Start, the same way a mobile-blocked device does', async () => {
@@ -179,7 +182,7 @@ describe('the access-code fallback', () => {
     const { default: QuizBrief } = await import('../pages/QuizBrief');
     renderWithProviders(<QuizBrief />);
 
-    await screen.findByRole('link', { name: /download the exam file/i });
+    await screen.findByText(/has to be installed on this computer first/i);
     expect(await screen.findByText(/don't have safe exam browser/i)).toBeTruthy();
     // Not shown until asked for — the code field is the fallback, not the
     // headline, and showing it by default reads as though it is the normal way
@@ -310,9 +313,9 @@ describe('the panel reflects whether Safe Exam Browser has actually been verifie
     renderWithProviders(<QuizBrief />);
 
     expect(await screen.findByText(/safe exam browser is active/i)).toBeTruthy();
-    // The launch button and the download fallback both answer a question this
-    // student no longer has, and leaving them up is what read as a failure.
-    expect(screen.queryByRole('link', { name: /download the exam file/i })).toBeNull();
+    // The launch instructions answer a question this student no longer has,
+    // and leaving them up is what read as a failure.
+    expect(screen.queryByText(/has to be installed on this computer first/i)).toBeNull();
     expect(screen.queryByRole('link', { name: /open this test in safe exam browser/i })).toBeNull();
   });
 
@@ -374,7 +377,7 @@ describe('the panel reflects whether Safe Exam Browser has actually been verifie
     const { default: QuizBrief } = await import('../pages/QuizBrief');
     renderWithProviders(<QuizBrief />);
 
-    expect(await screen.findByRole('link', { name: /download the exam file/i })).toBeTruthy();
+    expect(await screen.findByText(/has to be installed on this computer first/i)).toBeTruthy();
     expect(screen.queryByText(/could not be matched to it/i)).toBeNull();
   });
 
@@ -385,7 +388,7 @@ describe('the panel reflects whether Safe Exam Browser has actually been verifie
     const { default: QuizBrief } = await import('../pages/QuizBrief');
     renderWithProviders(<QuizBrief />);
 
-    expect(await screen.findByRole('link', { name: /download the exam file/i })).toBeTruthy();
+    expect(await screen.findByText(/has to be installed on this computer first/i)).toBeTruthy();
     expect(screen.queryByText(/safe exam browser is active/i)).toBeNull();
   });
 });
@@ -420,7 +423,7 @@ describe('getting Safe Exam Browser itself, for a student who does not have it',
     const { default: QuizBrief } = await import('../pages/QuizBrief');
     renderWithProviders(<QuizBrief />);
 
-    await screen.findByRole('link', { name: /download the exam file/i });
+    await screen.findByText(/has to be installed on this computer first/i);
     expect(screen.queryByText(/don't have it yet/i)).toBeNull();
   });
 

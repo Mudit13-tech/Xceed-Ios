@@ -519,6 +519,83 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
   );
 }
 
+/** Which build a person most likely needs, guessed from the browser they asked in. */
+const isAppleDevice = () => /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent || navigator.platform || '');
+
+/**
+ * Safe Exam Browser itself, offered from the quiz list rather than only from a
+ * single paper's brief.
+ *
+ * The brief already carries this (`SebInstallerLinks` in `QuizBrief.jsx`), but
+ * it is the wrong moment: a student reaches it when a proctored test is about
+ * to start, which is the worst time to discover they have a 100MB install
+ * ahead of them. Here it sits on the page they open days earlier, and a
+ * teacher checking their own setup can reach it without opening a paper.
+ *
+ * Deliberately unconditional on any quiz: this asks "does this computer have
+ * SEB" — nothing about which papers require it — and it disappears entirely
+ * when no installer has been uploaded, so an installation that does not use
+ * SEB never sees it.
+ */
+function SebInstallerDownload() {
+  const [installers, setInstallers] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Started inside a resolved promise so a server or client that has no such
+    // endpoint at all fails the same quiet way a failed request does, rather
+    // than throwing out of the effect and taking the quiz list down with it.
+    Promise.resolve()
+      .then(() => lmApi.getSebInstallers())
+      // Nothing configured, or the request failed — either way there is nothing
+      // to offer and no error worth putting in a toolbar.
+      .then((result) => { if (!cancelled) setInstallers(result); })
+      .catch(() => { if (!cancelled) setInstallers(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!installers) return null;
+
+  const mac = isAppleDevice();
+  const primary = mac ? 'mac' : 'windows';
+  const secondary = mac ? 'windows' : 'mac';
+  const label = { windows: 'Windows', mac: 'Mac' };
+  const platforms = [primary, secondary].filter((p) => installers[p]?.available);
+  if (platforms.length === 0) return null;
+
+  // One build available is a plain link; both is a menu, so the common case
+  // stays a single click and the other machine is still one hop away.
+  if (platforms.length === 1) {
+    return (
+      <Button
+        as="a"
+        href={lmApi.sebInstallerDownloadUrl(platforms[0])}
+        size="sm"
+        variant="outline"
+        colorScheme="purple"
+        leftIcon={<DownloadIcon />}
+      >
+        Safe Exam Browser ({label[platforms[0]]})
+      </Button>
+    );
+  }
+
+  return (
+    <Menu>
+      <MenuButton as={Button} size="sm" variant="outline" colorScheme="purple" leftIcon={<DownloadIcon />}>
+        Safe Exam Browser
+      </MenuButton>
+      <MenuList>
+        {platforms.map((p) => (
+          <MenuItem key={p} as="a" href={lmApi.sebInstallerDownloadUrl(p)}>
+            Download for {label[p]}
+          </MenuItem>
+        ))}
+      </MenuList>
+    </Menu>
+  );
+}
+
 // Teachers get the whole quiz document back; students get a trimmed projection
 // that carries questionCount instead of questions, and `window` rather than any
 // single "can I start this" flag.
@@ -1076,16 +1153,34 @@ export default function Quizzes() {
               : 'Everything your teacher has published.'}
           </Text>
         </Box>
-        {isTeacher && (
-          <HStack>
+        {/* Students get this row too, for the SEB installer alone: they have no
+            other route to it that does not start with a test about to begin. */}
+        <HStack>
+          <SebInstallerDownload />
+          {isTeacher && (
+            <>
             <Button as={RouterLink} to={`/learning/class/${classId}/studio`} size="sm" variant="outline">
               ✨ Generate from a recording
+            </Button>
+            <Button
+              as="a"
+              href="/learning/quizmanual"
+              target="_blank"
+              rel="noreferrer"
+              size="sm"
+              variant="outline"
+              colorScheme="teal"
+              borderWidth="2px"
+              fontWeight="semibold"
+            >
+              📖 Manual
             </Button>
             <Button colorScheme="blue" size="sm" onClick={onOpen}>
               + Create quiz
             </Button>
-          </HStack>
-        )}
+            </>
+          )}
+        </HStack>
       </Flex>
 
       <ErrorState error={error} onRetry={load} />
