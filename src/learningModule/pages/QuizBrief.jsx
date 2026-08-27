@@ -811,24 +811,15 @@ export default function QuizBrief() {
                     </Text>
                     <SebInstallerLinks />
                     {/* One click, if SEB is installed: following a `seb://` link hands
-                        the settings straight to it. The download beneath is the same
-                        file the long way round, for a browser that will not follow an
-                        unknown scheme - which many do silently, so the fallback is
-                        offered rather than left to be discovered after a failure. */}
+                        the settings straight to it. The raw exam-file download that
+                        used to sit beneath this is gone by request — students were
+                        taking it as the normal route and ending up with a stray
+                        `.seb` file in Downloads instead of a launched exam. */}
                     {sebLaunch && (
                       <Button as="a" href={sebLaunch} size="sm" colorScheme="purple" mb={2}>
                         Open this test in Safe Exam Browser
                       </Button>
                     )}
-                    <Text fontSize="xs" color="lmFg.subtle" mb={1}>
-                      <Box
-                        as="a"
-                        href={lmApi.sebConfigUrl(classId, quizId)}
-                        textDecoration="underline"
-                      >
-                        Nothing happened? Download the exam file instead
-                      </Box>
-                    </Text>
                     <Text
                       fontSize="xs"
                       color="lmFg.subtle"
