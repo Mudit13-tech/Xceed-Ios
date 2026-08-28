@@ -26,6 +26,10 @@ vi.mock('react-router-dom', async () => {
 
 const quizBrief = vi.fn();
 const startAttempt = vi.fn();
+// Checking the access code on its own, before the sitting is spent. The screen
+// asks the two gates in order — right browser, then right room — so nothing
+// below the code field exists until this has answered.
+const verifyAccessCode = vi.fn(async () => ({ ok: true, roomCodeRequired: false }));
 const sebConfigUrl = vi.fn(() => 'https://api.test/api/v1/learningmodule/classes/c1/quizzes/q1/seb-config');
 // The one-click launch: the same address with the scheme swapped, which is what
 // makes a browser hand it to Safe Exam Browser instead of opening it.
@@ -50,6 +54,7 @@ vi.mock('../api/lmApi', () => ({
     quizBrief: (...args) => quizBrief(...args),
     listQuizzes: vi.fn(),
     startAttempt: (...args) => startAttempt(...args),
+    verifyAccessCode: (...args) => verifyAccessCode(...args),
     sebConfigUrl: (...args) => sebConfigUrl(...args),
     sebLaunchToken: (...args) => sebLaunchToken(...args),
     sebLaunchUrlFromToken: (...args) => sebLaunchUrlFromToken(...args),
@@ -125,18 +130,37 @@ describe('a quiz that requires Safe Exam Browser and is ready', () => {
     const { default: QuizBrief } = await import('../pages/QuizBrief');
     renderWithProviders(<QuizBrief />);
 
-    await screen.findByRole('button', { name: /start test/i });
+    await screen.findByText(/has to be installed on this computer first/i);
     expect(screen.queryByRole('link', { name: /download the exam file/i })).toBeNull();
     expect(sebConfigUrl).not.toHaveBeenCalled();
   });
 
-  it('leaves Start enabled — the server decides whether SEB actually let them in', async () => {
+  /**
+   * Start is not one of two equal ways in.
+   *
+   * A Start button next to "Open this test in Safe Exam Browser" read as a
+   * choice, so students pressed it, collected a refusal they could not act on,
+   * and concluded the test was broken. The launch *is* the start now: until the
+   * server has verified SEB (or an access code has been checked) there is no
+   * Start button on the page at all, only the thing to do instead.
+   */
+  it('offers no Start button at all — the launch is the only thing to press', async () => {
     quizBrief.mockResolvedValue(ready());
     const { default: QuizBrief } = await import('../pages/QuizBrief');
     renderWithProviders(<QuizBrief />);
 
-    const button = await screen.findByRole('button', { name: /start test/i });
-    expect(button).not.toBeDisabled();
+    await screen.findByText(/has to be installed on this computer first/i);
+    expect(screen.queryByRole('button', { name: /start test/i })).toBeNull();
+    expect(await screen.findByText(/start from safe exam browser/i)).toBeTruthy();
+  });
+
+  it('says why the button is missing rather than leaving a blank space', async () => {
+    // A gap where the button was reads as a page that failed to load.
+    quizBrief.mockResolvedValue(ready());
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    expect(await screen.findByText(/that is how this paper begins/i)).toBeTruthy();
   });
 
   it('does not show a bypass-code option when the teacher has not enabled one', async () => {
@@ -161,15 +185,15 @@ describe('a quiz that requires Safe Exam Browser but is not set up yet', () => {
     expect(screen.queryByText(/has to be installed on this computer first/i)).toBeNull();
   });
 
-  it('disables Start, the same way a mobile-blocked device does', async () => {
+  it('offers no Start button, and says the paper is not ready rather than nothing', async () => {
     quizBrief.mockResolvedValue(
       brief({ settings: { deliveryMode: 'all_at_once', requireSafeExamBrowser: true, sebReady: false } }),
     );
     const { default: QuizBrief } = await import('../pages/QuizBrief');
     renderWithProviders(<QuizBrief />);
 
-    const button = await screen.findByRole('button', { name: /start test/i });
-    expect(button).toBeDisabled();
+    expect(await screen.findByText(/not ready to start yet/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /start test/i })).toBeNull();
   });
 });
 
@@ -199,7 +223,22 @@ describe('the access-code fallback', () => {
     expect(await screen.findByPlaceholderText('Access code')).toBeTruthy();
   });
 
-  it('sends the typed code on Start, and nothing when the field is empty', async () => {
+  /* Typing is not passing. The code has to be *checked* — by the server, on its
+     own endpoint — before anything below it appears, because "the student typed
+     something" is not an answer to "is this student allowed in without SEB". */
+  it('does not hand over Start for a code that has merely been typed', async () => {
+    quizBrief.mockResolvedValue(withCode());
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    fireEvent.click(await screen.findByText(/don't have safe exam browser/i));
+    fireEvent.change(await screen.findByPlaceholderText('Access code'), { target: { value: 'ABC123' } });
+
+    expect(screen.queryByRole('button', { name: /start test/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /check code/i })).toBeTruthy();
+  });
+
+  it('checks the code against the server, and only then offers Start', async () => {
     quizBrief.mockResolvedValue(withCode());
     startAttempt.mockResolvedValue({ attempt: { _id: 'a1' } });
     const { default: QuizBrief } = await import('../pages/QuizBrief');
@@ -207,13 +246,133 @@ describe('the access-code fallback', () => {
 
     fireEvent.click(await screen.findByText(/don't have safe exam browser/i));
     fireEvent.change(await screen.findByPlaceholderText('Access code'), { target: { value: 'ABC123' } });
-    fireEvent.click(screen.getByRole('button', { name: /start test/i }));
+    fireEvent.click(screen.getByRole('button', { name: /check code/i }));
 
-    await waitFor(() => expect(startAttempt).toHaveBeenCalledWith('c1', 'q1', 'ABC123'));
+    await waitFor(() => expect(verifyAccessCode).toHaveBeenCalledWith('c1', 'q1', 'ABC123'));
+    fireEvent.click(await screen.findByRole('button', { name: /start test/i }));
+
+    // Still sent on Start: the check grants nothing by itself, and the server
+    // re-checks the same code before it will mint the attempt.
+    await waitFor(() =>
+      expect(startAttempt).toHaveBeenCalledWith('c1', 'q1', { sebBypassCode: 'ABC123', roomCode: undefined }),
+    );
   });
 
-  it('does not send a blank code as an empty string', async () => {
+  it('says so on the page when the code is wrong, and keeps Start away', async () => {
     quizBrief.mockResolvedValue(withCode());
+    const { default: LmApi } = await import('../api/lmApi');
+    verifyAccessCode.mockRejectedValueOnce(
+      new LmApi.LmApiError('That access code is not correct.', 403, {
+        code: 'SEB_REQUIRED',
+        sebBypassEnabled: true,
+        codeRejected: true,
+      }),
+    );
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    fireEvent.click(await screen.findByText(/don't have safe exam browser/i));
+    fireEvent.change(await screen.findByPlaceholderText('Access code'), { target: { value: 'NOPE99' } });
+    fireEvent.click(screen.getByRole('button', { name: /check code/i }));
+
+    expect(await screen.findByText(/that access code is not correct/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /start test/i })).toBeNull();
+  });
+
+  it('closes the gate again if the code is edited after being accepted', async () => {
+    // A checked code that has since been changed has not been checked.
+    quizBrief.mockResolvedValue(withCode());
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    fireEvent.click(await screen.findByText(/don't have safe exam browser/i));
+    fireEvent.change(await screen.findByPlaceholderText('Access code'), { target: { value: 'ABC123' } });
+    fireEvent.click(screen.getByRole('button', { name: /check code/i }));
+    await screen.findByRole('button', { name: /start test/i });
+
+    // The field locks once accepted, so editing means pressing Change first.
+    fireEvent.click(screen.getByRole('button', { name: /change/i }));
+    expect(screen.queryByRole('button', { name: /start test/i })).toBeNull();
+  });
+});
+
+/**
+ * The two gates, asked in order.
+ *
+ * They answer different questions — "are you in the right browser?" and "are you
+ * in the right room?" — and the second is worth nothing asked of somebody who has
+ * not answered the first. Drawing the room-code keypad for anyone who opens the
+ * link also tells a student who should never have got that far that a spoken code
+ * exists and how many characters it has. So the pad waits: for Safe Exam Browser
+ * to be verified, or for an access code to be checked.
+ */
+describe('the room code is the second gate, not a simultaneous one', () => {
+  const roomAndSeb = (extra = {}) =>
+    brief({
+      settings: {
+        deliveryMode: 'all_at_once',
+        requireSafeExamBrowser: true,
+        sebReady: true,
+        roomCodeRequired: true,
+        ...extra,
+      },
+    });
+
+  it('does not ask for the room code while the browser gate is still shut', async () => {
+    quizBrief.mockResolvedValue(roomAndSeb({ sebBypassEnabled: true }));
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    await screen.findByText(/has to be installed on this computer first/i);
+    expect(screen.queryByText(/your invigilator will read out a code/i)).toBeNull();
+  });
+
+  it('asks for it as soon as Safe Exam Browser is verified', async () => {
+    quizBrief.mockResolvedValue(
+      brief({
+        settings: { deliveryMode: 'all_at_once', requireSafeExamBrowser: true, sebReady: true, roomCodeRequired: true },
+        sebVerified: true,
+        sebReason: null,
+      }),
+    );
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    expect(await screen.findByText(/your invigilator will read out a code/i)).toBeTruthy();
+  });
+
+  it('asks for it once an access code has been checked, and not before', async () => {
+    quizBrief.mockResolvedValue(roomAndSeb({ sebBypassEnabled: true }));
+    verifyAccessCode.mockResolvedValueOnce({ ok: true, roomCodeRequired: true });
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    fireEvent.click(await screen.findByText(/don't have safe exam browser/i));
+    fireEvent.change(await screen.findByPlaceholderText('Access code'), { target: { value: 'ABC123' } });
+    expect(screen.queryByText(/your invigilator will read out a code/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /check code/i }));
+    expect(await screen.findByText(/your invigilator will read out a code/i)).toBeTruthy();
+  });
+
+  it('leaves Start disabled until the room code is entered too', async () => {
+    quizBrief.mockResolvedValue(
+      brief({
+        settings: { deliveryMode: 'all_at_once', requireSafeExamBrowser: true, sebReady: true, roomCodeRequired: true },
+        sebVerified: true,
+        sebReason: null,
+      }),
+    );
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    expect(await screen.findByRole('button', { name: /start test/i })).toBeDisabled();
+  });
+});
+
+describe('a quiz with no Safe Exam Browser gate to pass', () => {
+  it('does not send a blank code as an empty string', async () => {
+    quizBrief.mockResolvedValue(brief());
     startAttempt.mockResolvedValue({ attempt: { _id: 'a1' } });
     const { default: QuizBrief } = await import('../pages/QuizBrief');
     renderWithProviders(<QuizBrief />);
@@ -223,28 +382,9 @@ describe('the access-code fallback', () => {
     // `undefined`, not `''` — the server only looks at the field when it is a
     // non-empty string, and an empty string sent every time would be
     // indistinguishable from one a student actually typed and then cleared.
-    await waitFor(() => expect(startAttempt).toHaveBeenCalledWith('c1', 'q1', undefined));
-  });
-
-  it('reveals the code field on its own when the server refuses to start without one', async () => {
-    // The case this exists for: a student presses Start straight from a
-    // download link that never got opened. The toast says why; the field
-    // showing up on its own is what tells them what to do about it without
-    // having to notice the disclosure link themselves.
-    quizBrief.mockResolvedValue(withCode());
-    const { default: LmApi } = await import('../api/lmApi');
-    startAttempt.mockRejectedValue(
-      new LmApi.LmApiError('This quiz must be opened in Safe Exam Browser, or started with the access code.', 403, {
-        code: 'SEB_REQUIRED',
-        sebBypassEnabled: true,
-      }),
+    await waitFor(() =>
+      expect(startAttempt).toHaveBeenCalledWith('c1', 'q1', { sebBypassCode: undefined, roomCode: undefined }),
     );
-    const { default: QuizBrief } = await import('../pages/QuizBrief');
-    renderWithProviders(<QuizBrief />);
-
-    fireEvent.click(await screen.findByRole('button', { name: /start test/i }));
-
-    expect(await screen.findByPlaceholderText('Access code')).toBeTruthy();
   });
 });
 
@@ -259,6 +399,9 @@ describe('the access-code fallback', () => {
  */
 describe('a refused start', () => {
   it('says so on the page, not in a toast behind it', async () => {
+    // Reachable even now that the code is checked first: a teacher who
+    // regenerates the code between the check and Start retires the one this
+    // student just had accepted, and the refusal lands on Start.
     startAttempt.mockRejectedValueOnce(
       Object.assign(new Error('That access code is not right.'), {
         status: 403,
@@ -278,6 +421,9 @@ describe('a refused start', () => {
     const { default: QuizBrief } = await import('../pages/QuizBrief');
     renderWithProviders(<QuizBrief />);
 
+    fireEvent.click(await screen.findByText(/don't have safe exam browser/i));
+    fireEvent.change(await screen.findByPlaceholderText('Access code'), { target: { value: 'ABC123' } });
+    fireEvent.click(screen.getByRole('button', { name: /check code/i }));
     fireEvent.click(await screen.findByRole('button', { name: /start test/i }));
 
     expect(await screen.findByText(/could not start the test/i)).toBeTruthy();

@@ -10,6 +10,7 @@ import {
   Heading,
   HStack,
   Icon,
+  Image,
   Input,
   InputGroup,
   InputLeftElement,
@@ -34,6 +35,13 @@ const ForgotPassword = () => {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  // Asked for only once the server sees this address being requested too
+  // often (see forgotPasswordGate.js on the server) — an ordinary reset never
+  // shows this.
+  const [captcha, setCaptcha] = useState(null);
+  const [captchaAnswer, setCaptchaAnswer] = useState('');
+  const [emailCode, setEmailCode] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
   const navigate = useNavigate();
 
   const pageBg = useColorModeValue('gray.50', 'gray.900');
@@ -42,6 +50,52 @@ const ForgotPassword = () => {
   const subColor = useColorModeValue('gray.600', 'gray.400');
   const iconBg = useColorModeValue('cyan.50', 'cyan.900');
   const iconColor = useColorModeValue('cyan.600', 'cyan.300');
+
+  /**
+   * The accessible alternative for anyone who cannot read the picture — a
+   * code posted to the address being requested, same as the login form's.
+   */
+  const requestEmailCode = async () => {
+    if (!email.trim()) {
+      setError('Enter your email address first, then ask for a code.');
+      return;
+    }
+    setSendingCode(true);
+    try {
+      const response = await fetch(`${apiUrl}/auth/captcha/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setError(data.message || 'Could not send a code. Please try again.');
+        return;
+      }
+      // No svg: the challenge is the code in their inbox.
+      setCaptcha({ token: data.token, svg: null });
+      setCaptchaAnswer('');
+      setEmailCode(true);
+      setInfo(data.message);
+    } catch {
+      setError('Could not send a code. Please try again.');
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  const loadCaptcha = async () => {
+    try {
+      const response = await fetch(`${apiUrl}/auth/captcha`);
+      if (!response.ok) throw new Error('challenge unavailable');
+      const data = await response.json();
+      setCaptcha({ token: data.token, svg: data.svg });
+      setCaptchaAnswer('');
+      setEmailCode(false);
+    } catch {
+      setError('Could not load the challenge image. Please try again.');
+    }
+  };
 
   const sendOtp = async () => {
     setError('');
@@ -52,16 +106,30 @@ const ForgotPassword = () => {
     }
     setIsLoading(true);
     try {
+      const body = { email: email.trim() };
+      if (captcha) {
+        body.captchaToken = captcha.token;
+        body.captchaAnswer = captchaAnswer;
+      }
       const response = await fetch(`${apiUrl}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify(body),
       });
       const data = await response.json();
       if (!response.ok || data.success === false) {
+        if (data.captchaRequired) {
+          // A fresh image when the last one expired or was already spent; the
+          // same one stays put after a simple typo, so the user is not made to
+          // re-read a new one for a slip.
+          if (!captcha || data.captchaStale) await loadCaptcha();
+          else setCaptchaAnswer('');
+        }
         throw new Error(data.message || 'Could not send OTP');
       }
       setStep('reset');
+      setCaptcha(null);
+      setCaptchaAnswer('');
       setInfo(`An OTP has been sent to ${email.trim()}. It is valid for 10 minutes.`);
     } catch (err) {
       setError(err.message === 'User not exists'
@@ -167,6 +235,56 @@ const ForgotPassword = () => {
                   />
                 </InputGroup>
               </FormControl>
+              {captcha && (
+                <FormControl isRequired>
+                  <FormLabel>
+                    {emailCode ? 'Enter the code we emailed you' : 'Type the characters shown'}
+                  </FormLabel>
+                  {!emailCode && (
+                    <HStack spacing={3} align="center" mb={2}>
+                      {/* Rendered through an <img> data URI, not injected into the
+                          DOM directly — see LoginForm.jsx for why. */}
+                      <Image
+                        src={`data:image/svg+xml;utf8,${encodeURIComponent(captcha.svg)}`}
+                        alt="Characters to type"
+                        height="60px"
+                        borderWidth="1px"
+                        borderRadius="md"
+                      />
+                      <Button size="sm" variant="ghost" onClick={loadCaptcha}>
+                        New image
+                      </Button>
+                    </HStack>
+                  )}
+                  <Input
+                    placeholder={emailCode ? 'Six-digit code from your email' : 'Characters from the image'}
+                    value={captchaAnswer}
+                    onChange={(e) => setCaptchaAnswer(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && sendOtp()}
+                    autoComplete="off"
+                    inputMode={emailCode ? 'numeric' : 'text'}
+                  />
+                  <Box mt={1}>
+                    <Text fontSize="xs" color={subColor}>
+                      {emailCode
+                        ? 'The code expires in five minutes and works once.'
+                        : 'Asked for after several requests for this address. Not case sensitive.'}
+                    </Text>
+                    {!emailCode && (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        colorScheme="blue"
+                        mt={1}
+                        isLoading={sendingCode}
+                        onClick={requestEmailCode}
+                      >
+                        Can&apos;t see the image? Email me a code instead
+                      </Button>
+                    )}
+                  </Box>
+                </FormControl>
+              )}
               <Button colorScheme="cyan" isLoading={isLoading} onClick={sendOtp}>
                 Send OTP
               </Button>

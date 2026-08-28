@@ -35,6 +35,7 @@ import {
 } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
+import ExamCodes from './ExamCodes';
 import { SectionCard } from './common';
 import { formatDateTime, relativeTime } from '../format';
 
@@ -74,6 +75,11 @@ export function RollNumber({ value }) {
 
 /** How often the invigilation view re-reads the server while it is open. */
 export const LIVE_POLL_MS = 15000;
+
+
+/** The invigilation ring's colour on a quiz that has never been given one.
+    Matches the server's fallback and ExamPulse's own default. */
+const DEFAULT_PULSE_COLOR = '#3884ff';
 
 
 /**
@@ -165,6 +171,39 @@ export function AttemptFlags({ attempt }) {
         <Badge colorScheme="gray" fontSize="0.6rem" mr={1}>
           mobile
         </Badge>
+      )}
+      {attempt.gateFailures > 1 && (
+        <Tooltip label={`Typed a wrong ${attempt.gateFailureType === 'room' ? 'room' : 'access'} code ${attempt.gateFailures} time(s) before starting`}>
+          <Badge colorScheme="orange" variant="solid" fontSize="0.6rem" mr={1}>
+            {attempt.gateFailures}× code
+          </Badge>
+        </Tooltip>
+      )}
+      {attempt.webcam?.flaggedAt && !attempt.webcam?.clearedAt && (
+        <Tooltip
+          label={
+            attempt.webcam.unavailableReason
+              ? 'Started on a machine with no usable camera'
+              : attempt.webcam.blockedCount > 0
+                ? 'Webcam went dark during the sitting'
+                : `No face on camera ${attempt.webcam.noFaceCount || 0} time(s)`
+          }
+        >
+          <Badge colorScheme="red" variant="solid" fontSize="0.6rem" mr={1}>
+            {attempt.webcam.unavailableReason
+              ? 'no camera'
+              : attempt.webcam.blockedCount > 0
+                ? 'camera off'
+                : 'no face'}
+          </Badge>
+        </Tooltip>
+      )}
+      {attempt.webcam?.waivedByName && (
+        <Tooltip label={`Webcam waived by ${attempt.webcam.waivedByName}`}>
+          <Badge colorScheme="gray" fontSize="0.6rem" mr={1}>
+            webcam waived
+          </Badge>
+        </Tooltip>
       )}
       {attempt.regradedAt && (
         <Tooltip
@@ -492,13 +531,370 @@ function SuspectMachines({ attempts, classId, onDone, toast }) {
 }
 
 
+/**
+ * Repeated wrong code entries, raised to the invigilator.
+ *
+ * A student fumbling their own code once is nothing; a run of them — a room code
+ * tried and rejected over and over, most tellingly by somebody who never started
+ * the paper — is the shape of someone trying to get into a test they are not
+ * sitting in front of. Built from both the sittings and the no-shows, because the
+ * row that matters most carries no attempt at all.
+ *
+ * A flag, not a verdict: like the VM panel, it says "go and look", and it can end
+ * nothing. The server already blocks a genuine grind (a two-minute pause past a
+ * handful of wrong entries); this is so an invigilator sees the grind happening.
+ */
+export const REPEAT_GUESS_THRESHOLD = 2;
+const codeLabel = (type) => (type === 'room' ? 'room-code' : type === 'access' ? 'access-code' : 'code');
+
+function CodeGuessAlerts({ attempts, notStarted }) {
+  const rows = [
+    ...attempts.map((attempt) => ({
+      id: String(attempt.studentId || attempt._id),
+      name: nameOf(attempt),
+      rollNumber: attempt.rollNumber,
+      count: attempt.gateFailures || 0,
+      type: attempt.gateFailureType,
+      where: attempt.status === 'in_progress' ? 'writing now' : 'already submitted',
+    })),
+    ...notStarted.map((student) => ({
+      id: String(student.studentId),
+      name: student.studentName || student.studentEmail || 'Unknown student',
+      rollNumber: student.rollNumber,
+      count: student.gateFailures || 0,
+      type: student.gateFailureType,
+      where: 'has not started',
+    })),
+  ]
+    .filter((row) => row.count >= REPEAT_GUESS_THRESHOLD)
+    .sort((a, b) => b.count - a.count);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <Alert status="warning" variant="left-accent" flexDirection="column" alignItems="stretch" mb={4} borderRadius="md">
+      <Flex align="center" mb={2}>
+        <AlertIcon />
+        <Text fontSize="sm" fontWeight="700">
+          {rows.length} student{rows.length === 1 ? '' : 's'} with repeated wrong code entries
+        </Text>
+      </Flex>
+      <Text fontSize="xs" color="lmFg.muted" mb={3}>
+        These accounts had a start code typed and rejected more than once. A student mistyping their
+        own code is ordinary; a run of them — above all from someone who has not started — can be a
+        person trying to get into a paper they are not in front of. Worth a look, not proof.
+      </Text>
+      <Stack spacing={2}>
+        {rows.map((row) => (
+          <Box key={row.id} borderWidth="1px" borderRadius="md" p={3} bg="lmBg.surface">
+            <Flex align="center" gap={2} wrap="wrap">
+              <Text fontSize="sm" fontWeight="600">
+                {row.name}
+              </Text>
+              {row.rollNumber && (
+                <Badge fontSize="0.6rem" colorScheme="blue">
+                  {row.rollNumber}
+                </Badge>
+              )}
+              <Badge fontSize="0.6rem" colorScheme="orange" variant="solid">
+                {`${row.count}× wrong ${codeLabel(row.type)}`}
+              </Badge>
+              <Text fontSize="xs" color="lmFg.muted">
+                {row.where}
+              </Text>
+            </Flex>
+          </Box>
+        ))}
+      </Stack>
+    </Alert>
+  );
+}
+
+
+/**
+ * Webcam flags, raised to the invigilator with the frames themselves.
+ *
+ * A run of empty frames — the machine sitting the paper with nobody in front of
+ * it — or a camera that went dark mid-test is what lands here, each with the last
+ * thumbnails the browser kept. As with the VM panel it only says "go and look":
+ * the "I have checked" button clears the flag off the row without judging it, and
+ * ending a sitting is a different button elsewhere.
+ */
+function WebcamAlerts({ attempts, classId, onDone, toast }) {
+  const [busyId, setBusyId] = useState(null);
+
+  const flagged = attempts.filter(
+    (attempt) => attempt.webcam?.flaggedAt && !attempt.webcam?.clearedAt,
+  );
+
+  if (flagged.length === 0) return null;
+
+  const markChecked = async (attempt) => {
+    setBusyId(attempt._id);
+    try {
+      await lmApi.markWebcamChecked(classId, attempt._id);
+      toast({
+        title: `${nameOf(attempt)}'s camera flag cleared`,
+        description: 'The alert is cleared. Their sitting is untouched — end it from the list below if you need to.',
+        status: 'success',
+        duration: 5000,
+      });
+      onDone();
+    } catch (err) {
+      toast({ title: err.message || 'Could not clear the alert', status: 'error', duration: 6000 });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <Alert status="error" variant="left-accent" flexDirection="column" alignItems="stretch" mb={4} borderRadius="md">
+      <Flex align="center" mb={2}>
+        <AlertIcon />
+        <Text fontSize="sm" fontWeight="700">
+          {flagged.length} webcam flag{flagged.length === 1 ? '' : 's'} to check now
+        </Text>
+      </Flex>
+      <Text fontSize="xs" color="lmFg.muted" mb={3}>
+        These sittings showed no face on camera, or the camera went dark. That is the shape of a machine
+        left running with nobody there — but the camera is the only witness, so look at the frames and, if
+        you can, the seat before doing anything.
+      </Text>
+      <Stack spacing={3}>
+        {flagged.map((attempt) => {
+          const cam = attempt.webcam || {};
+          const shots = (cam.thumbnails || []).filter((thumb) => thumb.image).slice(-3);
+          return (
+            <Box key={attempt._id} borderWidth="1px" borderRadius="md" p={3} bg="lmBg.surface">
+              <Flex align="center" gap={2} wrap="wrap" mb={2}>
+                <Text fontSize="sm" fontWeight="600">
+                  {nameOf(attempt)}
+                </Text>
+                {attempt.rollNumber && (
+                  <Badge fontSize="0.6rem" colorScheme="blue">
+                    {attempt.rollNumber}
+                  </Badge>
+                )}
+                {cam.noFaceCount > 0 && (
+                  <Badge fontSize="0.6rem" colorScheme="red" variant="solid">
+                    {`${cam.noFaceCount}× no face`}
+                  </Badge>
+                )}
+                {cam.blockedCount > 0 && (
+                  <Badge fontSize="0.6rem" colorScheme="red" variant="solid">
+                    camera blocked
+                  </Badge>
+                )}
+                {cam.unavailableReason && (
+                  <Badge fontSize="0.6rem" colorScheme="red" variant="solid">
+                    no camera
+                  </Badge>
+                )}
+                <Text fontSize="xs" color="lmFg.muted">
+                  flagged {relativeTime(cam.flaggedAt)}
+                </Text>
+              </Flex>
+              {shots.length > 0 && (
+                <HStack spacing={2} mb={2}>
+                  {shots.map((thumb, i) => (
+                    <Box
+                      // eslint-disable-next-line react/no-array-index-key
+                      key={i}
+                      as="img"
+                      src={thumb.image}
+                      alt={`Webcam frame (${thumb.type || 'flagged'})`}
+                      w="88px"
+                      h="66px"
+                      objectFit="cover"
+                      borderRadius="md"
+                      borderWidth="1px"
+                      transform="scaleX(-1)"
+                    />
+                  ))}
+                </HStack>
+              )}
+              {cam.unavailableReason ? (
+                <Text fontSize="xs" color="lmFg.muted" mb={2}>
+                  {cam.unavailableReason === 'seb_blocked'
+                    ? 'Safe Exam Browser blocked the camera on this machine — the camera is not enabled in the exam settings file. They were let in rather than stranded.'
+                    : `Started on a machine with no usable camera${
+                        cam.unavailableReason === 'notfound' ? ' (no camera found)' : ''
+                      }. They were let in rather than stranded — check the seat, or move them to a camera machine.`}
+                </Text>
+              ) : (
+                !cam.detectionAvailable && (
+                  <Text fontSize="xs" color="lmFg.muted" mb={2}>
+                    Face detection was not available in this browser — these frames are kept for you to read.
+                  </Text>
+                )
+              )}
+              <Button
+                size="xs"
+                variant="outline"
+                isLoading={busyId === attempt._id}
+                onClick={() => markChecked(attempt)}
+              >
+                I have checked this
+              </Button>
+            </Box>
+          );
+        })}
+      </Stack>
+    </Alert>
+  );
+}
+
+
+/**
+ * Webcam waivers — the escape hatch, from Live control.
+ *
+ * The requirement is right for the room but cannot serve the one student whose
+ * camera will not work; this is where a teacher lets that student in without one.
+ * A waiver targets a student who has not started (the one stuck at "camera
+ * blocked"), so it is granted from the roster by name — the same search that
+ * filters the rest of the panel finds them. Waived students are listed with the
+ * teacher who allowed it, and a single click withdraws it. Once granted, the
+ * student refreshes the pre-test screen and starts without a camera.
+ */
+function WebcamWaivers({ quizId, classId, notStarted, attempts, exemptions, search, onDone, toast }) {
+  const [busyId, setBusyId] = useState(null);
+
+  const nameById = new Map();
+  [...attempts, ...notStarted].forEach((person) => {
+    const id = String(person.studentId || person._id || '');
+    if (id) nameById.set(id, nameOf(person));
+  });
+
+  const setWaiver = async (studentId, exempt) => {
+    setBusyId(studentId);
+    try {
+      await lmApi.setWebcamExemption(classId, quizId, studentId, exempt);
+      toast({
+        title: exempt ? 'Webcam waived' : 'Waiver withdrawn',
+        description: exempt
+          ? 'They can start without a camera once they refresh the start screen.'
+          : 'The camera is required for them again.',
+        status: 'success',
+        duration: 5000,
+      });
+      onDone();
+    } catch (err) {
+      toast({ title: err.message || 'Could not change the waiver', status: 'error', duration: 6000 });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const term = search.trim().toLowerCase();
+  const waivedIds = new Set((exemptions || []).map((row) => String(row.studentId)));
+  // Only not-started students, and only once a name is being searched — a hall of
+  // two hundred should not render as a list to scroll.
+  const candidates = term
+    ? notStarted
+        .filter((student) => !waivedIds.has(String(student.studentId)))
+        .filter((student) =>
+          [student.studentName, student.studentEmail, student.rollNumber]
+            .filter(Boolean)
+            .some((field) => String(field).toLowerCase().includes(term)),
+        )
+        .slice(0, 8)
+    : [];
+
+  return (
+    <Box mb={4} p={3} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md">
+      <Text fontSize="sm" fontWeight="700" mb={1}>
+        Webcam waivers
+      </Text>
+      <Text fontSize="xs" color="lmFg.muted" mb={2}>
+        For a student whose camera cannot be made to work. A waived student can start without one; the
+        sitting records that you allowed it. Search a name above to find someone who has not started.
+      </Text>
+
+      {(exemptions || []).length > 0 && (
+        <Stack spacing={1} mb={2}>
+          {(exemptions || []).map((row) => (
+            <Flex key={String(row.studentId)} align="center" gap={2} wrap="wrap">
+              <Badge colorScheme="green" fontSize="0.6rem">
+                waived
+              </Badge>
+              <Text fontSize="sm">{nameById.get(String(row.studentId)) || 'Student'}</Text>
+              {row.byName && (
+                <Text fontSize="xs" color="lmFg.muted">
+                  by {row.byName}
+                </Text>
+              )}
+              <Button
+                size="xs"
+                variant="ghost"
+                colorScheme="red"
+                isLoading={busyId === String(row.studentId)}
+                onClick={() => setWaiver(String(row.studentId), false)}
+              >
+                Undo
+              </Button>
+            </Flex>
+          ))}
+        </Stack>
+      )}
+
+      {term ? (
+        candidates.length > 0 ? (
+          <Stack spacing={1}>
+            {candidates.map((student) => (
+              <Flex key={String(student.studentId)} align="center" gap={2} wrap="wrap">
+                <Text fontSize="sm">{nameOf(student)}</Text>
+                {student.rollNumber && (
+                  <Badge fontSize="0.6rem" colorScheme="blue">
+                    {student.rollNumber}
+                  </Badge>
+                )}
+                <Button
+                  size="xs"
+                  variant="outline"
+                  isLoading={busyId === String(student.studentId)}
+                  onClick={() => setWaiver(String(student.studentId), true)}
+                >
+                  Waive webcam
+                </Button>
+              </Flex>
+            ))}
+          </Stack>
+        ) : (
+          <Text fontSize="xs" color="lmFg.subtle">
+            No not-yet-started student matches “{search}”.
+          </Text>
+        )
+      ) : null}
+    </Box>
+  );
+}
+
+
 export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast }) {
-  const { quiz, attempts = [] } = data || { quiz: null };
+  const { quiz, attempts = [], notStartedStudents = [], webcamExemptions = [] } = data || { quiz: null };
   const [minutesById, setMinutesById] = useState({});
   const [busyId, setBusyId] = useState(null);
   const [sebExempt, setSebExempt] = useState(false);
   const [search, setSearch] = useState('');
+  const [pulsing, setPulsing] = useState(false);
+  // The ring's colour, editable from here as well as from the quiz editor —
+  // which shade reads at range is something an invigilator only finds out once
+  // the hall is sitting under its own lights, and by then the editor is shut.
+  // Local state so the swatch answers the moment it is dragged; the write is
+  // debounced behind it, and the panel's refresh brings back the stored value
+  // once it lands.
+  const storedPulseColor = quiz?.settings?.invigilationPulseColor || DEFAULT_PULSE_COLOR;
+  const [pulseColor, setPulseColor] = useState(storedPulseColor);
+  const colourSaveRef = useRef(null);
   useSecondTick(isOpen);
+
+  useEffect(() => {
+    // Don't let a refresh that landed mid-edit yank the swatch back to the old
+    // colour: while a write is pending, the local value is the truth.
+    if (!colourSaveRef.current) setPulseColor(storedPulseColor);
+  }, [storedPulseColor]);
+
+  useEffect(() => () => clearTimeout(colourSaveRef.current), []);
 
   useEffect(() => {
     // Same reasoning as the reopen dialog: waiving SEB is a decision made for
@@ -553,6 +949,54 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
     }
   };
 
+  // Fire the invigilation pulse across every live screen at once, on the
+  // invigilator's word. It rides the heartbeat, so it reaches the room within a
+  // beat and is not instant — the button says as much. Always available, even
+  // on a quiz where the standing 30s pulse was never turned on: sweeping the
+  // hall on demand is the whole point of the button.
+  const pulseNow = async () => {
+    setPulsing(true);
+    try {
+      await lmApi.pulseQuiz(classId, quiz._id);
+      toast({
+        title: 'Pulse sent',
+        description: 'Every live screen rings within one heartbeat (up to 30s from now).',
+        status: 'success',
+        duration: 5000,
+      });
+    } catch (err) {
+      toast({ title: err.message || 'Could not send the pulse', status: 'error', duration: 6000 });
+    } finally {
+      setPulsing(false);
+    }
+  };
+
+  // The colour is a quiz setting, so it is written the way the editor writes it
+  // and reaches a live sitting on its next heartbeat — a paper already open
+  // picks up the new shade without being touched. Debounced because a colour
+  // input fires as it is dragged, and one PATCH per shade dragged through is a
+  // write a frame on a route that is doing real work during a sitting.
+  const chooseColor = (next) => {
+    setPulseColor(next);
+    clearTimeout(colourSaveRef.current);
+    colourSaveRef.current = setTimeout(async () => {
+      try {
+        await lmApi.updateQuiz(classId, quiz._id, {
+          settings: { invigilationPulseColor: next },
+        });
+      } catch (err) {
+        toast({
+          title: err.message || 'Could not change the pulse colour',
+          status: 'error',
+          duration: 6000,
+        });
+        setPulseColor(storedPulseColor);
+      } finally {
+        colourSaveRef.current = null;
+      }
+    }, 400);
+  };
+
   if (!quiz) return null;
 
   // Full screen on a phone: this is the panel an invigilator holds in one hand
@@ -579,17 +1023,51 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
             shutOut={lockedOut.length}
             now={now}
           />
+
+          {/* Under the clock, above every control: the panel is opened mid-hall,
+              and the two questions it is opened for after "who is stuck" are
+              "what is the room code again" and "what do I give this laptop that
+              will not run SEB". Both answers belong on screen, not behind a
+              second dialog opened from behind this one. */}
+          <ExamCodes settings={quiz.settings} mt={3} />
+          <HStack mt={3} spacing={3}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={pulseNow}
+              isLoading={pulsing}
+              loadingText="Sending pulse"
+              leftIcon={<span aria-hidden="true">◎</span>}
+            >
+              Pulse now
+            </Button>
+            <Tooltip label="The ring's colour, on every live screen within one heartbeat — Pulse now and the automatic pulse both use it.">
+              <Input
+                type="color"
+                size="sm"
+                w="46px"
+                p={1}
+                value={pulseColor}
+                onChange={(e) => chooseColor(e.target.value)}
+                aria-label="Invigilation pulse ring colour"
+              />
+            </Tooltip>
+          </HStack>
         </ModalHeader>
         <ModalCloseButton />
         <ModalBody pb={6}>
-          {/* Above the search box on purpose: this is the one thing in the panel
-              that staff must see without having looked for it. */}
+          {/* Above the search box on purpose: the two things in the panel staff
+              must see without having looked for them — a machine to check, and a
+              run of wrong code entries that may be somebody getting in from
+              outside the room. */}
           <SuspectMachines
             attempts={attempts}
             classId={classId}
             onDone={onDone}
             toast={toast}
           />
+          <WebcamAlerts attempts={attempts} classId={classId} onDone={onDone} toast={toast} />
+          <CodeGuessAlerts attempts={attempts} notStarted={notStartedStudents} />
 
           {/* One box, filtering every list below it. In a hall of two hundred
               the panel is opened because one person put their hand up, and the
@@ -603,6 +1081,20 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
               aria-label="Search students"
             />
           </FormControl>
+
+          {/* ---- the webcam escape hatch ---- */}
+          {quiz.settings?.requireWebcam && (
+            <WebcamWaivers
+              quizId={quiz._id}
+              classId={classId}
+              notStarted={notStartedStudents}
+              attempts={attempts}
+              exemptions={webcamExemptions}
+              search={search}
+              onDone={onDone}
+              toast={toast}
+            />
+          )}
 
           {/* ---- who has been shut out ---- */}
           <SectionCard

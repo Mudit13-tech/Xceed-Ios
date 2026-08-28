@@ -649,6 +649,8 @@ body {
 .content-card {
     background-color: white;
     width: 25rem;
+    max-width: 100%;
+    box-sizing: border-box;
     margin-bottom: 2rem;
     height: fit-content;
     border-radius: 1.3rem;
@@ -658,7 +660,9 @@ body {
 }
 .cards-container {
     margin-top: 2rem;
-    overflow-y: scroll;
+    overflow-y: auto;
+    max-width: 100%;
+    box-sizing: border-box;
     -ms-overflow-style: none;
     scrollbar-width: none;
     padding-top: 0.9rem;
@@ -710,6 +714,10 @@ body {
 }
 .end-container {
     width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: space-evenly;
 }
 .search-bar-panel {
     float: right;
@@ -718,9 +726,21 @@ body {
     border-radius: 100px;
     position: relative;
     width: 25rem;
+    max-width: 100%;
+    box-sizing: border-box;
     margin-top: 1.3rem;
     margin-bottom: 1.3rem;
     transition: all 300ms;
+}
+
+@media (max-width: 576px) {
+    .content-card {
+        width: 100%;
+    }
+    .search-bar-panel {
+        width: 100%;
+        float: none;
+    }
 }
 
 .search-bar-panel .search-button-image {

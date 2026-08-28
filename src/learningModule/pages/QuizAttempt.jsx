@@ -27,6 +27,7 @@ import useAnswerAutosave from '../hooks/useAnswerAutosave';
 import useQuestionPrefetch from '../hooks/useQuestionPrefetch';
 import QuizReview from '../components/QuizReview';
 import QuizStage from '../components/QuizStage';
+import WebcamProctor from '../components/WebcamProctor';
 import QuizCalculator from '../components/QuizCalculator';
 import NumericKeypad from '../components/NumericKeypad';
 import { fullscreenSupported, requestQuizFullscreen, scrollStageToTop } from '../quizStage';
@@ -172,6 +173,15 @@ export default function QuizAttempt() {
   const navigate = useNavigate();
 
   const [settings, setSettings] = useState(null);
+  // The last "pulse now" the teacher fired from live control, as it arrives on
+  // the heartbeat. Handed to the stage's ExamPulse, which blooms once for a
+  // stamp newer than the last it saw and ignores a stale one (see ExamPulse).
+  const [manualPulseAt, setManualPulseAt] = useState(null);
+  // The ring colour as of the last heartbeat. Null until one has answered, at
+  // which point it wins over the copy loaded with the paper: the teacher can
+  // change the colour from live control mid-sitting, and this is the channel
+  // that carries it to a page that has been open since before the change.
+  const [livePulseColor, setLivePulseColor] = useState(null);
   // Title, subject and faculty for the banner, taken from the quiz itself:
   // the sitting is the one screen that has to identify itself without leaning
   // on the class page around it.
@@ -471,7 +481,15 @@ export default function QuizAttempt() {
     onViolation: (type, at, detail) => lmApi.recordViolation(classId, attemptId, type, at, detail),
     // `env` is present only on the beats that carry a machine fingerprint; see
     // ENV_PROBE_EVERY in useProctoring.
-    onHeartbeat: (env) => lmApi.heartbeat(classId, attemptId, env),
+    onHeartbeat: async (env) => {
+      const res = await lmApi.heartbeat(classId, attemptId, env);
+      // A manual pulse the teacher fired reaches the room on this channel. Pass
+      // the stamp down whenever it moves; ExamPulse decides whether it is fresh
+      // enough to bloom and guards against replaying one it already handled.
+      if (res?.manualPulseAt) setManualPulseAt(res.manualPulseAt);
+      if (res?.pulseColor) setLivePulseColor(res.pulseColor);
+      return res;
+    },
     onTerminated: () => reconcile(),
     // Gets whatever autosave is still holding onto the wire before the
     // violation report ends the sitting — see the note on `report` in
@@ -1344,13 +1362,29 @@ export default function QuizAttempt() {
    * and tabs never appear beside a live paper.
    */
   return (
-    <QuizStage
-      subject={[banner.subject, klass?.subject, klass?.name].find(Boolean)}
-      faculty={[banner.facultyName, klass?.ownerName].find(Boolean)}
-      title={banner.title}
-      autoFullscreen={wantsFullscreen}
-    >
-      {content}
-    </QuizStage>
+    <>
+      {/* The webcam watch, when the paper requires one. Runs for the length of
+          the sitting, reports what it sees, and its self-view floats over the
+          stage. Fire-and-forget reporting — a failed report must never stall the
+          paper. */}
+      <WebcamProctor
+        active={sitting && Boolean(settings?.requireWebcam)}
+        onReport={(body) => {
+          lmApi.recordWebcamCheck(classId, attemptId, body).catch(() => {});
+        }}
+      />
+      <QuizStage
+        subject={[banner.subject, klass?.subject, klass?.name].find(Boolean)}
+        faculty={[banner.facultyName, klass?.ownerName].find(Boolean)}
+        title={banner.title}
+        autoFullscreen={wantsFullscreen}
+        pulse={wantsFullscreen}
+        autoPulse={wantsFullscreen && settings?.invigilationPulse !== false}
+        pulseColor={livePulseColor || settings?.invigilationPulseColor}
+        manualPulseAt={manualPulseAt}
+      >
+        {content}
+      </QuizStage>
+    </>
   );
 }

@@ -152,8 +152,10 @@ describe('the paper as a download', () => {
 });
 
 describe('the Safe Exam Browser access code', () => {
-  it('is on the card once the paper is published, and shows the code once', async () => {
-    setSebBypassCode.mockResolvedValue({ code: 'K7PQ4M2X', settings: { sebBypassEnabled: true } });
+  it('is on the card once the paper is published, and keeps showing the code', async () => {
+    setSebBypassCode.mockResolvedValue({
+      settings: { sebBypassEnabled: true, sebBypassCode: 'K7PQ4M2X' },
+    });
     await render(listed({ settings: { deliveryMode: 'one_at_a_time', requireSafeExamBrowser: true } }));
 
     fireEvent.click(screen.getByRole('button', { name: /access code/i }));
@@ -161,7 +163,27 @@ describe('the Safe Exam Browser access code', () => {
 
     await waitFor(() => expect(setSebBypassCode).toHaveBeenCalledWith('c1', 'q1', {}));
     expect(await screen.findByText('K7PQ4M2X')).toBeTruthy();
-    expect(screen.getByText(/will not be shown again/i)).toBeTruthy();
+    /* The code used to be shown once and never again, on the reasoning that
+       keeps a password hashed. It is handed out by hand by a teacher, so "once"
+       only ever meant minting a replacement — retiring the code already given
+       out — and the promise is gone with the behaviour. */
+    expect(screen.queryByText(/will not be shown again/i)).toBeNull();
+  });
+
+  it('shows a code the card already knows about, without opening anything', async () => {
+    await render(
+      listed({
+        settings: {
+          deliveryMode: 'one_at_a_time',
+          requireSafeExamBrowser: true,
+          sebBypassEnabled: true,
+          sebBypassCode: 'ZX8HT4',
+        },
+      }),
+    );
+    // On the card itself: it is wanted with a student standing in front of you,
+    // which is a moment too late to go looking through a dialog for it.
+    expect(await screen.findByText('ZX8HT4')).toBeTruthy();
   });
 
   it('stays off a paper with no lockdown to bypass', async () => {

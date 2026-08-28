@@ -294,12 +294,12 @@ const lmApi = {
   // Accounts are always provisioned for addresses without one, and the platform
   // role is always granted to people who already have an account without it —
   // both were once modal checkboxes and are now the only supported behaviour.
-  inviteMembers: (classId, emails, role) =>
+  inviteMembers: (classId, emails, role, options = {}) =>
     request(`/classes/${classId}/members/invite`, {
       method: 'POST',
       body: {
         emails,
-        rollNumbers: options.rollNumbers,
+        rollNumbers: options?.rollNumbers,
         role,
         createAccounts: true,
         grantRoleToExisting: true,
@@ -416,6 +416,33 @@ const lmApi = {
      quizController.clearVmFlag. */
   markVmChecked: (classId, attemptId) =>
     request(`/classes/${classId}/attempts/${attemptId}/vm-checked`, { method: 'POST', body: {} }),
+
+  /* The webcam watch reporting what it saw — see quizController.recordWebcamCheck.
+     Best-effort: the sitting must not stall on a failed report, so callers fire
+     and forget. `image` is a small JPEG data URI, sent only on a flagged frame. */
+  recordWebcamCheck: (classId, attemptId, body) =>
+    request(`/classes/${classId}/attempts/${attemptId}/webcam`, { method: 'POST', body: body || {} }),
+
+  /* An invigilator confirming they have looked at a webcam flag — the mirror of
+     markVmChecked. Clears the flag off the live panel without judging it. */
+  markWebcamChecked: (classId, attemptId) =>
+    request(`/classes/${classId}/attempts/${attemptId}/webcam-checked`, { method: 'POST', body: {} }),
+
+  /* Grant (or withdraw) a webcam waiver for one student, from Live control — the
+     escape hatch for a camera that cannot be made to work. See
+     quizController.setWebcamExemption. */
+  setWebcamExemption: (classId, quizId, studentId, exempt) =>
+    request(`/classes/${classId}/quizzes/${quizId}/webcam-exempt`, {
+      method: 'POST',
+      body: { studentId, exempt },
+    }),
+
+  /* Fire the invigilation pulse across every live screen at once — the same 30s
+     bloom asked for out of turn from the live panel. It rides the heartbeat, so
+     a sitting sees it within one beat and skips its next automatic ring. See
+     quizController.triggerPulse. */
+  pulseQuiz: (classId, quizId) =>
+    request(`/classes/${classId}/quizzes/${quizId}/pulse`, { method: 'POST', body: {} }),
   setQuizCollaborators: (classId, quizId, emails) =>
     request(`/classes/${classId}/quizzes/${quizId}/collaborators`, { method: 'POST', body: { emails } }),
   deleteQuizResponses: (classId, quizId) =>
@@ -424,16 +451,48 @@ const lmApi = {
 
   /* quiz sitting */
   quizBrief: (classId, quizId) => request(`/classes/${classId}/quizzes/${quizId}/brief`),
+  /* Check the Safe Exam Browser access code on its own, without spending the
+     sitting. The pre-test screen asks the two gates in order — right browser,
+     then right room — so it needs to know the code is good before it draws the
+     room-code pad. Throws the usual LmApiError on a wrong code; resolves with
+     `{ ok: true, roomCodeRequired }` on a right one. Nothing is granted by it:
+     `startAttempt` checks the code again from scratch. */
+  verifyAccessCode: (classId, quizId, code) =>
+    request(`/classes/${classId}/quizzes/${quizId}/verify-access-code`, {
+      method: 'POST',
+      // The same field name the start endpoint reads, because the shared rate
+      // limiter counts guesses by that field.
+      body: { sebBypassCode: code },
+    }),
+  /* Check the room code on its own, the moment it is complete. Same shape as
+     `verifyAccessCode` and the same shared guess budget; resolves with
+     `{ ok: true }`, throws LmApiError on a wrong code. Grants nothing —
+     `startAttempt` checks the code again from scratch. */
+  verifyRoomCode: (classId, quizId, code) =>
+    request(`/classes/${classId}/quizzes/${quizId}/verify-room-code`, {
+      method: 'POST',
+      body: { roomCode: code },
+    }),
   // The only call that mints a session token, so it is also the only one that
   // stores it. Everything else on the attempt picks it up from `request`.
   // `sebBypassCode` is only ever sent for a quiz that requires Safe Exam
   // Browser and could not be opened in it — see QuizBrief for where a student
-  // enters one. Sending it on every other quiz is harmless: the server only
-  // looks at it when `requireSafeExamBrowser` is on.
-  startAttempt: async (classId, quizId, sebBypassCode) => {
+  // enters one. `roomCode` is the invigilator's spoken code, sent when the quiz
+  // requires one. Sending either on a quiz that does not use it is harmless: the
+  // server only looks at each when its own setting is on.
+  startAttempt: async (classId, quizId, { sebBypassCode, roomCode, cameraReady, cameraUnavailable } = {}) => {
+    const body = {};
+    if (sebBypassCode) body.sebBypassCode = sebBypassCode;
+    if (roomCode) body.roomCode = roomCode;
+    // Only ever true once the pre-test screen has the camera grant in hand; the
+    // server refuses a required-camera start without it.
+    if (cameraReady) body.cameraReady = true;
+    // The other way past the webcam gate: a machine with no usable camera. The
+    // server lets it start but flags the sitting; a plain refusal sends neither.
+    if (cameraUnavailable) body.cameraUnavailable = cameraUnavailable;
     const result = await request(`/classes/${classId}/quizzes/${quizId}/attempts`, {
       method: 'POST',
-      body: sebBypassCode ? { sebBypassCode } : {},
+      body,
     });
     quizSession.save(result?.attempt?._id, result?.sessionToken);
     return result;
@@ -815,6 +874,9 @@ const lmApi = {
   /* lm-admin — faculty accounts. Same 403 for anyone who is not a platform admin. */
   adminListFaculty: (q) => request(`/admin/faculty${qs({ q })}`),
   adminCreateFaculty: (body) => request('/admin/faculty', { method: 'POST', body }),
+  /* lm-admin — student accounts. Same 403 for anyone who is not a platform admin. */
+  adminListStudents: (params = {}) => request(`/admin/students${qs(params)}`),
+  adminCreateStudent: (body) => request('/admin/students', { method: 'POST', body }),
 
   /* ---- discussion forum ---- */
   listDiscussions: (classId) => request(`/classes/${classId}/discussions`),
@@ -990,6 +1052,12 @@ const lmApi = {
   },
   setSebBypassCode: (classId, quizId, body) =>
     request(`/classes/${classId}/quizzes/${quizId}/seb-bypass-code`, { method: 'POST', body }),
+
+  /* The room code the invigilator reads out to the hall. `{}` mints a fresh one
+     (retiring the old), `{ clear: true }` removes it. Returns the plaintext for
+     the teacher to read out — see quizController.setRoomCode. */
+  setRoomCode: (classId, quizId, body = {}) =>
+    request(`/classes/${classId}/quizzes/${quizId}/room-code`, { method: 'POST', body }),
 
   /* Attachments are filed under the class that owns them, so the upload is
      class-scoped: the server writes into that class's folder and mints a URL
