@@ -7,8 +7,8 @@ android {
         applicationId "in.ac.nitj.xceed.learning.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 6
-        versionName "2.1.19"
+        versionCode 8
+        versionName "2.1.20"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -43,6 +43,28 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+// Force-remove READ_MEDIA_IMAGES and READ_MEDIA_VIDEO permissions from merged manifest
+// These are injected by io.ionic.libs:ioncamera-android AAR and tools:node="remove" doesn't strip them
+tasks.whenTaskAdded { task ->
+    if (task.name == 'processReleaseMainManifest') {
+        task.doLast {
+            def manifestDir = "${buildDir}/intermediates/merged_manifest/release/processReleaseMainManifest"
+            def manifestFile = file("${manifestDir}/AndroidManifest.xml")
+            if (manifestFile.exists()) {
+                def content = manifestFile.text
+                content = content.replaceAll(
+                    /(?m)^\s*<uses-permission[^>]*android\.permission\.READ_MEDIA_IMAGES[^>]*\/>\s*\n?/, ''
+                )
+                content = content.replaceAll(
+                    /(?m)^\s*<uses-permission[^>]*android\.permission\.READ_MEDIA_VIDEO[^>]*\/>\s*\n?/, ''
+                )
+                manifestFile.text = content
+                println "Stripped READ_MEDIA_IMAGES and READ_MEDIA_VIDEO from merged manifest"
+            }
+        }
+    }
+}
 
 try {
     def servicesJSON = file('google-services.json')
