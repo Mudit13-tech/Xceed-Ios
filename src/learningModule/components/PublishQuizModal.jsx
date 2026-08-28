@@ -5,6 +5,7 @@ import {
   Badge,
   Box,
   Button,
+  Checkbox,
   Divider,
   Flex,
   FormControl,
@@ -96,12 +97,23 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
   // '' until the teacher has answered the results question — see `answered`.
   const [resultsMode, setResultsMode] = useState('');
   const [resultReleaseAt, setResultReleaseAt] = useState('');
+  /* The room code, asked here for the same reason the results question is: it
+     is a decision about how the paper is sat, and the only other place to make
+     it was a button on the quiz card — which a teacher reliably remembers about
+     when they are already standing in front of a hall that has started. '' until
+     answered, exactly like `resultsMode`. */
+  const [roomCodeMode, setRoomCodeMode] = useState('');
+  const [regenerateRoomCode, setRegenerateRoomCode] = useState(false);
+  // The code the server actually minted, shown once published so it can be read
+  // out. Only ever arrives on a teacher's response.
+  const [roomCode, setRoomCode] = useState('');
   const [saving, setSaving] = useState(false);
   const [link, setLink] = useState('');
   const toast = useToast();
 
   const url = link && typeof window !== 'undefined' ? new URL(link, window.location.origin).href : '';
   const { onCopy, hasCopied } = useClipboard(url);
+  const roomClip = useClipboard(roomCode);
   /* No Safe Exam Browser link here, deliberately.
      A `seb://` launch has to carry a token, because SEB fetches the settings
      itself with none of the student's session — and a token is minted for one
@@ -128,6 +140,15 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
     hydratedFor.current = String(quiz._id);
 
     setLink('');
+    setRoomCode('');
+    setRegenerateRoomCode(false);
+    /* Unanswered until a teacher answers it, on the same rule as the results
+       question below. A paper that already carries a code has been answered
+       once — `roomCode` on a teacher's copy, `roomCodeRequired` on the list's
+       student-facing one, whichever this quiz was serialised with. */
+    const currentRoomCode = quiz.settings?.roomCode || '';
+    const roomCodeSet = Boolean(currentRoomCode || quiz.settings?.roomCodeRequired);
+    setRoomCodeMode(roomCodeSet ? 'required' : quiz.published ? 'none' : '');
     setPublishAt(toDateTimeInput(quiz.publishAt) || nowForInput());
     setAvailableFrom(toDateTimeInput(quiz.settings?.availableFrom) || nowPlus5ForInput());
     setAvailableTo(toDateTimeInput(quiz.settings?.availableTo));
@@ -185,6 +206,11 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
   );
   const missingRelease = resultsMode === 'scheduled' && !resultReleaseAt;
   const unanswered = !resultsMode;
+  // What this paper already has, which decides whether "require a room code"
+  // means "mint one" or "keep the one that is set".
+  const existingRoomCode = quiz?.settings?.roomCode || '';
+  const roomCodeSet = Boolean(existingRoomCode || quiz?.settings?.roomCodeRequired);
+  const roomUnanswered = !roomCodeMode;
   const outOfOrder =
     publishInPast ||
     startsBeforePublished ||
@@ -192,7 +218,8 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
     missingCutOff ||
     resultsBeforeClose ||
     missingRelease ||
-    unanswered;
+    unanswered ||
+    roomUnanswered;
 
   const submit = async () => {
     setSaving(true);
@@ -204,11 +231,21 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
         startDeadline: cutOff || null,
         resultReleaseAt: releaseAt || null,
       };
+      /* Only ever sent as an instruction, never as a code: the server mints it,
+         so a code cannot be chosen (and so guessed) by whoever sets it up.
+         Omitted entirely when the answer is "keep what is already set", which is
+         what a re-save of an unchanged paper sends. */
+      if (roomCodeMode === 'required' && (!roomCodeSet || regenerateRoomCode)) {
+        payload.roomCode = 'generate';
+      } else if (roomCodeMode === 'none') {
+        payload.roomCode = 'none';
+      }
       if (!isAlreadyPublished) {
         payload.publishAt = publishAt || null;
       }
       const result = await lmApi.publishQuiz(classId, quiz._id, payload);
       setLink(result.link);
+      setRoomCode(result.roomCode || '');
       await onPublished?.();
     } catch (error) {
       toast({
@@ -266,6 +303,38 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
                   </Text>
                 </Box>
               </Alert>
+
+              {/* Above the link, deliberately: the link is pasted somewhere and
+                  forgotten, while this has to be carried into the room and read
+                  out. A teacher who closes this dialog without noticing it can
+                  still get it back from the quiz card, but they should not have
+                  to. */}
+              {roomCode && (
+                <Box
+                  borderWidth="1px"
+                  borderColor="lmHue.blue200"
+                  bg="lmHue.blue50"
+                  borderRadius="md"
+                  p={4}
+                  mb={4}
+                >
+                  <Text fontSize="xs" color="lmFg.muted" mb={1}>
+                    Room code — read this out to the hall when the sitting starts
+                  </Text>
+                  <HStack>
+                    <Text fontFamily="mono" fontSize="2xl" fontWeight="800" letterSpacing="0.15em">
+                      {roomCode}
+                    </Text>
+                    <Button size="xs" onClick={roomClip.onCopy}>
+                      {roomClip.hasCopied ? 'Copied' : 'Copy'}
+                    </Button>
+                  </HStack>
+                  <Text fontSize="xs" color="lmFg.muted" mt={1}>
+                    Students cannot start without it. It is on the quiz card too, and generating a
+                    new one there retires this.
+                  </Text>
+                </Box>
+              )}
 
               <FormLabel fontSize="sm">Share this link</FormLabel>
               <HStack>
@@ -379,6 +448,58 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
                 </FormHelperText>
               </ClockRow>
 
+              {/* Not a moment on the timeline above — it is the one thing about
+                  the sitting itself that has to be decided before the paper goes
+                  out, and the only other place to decide it was a button on the
+                  quiz card that a teacher remembers about while the hall is
+                  already writing. Marked with a pin rather than a step number so
+                  it does not read as a fifth clock. */}
+              <ClockRow
+                step="📍"
+                title="Room code"
+                subtitle="A short code you read out to the room when the sitting begins. Students type it on an on-screen keypad to start, so somebody sitting the paper from anywhere else never hears it — it is what stops a friend taking the test remotely."
+                isInvalid={roomUnanswered}
+                action={
+                  roomUnanswered ? (
+                    <Badge colorScheme="orange" borderRadius="full" px={2}>
+                      Answer required
+                    </Badge>
+                  ) : null
+                }
+              >
+                <RadioGroup value={roomCodeMode} onChange={setRoomCodeMode}>
+                  <Stack spacing={2}>
+                    <Radio value="required">
+                      <Text fontSize="sm">Require a room code</Text>
+                      <Text fontSize="xs" color="lmFg.subtle">
+                        {roomCodeSet
+                          ? 'Keeps the code this paper already has — you can replace it below, or any time from the quiz card.'
+                          : 'One is generated when you publish and shown here, ready to read out.'}
+                      </Text>
+                    </Radio>
+                    <Radio value="none">
+                      <Text fontSize="sm">No room code</Text>
+                      <Text fontSize="xs" color="lmFg.subtle">
+                        Anyone in the class can start from wherever they are.
+                      </Text>
+                    </Radio>
+                  </Stack>
+                </RadioGroup>
+                {roomCodeMode === 'required' && roomCodeSet && (
+                  <Checkbox
+                    mt={3}
+                    size="sm"
+                    isChecked={regenerateRoomCode}
+                    onChange={(event) => setRegenerateRoomCode(event.target.checked)}
+                  >
+                    <Text fontSize="xs">
+                      Generate a new code, retiring the current one
+                      {existingRoomCode ? ` (${existingRoomCode})` : ''}
+                    </Text>
+                  </Checkbox>
+                )}
+              </ClockRow>
+
               <Divider mb={5} />
 
               <ClockRow
@@ -481,6 +602,14 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
                   <AlertIcon />
                   Set the time the results are announced, or choose to show each student their score
                   as they submit.
+                </Alert>
+              )}
+              {roomUnanswered && (
+                <Alert status="warning" borderRadius="md" mt={4} fontSize="sm">
+                  <AlertIcon />
+                  Choose whether this paper needs a room code. It is the check that the student
+                  sitting it is in the room you are invigilating, and it is far harder to add once
+                  the class has the link.
                 </Alert>
               )}
               {unanswered && (

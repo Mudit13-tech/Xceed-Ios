@@ -35,11 +35,17 @@ vi.mock('react-router-dom', async () => {
 const quizResults = vi.fn();
 const reopenQuizAttempt = vi.fn();
 const listQuizzes = vi.fn();
+const markWebcamChecked = vi.fn();
+const setWebcamExemption = vi.fn();
+const updateQuiz = vi.fn();
 vi.mock('../api/lmApi', () => ({
   default: {
     quizResults: (...args) => quizResults(...args),
     reopenQuizAttempt: (...args) => reopenQuizAttempt(...args),
     listQuizzes: (...args) => listQuizzes(...args),
+    markWebcamChecked: (...args) => markWebcamChecked(...args),
+    setWebcamExemption: (...args) => setWebcamExemption(...args),
+    updateQuiz: (...args) => updateQuiz(...args),
     quizResultsCsvUrl: () => 'https://api.test/export.csv',
     LmApiError: class LmApiError extends Error {},
   },
@@ -298,5 +304,105 @@ describe('the live exam control panel', () => {
     expect(
       within(dialog).queryByRole('checkbox', { name: /without safe exam browser/i }),
     ).toBeNull();
+  });
+
+  it('waives the webcam for a searched not-started student', async () => {
+    setWebcamExemption.mockResolvedValue({ exempt: true, webcamExemptions: [] });
+    const fixture = resultsFixture(quizWith({ requireWebcam: true }), [writingWithoutSeb()]);
+    fixture.notStartedStudents = [
+      { studentId: 'u-stuck', studentName: 'Meena Roy', rollNumber: '21EC050' },
+    ];
+    fixture.webcamExemptions = [];
+    const dialog = await openPanel(fixture);
+    const panel = within(dialog);
+
+    // The waiver section is present for a webcam quiz; the candidate appears only
+    // once searched by name.
+    expect(panel.getByText(/webcam waivers/i)).toBeTruthy();
+    fireEvent.change(panel.getByPlaceholderText(/search by name/i), { target: { value: 'Meena' } });
+
+    fireEvent.click(await panel.findByRole('button', { name: /waive webcam/i }));
+    await waitFor(() => expect(setWebcamExemption).toHaveBeenCalledWith('c1', 'q1', 'u-stuck', true));
+  });
+
+  it('raises a webcam flag with its frames and lets staff clear it', async () => {
+    markWebcamChecked.mockResolvedValue({ cleared: true });
+    const fixture = resultsFixture(quizWith(), [
+      writingWithoutSeb({
+        _id: 'a7',
+        studentName: 'Ravi Kumar',
+        sebBypassed: false,
+        webcam: {
+          noFaceCount: 3,
+          blockedCount: 0,
+          detectionAvailable: true,
+          flaggedAt: new Date(Date.now() - 60000).toISOString(),
+          clearedAt: null,
+          thumbnails: [{ at: new Date().toISOString(), type: 'no_face', image: 'data:image/jpeg;base64,AAAA' }],
+        },
+      }),
+    ]);
+    const dialog = await openPanel(fixture);
+    const panel = within(dialog);
+
+    expect(panel.getByText(/1 webcam flag to check now/i)).toBeTruthy();
+    expect(panel.getByText(/3× no face/i)).toBeTruthy();
+    // The frame itself is shown for the invigilator to read.
+    expect(panel.getByRole('img', { name: /webcam frame/i })).toBeTruthy();
+
+    fireEvent.click(panel.getByRole('button', { name: /i have checked this/i }));
+    await waitFor(() => expect(markWebcamChecked).toHaveBeenCalledWith('c1', 'a7'));
+  });
+
+  it('flags a no-show who is grinding the room code, and stays quiet on a single fumble', async () => {
+    const fixture = resultsFixture(quizWith(), [
+      // A sitting that eventually started after two wrong access codes — flagged.
+      writingWithoutSeb({ _id: 'a9', studentName: 'Ravi Kumar', gateFailures: 2, gateFailureType: 'access' }),
+    ]);
+    // Two no-shows: one grinding the room code, one honest single mistype.
+    fixture.notStartedStudents = [
+      { studentId: 'u-grind', studentName: 'Nia Sharma', rollNumber: '21EC099', gateFailures: 4, gateFailureType: 'room' },
+      { studentId: 'u-fumble', studentName: 'Ken Das', rollNumber: '21EC100', gateFailures: 1, gateFailureType: 'room' },
+    ];
+    const dialog = await openPanel(fixture);
+    const panel = within(dialog);
+
+    // The header names the count — two above the threshold (Ravi ×2, Nia ×4).
+    expect(panel.getByText(/2 students with repeated wrong code entries/i)).toBeTruthy();
+    // The grinding no-show is named with her count and that she never started.
+    expect(panel.getByText('Nia Sharma')).toBeTruthy();
+    expect(panel.getByText(/4× wrong room-code/i)).toBeTruthy();
+    // Ravi eventually started, but his two wrong access codes are flagged too.
+    expect(panel.getByText(/2× wrong access-code/i)).toBeTruthy();
+    // The single honest fumble is below the threshold and is not raised.
+    expect(panel.queryByText('Ken Das')).toBeNull();
+  });
+  /**
+   * The pulse colour, changed from the panel rather than from the editor.
+   *
+   * Which shade reads from the back of a hall is something staff only find out
+   * once the room is sitting under its own lights, and by then the quiz editor
+   * is shut. The swatch writes the same quiz setting the editor writes, so the
+   * change reaches every live screen on its next heartbeat.
+   */
+  it('changes the invigilation pulse colour from the panel', async () => {
+    updateQuiz.mockResolvedValue({});
+    const dialog = await openPanel(
+      resultsFixture(quizWith({ invigilationPulse: true, invigilationPulseColor: '#ff0066' }), [
+        writingWithoutSeb(),
+      ]),
+    );
+    const swatch = within(dialog).getByLabelText(/invigilation pulse ring colour/i);
+    // Opens on the colour the quiz is already carrying, not the default.
+    expect(swatch.value).toBe('#ff0066');
+
+    fireEvent.change(swatch, { target: { value: '#00cc88' } });
+    // Debounced behind the swatch — a colour input fires as it is dragged — so
+    // the write lands shortly after, not on the event.
+    await waitFor(() =>
+      expect(updateQuiz).toHaveBeenCalledWith('c1', 'q1', {
+        settings: { invigilationPulseColor: '#00cc88' },
+      }),
+    );
   });
 });

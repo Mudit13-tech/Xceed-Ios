@@ -1,5 +1,6 @@
 import { Flex } from '@chakra-ui/react'
 import { useRive, Layout, Fit, Alignment } from '@rive-app/react-canvas'
+import '../../utils/riveWasm.js';
 
 export const LogoAnimation = (props) => {
   const { RiveComponent } = useRive({

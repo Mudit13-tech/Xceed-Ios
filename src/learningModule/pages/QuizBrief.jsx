@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -14,6 +14,7 @@ import {
   ListIcon,
   ListItem,
   Input,
+  Spinner,
   Table,
   Tbody,
   Td,
@@ -27,7 +28,9 @@ import lmApi from '../api/lmApi';
 import serverClock from '../serverClock';
 import { sebDiagnosis } from '../sebDiagnosis';
 import QuizStage from '../components/QuizStage';
+import CodeKeypad from '../components/CodeKeypad';
 import RichText from '../components/RichText';
+import { requestCamera, stopStream } from '../webcam';
 import { ErrorState, Loading, SectionCard, StatTile } from '../components/common';
 import { formatDateTime } from '../format';
 import useProctoring, { isMobileDevice } from '../hooks/useProctoring';
@@ -221,6 +224,31 @@ export default function QuizBrief() {
   // reported the way a wrong guess would.
   const [sebCode, setSebCode] = useState('');
   const [showSebCode, setShowSebCode] = useState(false);
+  /* Whether the server has confirmed this code, and the request that asks it.
+     The two gates are asked in order — right browser, then right room — so the
+     screen has to know the code is good *before* it draws the room-code pad and
+     the Start button. Cleared on every edit of the field: a code that has been
+     changed since it was checked has not been checked. */
+  const [codeVerified, setCodeVerified] = useState(false);
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const [codeError, setCodeError] = useState('');
+  // The room code, entered on an on-screen keyboard (never the physical one) and
+  // sent only when the student actually presses Start — see CodeKeypad.
+  const [roomCode, setRoomCode] = useState('');
+  /* Whether the server has accepted this room code, and the check in flight.
+     Checked automatically the moment the entry is complete rather than on Start,
+     so a wrong code reads as a wrong code while the student can still do
+     something about it. Cleared on every edit: a code changed since it was
+     checked has not been checked. */
+  const [roomVerified, setRoomVerified] = useState(false);
+  const [verifyingRoom, setVerifyingRoom] = useState(false);
+  const [roomError, setRoomError] = useState('');
+  // The webcam grant, for a paper that requires one. 'idle' before we ask, then
+  // 'prompting', then 'granted' or a reason the student can act on. The Start
+  // button will not fire until this is 'granted'.
+  const [camState, setCamState] = useState('idle');
+  const camStreamRef = useRef(null);
+  const camVideoRef = useRef(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -258,6 +286,85 @@ export default function QuizBrief() {
       cancelled = true;
     };
   }, [brief?.settings, classId, quizId, isTeacher]);
+
+  /**
+   * The camera grant, asked for on this screen so a required-camera paper cannot
+   * be started without it. Requested once the brief has loaded and only for a
+   * student — a teacher previewing has nothing to start. The stream is held only
+   * to prove the grant and show a preview; it is stopped on the way to the paper,
+   * which acquires its own (with the permission already given, so no second
+   * prompt). `askCamera` is also the Try-again handler, and a full refresh is
+   * offered too, because a browser that remembers a block only re-prompts on
+   * reload.
+   */
+  const askCamera = useCallback(() => {
+    setCamState('prompting');
+    requestCamera()
+      .then((stream) => {
+        camStreamRef.current = stream;
+        setCamState('granted');
+        if (camVideoRef.current) {
+          camVideoRef.current.srcObject = stream;
+          camVideoRef.current.play().catch(() => {});
+        }
+      })
+      .catch((err) => setCamState(err?.reason || 'error'));
+  }, []);
+
+  /* Asked for last, and only once the room code has been accepted — the same
+     order in Safe Exam Browser as in an ordinary browser.
+
+     It used to be asked the moment the brief loaded, which put the camera
+     prompt in front of students who had not yet proved they were in the room and
+     might never start the paper at all: a light coming on, and a permission
+     dialog, for a sitting that had not begun. Held until the last gate passes,
+     the prompt arrives once, at the point the student is actually about to
+     start, and never for somebody who wandered onto the link.
+
+     A paper with no room code has nothing to wait for, so it asks as soon as the
+     browser gate is open, as before. */
+  const roomGateOpen = !brief?.settings?.roomCodeRequired || roomVerified;
+  useEffect(() => {
+    // Skipped when a teacher has waived the camera for this student — there is
+    // nothing to ask for, and the paper starts without one.
+    if (!brief?.settings?.requireWebcam || isTeacher || brief?.webcamExempt) return undefined;
+    if (!roomGateOpen) return undefined;
+    askCamera();
+    return () => {
+      stopStream(camStreamRef.current);
+      camStreamRef.current = null;
+    };
+  }, [brief?.settings?.requireWebcam, isTeacher, brief?.webcamExempt, roomGateOpen, askCamera]);
+
+  // Whether this screen is actually running inside Safe Exam Browser. It matters
+  // for the camera: a camera "denied" inside SEB is SEB's own config refusing it,
+  // not the student — and the student cannot change that config.
+  //
+  // `sebVerified` alone was too narrow to answer it, and the gap is where the
+  // whole point of this went: it is only ever computed for a paper that requires
+  // SEB, and only true once the Config Key matches. A webcam paper that does not
+  // demand SEB has no key at all, and a mis-keyed settings file fails the hash —
+  // in both, a student sitting in SEB looked to this screen like an ordinary
+  // browser, and a config-level block looked like them refusing. `sebLikely` is
+  // the server answering the presence question on its own terms (SEB's headers,
+  // or its name in the user agent). The local user-agent test stays as a last
+  // resort for a cached brief from a server that predates the field.
+  const inSeb =
+    Boolean(brief?.sebVerified) ||
+    Boolean(brief?.sebLikely) ||
+    /\bSEB(\b|_)/i.test(navigator.userAgent || '');
+  // A refusal by SEB's config rather than by the student. Treated as unavailable
+  // (let through, flagged) so a locked-down config does not strand a whole hall.
+  const cameraSebBlocked = camState === 'denied' && inSeb;
+  // "No usable camera here" — a desktop with no webcam, a browser that cannot
+  // open one, or a camera SEB blocked. Not a student refusal, so the paper is let
+  // through and flagged rather than blocked. Kept in step with the server's
+  // WEBCAM_UNAVAILABLE_REASONS.
+  const cameraUnavailable =
+    ['notfound', 'unsupported', 'insecure', 'inuse', 'error'].includes(camState) || cameraSebBlocked;
+  // The reason sent to the server — a real refusal outside SEB is not in the
+  // allow set, so it stays undefined and the start is turned away.
+  const cameraUnavailableReason = cameraSebBlocked ? 'seb_blocked' : cameraUnavailable ? camState : undefined;
 
   const opensIn = useCountdown(brief?.window?.notYetOpen ? brief.window.opensAt : null);
   const startDeadlineIn = useCountdown(
@@ -304,6 +411,93 @@ export default function QuizBrief() {
     lockKeyboard: false,
   });
 
+  /**
+   * Check the access code, before anything else is asked of this student.
+   *
+   * A student on an ordinary browser has nothing that answers "are you allowed
+   * to sit this outside Safe Exam Browser?" until the code is checked, and until
+   * that is answered there is no reason to show them the room-code pad or a
+   * Start button. So the code is checked on its own here rather than folded into
+   * Start, and only a pass opens the rest of the screen.
+   *
+   * It grants nothing by itself — `startAttempt` checks the same code again — so
+   * the worst a tampered `codeVerified` buys is the sight of a keypad.
+   */
+  const verifyCode = async () => {
+    const code = sebCode.trim().toUpperCase();
+    if (!code) return;
+    setVerifyingCode(true);
+    setCodeError('');
+    setStartError('');
+    try {
+      await lmApi.verifyAccessCode(classId, quizId, code);
+      setCodeVerified(true);
+    } catch (err) {
+      setCodeVerified(false);
+      setCodeError(err.message);
+    } finally {
+      setVerifyingCode(false);
+    }
+  };
+
+  /* The room code, checked the moment the entry is complete.
+
+     Automatic rather than a button, because a spoken five-character code has
+     exactly one moment worth checking at and asking the student to press a
+     second thing after typing it is a step that only ever adds a way to forget.
+     Fired once per complete entry — the effect below re-runs on every edit, but
+     `roomCodeLength` keeps a request from going out for a half-typed code, which
+     would spend the shared guess budget four times over before the code was even
+     finished.
+
+     Nothing is granted by a pass. `startAttempt` re-checks the code, so a
+     tampered `roomVerified` buys a green tick and nothing behind it. */
+  const roomCodeLength = brief?.settings?.roomCodeLength || 0;
+  const roomCodeComplete = roomCodeLength > 0 && roomCode.trim().length === roomCodeLength;
+  useEffect(() => {
+    if (!roomCodeComplete || isTeacher) return undefined;
+    let cancelled = false;
+    const code = roomCode.trim().toUpperCase();
+    setVerifyingRoom(true);
+    setRoomError('');
+    lmApi
+      .verifyRoomCode(classId, quizId, code)
+      .then(() => {
+        if (!cancelled) setRoomVerified(true);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setRoomVerified(false);
+        setRoomError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setVerifyingRoom(false);
+      });
+    /* A code edited while its check was in flight must not be overwritten by
+       that check landing late — the student would see a tick against a code they
+       had already changed. */
+    return () => {
+      cancelled = true;
+    };
+  }, [roomCodeComplete, roomCode, classId, quizId, isTeacher]);
+
+  /* The one state the pad draws itself with, folded out of the three flags so
+     the pad has a single thing to switch on. */
+  const roomStatus = verifyingRoom
+    ? 'checking'
+    : roomVerified
+      ? 'verified'
+      : roomError
+        ? 'error'
+        : 'idle';
+
+  /** Every edit invalidates the last verdict — see `roomVerified`. */
+  const onRoomCodeChange = useCallback((next) => {
+    setRoomCode(next);
+    setRoomVerified(false);
+    setRoomError('');
+  }, []);
+
   const start = async () => {
     setStarting(true);
     setStartError('');
@@ -313,7 +507,12 @@ export default function QuizBrief() {
       // too, so this is belt and braces — but it also keeps what was typed and
       // what was sent the same thing, which matters when a student reads the
       // field back to a teacher over the phone.
-      const result = await lmApi.startAttempt(classId, quizId, sebCode.trim().toUpperCase() || undefined);
+      const result = await lmApi.startAttempt(classId, quizId, {
+        sebBypassCode: sebCode.trim().toUpperCase() || undefined,
+        roomCode: roomCode.trim().toUpperCase() || undefined,
+        cameraReady: camState === 'granted' || undefined,
+        cameraUnavailable: cameraUnavailableReason,
+      });
       navigate(`/learning/class/${classId}/quiz/${quizId}/attempt/${result.attempt._id}`);
     } catch (err) {
       /* Inline, not a toast.
@@ -386,6 +585,27 @@ export default function QuizBrief() {
     const sebCodeOpen = showSebCode || sebRunningUnverified;
     // One sitting per student, so a used attempt is the end of it.
     const attemptUsed = brief.attemptsUsed > 0;
+    /* The first of the two gates, and the one everything else on this screen
+       waits behind: is this student in a browser allowed to sit the paper?
+       Safe Exam Browser answers it by itself — the server verified the header —
+       and an ordinary browser answers it with an access code that has been
+       checked (see `verifyCode`), never merely typed.
+
+       Until it is answered there is no Start button and no room-code pad. A
+       Start button sitting beside "Open this test in Safe Exam Browser" made the
+       launch look like one of two equal routes: students pressed Start,
+       collected a refusal they could not act on, and read it as the test being
+       broken. And the room code is the *second* question — asking it of somebody
+       who has not passed the first hands the entry pad to anyone who opens the
+       link. */
+    const sebGateOpen =
+      !settings.requireSafeExamBrowser || isTeacher || Boolean(brief.sebVerified) || codeVerified;
+
+    /* Two exemptions from hiding Start, both matching what `startAttempt` itself
+       does: a sitting already in progress resumes before the SEB gate is ever
+       reached, and a student whose single attempt is spent needs the
+       Review/Results button below rather than a launch instruction. */
+    const sebStartBlocked = !sebGateOpen && !brief.hasInProgress && !attemptUsed;
     const hasInstructions = brief.instructions?.length > 0;
     // Staff can read this page — it is the one they hand out, and checking what
     // the class will see is the point — but only the roll can sit the paper.
@@ -843,22 +1063,75 @@ export default function QuizBrief() {
                           For starting without Safe Exam Browser. Your teacher gives this out
                           directly — ask them if you do not have it.
                         </Text>
-                        <Input
-                          size="sm"
-                          maxW="200px"
-                          fontFamily="mono"
-                          placeholder="Access code"
-                          value={sebCode}
-                          onChange={(e) => setSebCode(e.target.value.toUpperCase())}
-                          /* The codes are uppercase, so the field is too: a
-                             student never sees what they typed differ from what
-                             is checked. autoCapitalize/autoCorrect are for
-                             phones, which otherwise "help" with a code. */
-                          textTransform="uppercase"
-                          autoCapitalize="characters"
-                          autoCorrect="off"
-                          spellCheck={false}
-                        />
+                        <HStack align="center">
+                          <Input
+                            size="sm"
+                            maxW="200px"
+                            fontFamily="mono"
+                            placeholder="Access code"
+                            value={sebCode}
+                            onChange={(e) => {
+                              setSebCode(e.target.value.toUpperCase());
+                              // A code that has been edited since it was checked
+                              // has not been checked. Closes the gate again, so
+                              // the room-code pad and Start cannot be left open
+                              // over a code that no longer matches.
+                              setCodeVerified(false);
+                              setCodeError('');
+                            }}
+                            /* The codes are uppercase, so the field is too: a
+                               student never sees what they typed differ from what
+                               is checked. autoCapitalize/autoCorrect are for
+                               phones, which otherwise "help" with a code. */
+                            textTransform="uppercase"
+                            autoCapitalize="characters"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            isDisabled={codeVerified}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') verifyCode();
+                            }}
+                          />
+                          {!codeVerified && (
+                            <Button
+                              size="sm"
+                              colorScheme="purple"
+                              onClick={verifyCode}
+                              isLoading={verifyingCode}
+                              isDisabled={!sebCode.trim()}
+                            >
+                              Check code
+                            </Button>
+                          )}
+                          {codeVerified && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setSebCode('');
+                                setCodeVerified(false);
+                              }}
+                            >
+                              Change
+                            </Button>
+                          )}
+                        </HStack>
+                        {codeError && (
+                          <Text fontSize="xs" color="lmHue.red700" mt={2} fontWeight="600">
+                            {codeError}
+                          </Text>
+                        )}
+                        {/* Said here because the Start button is not on screen to
+                            be looked for: checking the code is what puts it
+                            there — and, on a paper with a room code, what brings
+                            up the keypad for it. */}
+                        <Text fontSize="xs" color={codeVerified ? 'lmHue.green700' : 'lmFg.subtle'} mt={2}>
+                          {codeVerified
+                            ? settings.roomCodeRequired
+                              ? '✓ Access code accepted. Now enter the room code your invigilator reads out, below.'
+                              : '✓ Access code accepted. The Start button is below.'
+                            : 'Enter the code and press Check code. Nothing else on this page unlocks until it is checked.'}
+                        </Text>
                       </>
                     ) : (
                       <Text
@@ -879,6 +1152,200 @@ export default function QuizBrief() {
           </Box>
         )}
 
+        {/* A teacher has waived the camera for this student — no camera is asked
+            for, and Start is not gated on one. Shown in place of the gate below. */}
+        {settings.requireWebcam && !isTeacher && brief.webcamExempt && (
+          <Box mb={4} p={4} borderWidth="1px" borderColor="lmHue.green200" bg="lmHue.green50" borderRadius="md">
+            <Text fontSize="sm" fontWeight="700" mb={1}>
+              Webcam waived
+            </Text>
+            <Text fontSize="xs" color="lmFg.muted">
+              Your teacher has allowed you to take this test without a webcam. You can start.
+            </Text>
+          </Box>
+        )}
+
+        {/* The room code, on an on-screen keyboard, when the invigilator has set
+            one. Students only — a teacher previewing the brief has no code to
+            enter and no sitting to start.
+
+            First on the screen now, not last. It gates the camera prompt as well
+            as Start, so it has to be the thing the student sees and answers
+            before anything else asks them for something; a permission dialog
+            arriving ahead of it was a request made of somebody not yet known to
+            be in the room.
+
+            Still held back until the browser gate has been passed, which is the
+            order the server checks them in: a student working out how to open
+            Safe Exam Browser has no use for a room code, and drawing the pad for
+            everyone who opens the link tells anyone curious that a spoken code
+            exists and how long it is. */}
+        {settings.roomCodeRequired && !isTeacher && sebGateOpen && (
+          <Box
+            mb={4}
+            p={4}
+            borderWidth="1px"
+            borderColor="lmHue.blue200"
+            bg="lmHue.blue50"
+            borderRadius="md"
+          >
+            <Text fontSize="sm" fontWeight="700" mb={1}>
+              Step 1 — Enter the room code {roomVerified ? '' : 'to continue'}
+            </Text>
+            <Text fontSize="xs" color="lmFg.muted" mb={3}>
+              Your invigilator will read out a {roomCodeLength ? `${roomCodeLength}-character ` : ''}
+              code for this room. Tap it into the boxes below — it is checked as soon as the last box is
+              filled, and nothing else on this page opens until it is accepted.
+            </Text>
+            {/* The pad draws one blank box per character of the real code, so a
+                student knows how many to listen for before the first tap, and
+                carries the verdict on the boxes themselves — the tick appears
+                the moment the last box is filled and checked. */}
+            <CodeKeypad
+              value={roomCode}
+              onChange={onRoomCodeChange}
+              length={roomCodeLength || undefined}
+              maxLength={roomCodeLength || 8}
+              status={roomStatus}
+              isDisabled={starting || roomVerified}
+            />
+            {/* The verdict in words, under the pad. The pad itself already
+                carries the state — a spinner, a green tick, a red row — but a
+                refusal has a *reason* ("wrong code", "no guesses left") that only
+                fits as a sentence. Silence here is what made the old screen feel
+                broken: the code was only ever judged on Start. */}
+            <Box mt={2} minH="24px">
+              {!verifyingRoom && roomVerified && (
+                <Text fontSize="sm" color="lmHue.green700" fontWeight="700">
+                  Room code accepted — you can start the test below.
+                </Text>
+              )}
+              {!verifyingRoom && roomError && (
+                <Text fontSize="sm" color="lmHue.orange700" fontWeight="600">
+                  {roomError}
+                </Text>
+              )}
+            </Box>
+          </Box>
+        )}
+
+        {/* The webcam gate. Students only, and only when the paper requires it
+            and the student has not been waived. The paper cannot start until this
+            is granted, so it sits above Start with the grant state and a preview.
+
+            Drawn only once the room code is in. Shown any earlier it is a panel
+            saying "Webcam required" with nothing happening in it, next to a
+            camera that has deliberately not been asked for yet — which reads as
+            the page having failed rather than as a step that has not come round. */}
+        {settings.requireWebcam && !isTeacher && !brief.webcamExempt && roomGateOpen && (
+          <Box
+            mb={4}
+            p={4}
+            borderWidth="1px"
+            borderColor={camState === 'granted' ? 'lmHue.green200' : 'lmHue.orange200'}
+            bg={camState === 'granted' ? 'lmHue.green50' : 'lmHue.orange50'}
+            borderRadius="md"
+          >
+            <Text fontSize="sm" fontWeight="700" mb={1}>
+              {settings.roomCodeRequired ? 'Step 2 — ' : ''}Webcam{' '}
+              {camState === 'granted' ? 'on' : 'required'}
+            </Text>
+            <Text fontSize="xs" color="lmFg.muted" mb={3}>
+              This test is invigilated by webcam. Your camera is watched for the length of the paper,
+              and a frame is kept and shown to your teacher only when something looks wrong (no face in
+              view). You must allow the camera to start.
+            </Text>
+
+            {/* The preview is always mounted so the granted stream has somewhere
+                to attach; it simply shows nothing until there is a stream. */}
+            <Flex gap={3} align="center" wrap="wrap">
+              <Box
+                as="video"
+                ref={camVideoRef}
+                muted
+                playsInline
+                w="160px"
+                h="120px"
+                bg="black"
+                borderRadius="md"
+                objectFit="cover"
+                transform="scaleX(-1)"
+                display={camState === 'granted' ? 'block' : 'none'}
+              />
+              {camState === 'prompting' && (
+                <HStack fontSize="sm" color="lmFg.muted">
+                  <Spinner size="sm" />
+                  <Text>Asking for your camera — choose “Allow”.</Text>
+                </HStack>
+              )}
+              {camState === 'granted' && (
+                <Text fontSize="sm" color="lmHue.green700" fontWeight="600">
+                  ✓ Camera on. You can start the test.
+                </Text>
+              )}
+              {camState === 'denied' && !cameraSebBlocked && (
+                <Box>
+                  <Text fontSize="sm" color="lmHue.orange700" fontWeight="600" mb={1}>
+                    Camera blocked. The test cannot start without it.
+                  </Text>
+                  <Text fontSize="xs" color="lmFg.muted" mb={2}>
+                    Allow the camera for this site, then try again.
+                  </Text>
+                  <HStack>
+                    <Button size="sm" variant="outline" onClick={askCamera}>
+                      Try again
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => window.location.reload()}>
+                      Refresh
+                    </Button>
+                  </HStack>
+                </Box>
+              )}
+              {/* No usable camera on this machine — not a refusal. The student is
+                  let through, and their teacher is told, so a legitimate desktop
+                  without a webcam is not stranded. */}
+              {cameraUnavailable && (
+                <Box>
+                  <Text fontSize="sm" color="lmHue.orange700" fontWeight="600" mb={1}>
+                    {cameraSebBlocked
+                      ? 'The camera is not enabled in the exam settings file.'
+                      : camState === 'notfound'
+                        ? 'No camera found on this computer.'
+                        : camState === 'inuse'
+                          ? 'Another app is using the camera.'
+                          : 'Could not open the camera.'}
+                  </Text>
+                  {cameraSebBlocked && (
+                    <Text fontSize="xs" color="lmFg.muted" mb={1}>
+                      Tell your invigilator.
+                    </Text>
+                  )}
+                  {/* One line, and no advice about which browser to open. The
+                      long version read as a troubleshooting page in the middle of
+                      an exam, and its suggestions were mostly things a student
+                      sitting in a locked-down hall cannot do — least of all
+                      switching browser, which on a Safe Exam Browser paper is the
+                      one action that is actually forbidden. What they need to
+                      know is that they can start and that it is not hidden. */}
+                  <Text fontSize="xs" color="lmFg.muted" mb={2}>
+                    You can still start the test. <b>Your teacher will be told</b> this sitting has no
+                    camera.
+                  </Text>
+                  <HStack>
+                    <Button size="sm" variant="outline" onClick={askCamera}>
+                      Try again
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => window.location.reload()}>
+                      Refresh
+                    </Button>
+                  </HStack>
+                </Box>
+              )}
+            </Flex>
+          </Box>
+        )}
+
+
         {/* Directly above Start, because that is where the student is looking
             when it is refused. A wrong access code is the common case and it has
             to look like a wrong code, not like a dead button. */}
@@ -898,13 +1365,56 @@ export default function QuizBrief() {
               still counts against `attemptsUsed`, and on that alone the student
               is handed a "Results pending" button for a paper they are supposed
               to be writing. */}
-          {!attemptUsed || brief.hasInProgress ? (
+          {sebStartBlocked ? (
+            /* Where the Start button would be, saying what to do instead. A
+               blank space here reads as a page that failed to finish loading —
+               the student has to be told that the launch above *is* the start. */
+            <Box
+              p={3}
+              borderWidth="1px"
+              borderColor="lmHue.purple200"
+              bg="lmHue.purple50"
+              borderRadius="md"
+              maxW="520px"
+            >
+              <Text fontSize="sm" fontWeight="600" mb={1}>
+                🔒 {sebNotReady ? 'This test is not ready to start yet' : 'Start from Safe Exam Browser'}
+              </Text>
+              <Text fontSize="xs" color="lmFg.muted">
+                {sebNotReady
+                  ? 'Your teacher has still to finish the Safe Exam Browser setup. There is nothing you can do from here yet.'
+                  : settings.sebBypassEnabled
+                    ? 'Open the test in Safe Exam Browser above — that is how this paper begins. If your invigilator has given you an access code instead, enter it above and press Check code; the Start button appears here once it is accepted.'
+                    : 'Open the test in Safe Exam Browser above — that is how this paper begins. There is no Start button here, because the test can only be sat inside Safe Exam Browser.'}
+              </Text>
+            </Box>
+          ) : !attemptUsed || brief.hasInProgress ? (
             <Button
               size="lg"
               colorScheme="purple"
               onClick={start}
               isLoading={starting}
-              isDisabled={!canStart}
+              // A room-code quiz needs the code before Start does anything, and a
+              // webcam quiz needs the camera granted; the server refuses either
+              // when missing, so gate the button rather than send a start that can
+              // only bounce. Resuming an open sitting is exempt — both are
+              // start-time gates, not re-asked mid-paper.
+              isDisabled={
+                !canStart ||
+                // The *accepted* code, not merely a typed one: it is checked as
+                // soon as it is complete, so by the time Start could be pressed
+                // the answer is already known, and enabling the button on typing
+                // alone would put a refusal back on Start for no reason.
+                (settings.roomCodeRequired && !brief.hasInProgress && !roomVerified) ||
+                // Blocked only while still trying, or on a plain refusal. A
+                // machine with no usable camera is let through (and flagged), and
+                // a teacher's waiver drops the requirement entirely.
+                (settings.requireWebcam &&
+                  !brief.hasInProgress &&
+                  !brief.webcamExempt &&
+                  camState !== 'granted' &&
+                  !cameraUnavailable)
+              }
             >
               {brief.hasInProgress ? 'Continue attempt' : 'Start test'}
             </Button>

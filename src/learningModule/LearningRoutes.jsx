@@ -72,6 +72,7 @@ const BugReports = lazyWithPreload(() => import('./pages/BugReports'));
 const DevTeam = lazyWithPreload(() => import('./pages/DevTeam'));
 const LmAdmin = lazyWithPreload(() => import('./pages/LmAdmin'));
 const LmAdminFaculty = lazyWithPreload(() => import('./pages/LmAdminFaculty'));
+const LmAdminStudents = lazyWithPreload(() => import('./pages/LmAdminStudents'));
 const QuizManual = lazyWithPreload(() => import('./pages/QuizManual'));
 const ShortsManual = lazyWithPreload(() => import('./pages/ShortsManual'));
 const AssignmentManual = lazyWithPreload(() => import('./pages/AssignmentManual'));
@@ -144,6 +145,7 @@ const LEARNING_ROUTES = (
             server for authorisation, and this one 403s into the same
             ErrorState as the dashboard it sits under. */}
         <Route path="lm-admin/faculty" element={<LmAdminFaculty />} />
+        <Route path="lm-admin/students" element={<LmAdminStudents />} />
 
         <Route path="class/:classId" element={<ClassLayout />}>
           <Route index element={<Stream />} />

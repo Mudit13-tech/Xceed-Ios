@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Alert,
-  AlertIcon,
+  Box,
   Button,
   HStack,
   Modal,
@@ -31,30 +30,30 @@ import lmApi from '../api/lmApi';
  * Only for a paper that requires SEB: a code that bypasses a lockdown nothing
  * enforces would unlock a door that is already open.
  *
- * The code itself is shown once and never again — only its hash is kept — which
- * is why this is a dialog rather than an inline toggle: there has to be somewhere
- * for "copy this now" to live.
+ * The code itself now lives on the card, beside the room code — this dialog is
+ * where it is turned on, replaced and turned off, not the only place it can be
+ * read. It used to be shown once and never again (only a hash was kept), which
+ * meant a teacher who closed this dialog could only get back to a code by
+ * minting a replacement, silently retiring the one already handed out.
  */
 export default function AccessCodeButton({ classId, quiz, onDone }) {
   const [isOpen, setIsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [code, setCode] = useState('');
+  // Seeded from the card's own copy of the settings — the code is stored in the
+  // clear now, so opening this needs no fetch to know what is set.
+  const [code, setCode] = useState(quiz.settings?.sebBypassCode || '');
   const [enabled, setEnabled] = useState(Boolean(quiz.settings?.sebBypassEnabled));
   const clip = useClipboard(code);
   const toast = useToast();
 
-  const close = () => {
-    setIsOpen(false);
-    // Never left on screen for the next person to open the dialog and read.
-    setCode('');
-  };
+  const close = () => setIsOpen(false);
 
   const run = async (body) => {
     setBusy(true);
     try {
       const result = await lmApi.setSebBypassCode(classId, quiz._id, body);
       setEnabled(Boolean(result.settings?.sebBypassEnabled));
-      setCode(result.code || '');
+      setCode(result.settings?.sebBypassCode || '');
       if (!result.code) toast({ status: 'success', title: 'Access code turned off', duration: 4000 });
       if (onDone) onDone();
     } catch (err) {
@@ -84,24 +83,26 @@ export default function AccessCodeButton({ classId, quiz, onDone }) {
             </Text>
 
             {code ? (
-              <Alert status="success" borderRadius="md" fontSize="sm" flexDirection="column" alignItems="flex-start">
+              <Box borderWidth="1px" borderColor="lmHue.purple200" bg="lmHue.purple50" borderRadius="md" p={4}>
+                <Text fontSize="xs" color="lmFg.muted" mb={1}>
+                  Current access code — also on the quiz card and in Live control
+                </Text>
                 <HStack>
-                  <AlertIcon />
-                  <Text fontWeight="600">Copy this now — it will not be shown again.</Text>
-                </HStack>
-                <HStack mt={2}>
-                  <Text fontFamily="mono" fontSize="lg" fontWeight="700" letterSpacing="0.1em">
+                  <Text fontFamily="mono" fontSize="2xl" fontWeight="800" letterSpacing="0.15em" userSelect="all">
                     {code}
                   </Text>
                   <Button size="xs" onClick={clip.onCopy}>
                     {clip.hasCopied ? 'Copied' : 'Copy'}
                   </Button>
                 </HStack>
-              </Alert>
+                <Text fontSize="xs" color="lmFg.muted" mt={1}>
+                  Generating a new one replaces it — the old code stops working the moment you do.
+                </Text>
+              </Box>
             ) : (
               <Text fontSize="sm" color={enabled ? 'lmFg.muted' : 'lmFg.subtle'}>
                 {enabled
-                  ? 'A code is active. Generating a new one replaces it — the old code stops working the moment you do.'
+                  ? 'A code is active but was minted before codes were kept readable, so it cannot be shown. Generate a new one to see it here.'
                   : 'No code is active for this paper.'}
               </Text>
             )}

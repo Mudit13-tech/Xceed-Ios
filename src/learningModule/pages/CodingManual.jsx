@@ -12,20 +12,23 @@ const T = {
     text: '#1a1f3c', textMuted: '#7b84ab', accent: '#1d4ed8',
     border: '#e4e8f5', bg: '#f5f6fb', fontBody: "'Inter', system-ui, sans-serif",
     success: '#10b981', danger: '#ef4444', warning: '#f59e0b',
+    purple: '#7c3aed', purpleBg: '#faf5ff', purpleBorder: '#e9d5ff',
 };
 
 const cssReset = `
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: ${T.bg}; }
-    code { font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: #eef0fb; padding: 1px 5px; border-radius: 4px; }
+    code { font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: #eef0fb; color: #1e293b; padding: 1px 5px; border-radius: 4px; }
+    pre code, .cdm-code-block code, pre { background: transparent !important; padding: 0 !important; border-radius: 0 !important; }
     .cdm-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .cdm-page { padding: 24px 28px; max-width: 900px; margin: 0 auto; }
+    .cdm-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .cdm-page { padding: 24px 28px; max-width: 920px; margin: 0 auto; }
     .cdm-card { padding: 28px 32px; }
     .cdm-topbar { padding: 10px 28px; }
     .cdm-title { font-size: 20px; }
     .cdm-subtitle { font-size: 13px; }
     @media (max-width: 640px) {
-        .cdm-grid-2 { grid-template-columns: 1fr; }
+        .cdm-grid-2, .cdm-grid-3 { grid-template-columns: 1fr; }
         .cdm-page { padding: 16px 12px; }
         .cdm-card { padding: 16px 14px; }
         .cdm-topbar { padding: 10px 12px; }
@@ -38,12 +41,33 @@ const cssReset = `
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
+function Step({ n, title, children }) {
+    return (
+        <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+            <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{
+                    width: 28, height: 28, borderRadius: '50%', background: '#7c3aed',
+                    color: '#fff', fontWeight: 800, fontSize: 12,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    boxShadow: '0 2px 6px rgba(124,58,237,0.3)',
+                }}>{n}</div>
+                <div style={{ width: 2, flex: 1, background: '#e9d5ff', marginTop: 4 }} />
+            </div>
+            <div style={{ flex: 1, paddingBottom: 6 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: T.text, marginBottom: 4, paddingTop: 4 }}>{title}</div>
+                <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.75 }}>{children}</div>
+            </div>
+        </div>
+    );
+}
+
 function Note({ type = 'info', children }) {
     const cfg = {
         info:    { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8', icon: 'ℹ' },
         warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: '⚠' },
         tip:     { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: '💡' },
         key:     { bg: '#eff6ff', border: '#bfdbfe', color: '#1e40af', icon: '🔑' },
+        purple:  { bg: '#faf5ff', border: '#e9d5ff', color: '#6b21a8', icon: '🧪' },
         danger:  { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: '⛔' },
     };
     const s = cfg[type] || cfg.info;
@@ -84,15 +108,352 @@ function Shot({ src, alt, caption }) {
     );
 }
 
+function TestCaseExampleCard({ title, language, code, testCases = [] }) {
+    return (
+        <div style={{
+            background: '#ffffff',
+            borderRadius: 10,
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+            overflow: 'hidden',
+            margin: '14px 0 20px',
+        }}>
+            {/* Header */}
+            <div style={{
+                background: '#f8fafc',
+                padding: '10px 16px',
+                borderBottom: '1px solid #e2e8f0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+            }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>{language === 'python' ? '🐍' : '⚙️'}</span>
+                    <span>{title}</span>
+                </div>
+                <span style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    background: language === 'python' ? '#eff6ff' : '#faf5ff',
+                    color: language === 'python' ? '#1d4ed8' : '#7c3aed',
+                    border: `1px solid ${language === 'python' ? '#bfdbfe' : '#e9d5ff'}`,
+                    padding: '2px 8px',
+                    borderRadius: 12,
+                }}>
+                    {language}
+                </span>
+            </div>
+
+            {/* Code Section */}
+            <div style={{ padding: '12px 16px', background: '#0f172a' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>
+                    Code Written in Cell
+                </div>
+                <pre style={{
+                    margin: 0,
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontSize: 12.5,
+                    color: '#f1f5f9',
+                    lineHeight: 1.6,
+                    whiteSpace: 'pre-wrap',
+                    background: 'transparent',
+                }}>
+                    <code style={{ background: 'transparent', padding: 0, color: '#f1f5f9' }}>{code}</code>
+                </pre>
+            </div>
+
+            {/* Test Cases Section */}
+            <div style={{ padding: '14px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: 10, letterSpacing: '0.05em' }}>
+                    Configured Hidden Test Cases
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {testCases.map((tc, idx) => (
+                        <div key={idx} style={{
+                            background: '#ffffff',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: 8,
+                            padding: '10px 14px',
+                        }}>
+                            <div style={{ fontSize: 11.5, fontWeight: 700, color: '#334155', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ width: 18, height: 18, borderRadius: '50%', background: '#7c3aed', color: '#fff', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
+                                    {idx + 1}
+                                </span>
+                                <span>{tc.name || `Test Case #${idx + 1}`}</span>
+                            </div>
+                            <div className="cdm-grid-2">
+                                <div>
+                                    <div style={{ fontSize: 10.5, fontWeight: 600, color: '#64748b', marginBottom: 3 }}>
+                                        Input (stdin)
+                                    </div>
+                                    <div style={{
+                                        background: '#f1f5f9',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: 5,
+                                        padding: '6px 10px',
+                                        fontFamily: "'IBM Plex Mono', monospace",
+                                        fontSize: 12,
+                                        color: '#0f172a',
+                                        minHeight: 28,
+                                    }}>
+                                        {tc.input || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>(empty)</span>}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: 10.5, fontWeight: 600, color: '#64748b', marginBottom: 3 }}>
+                                        Expected Output (stdout)
+                                    </div>
+                                    <div style={{
+                                        background: '#ecfdf5',
+                                        border: '1px solid #a7f3d0',
+                                        borderRadius: 5,
+                                        padding: '6px 10px',
+                                        fontFamily: "'IBM Plex Mono', monospace",
+                                        fontSize: 12,
+                                        color: '#065f46',
+                                        fontWeight: 600,
+                                        minHeight: 28,
+                                    }}>
+                                        {tc.output}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Visual Mockup representing the Faculty Test Cases Panel in NotebookEditor
+ */
+function VisualTestCasesEditorMock() {
+    return (
+        <div style={{
+            background: '#fff', borderRadius: 8, border: '1px solid #e4e8f5',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.06)', overflow: 'hidden',
+            margin: '12px 0 20px',
+        }}>
+            {/* Cell Top Header */}
+            <div style={{
+                background: '#f8fafc', padding: '8px 12px', borderBottom: '1px solid #e2e8f0',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8,
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>[In 1] Python</span>
+                    <span style={{
+                        fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#166534',
+                        padding: '2px 8px', borderRadius: 12,
+                    }}>Completed (Yes)</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{
+                        fontSize: 11, fontWeight: 600, background: '#7c3aed', color: '#fff',
+                        padding: '3px 10px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4,
+                    }}>
+                        🧪 Test Cases (2)
+                    </span>
+                    <span style={{
+                        fontSize: 11, fontWeight: 600, background: '#f1f5f9', color: '#475569',
+                        padding: '3px 8px', borderRadius: 6,
+                    }}>
+                        ⌨️ Input
+                    </span>
+                </div>
+            </div>
+
+            {/* Code Body */}
+            <div style={{
+                background: '#1e293b', padding: '12px 14px',
+                fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: '#f8fafc',
+            }}>
+                <div><span style={{ color: '#93c5fd' }}>def</span> <span style={{ color: '#86efac' }}>solve</span>():</div>
+                <div style={{ paddingLeft: 16 }}><span style={{ color: '#fcd34d' }}>a</span>, <span style={{ color: '#fcd34d' }}>b</span> = map(int, input().split())</div>
+                <div style={{ paddingLeft: 16 }}>print(a + b)</div>
+                <div>solve()</div>
+            </div>
+
+            {/* Test Cases Panel */}
+            <div style={{ background: '#faf5ff', borderTop: '1px solid #e9d5ff', padding: '12px 14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase' }}>
+                            Hidden Test Cases (2)
+                        </span>
+                        <span style={{
+                            fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d',
+                            padding: '2px 7px', borderRadius: 10,
+                        }}>Completed (Yes)</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                        <button style={{
+                            fontSize: 11, fontWeight: 700, background: '#7c3aed', color: '#fff',
+                            border: 'none', padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
+                        }}>
+                            ▶ Test Solution on Cell
+                        </button>
+                        <button style={{
+                            fontSize: 11, fontWeight: 700, background: '#fff', color: '#7c3aed',
+                            border: '1px solid #c084fc', padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
+                        }}>
+                            + Add Test Case
+                        </button>
+                    </div>
+                </div>
+
+                <div style={{ fontSize: 11, color: '#6b21a8', opacity: 0.8, marginBottom: 10 }}>
+                    Students will not see these inputs or expected outputs directly. They will click "Run Hidden Test Case" to test their code and receive Yes/No feedback.
+                </div>
+
+                {/* Test Case Cards */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ background: '#fff', border: '1px solid #e9d5ff', borderRadius: 6, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: '#4c1d95', marginBottom: 6 }}>Test Case #1</div>
+                        <div className="cdm-grid-2">
+                            <div>
+                                <div style={{ fontSize: 10.5, fontWeight: 600, color: '#475569', marginBottom: 3 }}>Input (stdin)</div>
+                                <div style={{
+                                    background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 5,
+                                    padding: '6px 10px', fontSize: 12, fontFamily: "'IBM Plex Mono', monospace",
+                                    color: '#0f172a', fontWeight: 600, minHeight: 28,
+                                }}>
+                                    5 10
+                                </div>
+                            </div>
+                            <div>
+                                <div style={{ fontSize: 10.5, fontWeight: 600, color: '#475569', marginBottom: 3 }}>Expected Output (stdout)</div>
+                                <div style={{
+                                    background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 5,
+                                    padding: '6px 10px', fontSize: 12, fontFamily: "'IBM Plex Mono', monospace",
+                                    color: '#065f46', fontWeight: 700, minHeight: 28,
+                                }}>
+                                    15
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style={{ background: '#fff', border: '1px solid #e9d5ff', borderRadius: 6, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: '#4c1d95', marginBottom: 6 }}>Test Case #2</div>
+                        <div className="cdm-grid-2">
+                            <div>
+                                <div style={{ fontSize: 10.5, fontWeight: 600, color: '#475569', marginBottom: 3 }}>Input (stdin)</div>
+                                <div style={{
+                                    background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 5,
+                                    padding: '6px 10px', fontSize: 12, fontFamily: "'IBM Plex Mono', monospace",
+                                    color: '#0f172a', fontWeight: 600, minHeight: 28,
+                                }}>
+                                    -4 20
+                                </div>
+                            </div>
+                            <div>
+                                <div style={{ fontSize: 10.5, fontWeight: 600, color: '#475569', marginBottom: 3 }}>Expected Output (stdout)</div>
+                                <div style={{
+                                    background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 5,
+                                    padding: '6px 10px', fontSize: 12, fontFamily: "'IBM Plex Mono', monospace",
+                                    color: '#065f46', fontWeight: 700, minHeight: 28,
+                                }}>
+                                    16
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Visual Mockup representing Student View in NotebookPlayer
+ */
+function VisualStudentTestMock() {
+    return (
+        <div style={{
+            background: '#fff', borderRadius: 8, border: '1px solid #e4e8f5',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.06)', overflow: 'hidden',
+            margin: '12px 0 20px',
+        }}>
+            {/* Student Cell Action Bar */}
+            <div style={{
+                background: '#f8fafc', padding: '8px 12px', borderBottom: '1px solid #e2e8f0',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8,
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button style={{
+                        fontSize: 11, fontWeight: 700, background: '#1d4ed8', color: '#fff',
+                        border: 'none', padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
+                    }}>
+                        ▶ Run
+                    </button>
+                    <button style={{
+                        fontSize: 11, fontWeight: 700, background: '#10b981', color: '#fff',
+                        border: 'none', padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
+                    }}>
+                        🧪 Run Hidden Test Case
+                    </button>
+                    <span style={{
+                        fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#166534',
+                        padding: '2px 8px', borderRadius: 12,
+                    }}>
+                        Passed (Yes - All Completed)
+                    </span>
+                </div>
+                <span style={{ fontSize: 11, color: '#64748b' }}>Autosaved</span>
+            </div>
+
+            {/* Test Results Banner */}
+            <div style={{ background: '#f0fdf4', borderTop: '1px solid #bbf7d0', padding: '10px 14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#166534', textTransform: 'uppercase' }}>
+                        Test Case Results (2/2 Passed)
+                    </span>
+                    <span style={{ fontSize: 10, color: '#15803d', fontWeight: 600 }}>Confidential Test Inputs</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{
+                        background: '#fff', border: '1px solid #86efac', borderRadius: 6,
+                        padding: '6px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600 }}>
+                            <span style={{ color: '#16a34a' }}>✓</span>
+                            <span>Test #1:</span>
+                            <span style={{ background: '#dcfce7', color: '#15803d', fontSize: 10, padding: '1px 6px', borderRadius: 8 }}>Yes (Passed)</span>
+                        </div>
+                        <span style={{ fontSize: 10, color: '#94a3b8' }}>Matched Expected Output</span>
+                    </div>
+
+                    <div style={{
+                        background: '#fff', border: '1px solid #86efac', borderRadius: 6,
+                        padding: '6px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600 }}>
+                            <span style={{ color: '#16a34a' }}>✓</span>
+                            <span>Test #2:</span>
+                            <span style={{ background: '#dcfce7', color: '#15803d', fontSize: 10, padding: '1px 6px', borderRadius: 8 }}>Yes (Passed)</span>
+                        </div>
+                        <span style={{ fontSize: 10, color: '#94a3b8' }}>Matched Expected Output</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ── tabs ──────────────────────────────────────────────────────────────────────
 
 const TABS = [
-    { id: 'overview', label: 'Overview',         icon: '🐍' },
-    { id: 'create',   label: 'Author a Notebook',icon: '✏️' },
-    { id: 'runtime',  label: 'What Can Run',     icon: '⚙️' },
-    { id: 'student',  label: 'What Students See',icon: '👀' },
-    { id: 'grade',    label: 'Grading',          icon: '✅' },
-    { id: 'gotchas',  label: 'Gotchas',          icon: '⚠️' },
+    { id: 'overview',  label: 'Overview',          icon: '🐍' },
+    { id: 'create',    label: 'Author a Notebook', icon: '✏️' },
+    { id: 'testcases', label: 'Hidden Test Cases', icon: '🧪' },
+    { id: 'runtime',   label: 'What Can Run',      icon: '⚙️' },
+    { id: 'student',   label: 'What Students See', icon: '👀' },
+    { id: 'grade',     label: 'Grading',           icon: '✅' },
+    { id: 'gotchas',   label: 'Gotchas',           icon: '⚠️' },
 ];
 
 // ── tab content ───────────────────────────────────────────────────────────────
@@ -103,7 +464,7 @@ function TabOverview() {
             <Note type="key">
                 Coding notebooks are Python or C worksheets — prose and code cells, Jupyter-notebook-like —
                 that run <strong>entirely inside the student's own browser</strong>. Nothing to install, no
-                server execution, no account anywhere else.
+                server execution, and zero infrastructure load.
             </Note>
 
             <Shot src={shotList} alt="Coding notebooks list for a class"
@@ -117,11 +478,18 @@ function TabOverview() {
                 because students already have code written for that kernel.
             </div>
 
+            <SectionTitle>Universal Hidden Test Cases & Verification</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                Every code cell can have <strong>Hidden Test Cases</strong> attached (input <code>stdin</code> and expected <code>stdout</code> pairs).
+                Students can click <strong>Run Hidden Test Case</strong> to test their solutions against confidential test cases in their browser
+                and receive instant <strong>Yes/No</strong> feedback without seeing the test inputs or expected outputs.
+            </div>
+
             <SectionTitle>Workflow at a Glance</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9 }}>
-                Author cells (prose + code, optionally locked or hidden) → publish → students run code
-                live in their own tab and submit → you read the code and recorded output by hand and grade
-                it — there is no autograder.
+                Author cells (prose + code, locked, hidden setup, or test cases) → verify test cases on reference solution → publish →
+                students code and evaluate against hidden test cases live in their own tab → submit → you review code, test pass rates,
+                and recorded output in the Submissions dashboard.
             </div>
         </div>
     );
@@ -132,45 +500,212 @@ function TabCreate() {
         <div>
             <SectionTitle>Notebook Settings</SectionTitle>
             <Shot src={shotEditor} alt="Notebook editor showing settings, a locked cell and a hidden setup cell"
-                caption="The editor. Packages and the Colab link only appear for Python; a C notebook shows a note on how its cells run instead. The Locked and Hidden setup checkboxes sit above every code cell." />
+                caption="The editor. Packages and the Colab link appear for Python; a C notebook shows compilation info. Locked, Hidden setup, and Test Cases sit above every code cell." />
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    <li><strong>Packages</strong> (Python only) — PyPI packages not already bundled with the in-browser runtime. numpy, pandas, matplotlib, scipy, sympy and scikit-learn ship for free and don't need declaring; anything needing a C extension without a WebAssembly build simply won't install. <strong>Packages only install at kernel start</strong> — adding one to an already-running kernel does nothing until it's restarted.</li>
-                    <li><strong>Open in Colab link</strong> (Python only) — for the things the browser kernel genuinely cannot do (TensorFlow, PyTorch, GPU work). Must be a <code>colab.research.google.com</code> address or it's discarded on save. Students run it in their own Google account — that work never comes back into this platform.</li>
-                    <li><strong>Submission deadline</strong> — advisory only. Nothing locks at this time; late submissions are simply flagged, and it also puts the exercise on the class calendar.</li>
-                    <li><strong>Let students add their own cells</strong> — off makes it a fixed worksheet.</li>
-                    <li><strong>Show your version after they submit</strong> — your own cell sources (not outputs) appear under a student's work once they've submitted.</li>
+                    <li><strong>Packages</strong> (Python only) — PyPI packages not already bundled with the in-browser runtime. <code>numpy</code>, <code>pandas</code>, <code>matplotlib</code>, <code>scipy</code>, <code>sympy</code> and <code>scikit-learn</code> ship for free and don't need declaring. <strong>Packages only install at kernel start</strong> — adding one to an already-running kernel does nothing until restarted.</li>
+                    <li><strong>Open in Colab link</strong> (Python only) — for workloads the browser kernel cannot run (TensorFlow, PyTorch, GPU). Must be a <code>colab.research.google.com</code> address.</li>
+                    <li><strong>Submission deadline</strong> — advisory only. Puts the exercise on the class calendar; late submissions are flagged.</li>
+                    <li><strong>Let students add their own cells</strong> — toggle off to keep it a fixed worksheet.</li>
+                    <li><strong>Show your version after they submit</strong> — your reference cell sources appear under a student's work once submitted.</li>
                 </ul>
             </div>
 
-            <SectionTitle>Locked vs. Hidden — Different, Orthogonal Concepts</SectionTitle>
-            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+            <SectionTitle>Cell Types & Toolbar Controls</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 12 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    <li><strong>Locked</strong> — visible and runnable, but the student can't edit the code (its stdin box still is editable — feeding a fixed program different input is often the exercise itself).</li>
-                    <li><strong>Hidden setup</strong> — never shown to the student at all. In Python it runs once into the kernel before their cells; in C, its source is prepended, literally, to every one of their cells before compiling — and for that reason a hidden C cell <strong>must not define <code>main()</code></strong>, or publishing is rejected.</li>
+                    <li><strong>Locked</strong> — visible and runnable, but the student cannot edit the source code (its Input/stdin box remains editable).</li>
+                    <li><strong>Hidden setup</strong> — never shown to the student. In Python it runs once into the kernel before their cells; in C, its source is prepended literally to every cell before compiling (must not define <code>main()</code>).</li>
+                    <li><strong>🧪 Test Cases (N)</strong> — opens the hidden test case authoring panel to set up secret stdin/stdout test pairs and verify your solution before publishing.</li>
+                    <li><strong>⌨️ Input (stdin)</strong> — pre-typed standard input fed to <code>input()</code> in Python or <code>scanf</code>/<code>fgets</code> in C.</li>
                 </ul>
             </div>
+
+            <VisualTestCasesEditorMock />
 
             <SectionTitle>C Notebooks Run Differently — No Shared State</SectionTitle>
             <Note type="warning">
                 A C "notebook" is not a REPL. <strong>Every code cell is a whole, independent program</strong>
                 with its own <code>main()</code> — nothing carries over between cells, because C has no
                 interpreter state to share. Shared <code>#include</code>s, typedefs or helper functions go
-                in the hidden setup cell instead. Cells compile with real clang, so error messages are the
-                ones a real compiler would give — including line numbers correctly shifted to account for
-                the prepended setup code.
+                in the hidden setup cell instead. Cells compile with real clang WebAssembly.
             </Note>
 
             <SectionTitle>Importing Existing Code</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
                 <strong>Import .ipynb / .py</strong> (Python) or <strong>Import .c</strong> appends cells from
-                a file to the end of the notebook — unsaved until you click Save. IPython magics
-                (<code>%matplotlib inline</code>, <code>!pip install x</code>) are stripped or converted
-                into the Packages box automatically, since the browser kernel has no IPython, and all
-                outputs are dropped — an import always arrives unrun. Separately,
-                <strong> 📥 Import cells</strong> pulls cells from a notebook in another class you teach,
-                the same reuse mechanism used elsewhere in the module.
+                a file to the end of the notebook. IPython magics (<code>%matplotlib inline</code>, <code>!pip install x</code>)
+                are stripped or converted automatically into Packages. Separately,
+                <strong> 📥 Import cells</strong> pulls cells from a notebook in another class you teach.
             </div>
+        </div>
+    );
+}
+
+function TabTestCases() {
+    return (
+        <div>
+            <Note type="purple">
+                <strong>Universal Hidden Test Cases:</strong> You can attach automated test cases (Input <code>stdin</code> &amp; Expected <code>stdout</code>)
+                to any code cell in both <strong>Python</strong> and <strong>C</strong> notebooks. They evaluate 100% inside the student's browser with
+                instant <strong>Yes (Passed) / No (Failed)</strong> feedback while keeping test inputs and outputs completely confidential!
+            </Note>
+
+            <SectionTitle>How Hidden Test Cases Work</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.8, marginBottom: 12 }}>
+                When you create a coding assignment, students need a way to verify their code against edge cases without revealing the answers.
+                Hidden test cases solve this by running standard input/output assertions inside the browser's WebAssembly sandbox:
+            </div>
+
+            <div className="cdm-grid-3" style={{ marginBottom: 16 }}>
+                <div style={{ background: '#fff', border: '1px solid #e4e8f5', borderRadius: 8, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 16, marginBottom: 4 }}>🔒</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 4 }}>Confidential Inputs</div>
+                    <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
+                        Students never see your test inputs or expected outputs in their UI, preventing hardcoded or pattern-matched answers.
+                    </div>
+                </div>
+
+                <div style={{ background: '#fff', border: '1px solid #e4e8f5', borderRadius: 8, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 16, marginBottom: 4 }}>⚡</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 4 }}>In-Browser Execution</div>
+                    <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
+                        Runs via WebAssembly workers (Pyodide &amp; Clang). Zero server latency, zero cloud compute costs, and infinite scalability.
+                    </div>
+                </div>
+
+                <div style={{ background: '#fff', border: '1px solid #e4e8f5', borderRadius: 8, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 16, marginBottom: 4 }}>📊</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 4 }}>Submissions Analytics</div>
+                    <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
+                        The Submissions dashboard shows instant test pass counts (e.g. <code>All Passed (3/3)</code>) for every student.
+                    </div>
+                </div>
+            </div>
+
+            <SectionTitle>Faculty Authoring &amp; Verification Interface</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, marginBottom: 8 }}>
+                Here is what the authoring panel looks like in the <strong>Notebook Editor</strong> when you click the purple <strong>Test Cases</strong> button:
+            </div>
+
+            <VisualTestCasesEditorMock />
+
+            <SectionTitle>Step-by-Step Guide for Teachers</SectionTitle>
+
+            <Step n="1" title="Open the Test Cases Panel in the Notebook Editor">
+                In any code cell, click the purple <strong>Test Cases (N)</strong> button in the cell action bar. This expands the Hidden Test Cases panel below the cell editor.
+            </Step>
+
+            <Step n="2" title="Add Test Cases (Stdin & Expected Stdout)">
+                Click <strong>+ Add Test Case</strong>. For each test case:
+                <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                    <li><strong>Input (stdin)</strong>: Enter the exact input string that your program will read via <code>input()</code> in Python or <code>scanf()</code> / <code>fgets()</code> in C (e.g. <code>5 10</code> or multi-line text). Leave empty if the program takes no input.</li>
+                    <li><strong>Expected Output (stdout)</strong>: Enter the exact output text your program should print to stdout (e.g. <code>15</code> or <code>Prime</code>).</li>
+                </ul>
+                You can add up to 20 test cases per cell. Use the red trash icon to delete unwanted test cases.
+            </Step>
+
+            <Step n="3" title="Start the Kernel & Write Reference Solution">
+                Start the runtime kernel by clicking <strong>Start Python</strong> or <strong>Start C</strong> at the top of the editor.
+                Write your complete, working reference solution directly into the code cell.
+            </Step>
+
+            <Step n="4" title="Verify Your Solution with 'Test Solution on Cell'">
+                Click the purple <strong>Test Solution on Cell</strong> button (or <strong>Run Hidden Test Case</strong> in the cell toolbar).
+                The test runner executes your reference solution against all configured test cases:
+                <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                    <li>If all test cases match, a green <strong>Completed (Yes)</strong> badge appears.</li>
+                    <li>If any test case fails, a red <strong>Failed (No - X/Y)</strong> badge appears with detailed diagnostic diffs showing <em>Input</em>, <em>Expected Output</em>, and <em>Actual Output</em> so you can fix any discrepancy.</li>
+                </ul>
+            </Step>
+
+            <Step n="5" title="Provide Starter Prompt / Skeleton & Publish">
+                Once you have verified that all test cases pass with your reference solution, you can replace the cell's code with starter skeleton code for students (e.g. <code># Write your solution here\n\n</code> or a function stub) and click <strong>Save</strong> or <strong>Publish</strong>.
+                Your test cases remain safely saved in the notebook!
+            </Step>
+
+            <SectionTitle>What Students Experience in the Notebook Player</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, marginBottom: 8 }}>
+                When students open the published notebook, they see a <strong>Run Hidden Test Case</strong> button on every cell that has test cases.
+                When they click it, their code runs against the test cases and displays binary pass/fail indicators without exposing your confidential test values:
+            </div>
+
+            <Shot src={shotPlayer} alt="Student notebook player with confidential hidden test cases feedback"
+                caption="Student player view: Live in-browser execution with confidential 'Passed (Yes - All Completed)' feedback." />
+
+            <SectionTitle>Language-Specific Execution Details</SectionTitle>
+            <div className="cdm-grid-2" style={{ marginBottom: 16 }}>
+                <div style={{ background: '#fff', border: '1px solid #e4e8f5', borderRadius: 8, padding: '14px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8', marginBottom: 6 }}>🐍 Python Test Execution</div>
+                    <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.7 }}>
+                        <ul style={{ margin: 0, paddingLeft: 16 }}>
+                            <li>Runs in Pyodide WebAssembly worker.</li>
+                            <li>Hidden setup cells execute first to load libraries or helper functions into the namespace.</li>
+                            <li><code>input()</code> reads line-by-line from the test case stdin string.</li>
+                            <li>Standard <code>print()</code> output and expression return values are captured for stdout comparison.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div style={{ background: '#fff', border: '1px solid #e4e8f5', borderRadius: 8, padding: '14px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#7c3aed', marginBottom: 6 }}>⚙️ C Test Execution</div>
+                    <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.7 }}>
+                        <ul style={{ margin: 0, paddingLeft: 16 }}>
+                            <li>Each cell is compiled with real Clang WebAssembly with its own <code>main()</code>.</li>
+                            <li>Hidden setup code is automatically prepended to the cell source before compilation.</li>
+                            <li><code>scanf()</code> / <code>fgets()</code> reads from the test case stdin stream.</li>
+                            <li><code>printf()</code> / <code>puts()</code> output is captured and matched.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <SectionTitle>Output Normalization & Matching Rules</SectionTitle>
+            <Note type="tip">
+                <strong>Smart Output Normalization:</strong> The test runner automatically normalizes outputs before comparison to prevent false failures from operating system discrepancies:
+                <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                    <li>Converts Windows CRLF (<code>\r\n</code>) line breaks to Unix LF (<code>\n</code>).</li>
+                    <li>Trims trailing spaces from each output line.</li>
+                    <li>Trims overall leading and trailing whitespace from the final output string.</li>
+                    <li>Comparison is strictly case-sensitive for characters and numbers (e.g. <code>True</code> vs <code>true</code>).</li>
+                </ul>
+            </Note>
+
+            <SectionTitle>Example Test Case Patterns</SectionTitle>
+            <TestCaseExampleCard
+                title="Sum of Two Numbers"
+                language="python"
+                code={`a, b = map(int, input().split())
+print(a + b)`}
+                testCases={[
+                    { name: 'Standard Case', input: '10 20', output: '30' },
+                    { name: 'Negative Numbers', input: '-15 5', output: '-10' },
+                    { name: 'Zero Handling', input: '0 0', output: '0' },
+                ]}
+            />
+
+            <TestCaseExampleCard
+                title="Reverse a String"
+                language="c"
+                code={`#include <stdio.h>
+#include <string.h>
+
+int main() {
+    char str[100];
+    if (scanf("%s", str) == 1) {
+        int len = strlen(str);
+        for (int i = len - 1; i >= 0; i--) {
+            putchar(str[i]);
+        }
+        putchar('\\n');
+    }
+    return 0;
+}`}
+                testCases={[
+                    { name: 'Standard Word', input: 'hello', output: 'olleh' },
+                    { name: 'Palindrome', input: 'racecar', output: 'racecar' },
+                ]}
+            />
         </div>
     );
 }
@@ -180,38 +715,32 @@ function TabRuntime() {
         <div>
             <Note type="key">
                 Both runtimes execute inside a Web Worker in the student's own tab — never on the server.
-                The model's own schema comment says why: running arbitrary student code server-side is a
-                remote-code-execution surface, and this platform has no container sandboxing to put behind
-                it. No network access and no file I/O are available to student code, in either language.
+                Running arbitrary student code server-side is a remote-code-execution surface; executing in the browser
+                guarantees complete isolation with zero cloud hosting bills.
             </Note>
 
             <SectionTitle>Python — Pyodide</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 Real CPython compiled to WebAssembly. The first start downloads a few megabytes; students
-                are warned before they click Start. <code>numpy</code>, <code>pandas</code>,
+                are informed before clicking Start. <code>numpy</code>, <code>pandas</code>,
                 <code> matplotlib</code>, <code>scipy</code>, <code>sympy</code> and
                 <code> scikit-learn</code> have prebuilt browser versions and don't need declaring in
                 Packages. <strong>TensorFlow, Keras, PyTorch, JAX, XGBoost, LightGBM, CatBoost and
-                Transformers have no browser build at all</strong> — the notebook saves fine, but nothing
-                can run those cells in-browser; point students at the Colab link for that work instead.
-                <code>input()</code> reads from the cell's pre-typed Input box rather than a real-time
-                prompt.
+                Transformers have no browser build at all</strong> — point students at the Google Colab link for GPU/deep learning work.
+                <code>input()</code> reads from the cell's stdin box or the active test case.
             </div>
 
             <SectionTitle>C — Real clang, via WebAssembly</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 Real clang plus a linker and sysroot, roughly 50MB on first start (cached after that).
-                Warnings are on; <code>-Werror</code> is deliberately off, so a first-year exercise doesn't
-                fail over an unused variable. <code>scanf</code>/<code>fgets</code> read from the same
-                pre-typed Input box as Python's <code>input()</code> — a program that asks for more input
-                than was supplied gets EOF, exactly like a real pipe.
+                Warnings are enabled; <code>-Werror</code> is off so first-year exercises don't fail over unused variables.
+                <code>scanf</code>/<code>fgets</code> read from the cell's stdin box or active test cases.
             </div>
 
             <Note type="warning">
-                <strong>Stop and Restart always throw away all kernel state</strong> in both languages —
-                there is no true cooperative interrupt (it would need cross-origin-isolation headers this
-                app doesn't send), so an infinite loop can only be killed by terminating the whole worker.
-                Every variable from the previous run is gone, and hidden setup has to replay from scratch.
+                <strong>Stop and Restart always reset kernel state</strong> in both languages —
+                there is no true cooperative interrupt, so an infinite loop is killed by terminating the worker.
+                Every variable from the previous run is cleared, and hidden setup replays from scratch.
             </Note>
         </div>
     );
@@ -221,16 +750,19 @@ function TabStudent() {
     return (
         <div>
             <Shot src={shotPlayer} alt="Student notebook view with a locked cell's output and a code cell with an error"
-                caption="A student's notebook. The first cell is locked (they can run it, not edit it) and already shows its output; the second is theirs to write, currently erroring — exactly what you'd see mid-attempt." />
+                caption="A student's notebook. The first cell is locked and already shows output; the second is theirs to write, with Run and Run Hidden Test Case buttons." />
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    <li>Kernel start is lazy — nothing downloads until the student clicks <strong>Start</strong>, so opening a notebook just to read it costs nothing.</li>
-                    <li><strong>Run all</strong> runs every code cell top to bottom in one go — order is the whole contract, since cells share one namespace (Python) or a copy-pasted prelude (C).</li>
-                    <li>Autosave runs a couple of seconds after any edit; a badge shows saved / saving / unsaved / or, if the same notebook is open in two tabs, a conflict warning telling the student to reload rather than overwrite the newer copy.</li>
-                    <li><strong>Submit warns it's final</strong>: "You will not be able to edit it afterwards." After submitting, cells can still be run to explore, but nothing more is saved.</li>
-                    <li>If you enabled it, your own (source-only, no outputs) version of the notebook appears below theirs once they've submitted.</li>
+                    <li><strong>Lazy Kernel Start</strong> — nothing downloads until the student clicks <strong>Start</strong>, so opening a notebook just to read it costs nothing.</li>
+                    <li><strong>Run All</strong> — runs every code cell top to bottom in sequential order.</li>
+                    <li><strong>Run Hidden Test Case</strong> — validates cell code against confidential test cases with instant Yes/No feedback.</li>
+                    <li><strong>Autosave</strong> — runs automatically a couple of seconds after any edit; a badge shows saved / saving / unsaved status.</li>
+                    <li><strong>Submit Confirmation</strong> — warns students that submission is final. After submitting, cells can still be run to explore, but changes are locked.</li>
+                    <li><strong>Reference Solutions</strong> — if enabled in settings, your reference cell sources appear below theirs once submitted.</li>
                 </ul>
             </div>
+            <SectionTitle>Student Cell & Test Case Controls</SectionTitle>
+            <VisualStudentTestMock />
         </div>
     );
 }
@@ -238,31 +770,33 @@ function TabStudent() {
 function TabGrade() {
     return (
         <div>
-            <Shot src={shotSubmissions} alt="Notebook submissions list showing status, cells run and grade columns" />
-            <Note type="danger">
-                <strong>Marked by hand, on purpose — there is no autograder anywhere in this feature.</strong>
-                Cell output is recorded from the student's own browser, so it shows what they saw, not
-                anything the server independently verified — it is not tamper-proof, and the model's own
-                schema comment is explicit that a stored output must never be the basis for a mark on its
-                own. Grade the code; treat the output as a hint, not evidence.
+            <Shot src={shotSubmissions} alt="Notebook submissions list showing status, cells run, test cases, and grade columns" />
+            <Note type="tip">
+                <strong>Automated Test Summaries + Manual Grading:</strong> The Submissions dashboard provides automated
+                test pass summaries (e.g. <code>All Passed (3/3)</code> or <code>1/3 Passed</code>) while allowing teachers
+                to inspect student code, view detailed test execution diffs, and assign final grades.
             </Note>
 
             <SectionTitle>The Submissions Table</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
-                Status (opened / in progress / submitted, with a late badge where relevant), cells run out
-                of the total, and a <strong>Worked through</strong> summary — "every cell ran" in green, or a
-                count of errored cells in yellow. Click <strong>Read</strong> to expand a submission inline.
+                The table lists all enrolled students with:
+                <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                    <li><strong>Status</strong> — Opened, In Progress, or Submitted (with late flags if submitted past due date).</li>
+                    <li><strong>Cells Run</strong> — "every cell ran" in green, or count of errored / unrun cells in yellow.</li>
+                    <li><strong>Test Cases</strong> — instant pass badge: <code>All Passed (N/N)</code> in green or <code>X/N Passed</code> in red.</li>
+                    <li><strong>Grade</strong> — points awarded out of max score.</li>
+                </ul>
             </div>
 
-            <Shot src={shotSubmissionDetail} alt="Expanded submission showing code, recorded output, and a grade/feedback form"
-                caption="Reading a submission. Every cell's code and recorded output, followed by a plain Grade / Out of / Feedback form — no rubric, no pre-filled score." />
+            <Shot src={shotSubmissionDetail} alt="Expanded submission showing code, recorded output, test results, and grade form"
+                caption="Reading a submission. Code, recorded output, and detailed Hidden Test Results breakdown, followed by the Grade and Feedback form." />
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    <li><strong>Grade</strong> and <strong>Out of</strong> are plain numbers you type — nothing is suggested or pre-filled from matching output.</li>
-                    <li><strong>Feedback</strong> is free text, shown back to the student on their own notebook.</li>
-                    <li><strong>Return grade</strong> saves it and mirrors into the class gradebook as returned.</li>
-                    <li><strong>Reopen</strong> hands a submitted notebook back to the student for another go — useful when a submission needs a re-attempt rather than just a comment.</li>
-                    <li><strong>PDF</strong>, per student, is the only export available — there is no CSV/bulk export for notebook results.</li>
+                    <li><strong>Detailed Test Diffs</strong> — when reading an expanded attempt, teachers can see the exact input, expected output, and student's actual output for failed test cases.</li>
+                    <li><strong>Grade and Out of</strong> — enter numeric points; grades mirror directly into the class gradebook.</li>
+                    <li><strong>Feedback</strong> — rich text comments shown back to the student on their notebook.</li>
+                    <li><strong>Reopen</strong> — resets submission state to allow a student another attempt.</li>
+                    <li><strong>PDF Export</strong> — download a structured grading summary PDF per student.</li>
                 </ul>
             </div>
         </div>
@@ -271,16 +805,16 @@ function TabGrade() {
 
 function TabGotchas() {
     const items = [
-        'There is no autograder and no test-case mechanism anywhere in this feature — recorded output is an unverifiable claim from the student\'s own browser, never proof.',
-        'Language is locked in once a notebook is published — switching Python and C requires unpublishing first, and existing student code stays written for the old kernel regardless.',
-        'Stop and Restart always wipe all kernel state in both languages — there is no true interrupt, so an infinite loop can only be killed by throwing away every variable.',
-        'A Python package only installs when the kernel starts — adding one to Packages does nothing to an already-running kernel until it\'s restarted.',
-        'TensorFlow, Keras, PyTorch, JAX, XGBoost, LightGBM, CatBoost and Transformers save fine but cannot run in-browser at all — the only way to give students that work is the Colab link, and it runs in their own Google account, not on this platform.',
-        'A C notebook has no shared state between cells at all — every code cell must be a whole program with its own main(), and a hidden setup cell must not define one, or publishing is rejected.',
-        'stdin (input() in Python, scanf/fgets in C) is read from a pre-typed Input box, once, in full — not a live, interactive prompt. Asking for more than was supplied returns EOF.',
-        'Deadlines are advisory only — nothing locks submission at the due date; late work is simply flagged.',
-        'Deleting a notebook deletes every student\'s attempt with it, with no separate "keep the notebook, wipe responses" option.',
-        'The only export is a per-student PDF — there is no CSV or bulk export for notebook results.',
+        'Hidden test cases evaluate locally inside the browser kernel — whitespace and linebreaks (CRLF/LF) are normalized, but string comparison is otherwise exact and case-sensitive.',
+        'Language is locked in once a notebook is published — switching between Python and C requires unpublishing first.',
+        'Stop and Restart reset kernel state in both languages — an infinite loop is killed by terminating the worker.',
+        'Python packages only install when the kernel starts — adding a package to Settings requires restarting the kernel.',
+        'TensorFlow, PyTorch, JAX, and GPU libraries cannot run in-browser — use the Google Colab link for deep learning assignments.',
+        'Every C code cell is an independent program with its own main() — shared headers or utilities belong in the Hidden Setup cell.',
+        'Hidden setup cells in C must not define main() — doing so will cause compilation conflicts when prepended to student cells.',
+        'stdin (input() in Python, scanf/fgets in C) reads pre-typed input strings or test case data; asking for more input than supplied returns EOF.',
+        'Submission deadlines are advisory — assignments do not lock automatically at the deadline; late submissions are flagged.',
+        'Deleting a notebook permanently removes all student attempts and submissions associated with it.',
     ];
     return (
         <div>
@@ -318,12 +852,13 @@ export default function CodingManual({ standalone = false }) {
     }, [standalone]);
 
     const TAB_CONTENT = {
-        overview: <TabOverview />,
-        create:   <TabCreate />,
-        runtime:  <TabRuntime />,
-        student:  <TabStudent />,
-        grade:    <TabGrade />,
-        gotchas:  <TabGotchas />,
+        overview:  <TabOverview />,
+        create:    <TabCreate />,
+        testcases: <TabTestCases />,
+        runtime:   <TabRuntime />,
+        student:   <TabStudent />,
+        grade:     <TabGrade />,
+        gotchas:   <TabGotchas />,
     };
 
     const activeIdx = TABS.findIndex(t => t.id === tab);
@@ -374,7 +909,7 @@ export default function CodingManual({ standalone = false }) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="cdm-title" style={{ fontWeight: 800, color: T.text }}>Coding Notebooks — Teacher Manual</div>
                         <div className="cdm-subtitle" style={{ color: T.textMuted, marginTop: 2 }}>
-                            Python and C, running entirely in the browser · XCEED Learning
+                            Python and C, running entirely in the browser with Universal Hidden Test Cases · XCEED Learning
                         </div>
                     </div>
                 </div>
@@ -383,9 +918,9 @@ export default function CodingManual({ standalone = false }) {
                     {TABS.map((t, i) => {
                         const active = tab === t.id;
                         const done = activeIdx > i;
-                        const bgColor = active ? T.accent : done ? '#10b981' : '#f1f5f9';
+                        const bgColor = active ? (t.id === 'testcases' ? '#7c3aed' : T.accent) : done ? '#10b981' : '#f1f5f9';
                         const numColor = active || done ? '#fff' : '#94a3b8';
-                        const labelColor = active ? T.accent : done ? '#10b981' : T.textMuted;
+                        const labelColor = active ? (t.id === 'testcases' ? '#7c3aed' : T.accent) : done ? '#10b981' : T.textMuted;
                         return (
                             <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', flex: i < TABS.length - 1 ? 1 : 'none', minWidth: 0 }}>
                                 <div
@@ -395,11 +930,11 @@ export default function CodingManual({ standalone = false }) {
                                     <div style={{
                                         width: 36, height: 36, borderRadius: '50%',
                                         background: bgColor,
-                                        border: active ? `2px solid ${T.accent}` : done ? '2px solid #10b981' : '2px solid #e2e8f0',
+                                        border: active ? (t.id === 'testcases' ? '2px solid #7c3aed' : `2px solid ${T.accent}`) : done ? '2px solid #10b981' : '2px solid #e2e8f0',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         fontSize: 13, fontWeight: 800, color: numColor,
                                         transition: 'all .2s', flexShrink: 0,
-                                        boxShadow: active ? `0 0 0 4px ${T.accent}18` : 'none',
+                                        boxShadow: active ? `0 0 0 4px ${t.id === 'testcases' ? '#7c3aed18' : `${T.accent}18`}` : 'none',
                                     }}>
                                         {done ? '✓' : i === 0 ? '★' : i}
                                     </div>
@@ -435,3 +970,4 @@ export default function CodingManual({ standalone = false }) {
         </>
     );
 }
+

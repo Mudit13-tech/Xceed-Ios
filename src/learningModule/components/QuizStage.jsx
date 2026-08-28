@@ -10,6 +10,7 @@ import {
   requestQuizFullscreen,
 } from '../quizStage';
 import StageBar from './StageBar';
+import ExamPulse from './ExamPulse';
 
 /**
  * The canvas a quiz runs on — the brief and the sitting alike.
@@ -20,7 +21,17 @@ import StageBar from './StageBar';
  * stage carries the only chrome a test is allowed: which paper this is, for
  * which subject, set by whom.
  */
-export default function QuizStage({ subject, faculty, title, children, autoFullscreen = true }) {
+export default function QuizStage({
+  subject,
+  faculty,
+  title,
+  children,
+  autoFullscreen = true,
+  pulse = false,
+  autoPulse = false,
+  pulseColor,
+  manualPulseAt = null,
+}) {
   const [host] = useState(getQuizStageHost);
   // Through `quizStage`'s helpers, never `document.fullscreenElement` directly:
   // WebKit before Safari 16.4 spells all of this with a `webkit` prefix, and a
@@ -81,6 +92,13 @@ export default function QuizStage({ subject, faculty, title, children, autoFulls
       <Box maxW="960px" mx="auto" px={{ base: 3, md: 6 }} py={5}>
         {children}
       </Box>
+
+      {/* The invigilation pulse — mounted whenever a paper is actually being
+          sat, painted over everything with no pointer events, so it is on the
+          same fullscreened canvas the student cannot escape. `autoPulse` is the
+          teacher's per-quiz toggle for the standing 30s ring; a manual "pulse
+          now" reaches it through `manualPulseAt` either way. See ExamPulse. */}
+      {pulse && <ExamPulse auto={autoPulse} color={pulseColor} manualPulseAt={manualPulseAt} />}
     </Box>,
     host,
   );

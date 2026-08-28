@@ -25,6 +25,7 @@ import { keyframes } from '@emotion/react';
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import { useRive, Layout, Fit, Alignment } from '@rive-app/react-canvas';
+import '../../utils/riveWasm.js';
 import { courseworkLink, courseworkMeta, formatDate, formatDateTime } from '../format';
 const pulseRing = keyframes`
   0% { transform: scale(0.95); opacity: 0.8; }

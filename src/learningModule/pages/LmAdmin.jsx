@@ -565,6 +565,20 @@ export default function LmAdmin() {
         </Text>
       </SectionCard>
 
+      <SectionCard
+        title="Student accounts & enrollment"
+        subtitle="Invite students to the module, view department-wise distribution, and monitor class enrollments."
+        action={
+          <RouterLinkStyle as={RouterLink} to="/learning/lm-admin/students" fontSize="sm" color="blue.600">
+            Open students →
+          </RouterLinkStyle>
+        }
+      >
+        <Text fontSize="sm" color="lmFg.muted">
+          Invite new students by email, provision accounts, track department-wise enrollment numbers, and view which classes students have joined.
+        </Text>
+      </SectionCard>
+
       <SharedSebCard />
 
       <SebInstallerCard />

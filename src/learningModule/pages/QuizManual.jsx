@@ -358,7 +358,8 @@ function TabOverview({ setTab }) {
                     <li><strong>Edit</strong> — the question editor.</li>
                     <li><strong>🧾 Attendance</strong> — on a published paper. The hall register, taken down the class roster. This is also where a paper is <strong>terminated</strong> — see Monitor &amp; Fix.</li>
                     <li><strong>Live control</strong> — while the paper is running. Who is writing, who has been shut out, and <strong>Let in</strong> — see the Let a Student In tab.</li>
-                    <li><strong>🔑 Access code</strong> — only on a paper that requires Safe Exam Browser. One code, shown once, for a student whose machine genuinely cannot run SEB — see the Locked Out of SEB tab for what it does <em>not</em> cover.</li>
+                    <li><strong>🔑 Access code</strong> — only on a paper that requires Safe Exam Browser. One code, for a student whose machine genuinely cannot run SEB — see the Locked Out of SEB tab for what it does <em>not</em> cover. The code itself is printed on the card beside the room code, so you can read it off without opening anything.</li>
+                    <li><strong>📍 Room code</strong> — on any published paper. The code you read out to the hall; a student cannot start without entering it. Shown on the card itself, so this button is only needed to replace the code or turn the requirement off.</li>
                     <li><strong>Results</strong> — scores, analysis and the answer key, live from the first submission.</li>
                 </ul>
             </div>
@@ -578,7 +579,7 @@ function TabSettings() {
                 <ul style={{ margin: '8px 0 0 0', paddingLeft: 18 }}>
                     <li><strong>Exam settings file (optional)</strong> — leave it blank to use the institution's shared configuration. Upload your own <code>.seb</code> file (built with SEB's free Configuration Tool) plus its Config Key only if this paper needs a lockdown of its own; both must come from the same saved file.</li>
                     <li><strong>Siri / dictation warning</strong> — clear <code>allowSiri</code> and <code>allowDictation</code> in the Configuration Tool's macOS settings before saving a custom file. A spoken trigger produces no keystroke, no focus change and no fullscreen exit, so nothing in the module can detect it — SEB refusing to run alongside a voice assistant is the only thing that stops it, and only if the file says so.</li>
-                    <li><strong>Access code, for a student without SEB</strong> — one shared code you generate and hand out yourself lets a specific student into the test from an ordinary browser, for the real, known reasons SEB sometimes cannot run (e.g. an unsupported OS). Every use is still recorded on the attempt it unlocks. Generating a new code immediately retires the old one.</li>
+                    <li><strong>Access code, for a student without SEB</strong> — one shared code you generate and hand out yourself lets a specific student into the test from an ordinary browser, for the real, known reasons SEB sometimes cannot run (e.g. an unsupported OS). Every use is still recorded on the attempt it unlocks. Generating a new code immediately retires the old one. The current code stays readable — on the quiz card, in Live control and here — so there is never a reason to mint a replacement just to see it. A code generated before this changed cannot be shown; generate a new one once, and it stays visible after that.</li>
                 </ul>
             </div>
             <Note type="warning">
@@ -621,6 +622,19 @@ function TabSettings() {
                 not the only one: for a high-stakes exam it is advisable to also have <strong>human
                 invigilators (e.g. PhD students or TAs) physically walk the room and watch student
                 screens</strong>, the same as you would for a paper exam.
+            </Note>
+            <Note type="info">
+                To help those invigilators, you can turn on the <strong>automatic invigilation pulse</strong>
+                under Settings → Proctoring. A faint ring sweeps out from the centre of every live screen
+                every 30&nbsp;seconds, all in step on the server&apos;s clock — weak up close and never over the
+                text, but visible from the back of the hall as motion. A screen <em>not</em> pulsing in time
+                (a second window, a screenshot held up, a paper quietly closed) is the one to walk over to,
+                and you pick the ring colour.
+                Separately, <strong>Live control</strong> always has a <strong>Pulse now</strong> button that
+                fires a single ring on demand — <strong>even on a quiz where you never turned the automatic
+                pulse on</strong>. It reaches every screen within one heartbeat (up to 30s); when the standing
+                pulse is also running, the on-demand ring replaces the next automatic one so nobody is pulsed
+                twice.
             </Note>
             <Note type="info">
                 The module also runs background anomaly detection on attempt activity and surfaces it as the
@@ -702,6 +716,37 @@ function TabPublish() {
                 when they open it.
             </Step>
 
+            <SectionTitle>The Room Code — Binding the Sitting to Your Hall</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, marginBottom: 8 }}>
+                The Schedule dialog asks one more question: whether this paper needs a <strong>room
+                code</strong>. It is a short code you <strong>read out to the hall</strong> at the start of the
+                sitting, and a student has to enter it before they can begin. Somebody sitting the paper from
+                somewhere else — a friend logged in as the student while a decoy sits in the room — never hears
+                it, and cannot start. It is asked once, at the beginning; a student whose connection drops and
+                resumes is not asked again.
+            </div>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    <li>Answer <strong>Require a room code</strong> and one is minted when you save. The dialog
+                        shows it immediately, above the share link.</li>
+                    <li>The code is then <strong>printed on the quiz card</strong> and at the top of
+                        <strong> Live control</strong>, so you can read it out without opening anything.</li>
+                    <li><strong>📍 Room code</strong> on the card generates a replacement or turns the
+                        requirement off. Generating a new one <em>immediately</em> retires the old one — do not
+                        press it mid-sitting unless you intend to read a new code out to everyone still waiting
+                        to start.</li>
+                    <li>It is independent of Safe Exam Browser. A paper can require both, either, or neither:
+                        SEB answers <em>&ldquo;is this the right browser?&rdquo;</em>, the room code answers
+                        <em> &ldquo;is this the right room?&rdquo;</em>.</li>
+                </ul>
+            </div>
+            <Note type="tip">
+                A student who cannot start says <em>&ldquo;it says the code is wrong&rdquo;</em>. Read the code
+                off the card again — the characters are drawn from an alphabet with no 0/O and no 1/I/L, so a
+                misheard character is nearly always a mis-typed one, and the on-screen keys will not even offer
+                the ambiguous ones.
+            </Note>
+
             <SectionTitle>What the Student Sees on That Link</SectionTitle>
             <StudentCountdownMock />
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
@@ -712,6 +757,14 @@ function TabPublish() {
                         students do not need to reload, and should be told to simply leave it open.</li>
                     <li>A student&apos;s own clock starts when they press <strong>Start test</strong>, not when the
                         window opens — so arriving a few minutes late costs them nothing but the entry cut-off.</li>
+                    <li>On a paper with a <strong>room code</strong>, a row of <strong>blank boxes</strong> — one
+                        per character of the code — sits above the Start button, with an on-screen keypad
+                        beneath it. The student taps the code in; there is no text field, and the physical
+                        keyboard does nothing, which is deliberate on a locked-down machine. The moment the last
+                        box is filled the code is <strong>checked automatically</strong>: a green tick and the
+                        boxes turn green if it is right, a red shake and a reason if it is not.
+                        <strong> Start test stays disabled until the tick appears</strong>, so a student never
+                        presses Start only to be refused.</li>
                 </ul>
             </div>
 
@@ -792,7 +845,15 @@ function TabMonitor() {
             <SectionTitle>Live Exam Control</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, marginBottom: 8 }}>
                 Click <strong>Live control</strong> on a published quiz&apos;s card while it is running. The panel
-                refreshes itself every few seconds — no need to reload the page. It has three lists:
+                refreshes itself every few seconds — no need to reload the page.
+            </div>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, marginBottom: 8 }}>
+                At the top, under the clock, sit the <strong>room code</strong> and — on a paper that requires
+                Safe Exam Browser — the <strong>access code</strong>, both in the clear with a copy button.
+                They are the two things asked of an invigilator mid-hall
+                (<em>&ldquo;what was the code again?&rdquo;</em> and <em>&ldquo;this laptop will not run
+                SEB&rdquo;</em>), and they are printed on the quiz card as well, so neither needs a dialog
+                opened to answer. Then three lists:
             </div>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
@@ -1051,6 +1112,9 @@ function TabGotchas() {
         '"Discourage mobile devices" is a nudge, not a control — it is trivially bypassed by a phone browser that does not identify itself as one.',
         'A custom SEB configuration file and its Config Key must come from the same saved file — mixing an old key with a newer file (or vice versa) will not work.',
         'There is one shared SEB bypass access code per quiz, not one per student. Generating a new code immediately retires the old one for everyone who had it.',
+        'Both codes — the room code and the SEB access code — are printed on the quiz card and at the top of Live control, in the clear, with a copy button. Neither has to be written down or screenshotted at publish time, and neither should ever be regenerated merely to read it: a new code retires the old one on the spot.',
+        'The room code is read out to the hall and typed on an on-screen keypad, never the physical keyboard. It is checked the instant the last box is filled, and Start test stays disabled until the green tick appears — so "Start does nothing" on a room-code paper means the code has not been accepted yet, not that the button is broken.',
+        'An access code generated before codes were kept readable cannot be displayed — only its hash was ever stored. Generate a new one once and it stays visible from then on.',
         'Publishing is blocked if the paper has no questions, or if any question is missing its own timer while the paper uses a timer-per-question delivery mode.',
         'The results-announcement choice (immediate vs. a set time for everyone) is effectively irreversible once students start submitting under it — get this right before you publish.',
         '"Publish results now" stays disabled until the quiz is actually conducted — you cannot release results for a paper that has not finished running.',

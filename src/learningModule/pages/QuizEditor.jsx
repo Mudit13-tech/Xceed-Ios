@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import {
   Alert,
   AlertIcon,
@@ -390,7 +390,6 @@ export default function QuizEditor({ mode = 'questions' }) {
   const { classId } = useOutletContext();
   const { quizId } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
   const toast = useToast();
 
   const [quiz, setQuiz] = useState(null);
@@ -408,11 +407,13 @@ export default function QuizEditor({ mode = 'questions' }) {
   const [sebFile, setSebFile] = useState(null);
   const [sebUploading, setSebUploading] = useState(false);
   const [sebCodeBusy, setSebCodeBusy] = useState(false);
-  // Carried straight from the create dialog when the paper was minted with an
-  // access code: the plaintext exists only in that one response, so this is the
-  // teacher's single chance to read it without generating a replacement.
-  const [sebGeneratedCode, setSebGeneratedCode] = useState(location.state?.sebBypassCode || '');
-  const sebCodeClip = useClipboard(sebGeneratedCode);
+  /* The access code is now kept in the clear on the quiz (see the model), so the
+     editor reads it off the settings like any other field rather than catching a
+     plaintext that existed in exactly one response. What is left in state is the
+     blank string for a paper minted before the code was kept — nothing to show,
+     and the panel says so. */
+  const sebCode = quiz?.settings?.sebBypassCode || '';
+  const sebCodeClip = useClipboard(sebCode);
 
   const load = useCallback(async () => {
     setError(null);
@@ -523,10 +524,10 @@ export default function QuizEditor({ mode = 'questions' }) {
   const generateSebCode = async () => {
     setSebCodeBusy(true);
     try {
-      const { code, settings } = await lmApi.setSebBypassCode(classId, quizId, {});
+      const { settings } = await lmApi.setSebBypassCode(classId, quizId, {});
+      // The reply's `settings` carries the new plaintext, so nothing has to be
+      // stashed alongside it — the panel re-renders showing the code.
       set({ settings });
-      // Shown once, here, and never again — only its hash is kept server-side.
-      setSebGeneratedCode(code);
     } catch (err) {
       toast({ status: 'error', title: err.message, duration: 6000 });
     } finally {
@@ -539,7 +540,6 @@ export default function QuizEditor({ mode = 'questions' }) {
     try {
       const { settings } = await lmApi.setSebBypassCode(classId, quizId, { clear: true });
       set({ settings });
-      setSebGeneratedCode('');
     } catch (err) {
       toast({ status: 'error', title: err.message, duration: 6000 });
     } finally {
@@ -1043,6 +1043,89 @@ export default function QuizEditor({ mode = 'questions' }) {
 
                   <Divider />
 
+                  {/* The invigilation pulse — for the person at the back of the
+                      hall, not the student. A faint ring blooms out of the centre
+                      of every live screen at the same instant, on the server's
+                      clock, so a room of papers breathes together and a screen
+                      out of the rhythm stands out from a distance. On by default,
+                      because it is only useful if it was already running when an
+                      invigilator walked the hall — a teacher setting a paper that
+                      nobody watches turns it off here. */}
+                  <Box>
+                    <Checkbox
+                      size="sm"
+                      isChecked={settings.invigilationPulse !== false}
+                      onChange={(e) => setSetting('invigilationPulse', e.target.checked)}
+                    >
+                      Automatic invigilation pulse — a synchronised ring every 30 seconds
+                    </Checkbox>
+                    <Text fontSize="xs" color="lmFg.muted" pl={6} mt={-1}>
+                      A faint ring sweeps out from the centre of every live screen every 30 seconds, all
+                      in step on the server&apos;s clock. It is weak up close and never covers the text; from
+                      the back what shows is the motion, and a screen not pulsing in time is the one to
+                      walk over to. This toggle only controls the <em>standing</em> pulse — the
+                      <strong> Pulse now</strong> button in Live control fires one on demand on any live
+                      quiz, whether or not this is on.
+                    </Text>
+                    {/* Always shown, not gated on the toggle: the same colour is
+                        used by a Pulse now fired from Live control, which works
+                        on any live quiz whether or not the standing pulse is on.
+                        A teacher who only ever uses the on-demand button still
+                        gets to pick its shade. */}
+                    <HStack pl={6} mt={2} spacing={3}>
+                      <Text fontSize="xs" color="lmFg.body">
+                        Ring colour
+                      </Text>
+                      <Input
+                        type="color"
+                        size="sm"
+                        w="56px"
+                        p={1}
+                        value={settings.invigilationPulseColor || '#3884ff'}
+                        onChange={(e) => setSetting('invigilationPulseColor', e.target.value)}
+                        aria-label="Invigilation pulse ring colour"
+                      />
+                      <Text fontSize="xs" color="lmFg.muted">
+                        Used by the automatic pulse and by Pulse now — pick a shade your invigilators can
+                        read at range.
+                      </Text>
+                    </HStack>
+                  </Box>
+
+                  <Divider />
+
+                  {/* Webcam invigilation. Off by default and the most sensitive
+                      control here — it captures images of students — so it is
+                      stated plainly and the consent lives on the student's own
+                      pre-test screen. */}
+                  <Box>
+                    <Checkbox
+                      size="sm"
+                      isChecked={Boolean(settings.requireWebcam)}
+                      onChange={(e) => setSetting('requireWebcam', e.target.checked)}
+                    >
+                      Require a webcam, and flag when no face is visible
+                    </Checkbox>
+                    <Text fontSize="xs" color="lmFg.muted" pl={6} mt={-1}>
+                      Students must allow their camera on the pre-test screen — the test will not start
+                      without it, and a refresh re-asks. Their browser watches for a face for the length
+                      of the paper; a frame with no face raises the student in <b>Live control</b>, with a
+                      thumbnail to look at. Detection runs on the student&apos;s device and only a result is
+                      sent, so a slow connection is not loaded — an image travels only when a frame is
+                      flagged.
+                    </Text>
+                    {settings.requireWebcam && (
+                      <Text fontSize="xs" color="lmHue.orange700" pl={6} mt={1}>
+                        This records images of students. Make sure your institution permits it and that
+                        students are told — the pre-test screen discloses it before they grant the camera.
+                        Automatic face detection depends on the browser; where it is unavailable, thumbnails
+                        are kept for you to review by eye instead.
+                      </Text>
+                    )}
+                  </Box>
+
+                  <Divider />
+
                   {/* Safe Exam Browser. A different kind of control from
                       everything above: those raise the cost of cheating from
                       inside an ordinary tab; this replaces the tab, so it closes
@@ -1202,37 +1285,44 @@ export default function QuizEditor({ mode = 'questions' }) {
                             happens; hand it out yourself, to whoever actually needs it. Every use is
                             still recorded on the attempt it unlocks.
                           </Text>
-                          {sebGeneratedCode ? (
-                            <Alert status="success" borderRadius="md" fontSize="xs" flexDirection="column" alignItems="flex-start" py={2}>
-                              <HStack>
-                                <AlertIcon />
-                                <Text fontWeight="600">Copy this now — it will not be shown again.</Text>
-                              </HStack>
-                              <HStack mt={2}>
-                                <Text fontFamily="mono" fontSize="md" fontWeight="700" letterSpacing="0.1em">
-                                  {sebGeneratedCode}
-                                </Text>
-                                <Button size="xs" onClick={sebCodeClip.onCopy}>
-                                  {sebCodeClip.hasCopied ? 'Copied' : 'Copy'}
-                                </Button>
-                              </HStack>
-                            </Alert>
-                          ) : (
-                            <HStack>
-                              <Button size="sm" onClick={generateSebCode} isLoading={sebCodeBusy}>
-                                {settings.sebBypassEnabled ? 'Generate a new code' : 'Enable and generate a code'}
+                          {/* The code itself, kept on screen rather than flashed
+                              once at mint time: it is handed out by a teacher, by
+                              hand, and one shown once is one that gets needlessly
+                              regenerated — retiring a code already given out. */}
+                          {sebCode && (
+                            <HStack
+                              mb={2}
+                              borderWidth="1px"
+                              borderColor="lmHue.purple200"
+                              bg="lmHue.purple50"
+                              borderRadius="md"
+                              px={3}
+                              py={2}
+                              w="fit-content"
+                            >
+                              <Text fontFamily="mono" fontSize="md" fontWeight="700" letterSpacing="0.1em" userSelect="all">
+                                {sebCode}
+                              </Text>
+                              <Button size="xs" onClick={sebCodeClip.onCopy}>
+                                {sebCodeClip.hasCopied ? 'Copied' : 'Copy'}
                               </Button>
-                              {settings.sebBypassEnabled && (
-                                <Button size="sm" variant="outline" colorScheme="red" onClick={clearSebCode} isLoading={sebCodeBusy}>
-                                  Turn off the access code
-                                </Button>
-                              )}
                             </HStack>
                           )}
-                          {settings.sebBypassEnabled && !sebGeneratedCode && (
+                          <HStack>
+                            <Button size="sm" onClick={generateSebCode} isLoading={sebCodeBusy}>
+                              {settings.sebBypassEnabled ? 'Generate a new code' : 'Enable and generate a code'}
+                            </Button>
+                            {settings.sebBypassEnabled && (
+                              <Button size="sm" variant="outline" colorScheme="red" onClick={clearSebCode} isLoading={sebCodeBusy}>
+                                Turn off the access code
+                              </Button>
+                            )}
+                          </HStack>
+                          {settings.sebBypassEnabled && (
                             <Text fontSize="xs" color="lmFg.muted" mt={1}>
-                              A code is active. Generating a new one replaces it — the old code stops
-                              working the moment you do.
+                              {sebCode
+                                ? 'This code is also on the quiz card and in Live control. Generating a new one replaces it — the old code stops working the moment you do.'
+                                : 'A code is active but was minted before codes were kept readable, so it cannot be shown. Generate a new one to see it here.'}
                             </Text>
                           )}
                         </Box>

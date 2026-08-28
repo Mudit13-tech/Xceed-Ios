@@ -45,6 +45,8 @@ import lmApi from '../api/lmApi';
 import LiveExamControl, { LiveCounts } from '../components/liveExam';
 import AttendanceControl from '../components/attendanceControl';
 import AccessCodeButton from '../components/AccessCodeButton';
+import RoomCodeButton from '../components/RoomCodeButton';
+import ExamCodes from '../components/ExamCodes';
 import { CopyLinkButton, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import PublishQuizModal from '../components/PublishQuizModal';
 import { formatDateTime, relativeTime } from '../format';
@@ -260,25 +262,14 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
       });
       reset();
       onClose();
-      // The plaintext exists in this response and nowhere else, and the editor
-      // opens on the questions tab — so it is said here too, and stays on screen
-      // until the teacher dismisses it rather than fading out unread.
-      if (created.sebBypassCode) {
-        toast({
-          status: 'success',
-          title: `Access code: ${created.sebBypassCode}`,
-          description:
-            'Copy this now — it is not shown again. Hand it to a student who cannot run Safe Exam Browser. You can replace or turn it off in the editor → Proctoring.',
-          duration: null,
-          isClosable: true,
-        });
-      }
+      /* No "copy this now" toast any more. The access code used to exist in this
+         one response and nowhere else, so it had to be shouted at the teacher
+         before it was gone for good; it is now kept in the clear and shown on
+         the quiz card and in Live control, which is where a teacher is standing
+         when they actually need it. */
       // Straight into the editor — a quiz with no questions cannot be published
       // anyway, so there is nothing useful to come back to the list for.
-      navigate(`/learning/class/${classId}/quiz/${created._id}/edit`, {
-        // The access code is in this response and nowhere else, ever again.
-        state: created.sebBypassCode ? { sebBypassCode: created.sebBypassCode } : undefined,
-      });
+      navigate(`/learning/class/${classId}/quiz/${created._id}/edit`);
     } catch (error) {
       toast({ status: 'error', title: 'Could not create quiz', description: error.message });
     } finally {
@@ -820,10 +811,10 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
       {/* The title line, with the icon toolbar on the end of it: wordless
           controls belong in the card's top corner, level with the name of the
           paper they act on, not on a line of their own. */}
-      <Flex align="flex-start" gap={3}>
-        <Box flex="1" minW="220px" {...bodyLink}>
+      <Flex align="flex-start" justify="space-between" gap={3} wrap="wrap">
+        <Box flex="1" minW={{ base: '0', sm: '220px' }} maxW="100%" {...bodyLink}>
           <HStack spacing={2} wrap="wrap">
-            <Heading size="sm">{quiz.title}</Heading>
+            <Heading size="sm" wordBreak="break-word">{quiz.title}</Heading>
             <Badge colorScheme={isExam ? 'red' : 'blue'}>{isExam ? '🎓 Exam' : '📝 Quiz'}</Badge>
             {quiz.source === 'ai' && <Badge colorScheme="purple">✨ AI</Badge>}
             {isTeacher && (
@@ -874,7 +865,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
           </HStack>
         </Box>
         {iconTools && (
-          <HStack spacing={1} mt={-1} mr={-1}>
+          <HStack spacing={1} mt={{ base: 0, sm: -1 }} mr={{ base: 0, sm: -1 }} wrap="wrap" maxW="100%">
             {iconTools}
           </HStack>
         )}
@@ -954,6 +945,14 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
               {start.why}
             </Text>
           )}
+
+          {/* The codes the sitting runs on, in the clear on the card itself.
+              They were both a dialog away — which is a click too many at the one
+              moment they are wanted, standing in front of a hall about to read
+              the room code out. Only published papers have a sitting to run, and
+              only staff ever receive the codes: the student copy of the settings
+              carries neither. */}
+          {isTeacher && quiz.published && <ExamCodes settings={quiz.settings} mt={2} />}
         </Box>
 
         <Flex gap={2} wrap="wrap" align="center" maxW="100%">
@@ -999,6 +998,11 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
               {/* Only where there is a lockdown for it to unlock. */}
               {quiz.published && quiz.settings?.requireSafeExamBrowser && (
                 <AccessCodeButton classId={classId} quiz={quiz} onDone={onRefresh} />
+              )}
+              {/* The room code — for any published paper, independent of SEB: it
+                  binds the start to the invigilated room rather than the browser. */}
+              {quiz.published && (
+                <RoomCodeButton classId={classId} quiz={quiz} onDone={onRefresh} />
               )}
             </>
           ) : (
@@ -1155,32 +1159,32 @@ export default function Quizzes() {
         </Box>
         {/* Students get this row too, for the SEB installer alone: they have no
             other route to it that does not start with a test about to begin. */}
-        <HStack>
+        <Flex gap={2} wrap="wrap" align="center" maxW="100%">
           <SebInstallerDownload />
           {isTeacher && (
             <>
-            <Button as={RouterLink} to={`/learning/class/${classId}/studio`} size="sm" variant="outline">
-              ✨ Generate from a recording
-            </Button>
-            <Button
-              as="a"
-              href="/learning/quizmanual"
-              target="_blank"
-              rel="noreferrer"
-              size="sm"
-              variant="outline"
-              colorScheme="teal"
-              borderWidth="2px"
-              fontWeight="semibold"
-            >
-              📖 Manual
-            </Button>
-            <Button colorScheme="blue" size="sm" onClick={onOpen}>
-              + Create quiz
-            </Button>
+              <Button as={RouterLink} to={`/learning/class/${classId}/studio`} size="sm" variant="outline">
+                ✨ Generate from a recording
+              </Button>
+              <Button
+                as="a"
+                href="/learning/quizmanual"
+                target="_blank"
+                rel="noreferrer"
+                size="sm"
+                variant="outline"
+                colorScheme="teal"
+                borderWidth="2px"
+                fontWeight="semibold"
+              >
+                📖 Manual
+              </Button>
+              <Button colorScheme="blue" size="sm" onClick={onOpen}>
+                + Create quiz
+              </Button>
             </>
           )}
-        </HStack>
+        </Flex>
       </Flex>
 
       <ErrorState error={error} onRetry={load} />
