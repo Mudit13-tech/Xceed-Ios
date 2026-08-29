@@ -53,6 +53,34 @@ describe('requestCamera maps failures to a reason the student can act on', () =>
     await expect(requestCamera()).rejects.toMatchObject({ reason: 'inuse' });
   });
 
+  it('asks again without constraints when the first shape is refused', async () => {
+    /* The Safe Exam Browser case: a desktop webcam that cannot describe a
+       facingMode, behind an embedded Chromium that answers an unmeetable
+       constraint with a refusal rather than a best effort. The bare retry is
+       what actually opens it, and the student sees one prompt, not two. */
+    const stream = { id: 's1' };
+    const getUserMedia = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error('over'), { name: 'OverconstrainedError' }))
+      .mockResolvedValueOnce(stream);
+    globalThis.navigator = { mediaDevices: { getUserMedia } };
+
+    await expect(requestCamera()).resolves.toBe(stream);
+    expect(getUserMedia).toHaveBeenNthCalledWith(2, { video: true, audio: false });
+  });
+
+  it('does not ask twice when the refusal was a refusal', async () => {
+    // A second prompt for a student who has just said no is noise, and a site
+    // already blocked will not produce one at all.
+    const getUserMedia = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('no'), { name: 'NotAllowedError' }));
+    globalThis.navigator = { mediaDevices: { getUserMedia } };
+
+    await expect(requestCamera()).rejects.toMatchObject({ reason: 'denied' });
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+  });
+
   it('resolves to the stream on success', async () => {
     const stream = { id: 's1' };
     globalThis.navigator = { mediaDevices: { getUserMedia: () => Promise.resolve(stream) } };

@@ -17,6 +17,7 @@ import {
   HStack,
   Heading,
   Input,
+  Link,
   Progress,
   Table,
   Tbody,
@@ -222,6 +223,27 @@ export default function TutorialResults() {
                         <AlertIcon />
                         {attempt.warnings.join(' · ')}
                       </Alert>
+                    )}
+
+                    {(attempt.uploads || []).length > 0 && (
+                      <Box mb={3}>
+                        <Text fontSize="xs" fontWeight="600" color="lmFg.subtle" mb={1}>
+                          Uploaded working
+                        </Text>
+                        <HStack wrap="wrap" spacing={3}>
+                          {attempt.uploads.map((file) => (
+                            <Link
+                              key={file.url}
+                              href={lmApi.fileUrl(file.url)}
+                              isExternal
+                              fontSize="xs"
+                              color="lmHue.blue700"
+                            >
+                              📎 {file.name || 'Attachment'}
+                            </Link>
+                          ))}
+                        </HStack>
+                      </Box>
                     )}
 
                     {(attempt.questions || []).map((question, index) => (

@@ -10,6 +10,7 @@ import {
   AlertIcon,
   Badge,
   Box,
+  Link,
   Button,
   Code,
   Flex,
@@ -215,6 +216,27 @@ export default function AssignmentResults() {
                         Submitted {formatDateTime(attempt.submittedAt)} · took{' '}
                         {Math.round(attempt.durationSec / 60)} min
                       </Text>
+                    )}
+
+                    {(attempt.uploads || []).length > 0 && (
+                      <Box mb={3}>
+                        <Text fontSize="xs" fontWeight="700" mb={1}>
+                          Uploaded working ({attempt.uploads.length})
+                        </Text>
+                        <HStack wrap="wrap" spacing={3}>
+                          {attempt.uploads.map((file) => (
+                            <Link
+                              key={file.url}
+                              href={lmApi.fileUrl(file.url)}
+                              isExternal
+                              fontSize="sm"
+                              color="lmHue.blue700"
+                            >
+                              {file.name || 'Attachment'}
+                            </Link>
+                          ))}
+                        </HStack>
+                      </Box>
                     )}
 
                     {(attempt.warnings || []).length > 0 && (

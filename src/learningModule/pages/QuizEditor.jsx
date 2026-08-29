@@ -1063,15 +1063,14 @@ export default function QuizEditor({ mode = 'questions' }) {
                       A faint ring sweeps out from the centre of every live screen every 30 seconds, all
                       in step on the server&apos;s clock. It is weak up close and never covers the text; from
                       the back what shows is the motion, and a screen not pulsing in time is the one to
-                      walk over to. This toggle only controls the <em>standing</em> pulse — the
-                      <strong> Pulse now</strong> button in Live control fires one on demand on any live
-                      quiz, whether or not this is on.
+                      walk over to. This toggle only controls the <em>standing</em> pulse — the ring
+                      colour below can be changed at any time from Live control, and a live sitting
+                      picks up the new shade on its next heartbeat.
                     </Text>
-                    {/* Always shown, not gated on the toggle: the same colour is
-                        used by a Pulse now fired from Live control, which works
-                        on any live quiz whether or not the standing pulse is on.
-                        A teacher who only ever uses the on-demand button still
-                        gets to pick its shade. */}
+                    {/* Always shown, not gated on the toggle: the colour is the
+                        same setting Live control edits mid-sitting, so a teacher
+                        who has not turned the standing pulse on still gets to
+                        pick the shade their invigilators will read at range. */}
                     <HStack pl={6} mt={2} spacing={3}>
                       <Text fontSize="xs" color="lmFg.body">
                         Ring colour
@@ -1086,8 +1085,8 @@ export default function QuizEditor({ mode = 'questions' }) {
                         aria-label="Invigilation pulse ring colour"
                       />
                       <Text fontSize="xs" color="lmFg.muted">
-                        Used by the automatic pulse and by Pulse now — pick a shade your invigilators can
-                        read at range.
+                        Used by the pulse everywhere, and changeable mid-sitting from Live control —
+                        pick a shade your invigilators can read at range.
                       </Text>
                     </HStack>
                   </Box>
@@ -1115,12 +1114,42 @@ export default function QuizEditor({ mode = 'questions' }) {
                       flagged.
                     </Text>
                     {settings.requireWebcam && (
-                      <Text fontSize="xs" color="lmHue.orange700" pl={6} mt={1}>
-                        This records images of students. Make sure your institution permits it and that
-                        students are told — the pre-test screen discloses it before they grant the camera.
-                        Automatic face detection depends on the browser; where it is unavailable, thumbnails
-                        are kept for you to review by eye instead.
-                      </Text>
+                      <>
+                        {/* The random snapshots. Kept next to the requirement
+                            that produces them, and only shown once it is on:
+                            a count on a paper with no camera is a setting that
+                            does nothing, which is worse than absent. */}
+                        <HStack pl={6} mt={2} spacing={3} align="center">
+                          <Text fontSize="xs" color="lmFg.body">
+                            Random snapshots per sitting
+                          </Text>
+                          <Input
+                            type="number"
+                            size="sm"
+                            w="72px"
+                            min={0}
+                            max={20}
+                            value={settings.webcamSnapshotCount ?? 3}
+                            onChange={(e) =>
+                              setSetting(
+                                'webcamSnapshotCount',
+                                Math.min(20, Math.max(0, Math.trunc(Number(e.target.value) || 0))),
+                              )
+                            }
+                            aria-label="Random webcam snapshots per sitting"
+                          />
+                          <Text fontSize="xs" color="lmFg.muted">
+                            Taken at moments no one can predict, spread across the paper, and stored with
+                            the quiz. 0 turns them off.
+                          </Text>
+                        </HStack>
+                        <Text fontSize="xs" color="lmHue.orange700" pl={6} mt={1}>
+                          This records images of students. Make sure your institution permits it and that
+                          students are told — the pre-test screen discloses it before they grant the camera.
+                          Automatic face detection depends on the browser; where it is unavailable, thumbnails
+                          are kept for you to review by eye instead.
+                        </Text>
+                      </>
                     )}
                   </Box>
 

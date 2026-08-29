@@ -630,11 +630,9 @@ function TabSettings() {
                 text, but visible from the back of the hall as motion. A screen <em>not</em> pulsing in time
                 (a second window, a screenshot held up, a paper quietly closed) is the one to walk over to,
                 and you pick the ring colour.
-                Separately, <strong>Live control</strong> always has a <strong>Pulse now</strong> button that
-                fires a single ring on demand — <strong>even on a quiz where you never turned the automatic
-                pulse on</strong>. It reaches every screen within one heartbeat (up to 30s); when the standing
-                pulse is also running, the on-demand ring replaces the next automatic one so nobody is pulsed
-                twice.
+                <strong>Live control</strong> shows the same colour picker under <strong>Pulse colour
+                change</strong>, so you can change the shade mid-sitting without leaving the hall: every live
+                screen picks up the new colour on its next heartbeat (up to 30s).
             </Note>
             <Note type="info">
                 The module also runs background anomaly detection on attempt activity and surfaces it as the

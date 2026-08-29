@@ -669,6 +669,24 @@ export default function QuizAttempt() {
     },
   });
 
+  /**
+   * How long the random webcam snapshots have to spread themselves over: what
+   * was left on the clock when this screen took charge of the sitting.
+   *
+   * Fixed once and then left alone — the countdown ticks every second, and a
+   * window that followed it would reschedule every picture once a second and
+   * take none of them. Read from `remaining` rather than the paper's time limit
+   * so a sitting resumed with eight minutes left gets its snapshots inside those
+   * eight minutes instead of over an hour that is not coming.
+   */
+  const [snapshotWindowMs, setSnapshotWindowMs] = useState(0);
+  useEffect(() => {
+    if (snapshotWindowMs || !sitting) return;
+    // An untimed paper has no remaining time to read; the proctor falls back to
+    // an ordinary paper's length on its own when handed 0.
+    setSnapshotWindowMs(remaining === null ? 0 : Math.max(60, remaining) * 1000);
+  }, [sitting, remaining, snapshotWindowMs]);
+
   /* ------------------------------ render ------------------------------- */
 
   // Which questions count as attempted — the navigator, the progress bar and
@@ -1369,6 +1387,8 @@ export default function QuizAttempt() {
           paper. */}
       <WebcamProctor
         active={sitting && Boolean(settings?.requireWebcam)}
+        snapshotCount={Number(settings?.webcamSnapshotCount ?? 3)}
+        snapshotWindowMs={snapshotWindowMs}
         onReport={(body) => {
           lmApi.recordWebcamCheck(classId, attemptId, body).catch(() => {});
         }}

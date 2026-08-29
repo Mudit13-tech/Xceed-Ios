@@ -266,6 +266,16 @@ export default function Tutorials() {
                     >
                       Results
                     </Button>
+                    {tutorial.published && tutorial.settings?.liveMode && (
+                      <Button
+                        as={RouterLink}
+                        to={`/learning/class/${classId}/tutorial/${tutorial._id}/present`}
+                        size="sm"
+                        colorScheme="red"
+                      >
+                        Present live
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       colorScheme={tutorial.published ? 'gray' : 'green'}

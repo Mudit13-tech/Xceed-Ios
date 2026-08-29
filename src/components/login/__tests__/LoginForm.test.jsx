@@ -39,7 +39,11 @@ const renderForm = () =>
 const queueFetch = (...replies) => {
   const fetchMock = vi.fn();
   replies.forEach(({ ok = true, body = {} }) => {
-    fetchMock.mockResolvedValueOnce({ ok, json: () => Promise.resolve(body) });
+    fetchMock.mockResolvedValueOnce({
+      ok,
+      json: () => Promise.resolve(body),
+      text: () => Promise.resolve(JSON.stringify(body)),
+    });
   });
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
@@ -53,7 +57,9 @@ const signIn = async (user) => {
 
 beforeEach(() => {
   vi.restoreAllMocks();
-  localStorage.clear();
+  if (typeof localStorage !== 'undefined' && typeof localStorage.clear === 'function') {
+    localStorage.clear();
+  }
 });
 
 describe('LoginForm captcha', () => {
