@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
+import { Preferences } from '@capacitor/preferences';
 import axios from 'axios';
 import getEnvironment from '../getenvironment';
 
@@ -11,6 +12,7 @@ export const initializePushNotifications = async (navigate) => {
     console.log('Push notifications are not supported on web.');
     return;
   }
+  console.log('Confirmed Native Platform for Push.');
 
   try {
     // 1. REGISTER LISTENERS FIRST
@@ -94,6 +96,7 @@ export const initializePushNotifications = async (navigate) => {
         
         if (navigate && route) {
           console.log(`Navigating to push link: ${route}`);
+          await Preferences.set({ key: 'pendingRoute', value: route });
           navigate(route);
         }
       }
@@ -112,21 +115,30 @@ export const initializePushNotifications = async (navigate) => {
       return;
     }
 
-    // Register custom action types for interactive push notifications
-    await PushNotifications.registerActionTypes({
-      types: [
-        {
-          id: 'EXAM_TERMINATED_ACTIONS',
-          actions: [
-            {
-              id: 'let_back_in',
-              title: 'Let back in now',
-              foreground: true // Brings app to foreground to ensure cookies/network are active
-            }
-          ]
-        }
-      ]
-    });
+    console.log('Push permissions granted. Registering Action Types...');
+
+    try {
+      // Register custom action types for interactive push notifications (mostly iOS)
+      await PushNotifications.registerActionTypes({
+        types: [
+          {
+            id: 'EXAM_TERMINATED_ACTIONS',
+            actions: [
+              {
+                id: 'let_back_in',
+                title: 'Let back in now',
+                foreground: true // Brings app to foreground to ensure cookies/network are active
+              }
+            ]
+          }
+        ]
+      });
+      console.log('Action Types Registered.');
+    } catch (actionTypeError) {
+      console.log('registerActionTypes skipped (expected on Android): ', actionTypeError.message);
+    }
+    
+    console.log('Calling PushNotifications.register()...');
 
     // Register with Apple / Google to receive push via APNS/FCM
     await PushNotifications.register();

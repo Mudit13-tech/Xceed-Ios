@@ -6,6 +6,7 @@ import FormHeader from './FormHeader'
 import { isSafeExamBrowser } from '../../learningModule/sebDiagnosis'
 import getEnvironment from '../../getenvironment'
 import { redirectTargetFrom } from '../../authRedirect'
+import { Preferences } from '@capacitor/preferences'
 import PinEntry from './PinEntry'
 import AccountSwitcher from './AccountSwitcher'
 import { useAccountManager } from '../../utils/useAccountManager'
@@ -229,7 +230,13 @@ const LoginForm = () => {
         // A full load rather than a client-side navigation: the platform navbar
         // reads the session once on mount, so a router push would land on the
         // target with a stale "signed out" navbar that bounces straight back.
-        window.location.href = target;
+        const { value: pending } = await Preferences.get({ key: 'pendingRoute' });
+        if (pending) {
+          await Preferences.remove({ key: 'pendingRoute' });
+          window.location.href = pending;
+        } else {
+          window.location.href = target;
+        }
       }
     } catch (error) {
       console.error('An error occurred', error)

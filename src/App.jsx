@@ -25,6 +25,7 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import { App as CapacitorApp } from '@capacitor/app';
+import { Preferences } from '@capacitor/preferences';
 import {
   lazyWithPreload,
   registerRouteTree,
@@ -244,6 +245,8 @@ const ConfidenceMonitor = lazyWithPreload(() => import('./attendancemodule/confi
 const MLDataFolder = lazyWithPreload(() => import('./attendancemodule/MLDataFolder.jsx').then((m) => ({ default: m.MLDataFolder })));
 const MLFineTuning = lazyWithPreload(() => import('./attendancemodule/MLFineTuning'));
 
+let isAppColdStart = true;
+
 const HardwareBackButton = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -274,19 +277,31 @@ const HardwareBackButton = () => {
         }
       });
 
-      appUrlListener = await CapacitorApp.addListener('appUrlOpen', (event) => {
+      appUrlListener = await CapacitorApp.addListener('appUrlOpen', async (event) => {
         try {
           const url = new URL(event.url);
           if (url.hostname === 'xceed.nitj.ac.in' || url.hostname === 'xceed.learning.app') {
             const path = url.pathname + url.search + url.hash;
             if (path && path !== '/') {
-              navigateRef.current(path);
+              await Preferences.set({ key: 'pendingRoute', value: path });
+              if (isAppColdStart) {
+                // Cold start: enforce PIN screen
+                navigateRef.current('/login');
+              } else {
+                // Background resume: navigate directly
+                navigateRef.current(path);
+              }
             }
           }
         } catch (e) {
           console.error('Invalid deep link URL:', e);
         }
       });
+      
+      // After a short delay, the app is considered "running" rather than cold-starting
+      setTimeout(() => {
+        isAppColdStart = false;
+      }, 3000);
     };
 
     registerListener();

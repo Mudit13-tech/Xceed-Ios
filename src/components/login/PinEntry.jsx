@@ -13,6 +13,7 @@ import {
   Avatar
 } from '@chakra-ui/react';
 import { redirectTargetFrom } from '../../authRedirect';
+import { Preferences } from '@capacitor/preferences';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -60,7 +61,13 @@ const PinEntry = ({
         if (onSetupComplete) {
           onSetupComplete();
         } else {
-          window.location.href = redirectTargetFrom(location.search) || '/userroles';
+          const { value: pending } = await Preferences.get({ key: 'pendingRoute' });
+          if (pending) {
+            await Preferences.remove({ key: 'pendingRoute' });
+            window.location.href = pending;
+          } else {
+            window.location.href = redirectTargetFrom(location.search) || '/userroles';
+          }
         }
       } else {
         // Verify PIN
@@ -74,7 +81,14 @@ const PinEntry = ({
             }
             localStorage.setItem('token', activeAccount.token);
             queryClient.invalidateQueries({ queryKey: ['user', 'details'] });
-            window.location.href = redirectTargetFrom(location.search) || '/userroles';
+            
+            const { value: pending } = await Preferences.get({ key: 'pendingRoute' });
+            if (pending) {
+              await Preferences.remove({ key: 'pendingRoute' });
+              window.location.href = pending;
+            } else {
+              window.location.href = redirectTargetFrom(location.search) || '/userroles';
+            }
           } else {
             throw new Error('Token missing from saved account');
           }
@@ -198,8 +212,17 @@ const PinEntry = ({
             // Skip PIN setup - save account without PIN
             await saveAccount({ ...activeAccount, pin: null });
             localStorage.setItem('token', activeAccount.token);
-            if (onSetupComplete) onSetupComplete();
-            else window.location.href = redirectTargetFrom(location.search) || '/userroles';
+            if (onSetupComplete) {
+              onSetupComplete();
+            } else {
+              const { value: pending } = await Preferences.get({ key: 'pendingRoute' });
+              if (pending) {
+                await Preferences.remove({ key: 'pendingRoute' });
+                window.location.href = pending;
+              } else {
+                window.location.href = redirectTargetFrom(location.search) || '/userroles';
+              }
+            }
           }} fontSize="sm">
             Skip for now
           </Link>
