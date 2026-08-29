@@ -30,7 +30,7 @@ import { sebDiagnosis } from '../sebDiagnosis';
 import QuizStage from '../components/QuizStage';
 import CodeKeypad from '../components/CodeKeypad';
 import RichText from '../components/RichText';
-import { requestCamera, stopStream } from '../webcam';
+import { acquireCamera, releaseCamera } from '../webcam';
 import { ErrorState, Loading, SectionCard, StatTile } from '../components/common';
 import { formatDateTime } from '../format';
 import useProctoring, { isMobileDevice } from '../hooks/useProctoring';
@@ -249,6 +249,10 @@ export default function QuizBrief() {
   const [camState, setCamState] = useState('idle');
   const camStreamRef = useRef(null);
   const camVideoRef = useRef(null);
+  /* The panel a student has to act in next — the room-code pad, or the camera
+     panel behind it. Held so the pointer at the top of the screen can put them
+     in front of it rather than describing where it is. */
+  const gateRef = useRef(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -299,7 +303,13 @@ export default function QuizBrief() {
    */
   const askCamera = useCallback(() => {
     setCamState('prompting');
-    requestCamera()
+    // Try-again on a screen that already holds a reference would take a second
+    // one and never give it back, so the camera would outlive the sitting.
+    if (camStreamRef.current) {
+      releaseCamera();
+      camStreamRef.current = null;
+    }
+    acquireCamera()
       .then((stream) => {
         camStreamRef.current = stream;
         setCamState('granted');
@@ -331,7 +341,14 @@ export default function QuizBrief() {
     if (!roomGateOpen) return undefined;
     askCamera();
     return () => {
-      stopStream(camStreamRef.current);
+      /* Released, not stopped. The paper takes its own reference a beat later,
+         and inside Safe Exam Browser stopping the device here is what left the
+         corner of the paper empty: SEB's embedded browser gives the camera back
+         to the OS on its own schedule, so the paper's request landed while the
+         device was still being freed and came back `NotReadableError`. The
+         holder in webcam.js keeps the stream alive across the handover and only
+         puts it down if nobody picks it up. */
+      if (camStreamRef.current) releaseCamera();
       camStreamRef.current = null;
     };
   }, [brief?.settings?.requireWebcam, isTeacher, brief?.webcamExempt, roomGateOpen, askCamera]);
@@ -600,6 +617,18 @@ export default function QuizBrief() {
        link. */
     const sebGateOpen =
       !settings.requireSafeExamBrowser || isTeacher || Boolean(brief.sebVerified) || codeVerified;
+    /* The gate this student is standing at, if any — what the pointer at the top
+       of the screen names, and what `gateRef` is attached to. Room code first,
+       because it is asked first and the camera is not even requested until it is
+       answered. */
+    const roomGatePending = Boolean(settings.roomCodeRequired) && !isTeacher && sebGateOpen && !roomVerified;
+    const camGatePending =
+      Boolean(settings.requireWebcam) &&
+      !isTeacher &&
+      !brief.webcamExempt &&
+      roomGateOpen &&
+      camState !== 'granted' &&
+      !cameraUnavailable;
 
     /* Two exemptions from hiding Start, both matching what `startAttempt` itself
        does: a sitting already in progress resumes before the SEB gate is ever
@@ -710,7 +739,9 @@ export default function QuizBrief() {
         {state.closed && !brief.hasInProgress && (
           <Alert status="error" borderRadius="md" mb={4}>
             <AlertIcon />
-            This test closed on {formatDateTime(state.closesAt)}.
+            {state.resultsPublished
+              ? 'This test has ended and results have been published.'
+              : `This test closed on ${formatDateTime(state.closesAt)}.`}
           </Alert>
         )}
 
@@ -744,6 +775,65 @@ export default function QuizBrief() {
               </Text>
             </Box>
           </Alert>
+        )}
+
+        {/* ---- where to go next ----
+
+            A pointer to the one thing this student has to do, pinned to the top
+            of the screen for as long as it is undone.
+
+            The gates are below the rules, and on a full-size browser window that
+            is invisible: the room-code pad is on the same screen as the heading.
+            Inside Safe Exam Browser it is not. SEB opens a kiosk window on the
+            display it is given, with no address bar, no tabs and — on this paper
+            — no keyboard, and the brief above the pad is long: how the test runs,
+            the monitored conditions, the teacher's own instructions, a table of
+            sections. A student in the hall saw a page of rules and no way in, and
+            asked the invigilator where the code goes. Which is the report: the
+            entry works, it just cannot be found from where they were standing.
+
+            So it is sticky, it names the step, and the button scrolls the pad
+            into the middle of the screen. Nothing here gates anything or repeats
+            the entry — a second place to type the code would be a second place
+            to get it wrong. It only says where. */}
+        {(roomGatePending || camGatePending) && (
+          <Box
+            position="sticky"
+            top={0}
+            zIndex={2}
+            mb={4}
+            p={3}
+            borderWidth="1px"
+            borderColor="lmHue.blue300"
+            bg="lmHue.blue50"
+            borderRadius="md"
+            boxShadow="sm"
+          >
+            <Flex align="center" justify="space-between" gap={3} wrap="wrap">
+              <Box>
+                <Text fontSize="sm" fontWeight="700">
+                  {roomGatePending
+                    ? 'Before you can start: enter the room code'
+                    : 'Before you can start: turn on your camera'}
+                </Text>
+                <Text fontSize="xs" color="lmFg.muted">
+                  {roomGatePending
+                    ? `Your invigilator reads out a ${roomCodeLength ? `${roomCodeLength}-character ` : ''}code. You tap it into the boxes further down this page — the keyboard is not used.`
+                    : 'The camera panel further down this page is waiting for you to allow it.'}
+                </Text>
+              </Box>
+              <Button
+                size="sm"
+                colorScheme="blue"
+                flexShrink={0}
+                onClick={() =>
+                  gateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }
+              >
+                {roomGatePending ? 'Take me to the code' : 'Take me to the camera'}
+              </Button>
+            </Flex>
+          </Box>
         )}
 
         {/* ---- rules ----
@@ -1149,6 +1239,58 @@ export default function QuizBrief() {
                 )}
               </>
             )}
+
+            {/* ---- the webcam check, on the Safe Exam Browser panel itself ----
+
+                The camera gate further down this page already says whether the
+                camera is on, and inside SEB that was not enough: a student read
+                "Webcam on", started the paper, and then had nothing in the corner
+                to confirm it was still on. The two states were reported in two
+                different places, one of which is gone the moment the paper opens.
+
+                So the same verdict is repeated here, on the panel a student in
+                SEB is already reading, in the form they asked for — a tick, or a
+                plain statement of what is wrong. It reads the same `camState` as
+                the gate below, so the two can never disagree; nothing is decided
+                here and nothing is gated on it.
+
+                Only for a paper that wants a camera, and never for a student
+                whose teacher waived it — a tick beside a check nobody is running
+                is worse than no line at all. */}
+            {settings.requireWebcam && !brief.webcamExempt && (
+              <Box mt={3} pt={3} borderTopWidth="1px" borderColor="lmHue.purple200">
+                {camState === 'granted' ? (
+                  <Text fontSize="xs" color="lmHue.green700" fontWeight="700">
+                    ✅ Webcam check passed — your camera is on and will be watched during the test.
+                  </Text>
+                ) : camState === 'prompting' ? (
+                  <HStack fontSize="xs" color="lmFg.muted">
+                    <Spinner size="xs" />
+                    <Text>Checking your webcam — choose “Allow” if you are asked.</Text>
+                  </HStack>
+                ) : cameraUnavailable ? (
+                  <Text fontSize="xs" color="lmHue.orange700" fontWeight="700">
+                    ⚠️ Webcam check failed —{' '}
+                    {cameraSebBlocked
+                      ? 'the camera is not enabled in the exam settings file. Tell your invigilator.'
+                      : camState === 'notfound'
+                        ? 'no camera found on this computer.'
+                        : camState === 'inuse'
+                          ? 'another app is using the camera.'
+                          : 'the camera could not be opened.'}{' '}
+                    You can still start; your teacher is told.
+                  </Text>
+                ) : camState === 'denied' ? (
+                  <Text fontSize="xs" color="lmHue.orange700" fontWeight="700">
+                    ⚠️ Webcam check failed — the camera was blocked. See the webcam step below.
+                  </Text>
+                ) : (
+                  <Text fontSize="xs" color="lmFg.muted">
+                    ⬜ Webcam check — runs once the room code is accepted.
+                  </Text>
+                )}
+              </Box>
+            )}
           </Box>
         )}
 
@@ -1182,6 +1324,7 @@ export default function QuizBrief() {
             exists and how long it is. */}
         {settings.roomCodeRequired && !isTeacher && sebGateOpen && (
           <Box
+            ref={roomGatePending ? gateRef : undefined}
             mb={4}
             p={4}
             borderWidth="1px"
@@ -1194,8 +1337,10 @@ export default function QuizBrief() {
             </Text>
             <Text fontSize="xs" color="lmFg.muted" mb={3}>
               Your invigilator will read out a {roomCodeLength ? `${roomCodeLength}-character ` : ''}
-              code for this room. Tap it into the boxes below — it is checked as soon as the last box is
-              filled, and nothing else on this page opens until it is accepted.
+              code for this room. <b>Use the on-screen keyboard below</b> — tap the letters and
+              numbers with your mouse. Your physical keyboard does not work for this code. It is
+              checked as soon as the last box is filled, and nothing else on this page opens until it
+              is accepted.
             </Text>
             {/* The pad draws one blank box per character of the real code, so a
                 student knows how many to listen for before the first tap, and
@@ -1239,6 +1384,7 @@ export default function QuizBrief() {
             the page having failed rather than as a step that has not come round. */}
         {settings.requireWebcam && !isTeacher && !brief.webcamExempt && roomGateOpen && (
           <Box
+            ref={camGatePending ? gateRef : undefined}
             mb={4}
             p={4}
             borderWidth="1px"
@@ -1252,8 +1398,16 @@ export default function QuizBrief() {
             </Text>
             <Text fontSize="xs" color="lmFg.muted" mb={3}>
               This test is invigilated by webcam. Your camera is watched for the length of the paper,
-              and a frame is kept and shown to your teacher only when something looks wrong (no face in
-              view). You must allow the camera to start.
+              and a frame is kept and shown to your teacher when something looks wrong (no face in
+              view).{' '}
+              {Number(settings.webcamSnapshotCount ?? 3) > 0 && (
+                <>
+                  {Number(settings.webcamSnapshotCount ?? 3)} still picture
+                  {Number(settings.webcamSnapshotCount ?? 3) === 1 ? ' is' : 's are'} also taken at random
+                  moments during the test and kept with your paper.{' '}
+                </>
+              )}
+              You must allow the camera to start.
             </Text>
 
             {/* The preview is always mounted so the granted stream has somewhere

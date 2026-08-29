@@ -170,6 +170,18 @@ export default function CodeKeypad({
               : 'Tap the code your invigilator read out.'}
       </Text>
 
+      {/* Named, because it is not obvious that this is the only way in. A
+          student looking for somewhere to type finds a row of boxes that cannot
+          be clicked into and a grid of letters that looks decorative — and in
+          Safe Exam Browser, where the physical keyboard is off, they have
+          nothing else to try. One line saying what the grid is fixes it. */}
+      <Text fontSize="xs" fontWeight="700" color="lmFg.heading" mb={1}>
+        On-screen keyboard — tap the code here
+      </Text>
+      <Text fontSize="xs" color="lmFg.muted" mb={2}>
+        Your physical keyboard does not work for this code.
+      </Text>
+
       <SimpleGrid columns={{ base: 6, sm: 8 }} spacing={1.5} maxW="360px">
         {CODE_ALPHABET.split('').map((ch) => (
           <Button

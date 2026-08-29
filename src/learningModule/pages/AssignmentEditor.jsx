@@ -752,16 +752,6 @@ export default function AssignmentEditor() {
             </Select>
           </FormControl>
           <FormControl>
-            <FormLabel fontSize="xs">Attempts allowed</FormLabel>
-            <Input
-              size="sm"
-              type="number"
-              min={1}
-              value={assignment.settings.attemptsAllowed}
-              onChange={(e) => setSetting('attemptsAllowed', Number(e.target.value) || 1)}
-            />
-          </FormControl>
-          <FormControl>
             <FormLabel fontSize="xs">Pass mark (%)</FormLabel>
             <Input
               size="sm"
@@ -784,17 +774,10 @@ export default function AssignmentEditor() {
         <HStack mt={4} spacing={5} wrap="wrap">
           <Checkbox
             size="sm"
-            isChecked={assignment.settings.newValuesOnRetry}
-            onChange={(e) => setSetting('newValuesOnRetry', e.target.checked)}
-          >
-            Fresh numbers on each retry
-          </Checkbox>
-          <Checkbox
-            size="sm"
             isChecked={assignment.settings.showSolutionAfterSubmit}
             onChange={(e) => setSetting('showSolutionAfterSubmit', e.target.checked)}
           >
-            Show the worked solution after submitting
+            Show the worked solution after the deadline
           </Checkbox>
           <Checkbox
             size="sm"
@@ -803,7 +786,18 @@ export default function AssignmentEditor() {
           >
             Show hints
           </Checkbox>
+          <Checkbox
+            size="sm"
+            isChecked={Boolean(assignment.settings.allowFileUpload)}
+            onChange={(e) => setSetting('allowFileUpload', e.target.checked)}
+          >
+            Let students upload photos/PDF of their working
+          </Checkbox>
         </HStack>
+        <Text fontSize="xs" color="lmFg.muted" mt={1}>
+          Every student gets one attempt. The worked solution is never shown before the deadline — tick
+          the box above only if you also want it revealed to students once the deadline has passed.
+        </Text>
 
         {/* Off by default, and the warning is the point: with instant feedback a
             numeric answer can be brute-forced by typing values until it goes

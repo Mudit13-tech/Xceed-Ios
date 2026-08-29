@@ -10,6 +10,9 @@ import { lazyWithPreload, registerRouteTree } from '../routePreload';
 // covers these too.
 import LearningLayout from './components/LearningLayout';
 import RequireTeacher from './components/RequireTeacher';
+// Eager for the same reason as RequireTeacher: a route guard that arrives in a
+// later chunk would let the page it guards paint first.
+import RequireLmAdmin from './components/RequireLmAdmin';
 import ClassLayout from './pages/ClassLayout';
 const SebExit = lazyWithPreload(() => import('./pages/SebExit'));
 const Dashboard = lazyWithPreload(() => import('./pages/Dashboard'));
@@ -56,6 +59,7 @@ const AssignmentResults = lazyWithPreload(() => import('./pages/AssignmentResult
 const TutorialImport = lazyWithPreload(() => import('./pages/TutorialImport'));
 const TutorialEditor = lazyWithPreload(() => import('./pages/TutorialEditor'));
 const TutorialPlayer = lazyWithPreload(() => import('./pages/TutorialPlayer'));
+const TutorialPresent = lazyWithPreload(() => import('./pages/TutorialPresent'));
 const TutorialResults = lazyWithPreload(() => import('./pages/TutorialResults'));
 const Forms = lazyWithPreload(() => import('./pages/Forms'));
 const FormEditor = lazyWithPreload(() => import('./pages/FormEditor'));
@@ -140,12 +144,17 @@ const LEARNING_ROUTES = (
         <Route path="profile" element={<Profile />} />
         <Route path="bugs" element={<BugReports />} />
         <Route path="dev-team" element={<DevTeam />} />
-        <Route path="lm-admin" element={<LmAdmin />} />
-        {/* Not behind a client-side admin guard: every route here relies on the
-            server for authorisation, and this one 403s into the same
-            ErrorState as the dashboard it sits under. */}
-        <Route path="lm-admin/faculty" element={<LmAdminFaculty />} />
-        <Route path="lm-admin/students" element={<LmAdminStudents />} />
+        {/* The server is still the authority — every endpoint these call is
+            behind requirePlatformAdmin. The guard is so the console does not
+            render at all for a non-admin who types the URL: the rail hides
+            these items, and without this the direct link showed a
+            faculty-provisioning screen full of 403s to anyone who guessed it.
+            Grouped so a page added here inherits the gate. */}
+        <Route element={<RequireLmAdmin />}>
+          <Route path="lm-admin" element={<LmAdmin />} />
+          <Route path="lm-admin/faculty" element={<LmAdminFaculty />} />
+          <Route path="lm-admin/students" element={<LmAdminStudents />} />
+        </Route>
 
         <Route path="class/:classId" element={<ClassLayout />}>
           <Route index element={<Stream />} />
@@ -211,6 +220,9 @@ const LEARNING_ROUTES = (
                 and then published. */}
             <Route path="tutorial-import/:draftId" element={<TutorialImport />} />
             <Route path="tutorial/:tutorialId/results" element={<TutorialResults />} />
+            {/* The teacher-paced live board — opens questions one at a time and
+                shows each student's sub-question progress. */}
+            <Route path="tutorial/:tutorialId/present" element={<TutorialPresent />} />
             <Route path="lab/:labId/edit" element={<LabEditor />} />
             <Route path="lab/:labId/results" element={<LabResults />} />
             <Route path="assignment/:assignmentId/edit" element={<AssignmentEditor />} />

@@ -423,6 +423,18 @@ const lmApi = {
   recordWebcamCheck: (classId, attemptId, body) =>
     request(`/classes/${classId}/attempts/${attemptId}/webcam`, { method: 'POST', body: body || {} }),
 
+  /* One random snapshot from a sitting, as an object URL the caller must revoke.
+     Fetched rather than linked because the route is staff-only and this module
+     authenticates with a bearer token: an <img src> carries no header, so a
+     plain link to it would come back 401. See quizController.serveWebcamSnapshot. */
+  webcamSnapshot: async (classId, attemptId, file) => {
+    const response = await request(
+      `/classes/${classId}/attempts/${attemptId}/webcam-snapshots/${encodeURIComponent(file)}`,
+      { raw: true },
+    );
+    return URL.createObjectURL(await response.blob());
+  },
+
   /* An invigilator confirming they have looked at a webcam flag — the mirror of
      markVmChecked. Clears the flag off the live panel without judging it. */
   markWebcamChecked: (classId, attemptId) =>
@@ -696,6 +708,35 @@ const lmApi = {
       method: 'POST',
       body: { adjustment, feedback },
     }),
+  // Photos/PDFs of a student's working on a tutorial attempt (10 MB each, images
+  // and PDFs, enforced server-side). `files` is a FileList or array of File.
+  addTutorialUploads: (classId, attemptId, files) => {
+    const form = new FormData();
+    Array.from(files).forEach((file) => form.append('files', file));
+    return request(`/classes/${classId}/tutorial-attempts/${attemptId}/uploads`, {
+      method: 'POST',
+      body: form,
+    });
+  },
+  removeTutorialUpload: (classId, attemptId, url) =>
+    request(`/classes/${classId}/tutorial-attempts/${attemptId}/uploads`, {
+      method: 'DELETE',
+      body: { url },
+    }),
+
+  /* live (teacher-paced) tutorials — the Shorts-style pace on top of a tutorial */
+  presentTutorial: (classId, tutorialId) =>
+    request(`/classes/${classId}/tutorials/${tutorialId}/present`, { method: 'POST' }),
+  tutorialSessionState: (classId, sessionId) =>
+    request(`/classes/${classId}/tutorial-sessions/${sessionId}/state`),
+  controlTutorialSession: (classId, sessionId, body) =>
+    request(`/classes/${classId}/tutorial-sessions/${sessionId}/control`, { method: 'POST', body }),
+  endTutorialSession: (classId, sessionId) =>
+    request(`/classes/${classId}/tutorial-sessions/${sessionId}/end`, { method: 'POST' }),
+  // The student side: current pace (poll), read by the player to reveal newly
+  // opened questions.
+  tutorialLiveState: (classId, tutorialId) =>
+    request(`/classes/${classId}/tutorials/${tutorialId}/live`),
 
   /* parameterised assignments — the assessed sibling of tutorials, on its own
      routes so neither has to know about the other */
@@ -722,6 +763,22 @@ const lmApi = {
   assignmentFormulaReference: (classId) => request(`/classes/${classId}/assignments/formula-reference`),
   myAssignmentAttempt: (classId, assignmentId) =>
     request(`/classes/${classId}/assignments/${assignmentId}/attempt`),
+  // Upload photos/PDFs of working straight onto an assignment submission (10 MB
+  // each, images and PDFs only — enforced server-side), and remove one. `files`
+  // is a FileList or array of File objects.
+  addAssignmentUploads: (classId, attemptId, files) => {
+    const form = new FormData();
+    Array.from(files).forEach((file) => form.append('files', file));
+    return request(`/classes/${classId}/assignment-attempts/${attemptId}/uploads`, {
+      method: 'POST',
+      body: form,
+    });
+  },
+  removeAssignmentUpload: (classId, attemptId, url) =>
+    request(`/classes/${classId}/assignment-attempts/${attemptId}/uploads`, {
+      method: 'DELETE',
+      body: { url },
+    }),
   saveAssignmentAttempt: (classId, attemptId, responses) =>
     request(`/classes/${classId}/assignment-attempts/${attemptId}/save`, {
       method: 'POST',
@@ -956,6 +1013,14 @@ const lmApi = {
   shortPresenterStreamUrl: (classId, sessionId) =>
     `${BASE()}/classes/${classId}/short-sessions/${sessionId}/stream`,
   shortParticipantStreamUrl: (sessionId) => `${BASE()}/shorts/live/${sessionId}/stream`,
+
+  // Live-tutorial SSE, read by the same useShortStream hook. The presenter's is
+  // the per-student progress board; the student's is the tiny pace payload that
+  // wakes the player when the teacher opens the next question.
+  tutorialPresenterStreamUrl: (classId, sessionId) =>
+    `${BASE()}/classes/${classId}/tutorial-sessions/${sessionId}/stream`,
+  tutorialLiveStreamUrl: (classId, tutorialId) =>
+    `${BASE()}/classes/${classId}/tutorials/${tutorialId}/live/stream`,
 
   /* forms — a Google-Forms-like builder for the class. Own model, own
      controller, own routes; nothing here is read by or written to quizzes or

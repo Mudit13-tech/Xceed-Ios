@@ -14,13 +14,20 @@ const MANUAL_CSS = `
   .manual-header-actions { display: flex; align-items: center; gap: 14px; }
   .manual-step-tabs { scrollbar-width: none; -ms-overflow-style: none; }
   .manual-step-tabs::-webkit-scrollbar { display: none; width: 0; height: 0; }
+  .manual-topbar { flex-wrap: wrap; }
+  .manual-hero { padding: 28px 32px; }
+  .manual-flow { display: flex; align-items: stretch; flex-wrap: wrap; background: #f8f9ff; border-radius: 10; border: 1px solid #e4e8f5; overflow: hidden; }
+  .manual-flow-step { flex: 1 1 200px; padding: 16px 18px; border-right: 1px solid #e4e8f5; }
+  .manual-flow-step:last-child { border-right: none; }
   @media (max-width: 800px) {
     .manual-responsive-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .manual-responsive-grid > * { border-right: 0 !important; }
     .manual-dev-grid { grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)) !important; }
     .manual-page { padding: 18px 16px !important; }
-    .manual-hero { flex-wrap: wrap; }
+    .manual-hero { padding: 22px 20px !important; flex-wrap: wrap; }
     .manual-header-actions { width: 100%; }
     .manual-header-actions button { flex: 1; }
+    .manual-flow-step { border-right: 0 !important; }
   }
   @media (max-width: 560px) {
     .manual-responsive-grid { grid-template-columns: 1fr !important; }
@@ -30,6 +37,8 @@ const MANUAL_CSS = `
     .manual-topbar > div span { display: none; }
     .manual-header-actions { display: grid; grid-template-columns: 1fr; }
     .manual-step { gap: 10px !important; }
+    .manual-hero { padding: 18px 14px !important; }
+    .manual-flow-step { flex-basis: 100%; }
   }
 `;
 
@@ -131,9 +140,9 @@ function TabOverview({ setTab }) {
     return (
         <div>
             {/* hero */}
-            <div style={{
+            <div className="manual-hero" style={{
                 background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-                borderRadius: 12, padding: '28px 32px', marginBottom: 28, color: '#fff',
+                borderRadius: 12, marginBottom: 28, color: '#fff',
             }}>
                 <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>
                     <ILeed style={{ color: '#fff' }} /> — Intelligent Learning Engagement and Entity Detection
@@ -365,19 +374,13 @@ function TabGroundTruth() {
             </Note>
 
             <SectionTitle>After Capture — What's Next?</SectionTitle>
-            <div style={{
-                display: 'flex', gap: 0, background: '#f8f9ff', borderRadius: 10,
-                border: '1px solid #e4e8f5', overflow: 'hidden',
-            }}>
+            <div className="manual-flow">
                 {[
                     { n: 'A', label: 'Upload ERP Photos', desc: 'Upload official student photos for the batch so the dept incharge can use them as visual reference when assigning roll numbers to clusters.', color: '#f472b6' },
                     { n: 'B', label: 'Roll Assignment', desc: 'Dept incharge compares each cluster against ERP reference photos to identify the student and assigns the roll number.', color: '#10b981' },
                     { n: 'C', label: 'Subject Embeddings', desc: 'Once roll assignment is complete, register each student\'s roll number per subject to reduce matching effort during attendance.', color: '#f59e0b' },
-                ].map((s, i) => (
-                    <div key={s.n} style={{
-                        flex: 1, padding: '16px 18px',
-                        borderRight: i < 2 ? '1px solid #e4e8f5' : 'none',
-                    }}>
+                ].map(s => (
+                    <div key={s.n} className="manual-flow-step">
                         <div style={{
                             width: 28, height: 28, borderRadius: 8, background: s.color,
                             color: '#fff', fontWeight: 800, fontSize: 13,

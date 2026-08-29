@@ -21,6 +21,8 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
+import useShortStream from '../hooks/useShortStream';
+import AssignmentUploads from '../components/AssignmentUploads';
 import { ErrorState, Loading, SectionCard, StatTile } from '../components/common';
 import RichText from '../components/RichText';
 import { formatDateTime } from '../format';
@@ -108,6 +110,12 @@ function answerGroups(question) {
  * The student's sitting of a parameterised tutorial. Their variable values
  * come from the server and are fixed for this attempt, so the paper is stable
  * across reloads.
+ *
+ * A tutorial run *live* (the teacher paces it) behaves the same, with two
+ * differences: only the questions the teacher has opened are shown, and the
+ * player subscribes to the live stream so a newly opened question appears the
+ * moment the teacher reveals it. Because the reveal is cumulative, a student can
+ * keep working an earlier question after the class has moved on.
  */
 export default function TutorialPlayer() {
   const { classId } = useOutletContext();
@@ -119,14 +127,6 @@ export default function TutorialPlayer() {
   const [attempt, setAttempt] = useState(null);
   const [meta, setMeta] = useState({ attemptsUsed: 0, attemptsAllowed: 1, exhausted: false });
   const [inputs, setInputs] = useState({});
-  /**
-   * Per-answer verdicts from the server, keyed the same way as `inputs`.
-   *
-   * Only ever populated when the teacher turned instant feedback on for this
-   * tutorial. The verdict is a boolean and a remaining-tries count — the server
-   * deliberately never sends the expected value, because one request that leaked
-   * it would be the answer key.
-   */
   const [verdicts, setVerdicts] = useState({});
   const [checking, setChecking] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -134,39 +134,100 @@ export default function TutorialPlayer() {
   const [busy, setBusy] = useState('');
   const [savedAt, setSavedAt] = useState(null);
   const submittedRef = useRef(false);
+  // The live pace, as last seen from the attempt payload or the stream. Null on
+  // a self-paced tutorial.
+  const [live, setLive] = useState(null);
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const [detail, sitting] = await Promise.all([
-        lmApi.getTutorial(classId, tutorialId),
-        lmApi.myTutorialAttempt(classId, tutorialId),
-      ]);
-      setTutorial(detail);
-      setAttempt(sitting.attempt);
-      setMeta({
-        attemptsUsed: sitting.attemptsUsed,
-        attemptsAllowed: sitting.attemptsAllowed,
-        exhausted: Boolean(sitting.exhausted),
-      });
+  // Verdicts for answers the server already knows are right — a live session
+  // persists the green tick, so it should be there on reload and after the
+  // teacher opens the next question, not only in the tab that first typed it.
+  const verdictsFromResponses = (responses) => {
+    const seeded = {};
+    (responses || []).forEach((response) => {
+      if (response.correct) {
+        seeded[answerId(response.questionId, response.answerKey)] = { checkable: true, correct: true };
+      }
+    });
+    return seeded;
+  };
 
-      // Re-hydrate a saved draft so a student can leave and come back.
-      const restored = {};
-      (sitting.attempt?.responses || []).forEach((response) => {
-        restored[answerId(response.questionId, response.answerKey)] = response.raw;
-      });
-      setInputs(restored);
-      submittedRef.current = sitting.attempt?.status !== 'in_progress';
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [classId, tutorialId]);
+  /**
+   * Loads the tutorial and the student's attempt. `merge` keeps whatever the
+   * student is currently typing — used when the live stream nudges a refresh, so
+   * a question opening across the room never wipes the box someone is mid-answer
+   * in.
+   */
+  const load = useCallback(
+    async (merge = false) => {
+      setError(null);
+      try {
+        const [detail, sitting] = await Promise.all([
+          lmApi.getTutorial(classId, tutorialId),
+          lmApi.myTutorialAttempt(classId, tutorialId),
+        ]);
+        setTutorial(detail);
+        setAttempt(sitting.attempt);
+        setLive(sitting.attempt?.live || null);
+        setMeta({
+          attemptsUsed: sitting.attemptsUsed,
+          attemptsAllowed: sitting.attemptsAllowed,
+          exhausted: Boolean(sitting.exhausted),
+        });
+
+        const restored = {};
+        (sitting.attempt?.responses || []).forEach((response) => {
+          restored[answerId(response.questionId, response.answerKey)] = response.raw;
+        });
+        // Local edits win over the saved copy on a merge; on a fresh load the
+        // saved copy is all there is.
+        setInputs((prev) => (merge ? { ...restored, ...prev } : restored));
+        setVerdicts((prev) =>
+          merge
+            ? { ...verdictsFromResponses(sitting.attempt?.responses), ...prev }
+            : verdictsFromResponses(sitting.attempt?.responses),
+        );
+        submittedRef.current = sitting.attempt?.status !== 'in_progress';
+      } catch (err) {
+        setError(err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [classId, tutorialId],
+  );
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Subscribe to the live pace only once we know the tutorial is in live mode.
+  const liveStreamUrl = useMemo(
+    () => (live ? lmApi.tutorialLiveStreamUrl(classId, tutorialId) : null),
+    [live, classId, tutorialId],
+  );
+  const pollLive = useCallback(
+    () => lmApi.tutorialLiveState(classId, tutorialId),
+    [classId, tutorialId],
+  );
+  const { state: liveState } = useShortStream(liveStreamUrl, {
+    fetchState: pollLive,
+    enabled: Boolean(liveStreamUrl),
+  });
+
+  // When the teacher opens the next question or flips a hint, the revision bumps
+  // — re-fetch the attempt to pull the newly revealed content in, preserving
+  // whatever the student is typing.
+  const lastRevisionRef = useRef(-1);
+  useEffect(() => {
+    if (!liveState) return;
+    setLive((prev) => ({ ...(prev || {}), ...liveState }));
+    const revision = Number(liveState.revision ?? 0);
+    if (revision !== lastRevisionRef.current) {
+      lastRevisionRef.current = revision;
+      // Skip the very first frame — it matches what load() already fetched.
+      if (revision > 0) load(true);
+    }
+  }, [liveState, load]);
 
   const responses = useMemo(
     () =>
@@ -183,15 +244,18 @@ export default function TutorialPlayer() {
     [inputs],
   );
 
-  const totalSlots = useMemo(
-    () => (attempt?.questions || []).reduce((sum, question) => sum + question.answers.length, 0),
+  // Only the questions the student can actually see. Self-paced: all of them.
+  // Live: the ones the teacher has opened (the server withholds the rest).
+  const openQuestions = useMemo(
+    () => (attempt?.questions || []).filter((question) => question.open !== false),
     [attempt],
   );
 
-  // Declared before checkOne below, which closes over it: hooks run
-  // unconditionally on every render, before the `!attempt` early return, so
-  // this cannot be pushed down next to its other use without a
-  // temporal-dead-zone crash on first render.
+  const totalSlots = useMemo(
+    () => openQuestions.reduce((sum, question) => sum + (question.answers || []).length, 0),
+    [openQuestions],
+  );
+
   const submitted = attempt?.status !== 'in_progress';
 
   const saveDraft = async () => {
@@ -209,73 +273,39 @@ export default function TutorialPlayer() {
   };
 
   /**
-
    * Asks the server whether one answer is right.
-
    *
-
    * Fired on blur rather than on every keystroke: a check costs a request and
-
    * spends one of the student's tries, and checking half-typed numbers would
-
    * burn the budget before they had finished the first one.
-
    */
-
   const checkOne = useCallback(
-
     async (question, answer) => {
-
       if (!attempt?.instantFeedback || submitted) return;
-
       const id = answerId(question.questionId, answer.key);
-
       const raw = inputs[id];
-
       if (!String(raw ?? '').trim()) return;
-
       // Nothing to learn from re-checking a value already called correct, and it
-
       // would spend another try.
-
       if (verdicts[id]?.correct) return;
 
-  
-
       setChecking(id);
-
       try {
-
         const result = await lmApi.checkTutorialAnswer(classId, tutorialId, attempt._id, {
-
           questionId: question.questionId,
-
           answerKey: answer.key,
-
           raw,
-
         });
-
         setVerdicts((prev) => ({ ...prev, [id]: result }));
-
       } catch {
-
         // Silent. A failed check must not read as a wrong answer, and the student
-
         // can still submit — marking happens server-side either way.
-
       } finally {
-
         setChecking(null);
-
       }
-
     },
-
     [attempt, classId, tutorialId, inputs, verdicts, submitted],
-
   );
-
 
   const submit = async () => {
     if (submittedRef.current) return;
@@ -317,6 +347,13 @@ export default function TutorialPlayer() {
     );
   }
 
+  const isLive = Boolean(live);
+  const liveEnded = isLive && live.status === 'ended';
+  const questionCount = (attempt.questions || []).length;
+  // Only once something is on screen — with nothing opened the hold card below
+  // already says the same thing, and both at once reads as a stutter.
+  const moreToCome =
+    isLive && !liveEnded && openQuestions.length > 0 && openQuestions.length < questionCount;
   const answeredCount = responses.length;
   const byKey = new Map((attempt.responses || []).map((r) => [answerId(r.questionId, r.answerKey), r]));
 
@@ -328,16 +365,29 @@ export default function TutorialPlayer() {
 
       <Flex justify="space-between" align="flex-start" gap={3} mb={4} wrap="wrap">
         <Box>
-          <Heading size="md">{tutorial.title}</Heading>
+          <HStack>
+            <Heading size="md">{tutorial.title}</Heading>
+            {isLive && (
+              <Badge colorScheme={liveEnded ? 'gray' : 'red'} variant="solid">
+                {liveEnded ? 'Live ended' : 'Live'}
+              </Badge>
+            )}
+          </HStack>
           {tutorial.description && (
             <Text fontSize="sm" color="lmFg.subtle">
               {tutorial.description}
             </Text>
           )}
           <HStack fontSize="xs" color="lmFg.muted" mt={1} wrap="wrap">
-            <Text>
-              Attempt {attempt.attemptNumber} of {meta.attemptsAllowed}
-            </Text>
+            {isLive ? (
+              <Text>
+                Question {openQuestions.length} of {questionCount} opened
+              </Text>
+            ) : (
+              <Text>
+                Attempt {attempt.attemptNumber} of {meta.attemptsAllowed}
+              </Text>
+            )}
             {tutorial.settings?.dueDate && <Text>Due {formatDateTime(tutorial.settings.dueDate)}</Text>}
             {attempt.late && <Badge colorScheme="red">Late</Badge>}
           </HStack>
@@ -348,7 +398,7 @@ export default function TutorialPlayer() {
               Save progress
             </Button>
             <Button size="sm" colorScheme="teal" onClick={submit} isLoading={busy === 'submit'}>
-              Submit
+              {isLive ? 'Finish' : 'Submit'}
             </Button>
           </HStack>
         )}
@@ -360,8 +410,21 @@ export default function TutorialPlayer() {
           Your figures are unique to you — comparing final answers with a classmate will not help, but
           comparing <em>method</em> will. You may type an expression such as <Code fontSize="xs">2*pi*3</Code>{' '}
           instead of a decimal.
+          {isLive && ' Try your answer as many times as you like — a green tick means you have it right.'}
         </Box>
       </Alert>
+
+      {attempt.allowFileUpload && (
+        <AssignmentUploads
+          classId={classId}
+          attemptId={attempt._id}
+          uploads={attempt.uploads || []}
+          canEdit={!submitted}
+          uploadFn={lmApi.addTutorialUploads}
+          removeFn={lmApi.removeTutorialUpload}
+          onChange={(uploads) => setAttempt((prev) => (prev ? { ...prev, uploads } : prev))}
+        />
+      )}
 
       {submitted && (
         <Flex gap={3} mb={5} wrap="wrap">
@@ -376,7 +439,7 @@ export default function TutorialPlayer() {
             value={attempt.passed ? 'Passed' : 'Not passed'}
             accent={attempt.passed ? 'green.500' : 'red.500'}
           />
-          {meta.attemptsUsed < meta.attemptsAllowed && (
+          {!isLive && meta.attemptsUsed < meta.attemptsAllowed && (
             <Box>
               <Button
                 mt={2}
@@ -416,7 +479,20 @@ export default function TutorialPlayer() {
         />
       )}
 
-      {attempt.questions.map((question, index) => (
+      {isLive && openQuestions.length === 0 && !liveEnded && (
+        <SectionCard>
+          <Flex align="center" gap={3}>
+            <Spinner size="sm" color="teal.400" />
+            <Text fontSize="sm" color="lmFg.subtle">
+              Waiting for your teacher to open the first question…
+            </Text>
+          </Flex>
+        </SectionCard>
+      )}
+
+      {openQuestions.map((question) => {
+        const index = attempt.questions.indexOf(question);
+        return (
         <SectionCard key={question.questionId} mb={4}>
           <Flex justify="space-between" gap={3} mb={2}>
             <Heading size="sm">Question {index + 1}</Heading>
@@ -481,10 +557,6 @@ export default function TutorialPlayer() {
                       borderColor={
                         submitted
                           ? (graded?.correct ? 'green.400' : 'red.400')
-                          // Before submitting, the border follows the live check
-                          // when there is one. Green only for a confirmed right
-                          // answer — an unchecked box stays neutral rather than
-                          // implying anything.
                           : verdicts[id]?.checkable === false
                             ? undefined
                             : verdicts[id]?.correct === true
@@ -511,8 +583,8 @@ export default function TutorialPlayer() {
                     {answer.unit && <InputRightAddon>{answer.unit}</InputRightAddon>}
                   </InputGroup>
 
-                  {/* The tick. Only ever present when the teacher switched instant
-                      feedback on for this tutorial. */}
+                  {/* The tick. Present when the teacher switched instant feedback
+                      on, or whenever the tutorial is running live. */}
                   {!submitted && attempt.instantFeedback && (
                     <LiveVerdict verdict={verdicts[id]} busy={checking === id} />
                   )}
@@ -550,7 +622,15 @@ export default function TutorialPlayer() {
             </>
           )}
         </SectionCard>
-      ))}
+        );
+      })}
+
+      {moreToCome && (
+        <Flex align="center" gap={3} px={2} mb={4} color="lmFg.muted">
+          <Spinner size="xs" color="teal.400" />
+          <Text fontSize="sm">Waiting for the teacher to open the next question…</Text>
+        </Flex>
+      )}
 
       {!submitted && (
         <>
@@ -560,7 +640,7 @@ export default function TutorialPlayer() {
             </Text>
           )}
           <Button colorScheme="teal" size="lg" w="100%" onClick={submit} isLoading={busy === 'submit'}>
-            Submit tutorial ({answeredCount}/{totalSlots} answered)
+            {isLive ? 'Finish' : 'Submit tutorial'} ({answeredCount}/{totalSlots} answered)
           </Button>
         </>
       )}

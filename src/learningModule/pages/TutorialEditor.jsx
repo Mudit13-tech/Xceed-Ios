@@ -838,6 +838,35 @@ export default function TutorialEditor() {
             </FormHelperText>
           </FormControl>
         )}
+
+        {/* Teacher-paced live mode: run the tutorial like a Short, opening the
+            questions one at a time from the live board. */}
+        <Divider my={3} />
+        <Checkbox
+          size="sm"
+          isChecked={Boolean(tutorial.settings.liveMode)}
+          onChange={(e) => setSetting('liveMode', e.target.checked)}
+        >
+          Run this tutorial live (teacher-paced)
+        </Checkbox>
+        <Text fontSize="xs" color="lmFg.subtle" mt={1}>
+          You open the questions one at a time from a live board and watch how each student is doing.
+          Everyone answers their own numbers as many times as they like, with a green tick when right,
+          and can finish an opened question later. A live tutorial always ticks answers as they go.
+        </Text>
+
+        <Divider my={3} />
+        <Checkbox
+          size="sm"
+          isChecked={Boolean(tutorial.settings.allowFileUpload)}
+          onChange={(e) => setSetting('allowFileUpload', e.target.checked)}
+        >
+          Let students upload photos/PDF of their working
+        </Checkbox>
+        <Text fontSize="xs" color="lmFg.subtle" mt={1}>
+          Adds an upload box to the tutorial. On a phone they can take a photo directly. Images and
+          PDFs, up to 10 MB each.
+        </Text>
       </SectionCard>
 
       {reference && (

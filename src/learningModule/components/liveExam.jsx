@@ -612,6 +612,104 @@ function CodeGuessAlerts({ attempts, notStarted }) {
 
 
 /**
+ * The random snapshots taken during one sitting, on demand.
+ *
+ * Behind a button rather than always open, and fetched only when that button is
+ * pressed. Two reasons, and the second is the important one. A hall of two
+ * hundred sittings would otherwise pull six hundred images through a panel that
+ * re-polls every few seconds. And these are photographs of students: an
+ * invigilator should have to ask for the one they want, not have every face in
+ * the room painted across a screen that is open on a desk in that room.
+ *
+ * They arrive as blobs through an authenticated fetch — the route is staff-only
+ * and this module signs requests with a header, which an <img src> cannot carry
+ * — so every object URL made here is revoked when the strip closes.
+ */
+function WebcamSnapshots({ attempt, classId }) {
+  const shots = attempt.webcam?.snapshots || [];
+  const [open, setOpen] = useState(false);
+  const [urls, setUrls] = useState([]);
+  const [failed, setFailed] = useState(0);
+
+  useEffect(() => {
+    if (!open) {
+      setUrls([]);
+      setFailed(0);
+      return undefined;
+    }
+    let cancelled = false;
+    const made = [];
+    (async () => {
+      let lost = 0;
+      for (const shot of shots) {
+        try {
+          // Sequential on purpose: a row of thumbnails is not worth opening
+          // several connections for, and they appear as they arrive.
+          // eslint-disable-next-line no-await-in-loop
+          const url = await lmApi.webcamSnapshot(classId, attempt._id, shot.file);
+          if (cancelled) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          made.push(url);
+          setUrls([...made]);
+        } catch {
+          // One picture that will not load is not a reason to lose the rest —
+          // say how many are missing and show what there is.
+          lost += 1;
+          if (!cancelled) setFailed(lost);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      made.forEach((url) => URL.revokeObjectURL(url));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, classId, attempt._id, shots.length]);
+
+  if (shots.length === 0) return null;
+
+  return (
+    <Box mt={1}>
+      <Button size="xs" variant="ghost" onClick={() => setOpen((was) => !was)}>
+        {open ? 'Hide' : 'Show'} {shots.length} camera snapshot{shots.length === 1 ? '' : 's'}
+      </Button>
+      {open && (
+        <HStack spacing={2} mt={1} wrap="wrap">
+          {urls.map((url, i) => (
+            <Box
+              // eslint-disable-next-line react/no-array-index-key
+              key={i}
+              as="img"
+              src={url}
+              alt={`Webcam snapshot taken ${relativeTime(shots[i]?.at)}`}
+              title={relativeTime(shots[i]?.at)}
+              w="104px"
+              h="78px"
+              objectFit="cover"
+              borderRadius="md"
+              borderWidth="1px"
+              transform="scaleX(-1)"
+            />
+          ))}
+          {urls.length + failed < shots.length && (
+            <Text fontSize="xs" color="lmFg.muted">
+              loading…
+            </Text>
+          )}
+          {failed > 0 && (
+            <Text fontSize="xs" color="lmFg.muted">
+              {failed} could not be loaded
+            </Text>
+          )}
+        </HStack>
+      )}
+    </Box>
+  );
+}
+
+/**
  * Webcam flags, raised to the invigilator with the frames themselves.
  *
  * A run of empty frames — the machine sitting the paper with nobody in front of
@@ -713,6 +811,7 @@ function WebcamAlerts({ attempts, classId, onDone, toast }) {
                   ))}
                 </HStack>
               )}
+              <WebcamSnapshots attempt={attempt} classId={classId} />
               {cam.unavailableReason ? (
                 <Text fontSize="xs" color="lmFg.muted" mb={2}>
                   {cam.unavailableReason === 'seb_blocked'
@@ -876,7 +975,6 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
   const [busyId, setBusyId] = useState(null);
   const [sebExempt, setSebExempt] = useState(false);
   const [search, setSearch] = useState('');
-  const [pulsing, setPulsing] = useState(false);
   // The ring's colour, editable from here as well as from the quiz editor —
   // which shade reads at range is something an invigilator only finds out once
   // the hall is sitting under its own lights, and by then the editor is shut.
@@ -949,28 +1047,6 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
     }
   };
 
-  // Fire the invigilation pulse across every live screen at once, on the
-  // invigilator's word. It rides the heartbeat, so it reaches the room within a
-  // beat and is not instant — the button says as much. Always available, even
-  // on a quiz where the standing 30s pulse was never turned on: sweeping the
-  // hall on demand is the whole point of the button.
-  const pulseNow = async () => {
-    setPulsing(true);
-    try {
-      await lmApi.pulseQuiz(classId, quiz._id);
-      toast({
-        title: 'Pulse sent',
-        description: 'Every live screen rings within one heartbeat (up to 30s from now).',
-        status: 'success',
-        duration: 5000,
-      });
-    } catch (err) {
-      toast({ title: err.message || 'Could not send the pulse', status: 'error', duration: 6000 });
-    } finally {
-      setPulsing(false);
-    }
-  };
-
   // The colour is a quiz setting, so it is written the way the editor writes it
   // and reaches a live sitting on its next heartbeat — a paper already open
   // picks up the new shade without being touched. Debounced because a colour
@@ -1031,17 +1107,10 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
               second dialog opened from behind this one. */}
           <ExamCodes settings={quiz.settings} mt={3} />
           <HStack mt={3} spacing={3}>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={pulseNow}
-              isLoading={pulsing}
-              loadingText="Sending pulse"
-              leftIcon={<span aria-hidden="true">◎</span>}
-            >
-              Pulse now
-            </Button>
-            <Tooltip label="The ring's colour, on every live screen within one heartbeat — Pulse now and the automatic pulse both use it.">
+            <Text fontSize="sm" fontWeight="500">
+              Pulse colour change
+            </Text>
+            <Tooltip label="The ring's colour on every live screen — a shade picked here reaches the hall on the next heartbeat, and the pulse rings in it from then on.">
               <Input
                 type="color"
                 size="sm"
@@ -1379,6 +1448,7 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
                           {attempt.answeredCount}/{total} answered
                           {attempt.startedAt ? ` · started ${relativeTime(attempt.startedAt)}` : ''}
                         </Text>
+                        <WebcamSnapshots attempt={attempt} classId={classId} />
                       </Box>
 
                     </Flex>

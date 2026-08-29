@@ -599,6 +599,14 @@ function startState(quiz) {
   if (quiz.inProgress) return { can: true, why: null };
   // One sitting per student — a submitted paper cannot be taken again.
   if (quiz.attemptsUsed) return { can: false, why: 'Already attempted' };
+  const isResultsPublished = Boolean(
+    quiz.window?.resultsPublished ||
+    quiz.resultsAnnouncedAt ||
+    (quiz.resultReleaseAt && new Date() >= new Date(quiz.resultReleaseAt))
+  );
+  if (isResultsPublished) {
+    return { can: false, why: 'Quiz ended · Results published' };
+  }
   if (quiz.window?.notYetOpen) return { can: false, why: 'Not open yet' };
   if (quiz.window?.closed) return { can: false, why: 'Closed' };
   if (quiz.window?.lateToStart) return { can: false, why: 'Start window has passed' };
@@ -622,7 +630,12 @@ function startState(quiz) {
  * own submission for them.
  */
 function liveState(quiz, isTeacher) {
-  const open = quiz.window?.open && (isTeacher ? quiz.published : true);
+  const isResultsPublished = Boolean(
+    quiz.window?.resultsPublished ||
+    quiz.resultsAnnouncedAt ||
+    (quiz.resultReleaseAt && new Date() >= new Date(quiz.resultReleaseAt))
+  );
+  const open = quiz.window?.open && !isResultsPublished && (isTeacher ? quiz.published : true);
 
   if (isTeacher) {
     const sitting = quiz.sittingNow || 0;
@@ -636,9 +649,9 @@ function liveState(quiz, isTeacher) {
   }
 
   return {
-    live: Boolean(quiz.inProgress || open),
+    live: Boolean(quiz.inProgress || (open && !isResultsPublished)),
     label: quiz.inProgress ? 'In progress' : 'Live',
-    open: Boolean(open && !quiz.inProgress),
+    open: Boolean(open && !quiz.inProgress && !isResultsPublished),
     completedAt: quiz.completedAt || null,
     completedLabel: 'You completed this',
   };
@@ -706,10 +719,19 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
   // A reopened paper is not a finished one. The attempt row survives a reopen,
   // so `attemptsUsed` still counts it, and on its own that would show a student
   // whose teacher just gave them more time a finished test with no way back
-  // into it. An open sitting therefore vetoes "Completed".
+  const isResultsPublished = Boolean(
+    quiz.window?.resultsPublished ||
+    quiz.resultsAnnouncedAt ||
+    (quiz.resultReleaseAt && new Date() >= new Date(quiz.resultReleaseAt))
+  );
+
   const isCompleted = !isTeacher
     ? Boolean(!quiz.inProgress && (state.completedAt || quiz.attemptsUsed > 0))
-    : Boolean(state.completedAt || (quiz.stats?.attempts > 0 && quiz.window?.closed));
+    : Boolean(
+        quiz.stats?.attempts > 0 &&
+          (quiz.window?.closed || !quiz.published || isResultsPublished) &&
+          (quiz.sittingNow || 0) === 0,
+      );
 
   /* The paper as a download, as an icon rather than a labelled menu.
    *
@@ -818,8 +840,24 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
             <Badge colorScheme={isExam ? 'red' : 'blue'}>{isExam ? '🎓 Exam' : '📝 Quiz'}</Badge>
             {quiz.source === 'ai' && <Badge colorScheme="purple">✨ AI</Badge>}
             {isTeacher && (
-              <Badge colorScheme={scheduled ? 'orange' : quiz.published ? 'green' : 'gray'}>
-                {scheduled ? 'Scheduled' : quiz.published ? 'Published' : 'Draft'}
+              <Badge
+                colorScheme={
+                  scheduled
+                    ? 'orange'
+                    : isCompleted || quiz.window?.closed || quiz.resultsAnnouncedAt || quiz.window?.resultsPublished
+                      ? 'blue'
+                      : quiz.published
+                        ? 'green'
+                        : 'gray'
+                }
+              >
+                {scheduled
+                  ? 'Scheduled'
+                  : isCompleted || quiz.window?.closed || quiz.resultsAnnouncedAt || quiz.window?.resultsPublished
+                    ? 'Completed'
+                    : quiz.published
+                      ? 'Published'
+                      : 'Draft'}
               </Badge>
             )}
             {/* Animated Green LIVE Button in Card Header */}
@@ -856,8 +894,8 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
               </Button>
             )}
 
-            {/* Completed badge */}
-            {isCompleted && (
+            {/* Completed badge for student */}
+            {!isTeacher && isCompleted && (
               <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5} py={0.5}>
                 ✅ Completed
               </Badge>
@@ -1048,18 +1086,22 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
                 </Tooltip>
               ) : (
                 <Button
-                  as={RouterLink}
+                  as={!start.can && !quiz.attemptsUsed ? undefined : RouterLink}
                   to={
                     quiz.attemptsUsed > 0 && quiz.lastAttemptId
                       ? `/learning/class/${classId}/quiz/${quiz._id}/attempt/${quiz.lastAttemptId}`
                       : `/learning/class/${classId}/quiz/${quiz._id}`
                   }
                   size="sm"
+                  isDisabled={!start.can && !quiz.attemptsUsed}
                   colorScheme={
                     isLive || start.can
                       ? 'green'
-                      : 'purple'
+                      : !start.can && !quiz.attemptsUsed
+                        ? 'gray'
+                        : 'purple'
                   }
+                  variant={!start.can && !quiz.attemptsUsed ? 'outline' : 'solid'}
                   sx={
                     isLive && start.can && !isCompleted
                       ? {
@@ -1073,7 +1115,9 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
                     ? 'Review answers'
                     : start.can
                       ? 'Start test'
-                      : 'View instructions'}
+                      : quiz.window?.notYetOpen
+                        ? 'View instructions'
+                        : 'Quiz ended'}
                 </Button>
               )}
             </>

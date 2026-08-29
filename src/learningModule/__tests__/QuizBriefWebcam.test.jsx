@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 
 import { renderWithProviders } from '../../test/renderWithProviders';
+import { releaseCameraNow } from '../webcam';
 
 /**
  * The webcam gate on the pre-test screen.
@@ -32,6 +33,10 @@ vi.mock('../api/lmApi', () => ({
     listQuizzes: vi.fn(),
     startAttempt: (...args) => startAttempt(...args),
     verifyRoomCode: (...args) => verifyRoomCode(...args),
+    // A SEB paper mints a launch token as soon as the brief lands; unmocked it
+    // throws out of an effect and takes the screen with it.
+    sebLaunchToken: vi.fn().mockResolvedValue({}),
+    sebLaunchUrlFromToken: vi.fn(() => 'seb://example'),
     LmApiError: class LmApiError extends Error {},
   },
 }));
@@ -68,6 +73,10 @@ beforeEach(() => {
 });
 afterEach(() => {
   delete globalThis.navigator.mediaDevices;
+  /* The camera is held by a module-level holder now, so one test's granted
+     stream would otherwise still be live for the next one — and a held stream is
+     handed back without asking, which is the whole point of it. */
+  releaseCameraNow();
 });
 
 it('grants the camera, enables Start, and sends cameraReady', async () => {
@@ -86,6 +95,54 @@ it('grants the camera, enables Start, and sends cameraReady', async () => {
   await waitFor(() =>
     expect(startAttempt).toHaveBeenCalledWith('c1', 'q1', expect.objectContaining({ cameraReady: true })),
   );
+});
+
+describe('the webcam check on the Safe Exam Browser panel', () => {
+  /* A student inside SEB reads that panel and starts from it. The camera gate
+     lower down is the same verdict, but it is gone the moment the paper opens —
+     so the panel carries a tick of its own, and it must never say something the
+     gate below contradicts. */
+  const sebBrief = (overrides = {}) =>
+    brief({
+      settings: {
+        deliveryMode: 'all_at_once',
+        timeLimitMinutes: 30,
+        requireWebcam: true,
+        requireSafeExamBrowser: true,
+        sebReady: true,
+      },
+      sebVerified: true,
+      ...overrides,
+    });
+
+  it('ticks the check once the camera is on', async () => {
+    setCamera(() => Promise.resolve(fakeStream()));
+    quizBrief.mockResolvedValue(sebBrief());
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    await screen.findByText(/webcam check passed/i);
+  });
+
+  it('says what is wrong rather than ticking, when the camera will not open', async () => {
+    setCamera(() => Promise.reject(Object.assign(new Error('no'), { name: 'NotFoundError' })));
+    quizBrief.mockResolvedValue(sebBrief());
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    await screen.findByText(/webcam check failed/i);
+    expect(screen.queryByText(/webcam check passed/i)).toBeNull();
+  });
+
+  it('shows no check at all for a student whose teacher waived the camera', async () => {
+    setCamera(() => Promise.resolve(fakeStream()));
+    quizBrief.mockResolvedValue(sebBrief({ webcamExempt: true }));
+    const { default: QuizBrief } = await import('../pages/QuizBrief');
+    renderWithProviders(<QuizBrief />);
+
+    await screen.findByText(/webcam waived/i);
+    expect(screen.queryByText(/webcam check/i)).toBeNull();
+  });
 });
 
 it('does not strand a student when Safe Exam Browser blocks the camera', async () => {
@@ -203,7 +260,7 @@ describe('the order the gates are asked in', () => {
     renderWithProviders(<QuizBrief />);
 
     // The room code is what the screen asks for, and the camera is untouched.
-    await screen.findByText(/enter the room code/i);
+    await screen.findByText(/step 1 — enter the room code/i);
     expect(getUserMedia).not.toHaveBeenCalled();
 
     await typeCode('ABCDE');
@@ -220,7 +277,7 @@ describe('the order the gates are asked in', () => {
     verifyRoomCode.mockResolvedValue({ ok: true });
     const { default: QuizBrief } = await import('../pages/QuizBrief');
     renderWithProviders(<QuizBrief />);
-    await screen.findByText(/enter the room code/i);
+    await screen.findByText(/step 1 — enter the room code/i);
 
     await typeCode('ABC');
     // Half a code is not a guess — sending it would spend the shared budget.
@@ -236,7 +293,7 @@ describe('the order the gates are asked in', () => {
     verifyRoomCode.mockRejectedValue(new Error('That room code is not correct.'));
     const { default: QuizBrief } = await import('../pages/QuizBrief');
     renderWithProviders(<QuizBrief />);
-    await screen.findByText(/enter the room code/i);
+    await screen.findByText(/step 1 — enter the room code/i);
 
     await typeCode('ZZZZZ');
     await screen.findByText(/that room code is not correct/i);

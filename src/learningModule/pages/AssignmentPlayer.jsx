@@ -23,6 +23,7 @@ import {
 import lmApi from '../api/lmApi';
 import { ErrorState, Loading, SectionCard, StatTile } from '../components/common';
 import RichText from '../components/RichText';
+import AssignmentUploads from '../components/AssignmentUploads';
 import { formatDateTime } from '../format';
 
 const answerId = (questionId, key) => `${questionId}:${key}`;
@@ -117,7 +118,7 @@ export default function AssignmentPlayer() {
 
   const [assignment, setAssignment] = useState(null);
   const [attempt, setAttempt] = useState(null);
-  const [meta, setMeta] = useState({ attemptsUsed: 0, attemptsAllowed: 1, exhausted: false });
+  const [uploads, setUploads] = useState([]);
   const [inputs, setInputs] = useState({});
   /**
    * Per-answer verdicts from the server, keyed the same way as `inputs`.
@@ -144,11 +145,7 @@ export default function AssignmentPlayer() {
       ]);
       setAssignment(detail);
       setAttempt(sitting.attempt);
-      setMeta({
-        attemptsUsed: sitting.attemptsUsed,
-        attemptsAllowed: sitting.attemptsAllowed,
-        exhausted: Boolean(sitting.exhausted),
-      });
+      setUploads(sitting.attempt?.uploads || []);
 
       // Re-hydrate a saved draft so a student can leave and come back.
       const restored = {};
@@ -335,9 +332,6 @@ export default function AssignmentPlayer() {
             </Text>
           )}
           <HStack fontSize="xs" color="lmFg.muted" mt={1} wrap="wrap">
-            <Text>
-              Attempt {attempt.attemptNumber} of {meta.attemptsAllowed}
-            </Text>
             {assignment.settings?.dueDate && <Text>Due {formatDateTime(assignment.settings.dueDate)}</Text>}
             {attempt.late && <Badge colorScheme="red">Late</Badge>}
           </HStack>
@@ -376,23 +370,6 @@ export default function AssignmentPlayer() {
             value={attempt.passed ? 'Passed' : 'Not passed'}
             accent={attempt.passed ? 'green.500' : 'red.500'}
           />
-          {meta.attemptsUsed < meta.attemptsAllowed && (
-            <Box>
-              <Button
-                mt={2}
-                size="sm"
-                colorScheme="teal"
-                variant="outline"
-                onClick={async () => {
-                  submittedRef.current = false;
-                  setLoading(true);
-                  await load();
-                }}
-              >
-                Start attempt {meta.attemptsUsed + 1}
-              </Button>
-            </Box>
-          )}
         </Flex>
       )}
 
@@ -404,6 +381,19 @@ export default function AssignmentPlayer() {
             <Text>{attempt.teacherFeedback}</Text>
           </Box>
         </Alert>
+      )}
+
+      {attempt.allowFileUpload && (
+        <AssignmentUploads
+          classId={classId}
+          attemptId={attempt._id}
+          uploads={uploads}
+          // Editable while the deadline has not passed — a student may add their
+          // working before or after submitting the numbers, but the server closes
+          // it at the deadline, so the widget stops offering it there too.
+          canEdit={!(assignment.settings?.dueDate && new Date() > new Date(assignment.settings.dueDate))}
+          onChange={setUploads}
+        />
       )}
 
       {!submitted && totalSlots > 0 && (
