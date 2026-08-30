@@ -89,6 +89,40 @@ describe('Student view of Quiz live status and published results (Issue #2115)',
     expect(screen.getByText(/Quiz ended · Results published/i)).toBeTruthy();
   });
 
+  it('lets a student open a published paper that has not opened yet, to read it and watch the clock', async () => {
+    /* "Cannot start" and "cannot look" are different questions. A paper
+       published on Monday for Friday used to sit behind a greyed-out button
+       labelled *View instructions* — a button naming the one thing it refused
+       to do. The brief carries the instructions, the duration and a "Starts in"
+       countdown that unlocks itself on the moment; none of that is the paper. */
+    const scheduledQuiz = {
+      _id: 'q4',
+      title: 'Friday Midterm',
+      totalMarks: 20,
+      questionCount: 5,
+      attemptsUsed: 0,
+      inProgress: false,
+      resultsReleased: false,
+      resultsPending: false,
+      window: {
+        open: false,
+        closed: false,
+        notYetOpen: true,
+        canStart: false,
+        opensAt: new Date(Date.now() + 86400000).toISOString(),
+      },
+      settings: { timeLimitMinutes: 30 },
+    };
+
+    await render([scheduledQuiz]);
+
+    // A link, not a dead button: it goes to the brief for this paper.
+    const link = screen.getByRole('link', { name: /View instructions/i });
+    expect(link.getAttribute('href')).toBe('/learning/class/c1/quiz/q4');
+    // And still not an invitation to start — the paper is not open.
+    expect(screen.queryByRole('link', { name: /Start test/i })).toBeNull();
+  });
+
   it('renders completed badge and result review button for student who submitted the quiz', async () => {
     const attemptedQuiz = {
       _id: 'q3',

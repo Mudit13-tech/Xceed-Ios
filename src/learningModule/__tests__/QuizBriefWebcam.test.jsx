@@ -87,7 +87,7 @@ it('grants the camera, enables Start, and sends cameraReady', async () => {
   renderWithProviders(<QuizBrief />);
 
   // Once granted, the screen says so and Start is live.
-  await screen.findByText(/camera on\. you can start/i);
+  await screen.findByText(/webcam check passed/i);
   const start = screen.getByRole('button', { name: /start test/i });
   await waitFor(() => expect(start).not.toBeDisabled());
 
@@ -97,11 +97,11 @@ it('grants the camera, enables Start, and sends cameraReady', async () => {
   );
 });
 
-describe('the webcam check on the Safe Exam Browser panel', () => {
-  /* A student inside SEB reads that panel and starts from it. The camera gate
-     lower down is the same verdict, but it is gone the moment the paper opens —
-     so the panel carries a tick of its own, and it must never say something the
-     gate below contradicts. */
+describe('the webcam check on a Safe Exam Browser paper', () => {
+  /* The verdict belongs to the webcam step and nowhere else. It was briefly
+     repeated on the SEB panel, which sits above the room code — so a student was
+     shown a webcam line before the pad they had to answer first, for a check
+     that had not run yet. */
   const sebBrief = (overrides = {}) =>
     brief({
       settings: {
@@ -130,7 +130,7 @@ describe('the webcam check on the Safe Exam Browser panel', () => {
     const { default: QuizBrief } = await import('../pages/QuizBrief');
     renderWithProviders(<QuizBrief />);
 
-    await screen.findByText(/webcam check failed/i);
+    await screen.findByText(/no camera found on this computer/i);
     expect(screen.queryByText(/webcam check passed/i)).toBeNull();
   });
 
@@ -267,7 +267,7 @@ describe('the order the gates are asked in', () => {
     // Accepted, said so, and only now is the camera asked for.
     await screen.findByText(/room code accepted/i);
     await waitFor(() => expect(getUserMedia).toHaveBeenCalled());
-    await screen.findByText(/camera on\. you can start/i);
+    await screen.findByText(/webcam check passed/i);
     await waitFor(() => expect(screen.getByRole('button', { name: /start test/i })).not.toBeDisabled());
   });
 

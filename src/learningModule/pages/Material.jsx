@@ -27,6 +27,8 @@ import { formatDate } from '../format';
 
 function TopicManager({ classId, topics, onChanged }) {
   const [name, setName] = useState('');
+  const [editingTopicId, setEditingTopicId] = useState(null);
+  const [editingName, setEditingName] = useState('');
   const toast = useToast();
 
   const add = async () => {
@@ -40,13 +42,40 @@ function TopicManager({ classId, topics, onChanged }) {
     }
   };
 
-  const remove = async (topicId) => {
+  const saveEdit = async (topicId) => {
+    const trimmed = editingName.trim();
+    if (!trimmed) {
+      toast({ status: 'error', title: 'Topic name is required.' });
+      return;
+    }
     try {
-      await lmApi.deleteTopic(classId, topicId);
+      await lmApi.updateTopic(classId, topicId, { name: trimmed });
+      setEditingTopicId(null);
+      setEditingName('');
       onChanged();
     } catch (error) {
       toast({ status: 'error', title: error.message });
     }
+  };
+
+  const remove = async (topicId) => {
+    const topic = topics.find((entry) => entry._id === topicId);
+    if (!topic) return;
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(`Delete topic "${topic.name}"? Material in it will move to Other.`)) return;
+    try {
+      await lmApi.deleteTopic(classId, topicId);
+      setEditingTopicId(null);
+      setEditingName('');
+      onChanged();
+    } catch (error) {
+      toast({ status: 'error', title: error.message });
+    }
+  };
+
+  const startEdit = (topic) => {
+    setEditingTopicId(topic._id);
+    setEditingName(topic.name);
   };
 
   return (
@@ -59,18 +88,57 @@ function TopicManager({ classId, topics, onChanged }) {
           Group material into units, chapters or weeks.
         </Text>
       )}
-      {topics.map((topic) => (
-        <Flex key={topic._id} align="center" justify="space-between" py={1}>
-          <Text fontSize="sm">{topic.name}</Text>
-          <IconButton
-            size="xs"
-            variant="ghost"
-            aria-label={`Delete topic ${topic.name}`}
-            icon={<span>✕</span>}
-            onClick={() => remove(topic._id)}
-          />
-        </Flex>
-      ))}
+      {topics.map((topic) => {
+        const isEditing = editingTopicId === topic._id;
+        return (
+          <Flex key={topic._id} align="center" justify="space-between" py={1} gap={2}>
+            {isEditing ? (
+              <>
+                <Input
+                  size="sm"
+                  value={editingName}
+                  onChange={(e) => setEditingName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveEdit(topic._id);
+                    if (e.key === 'Escape') {
+                      setEditingTopicId(null);
+                      setEditingName('');
+                    }
+                  }}
+                />
+                <HStack spacing={1}>
+                  <Button size="xs" onClick={() => saveEdit(topic._id)}>
+                    Save
+                  </Button>
+                  <Button size="xs" variant="ghost" onClick={() => {
+                    setEditingTopicId(null);
+                    setEditingName('');
+                  }}>
+                    Cancel
+                  </Button>
+                </HStack>
+              </>
+            ) : (
+              <>
+                <Text fontSize="sm" flex="1" minW={0} noOfLines={1}>
+                  {topic.name}
+                </Text>
+                <Menu>
+                  <MenuButton as={IconButton} size="xs" variant="ghost" icon={<span>⋮</span>} aria-label={`Topic actions for ${topic.name}`} />
+                  <MenuList>
+                    <MenuItem {...buttonTextStyles} onClick={() => startEdit(topic)}>
+                      Edit
+                    </MenuItem>
+                    <MenuItem color="red.600" onClick={() => remove(topic._id)}>
+                      Delete
+                    </MenuItem>
+                  </MenuList>
+                </Menu>
+              </>
+            )}
+          </Flex>
+        );
+      })}
       <Flex gap={2} mt={3}>
         <Input
           size="sm"
@@ -287,7 +355,7 @@ export default function Material() {
 
       {isTeacher && (
         <Box w={{ base: '100%', lg: '260px' }} flexShrink={0} order={{ base: 1, lg: 2 }}>
-          <TopicManager classId={classId} topics={topics} onChanged={reloadClass} />
+          <TopicManager classId={classId} topics={topics} onChanged={afterSave} />
         </Box>
       )}
 

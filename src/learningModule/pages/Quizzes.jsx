@@ -685,6 +685,18 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
   const isExam = quiz.settings?.deliveryMode === 'one_at_a_time';
   const questionCount = quiz.questionCount ?? quiz.questions?.length ?? 0;
   const start = isTeacher ? { can: true, why: null } : startState(quiz);
+  /* A paper that is published but has not opened yet is still a page a student
+     may read.
+
+     "Cannot start" and "cannot look" were the same flag here, so a test
+     published on Monday for Friday sat behind a greyed-out button labelled
+     *View instructions* — a button that named the thing it then refused to do.
+     The instructions, the mark scheme, the duration and the countdown to the
+     opening moment are exactly what a student wants in the days before a paper,
+     and none of them is the paper. The brief already knows it is early: it draws
+     a "Starts in" clock and unlocks itself on the moment, so letting them in
+     early costs nothing and saves them watching the list for it. */
+  const canOpen = start.can || Boolean(quiz.window?.notYetOpen);
   const scheduled = quiz.publish?.scheduled;
   const opensAt = quiz.settings?.availableFrom;
   const entryCloses = quiz.window?.startDeadline;
@@ -1086,21 +1098,24 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
                 </Tooltip>
               ) : (
                 <Button
-                  as={!start.can && !quiz.attemptsUsed ? undefined : RouterLink}
+                  as={!canOpen && !quiz.attemptsUsed ? undefined : RouterLink}
                   to={
                     quiz.attemptsUsed > 0 && quiz.lastAttemptId
                       ? `/learning/class/${classId}/quiz/${quiz._id}/attempt/${quiz.lastAttemptId}`
                       : `/learning/class/${classId}/quiz/${quiz._id}`
                   }
                   size="sm"
-                  isDisabled={!start.can && !quiz.attemptsUsed}
+                  isDisabled={!canOpen && !quiz.attemptsUsed}
                   colorScheme={
                     isLive || start.can
                       ? 'green'
-                      : !start.can && !quiz.attemptsUsed
+                      : !canOpen && !quiz.attemptsUsed
                         ? 'gray'
                         : 'purple'
                   }
+                  // Outline, not solid, while it only opens the instructions:
+                  // the filled green button is "start your test", and a paper
+                  // that has not opened must not look like one.
                   variant={!start.can && !quiz.attemptsUsed ? 'outline' : 'solid'}
                   sx={
                     isLive && start.can && !isCompleted

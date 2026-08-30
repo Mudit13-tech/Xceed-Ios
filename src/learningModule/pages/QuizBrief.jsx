@@ -1240,57 +1240,6 @@ export default function QuizBrief() {
               </>
             )}
 
-            {/* ---- the webcam check, on the Safe Exam Browser panel itself ----
-
-                The camera gate further down this page already says whether the
-                camera is on, and inside SEB that was not enough: a student read
-                "Webcam on", started the paper, and then had nothing in the corner
-                to confirm it was still on. The two states were reported in two
-                different places, one of which is gone the moment the paper opens.
-
-                So the same verdict is repeated here, on the panel a student in
-                SEB is already reading, in the form they asked for — a tick, or a
-                plain statement of what is wrong. It reads the same `camState` as
-                the gate below, so the two can never disagree; nothing is decided
-                here and nothing is gated on it.
-
-                Only for a paper that wants a camera, and never for a student
-                whose teacher waived it — a tick beside a check nobody is running
-                is worse than no line at all. */}
-            {settings.requireWebcam && !brief.webcamExempt && (
-              <Box mt={3} pt={3} borderTopWidth="1px" borderColor="lmHue.purple200">
-                {camState === 'granted' ? (
-                  <Text fontSize="xs" color="lmHue.green700" fontWeight="700">
-                    ✅ Webcam check passed — your camera is on and will be watched during the test.
-                  </Text>
-                ) : camState === 'prompting' ? (
-                  <HStack fontSize="xs" color="lmFg.muted">
-                    <Spinner size="xs" />
-                    <Text>Checking your webcam — choose “Allow” if you are asked.</Text>
-                  </HStack>
-                ) : cameraUnavailable ? (
-                  <Text fontSize="xs" color="lmHue.orange700" fontWeight="700">
-                    ⚠️ Webcam check failed —{' '}
-                    {cameraSebBlocked
-                      ? 'the camera is not enabled in the exam settings file. Tell your invigilator.'
-                      : camState === 'notfound'
-                        ? 'no camera found on this computer.'
-                        : camState === 'inuse'
-                          ? 'another app is using the camera.'
-                          : 'the camera could not be opened.'}{' '}
-                    You can still start; your teacher is told.
-                  </Text>
-                ) : camState === 'denied' ? (
-                  <Text fontSize="xs" color="lmHue.orange700" fontWeight="700">
-                    ⚠️ Webcam check failed — the camera was blocked. See the webcam step below.
-                  </Text>
-                ) : (
-                  <Text fontSize="xs" color="lmFg.muted">
-                    ⬜ Webcam check — runs once the room code is accepted.
-                  </Text>
-                )}
-              </Box>
-            )}
           </Box>
         )}
 
@@ -1394,7 +1343,7 @@ export default function QuizBrief() {
           >
             <Text fontSize="sm" fontWeight="700" mb={1}>
               {settings.roomCodeRequired ? 'Step 2 — ' : ''}Webcam{' '}
-              {camState === 'granted' ? 'on' : 'required'}
+              {camState === 'granted' ? 'on ✅' : 'required'}
             </Text>
             <Text fontSize="xs" color="lmFg.muted" mb={3}>
               This test is invigilated by webcam. Your camera is watched for the length of the paper,
@@ -1432,9 +1381,14 @@ export default function QuizBrief() {
                   <Text>Asking for your camera — choose “Allow”.</Text>
                 </HStack>
               )}
+              {/* The verdict, where the check is. It was briefly repeated up on
+                  the Safe Exam Browser panel, which reads as a step that has
+                  already happened — and that panel is above the room code, so a
+                  student saw a webcam line before the pad they had to answer
+                  first. One tick, on the step it belongs to. */}
               {camState === 'granted' && (
-                <Text fontSize="sm" color="lmHue.green700" fontWeight="600">
-                  ✓ Camera on. You can start the test.
+                <Text fontSize="sm" color="lmHue.green700" fontWeight="700">
+                  ✅ Webcam check passed — your camera is on. You can start the test.
                 </Text>
               )}
               {camState === 'denied' && !cameraSebBlocked && (
