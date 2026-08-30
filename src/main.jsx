@@ -35,12 +35,19 @@ window.fetch = function(url, options = {}) {
 
   if (isOwnServer) {
     options.credentials = 'include';
-    if (token) {
-      options.headers = {
-        ...options.headers,
-        'Authorization': `Bearer ${token}`,
-      };
-    }
+    options.headers = {
+      ...options.headers,
+      /* Names this app on every call to our own API, signed in or not.
+         The server refuses a state-changing request that carries no header a
+         cross-site form could not have set (see server csrfGuard): the session
+         cookie is SameSite=None, so a page on any origin can post it back, and
+         a header is the one thing such a page cannot add. It has to go on
+         unconditionally rather than beside the token, because the requests with
+         no token — a guest joining a Short or answering a shared form — are
+         exactly the ones that would otherwise arrive with nothing to prove. */
+      'X-App-Name': 'xceed-web',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
   }
   
   return originalFetch(url, options);
@@ -49,6 +56,9 @@ window.fetch = function(url, options = {}) {
 axios.defaults.withCredentials = true;
 axios.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
+  // Same reasoning as the fetch wrapper above: the header is the CSRF proof, so
+  // it goes on whether or not there is a token to go with it.
+  config.headers['X-App-Name'] = 'xceed-web';
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });

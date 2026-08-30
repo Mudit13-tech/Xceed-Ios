@@ -23,7 +23,6 @@ import {
 } from 'react-icons/fi';
 import getEnvironment from '../getenvironment';
 import {
-  ROLE_DESTINATIONS,
   EXCLUDED_ROLES,
   singleRoleTarget,
 } from '../authRedirect';
@@ -33,70 +32,60 @@ const apiUrl = getEnvironment();
 const ROLE_META = {
   ITTC: {
     name: 'Institute Time Table Coordinator',
-    link: ROLE_DESTINATIONS.ITTC,
     description: 'Manage institute-wide timetables',
     icon: FiCalendar,
     accent: 'blue',
   },
   DTTI: {
     name: 'Department Time Table Coordinator',
-    link: ROLE_DESTINATIONS.DTTI,
     description: 'Manage department timetables',
     icon: FiCalendar,
     accent: 'blue',
   },
   CM: {
     name: 'Event Certificate Manager',
-    link: ROLE_DESTINATIONS.CM,
     description: 'Create and manage certificates',
     icon: FiAward,
     accent: 'green',
   },
   admin: {
     name: 'XCEED Super User',
-    link: ROLE_DESTINATIONS.admin,
     description: 'Full system administration',
     icon: FiShield,
     accent: 'red',
   },
   EO: {
     name: 'Event Organiser',
-    link: ROLE_DESTINATIONS.EO,
     description: 'Organize and manage events',
     icon: FiMic,
     accent: 'purple',
   },
   FACULTY: {
     name: 'Faculty',
-    link: ROLE_DESTINATIONS.FACULTY,
     description: 'Your classes and coursework',
     icon: FiUser,
     accent: 'orange',
   },
   'iams-admin': {
     name: 'iLEED Admin',
-    link: ROLE_DESTINATIONS['iams-admin'],
     description: 'Manage face recognition attendance system',
     icon: FiUserCheck,
     accent: 'cyan',
   },
   'iams-dept-admin': {
     name: 'iLEED Department Admin',
-    link: ROLE_DESTINATIONS['iams-dept-admin'],
     description: 'Department-level attendance management',
     icon: FiUserCheck,
     accent: 'cyan',
   },
   STUDENT: {
     name: 'Student',
-    link: ROLE_DESTINATIONS.STUDENT,
     description: 'Your classes, coursework and tutorials',
     icon: FiBookOpen,
     accent: 'teal',
   },
   'lm-admin': {
     name: 'Learning Module Admin',
-    link: ROLE_DESTINATIONS['lm-admin'],
     description: 'Bug reports, feedback and usage stats for the Learning module',
     icon: FiShield,
     accent: 'purple',
@@ -106,14 +95,12 @@ const ROLE_META = {
   // so they never displace a real role or the single-role auto-redirect.
   'learning-teacher': {
     name: 'Learning — Teacher',
-    link: ROLE_DESTINATIONS['learning-teacher'],
     description: 'Classes you teach',
     icon: FiBookOpen,
     accent: 'teal',
   },
   'learning-student': {
     name: 'Learning — Student',
-    link: ROLE_DESTINATIONS['learning-student'],
     description: 'Classes you are enrolled in',
     icon: FiBookOpen,
     accent: 'teal',
@@ -123,7 +110,6 @@ const ROLE_META = {
 const roleMeta = (role) =>
   ROLE_META[role] || {
     name: role,
-    link: '#',
     description: 'Access your dashboard',
     icon: FiUser,
     accent: 'gray',
@@ -397,7 +383,7 @@ const AllocatedRolesPage = () => {
                 role={card.role}
                 index={allocatedRoles.length + index}
                 descriptionOverride={card.description}
-                onOpen={() => navigate(roleMeta(card.role).link)}
+                onOpen={() => navigate(singleRoleTarget(card.role, user))}
               />
             ))}
           </SimpleGrid>
