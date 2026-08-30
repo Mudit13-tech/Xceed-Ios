@@ -39,21 +39,6 @@ export const loginPathFor = (location) => {
   return `/login?${REDIRECT_PARAM}=${encodeURIComponent(from)}`;
 };
 
-export const ROLE_DESTINATIONS = {
-  ITTC: '/tt/admin',
-  DTTI: '/tt/dashboard',
-  CM: '/cm/dashboard',
-  admin: '/superadmin',
-  EO: '/cf/dashboard',
-  FACULTY: '/learning',
-  'iams-admin': '/iams-admin',
-  'iams-dept-admin': '/dept-admin/dashboard',
-  STUDENT: '/learning',
-  'lm-admin': '/learning/lm-admin',
-  'learning-teacher': '/learning',
-  'learning-student': '/learning',
-};
-
 export const EXCLUDED_ROLES = [
   'reviewer',
   'author',
@@ -74,16 +59,38 @@ const identifiers = (user) => {
 
 /**
  * Returns the target URL for a user with a single confirmed role.
+ *
+ * The exact role-to-route map is supplied by the authenticated server response
+ * rather than hardcoded into the public client bundle. That keeps sensitive
+ * admin paths out of the JavaScript shipped to every visitor while still letting
+ * the currently signed-in user land on their own workspace.
  */
+const roleTargets = (user) => {
+  const source = user?.roleTargets || user?.dashboardRoutes || user?.routeMap || {};
+  return typeof source === 'object' && source !== null ? source : {};
+};
+
 export const singleRoleTarget = (role, user) => {
   if (identifiers(user).includes('coe@nitj.ac.in')) return '/tt/coe/facultyload';
   if (!role) return '#';
-  if (ROLE_DESTINATIONS[role]) return ROLE_DESTINATIONS[role];
+
+  const targets = roleTargets(user);
+  const direct = [
+    String(role),
+    String(role).toLowerCase(),
+    String(role).toUpperCase(),
+  ].find((key) => targets[key]);
+  if (direct) return targets[direct];
+
+  if (user?.landingPath && Array.isArray(user?.role) && user.role.length === 1) {
+    return user.landingPath;
+  }
+
   const lower = String(role).toLowerCase();
-  const matchedKey = Object.keys(ROLE_DESTINATIONS).find(
-    (k) => k.toLowerCase() === lower,
-  );
-  return matchedKey ? ROLE_DESTINATIONS[matchedKey] : '#';
+  if (['student', 'faculty', 'learning-teacher', 'learning-student'].includes(lower)) {
+    return '/learning';
+  }
+  return '#';
 };
 
 /**
@@ -93,6 +100,9 @@ export const singleRoleTarget = (role, user) => {
  */
 export const defaultTargetForUser = (user) => {
   if (!user) return '/userroles';
+  if (typeof user.landingPath === 'string' && user.landingPath.startsWith('/')) {
+    return user.landingPath;
+  }
   const rawRoles = Array.isArray(user.role)
     ? user.role
     : user.role

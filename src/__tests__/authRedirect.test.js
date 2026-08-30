@@ -36,36 +36,43 @@ describe('loginPathFor', () => {
 });
 
 describe('singleRoleTarget', () => {
-  it('maps single roles to their dedicated dashboards', () => {
+  it('maps public single-role destinations without exposing admin route names', () => {
     expect(singleRoleTarget('STUDENT')).toBe('/learning');
     expect(singleRoleTarget('student')).toBe('/learning');
     expect(singleRoleTarget('FACULTY')).toBe('/learning');
     expect(singleRoleTarget('faculty')).toBe('/learning');
-    expect(singleRoleTarget('admin')).toBe('/superadmin');
-    expect(singleRoleTarget('ITTC')).toBe('/tt/admin');
-    expect(singleRoleTarget('ittc')).toBe('/tt/admin');
-    expect(singleRoleTarget('DTTI')).toBe('/tt/dashboard');
-    expect(singleRoleTarget('CM')).toBe('/cm/dashboard');
-    expect(singleRoleTarget('EO')).toBe('/cf/dashboard');
-    expect(singleRoleTarget('iams-admin')).toBe('/iams-admin');
-    expect(singleRoleTarget('iams-dept-admin')).toBe('/dept-admin/dashboard');
-    expect(singleRoleTarget('lm-admin')).toBe('/learning/lm-admin');
+    expect(singleRoleTarget('admin')).toBe('#');
+    expect(singleRoleTarget('ITTC')).toBe('#');
+    expect(singleRoleTarget('DTTI')).toBe('#');
+    expect(singleRoleTarget('CM')).toBe('#');
+    expect(singleRoleTarget('EO')).toBe('#');
+    expect(singleRoleTarget('iams-admin')).toBe('#');
+    expect(singleRoleTarget('iams-dept-admin')).toBe('#');
+    expect(singleRoleTarget('lm-admin')).toBe('#');
   });
 
-  it('routes COE user to coe faculty load page', () => {
+  it('takes a server-provided role target when available', () => {
+    const user = {
+      role: ['ITTC'],
+      roleTargets: { ITTC: '/tt/admin', DTTI: '/tt/dashboard', admin: '/superadmin' },
+      landingPath: '/tt/admin',
+    };
+    expect(singleRoleTarget('ITTC', user)).toBe('/tt/admin');
+    expect(singleRoleTarget('DTTI', user)).toBe('/tt/dashboard');
+    expect(singleRoleTarget('admin', user)).toBe('/superadmin');
+  });
+
+  it('routes COE users via the server-shared faculty-load path', () => {
     expect(singleRoleTarget('FACULTY', { name: 'coe@nitj.ac.in' })).toBe('/tt/coe/facultyload');
     expect(singleRoleTarget('ITTC', { email: 'coe@nitj.ac.in' })).toBe('/tt/coe/facultyload');
     expect(singleRoleTarget('ITTC', { email: ['coe@nitj.ac.in'] })).toBe('/tt/coe/facultyload');
   });
 
-  // `email` is an array on the user schema and `name` is optional, so an
-  // account created without a name used to throw here and leave the role card
-  // on /userroles doing nothing when clicked.
-  it('resolves a target for a user with an array email and no name', () => {
-    const user = { role: ['ITTC', 'DTTI'], email: ['ttc@nitj.ac.in'] };
-    expect(singleRoleTarget('ITTC', user)).toBe('/tt/admin');
-    expect(singleRoleTarget('DTTI', user)).toBe('/tt/dashboard');
-    expect(defaultTargetForUser({ role: ['DTTI'], email: ['ttc@nitj.ac.in'] })).toBe('/tt/dashboard');
+  // The role map moved behind the authenticated API, so the client only has
+  // the server-provided target when it is already signed in.
+  it('uses the server-provided landing page for a single-role account', () => {
+    const user = { role: ['DTTI'], landingPath: '/tt/dashboard' };
+    expect(defaultTargetForUser(user)).toBe('/tt/dashboard');
   });
 });
 
@@ -79,8 +86,8 @@ describe('defaultTargetForUser', () => {
     expect(defaultTargetForUser({ role: ['FACULTY'] })).toBe('/learning');
   });
 
-  it('routes a single-role admin directly to /superadmin', () => {
-    expect(defaultTargetForUser({ role: ['admin'] })).toBe('/superadmin');
+  it('uses the authenticated landing path when the server provides one', () => {
+    expect(defaultTargetForUser({ role: ['admin'], landingPath: '/superadmin' })).toBe('/superadmin');
   });
 
   it('filters out obsolete / deprecated roles and routes accordingly', () => {
@@ -111,10 +118,10 @@ describe('redirectTargetFrom', () => {
     expect(redirectTargetFrom('?other=1')).toBe('/userroles');
   });
 
-  it('resolves directly to the single role destination when user object is provided', () => {
+  it('resolves directly to the single role destination when the user provides one', () => {
     expect(redirectTargetFrom('', { role: ['STUDENT'] })).toBe('/learning');
     expect(redirectTargetFrom('?other=1', { role: ['STUDENT'] })).toBe('/learning');
-    expect(redirectTargetFrom('', { role: ['admin'] })).toBe('/superadmin');
+    expect(redirectTargetFrom('', { role: ['admin'], landingPath: '/superadmin' })).toBe('/superadmin');
     expect(redirectTargetFrom('', { role: ['FACULTY', 'DTTI'] })).toBe('/userroles');
   });
 

@@ -158,10 +158,10 @@ const ACTIONS = {
  * the same fix as its own **Let back in** button, and two controls doing one
  * thing in one row reads as two different things.
  */
-function AttemptActions({ attempt, onAct, showContinue = true }) {
+function AttemptActions({ attempt, onAct, showContinue = true, hideResultsControls = false }) {
   return (
     <HStack spacing={1}>
-      {showContinue && (
+      {showContinue && !hideResultsControls && (
         <Button
           size="xs"
           variant="ghost"
@@ -171,14 +171,16 @@ function AttemptActions({ attempt, onAct, showContinue = true }) {
           {attempt.status === 'in_progress' ? '⏱ More time' : '▶️ Reopen'}
         </Button>
       )}
-      <Button
-        size="xs"
-        variant="ghost"
-        colorScheme="orange"
-        onClick={() => onAct('restart')}
-      >
-        🔄 Restart
-      </Button>
+      {!hideResultsControls && (
+        <Button
+          size="xs"
+          variant="ghost"
+          colorScheme="orange"
+          onClick={() => onAct('restart')}
+        >
+          🔄 Restart
+        </Button>
+      )}
       <Button
         size="xs"
         variant="ghost"
@@ -835,7 +837,7 @@ function StoppedStatus({ attempt }) {
  * apart rather than badged within one table because the action each calls for
  * is different: watch, let back in, or chase.
  */
-function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto, updatedAt }) {
+function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto, updatedAt, results }) {
   useSecondTick(true);
 
   const { attempts, notStartedStudents, quiz } = data;
@@ -1076,21 +1078,24 @@ function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto
                   </CardFact>
                 </Flex>
 
-                <Flex mt={2} gap={1} wrap="wrap" align="center">
-                  <Button
-                    size="xs"
-                    colorScheme="blue"
-                    variant={attempt.status === 'submitted' ? 'ghost' : 'solid'}
-                    onClick={() => onAct(attempt, 'continue')}
-                  >
-                    Let back in
-                  </Button>
-                  <AttemptActions
-                    attempt={attempt}
-                    showContinue={false}
-                    onAct={(action) => onAct(attempt, action)}
-                  />
-                </Flex>
+                {!results.released && (
+                  <Flex mt={2} gap={1} wrap="wrap" align="center">
+                    <Button
+                      size="xs"
+                      colorScheme="blue"
+                      variant={attempt.status === 'submitted' ? 'ghost' : 'solid'}
+                      onClick={() => onAct(attempt, 'continue')}
+                    >
+                      Let back in
+                    </Button>
+                    <AttemptActions
+                      attempt={attempt}
+                      showContinue={false}
+                      onAct={(action) => onAct(attempt, action)}
+                      hideResultsControls={results.released}
+                    />
+                  </Flex>
+                )}
               </MonitorCard>
             ))}
           </Stack>
@@ -1129,20 +1134,23 @@ function LiveMonitor({ data, skewMs, onAct, onRefresh, refreshing, auto, setAuto
                       <AttemptFlags attempt={attempt} />
                     </Td>
                     <Td>
-                      <Button
-                        size="xs"
-                        colorScheme="blue"
-                        variant={attempt.status === 'submitted' ? 'ghost' : 'solid'}
-                        onClick={() => onAct(attempt, 'continue')}
-                      >
-                        Let back in
-                      </Button>
+                      {!results.released && (
+                        <Button
+                          size="xs"
+                          colorScheme="blue"
+                          variant={attempt.status === 'submitted' ? 'ghost' : 'solid'}
+                          onClick={() => onAct(attempt, 'continue')}
+                        >
+                          Let back in
+                        </Button>
+                      )}
                     </Td>
                     <Td>
                       <AttemptActions
                         attempt={attempt}
                         showContinue={false}
                         onAct={(action) => onAct(attempt, action)}
+                        hideResultsControls={results.released}
                       />
                     </Td>
                   </Tr>
@@ -1439,6 +1447,7 @@ export default function QuizResults() {
   // shown to an invigilator agree with the deadline the server will enforce.
   const [studentSearch, setStudentSearch] = useState('');
   const [studentStatusFilter, setStudentStatusFilter] = useState('all');
+  const [studentSort, setStudentSort] = useState({ key: 'rollNumber', direction: 'asc' });
   const skewRef = useRef(0);
   const knownTerminatedRef = useRef(new Set());
   const toast = useToast();
@@ -1609,6 +1618,30 @@ export default function QuizResults() {
       return true;
     });
   }, [attempts, studentStatusFilter, studentSearch]);
+
+  const sortedAttempts = useMemo(() => {
+    const rows = [...filteredAttempts];
+    rows.sort((a, b) => {
+      const direction = studentSort.direction === 'asc' ? 1 : -1;
+
+      if (studentSort.key === 'rollNumber') {
+        const aRoll = String(a.rollNumber ?? '').trim();
+        const bRoll = String(b.rollNumber ?? '').trim();
+        const aNum = Number.parseFloat(aRoll.replace(/[^0-9.]/g, ''));
+        const bNum = Number.parseFloat(bRoll.replace(/[^0-9.]/g, ''));
+
+        if (!Number.isNaN(aNum) || !Number.isNaN(bNum)) {
+          return (Number.isNaN(aNum) ? 0 : aNum - (Number.isNaN(bNum) ? 0 : bNum)) * direction;
+        }
+        return aRoll.localeCompare(bRoll) * direction;
+      }
+
+      const aScore = Number(a.score ?? 0);
+      const bScore = Number(b.score ?? 0);
+      return (aScore - bScore) * direction;
+    });
+    return rows;
+  }, [filteredAttempts, studentSort]);
 
   const questionInsights = useMemo(() => {
     if (!perQuestion?.length) return null;
@@ -1824,7 +1857,7 @@ export default function QuizResults() {
       )}
 
       <Tabs colorScheme="purple" variant="enclosed" index={tab} onChange={setTab}>
-        <TabList>
+        <TabList overflowX="auto" whiteSpace="nowrap" flexWrap="nowrap" sx={{ scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
           <Tab fontSize="sm">
             Live monitor
             {summary.inProgress > 0 && (
@@ -1859,6 +1892,7 @@ export default function QuizResults() {
               auto={auto}
               setAuto={setAuto}
               updatedAt={updatedAt}
+              results={results}
             />
           </TabPanel>
 
@@ -1906,9 +1940,51 @@ export default function QuizResults() {
                     <Thead>
                       <Tr>
                         <Th>Student</Th>
-                        <Th>Roll</Th>
+                        <Th>
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            p={0}
+                            minW={0}
+                            h="auto"
+                            fontWeight="700"
+                            fontSize="sm"
+                            color="lmFg.subtle"
+                            aria-label="Sort by roll number"
+                            onClick={() => setStudentSort((prev) => ({
+                              key: 'rollNumber',
+                              direction: prev.key === 'rollNumber' && prev.direction === 'asc' ? 'desc' : 'asc',
+                            }))}
+                          >
+                            Roll
+                            <Text as="span" ml={1} fontSize="13px" lineHeight="1" color={studentSort.key === 'rollNumber' ? 'lmFg.heading' : 'lmFg.muted'}>
+                              {studentSort.key === 'rollNumber' ? (studentSort.direction === 'asc' ? '↑' : '↓') : '↕'}
+                            </Text>
+                          </Button>
+                        </Th>
                         <Th isNumeric>#</Th>
-                        <Th isNumeric>Score</Th>
+                        <Th isNumeric>
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            p={0}
+                            minW={0}
+                            h="auto"
+                            fontWeight="700"
+                            fontSize="sm"
+                            color="lmFg.subtle"
+                            aria-label="Sort by score"
+                            onClick={() => setStudentSort((prev) => ({
+                              key: 'score',
+                              direction: prev.key === 'score' && prev.direction === 'asc' ? 'desc' : 'asc',
+                            }))}
+                          >
+                            Score
+                            <Text as="span" ml={1} fontSize="13px" lineHeight="1" color={studentSort.key === 'score' ? 'lmFg.heading' : 'lmFg.muted'}>
+                              {studentSort.key === 'score' ? (studentSort.direction === 'asc' ? '↑' : '↓') : '↕'}
+                            </Text>
+                          </Button>
+                        </Th>
                         <Th isNumeric>%</Th>
                         <Th>Result</Th>
                         <Th isNumeric>✓</Th>
@@ -1922,14 +1998,14 @@ export default function QuizResults() {
                       </Tr>
                     </Thead>
                     <Tbody>
-                      {filteredAttempts.length === 0 ? (
+                      {sortedAttempts.length === 0 ? (
                         <Tr>
                           <Td colSpan={14} textAlign="center" py={6} color="lmFg.muted">
                             No student attempts match your search or filter criteria.
                           </Td>
                         </Tr>
                       ) : (
-                        filteredAttempts.map((attempt) => (
+                        sortedAttempts.map((attempt) => (
                           <Tr key={attempt._id} bg={attempt.status === 'terminated' ? 'lmHue.red50' : undefined}>
                             <Td fontWeight="500">{attempt.studentName || attempt.studentEmail}</Td>
                             <Td fontSize="xs">{attempt.rollNumber}</Td>
@@ -2157,25 +2233,35 @@ export default function QuizResults() {
           {/* ---- distribution ---- */}
           <TabPanel px={0}>
             <SectionCard title="Score distribution">
-              {distribution.map((band) => (
-                <Flex key={band.label} align="center" gap={3} py={2}>
-                  <Text fontSize="xs" w="70px" color="lmFg.subtle">
-                    {band.label}
-                  </Text>
-                  <Box flex="1" bg="lmBg.track" borderRadius="full" h="18px" overflow="hidden">
-                    <Box
-                      w={`${(band.count / maxBand) * 100}%`}
-                      h="100%"
-                      bg="purple.400"
-                      borderRadius="full"
-                      transition="width 0.3s"
-                    />
-                  </Box>
-                  <Text fontSize="xs" w="30px" textAlign="right" fontWeight="600">
-                    {band.count}
-                  </Text>
-                </Flex>
-              ))}
+              <Box w="100%" minW={0}>
+                {distribution.map((band) => (
+                  <Flex
+                    key={band.label}
+                    align={{ base: 'flex-start', sm: 'center' }}
+                    direction={{ base: 'column', sm: 'row' }}
+                    gap={{ base: 1, sm: 3 }}
+                    py={2}
+                    w="100%"
+                    minW={0}
+                  >
+                    <Text fontSize="xs" w={{ base: '100%', sm: '70px' }} color="lmFg.subtle">
+                      {band.label}
+                    </Text>
+                    <Box flex="1" w="100%" minW={0} bg="lmBg.track" borderRadius="full" h="18px" overflow="hidden">
+                      <Box
+                        w={`${(band.count / maxBand) * 100}%`}
+                        h="100%"
+                        bg="purple.400"
+                        borderRadius="full"
+                        transition="width 0.3s"
+                      />
+                    </Box>
+                    <Text fontSize="xs" w={{ base: '100%', sm: '30px' }} textAlign={{ base: 'left', sm: 'right' }} fontWeight="600">
+                      {band.count}
+                    </Text>
+                  </Flex>
+                ))}
+              </Box>
               <HStack mt={4} spacing={6} fontSize="sm" wrap="wrap">
                 <Text>
                   Median: <b>{summary.median === null ? '—' : `${summary.median}%`}</b>
