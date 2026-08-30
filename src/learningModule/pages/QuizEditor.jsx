@@ -1093,9 +1093,10 @@ export default function QuizEditor({ mode = 'questions' }) {
 
                   <Divider />
 
-                  {/* Webcam invigilation. Off by default and the most sensitive
+                  {/* Webcam invigilation. On by default, and the most sensitive
                       control here — it captures images of students — so it is
-                      stated plainly and the consent lives on the student's own
+                      stated plainly, it can be turned off for a paper that does
+                      not want it, and the consent lives on the student's own
                       pre-test screen. */}
                   <Box>
                     <Checkbox
