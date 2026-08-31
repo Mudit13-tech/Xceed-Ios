@@ -102,8 +102,11 @@ function TabOverview() {
         <div>
             <Note type="key">
                 Shorts are instant, live questions the whole room answers on their phones — a Mentimeter-style
-                warm-up, temperature check, or recap, run from the front of the class. Deliberately separate
-                from Quizzes: a Short has no window, no attempt cap and (usually) no gradebook row.
+                warm-up, temperature check, or recap, run from the front of the class. Two differences from
+                Mentimeter worth knowing: there is no cap on how many students may join a session, and the live
+                view is built to keep up with a full hall answering at once rather than slowing as the room
+                fills. Deliberately separate from Quizzes: a Short has no window, no attempt cap and (usually)
+                no gradebook row.
             </Note>
 
             <Shot src={shotList} alt="Shorts list for a class, with a live session banner"

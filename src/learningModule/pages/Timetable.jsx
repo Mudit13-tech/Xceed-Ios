@@ -25,31 +25,142 @@ import ViewTimetable from '../../timetableadmin/viewtt';
 import TimetableSummary from '../../timetableadmin/ttsummary';
 import { generateInitialTimetableData } from '../../timetableadmin/timetableDataHelpers';
 import TimetableWidget from '../components/TimetableWidget';
+import SafeChild from '../components/SafeChild';
 import { isStudentOnly } from '../roles';
 
 /**
- * The timetable tab.
+ * Standard department acronym mappings to bridge student class department names
+ * with full timetable session department names.
+ */
+const DEPT_ACRONYMS = {
+  ECE: ['Electronics & Communication Engineering', 'Electronics and Communication Engineering', 'ECE'],
+  CSE: ['Computer Science & Engineering', 'Computer Science and Engineering', 'CSE'],
+  ICE: ['Instrumentation & Control Engineering', 'Instrumentation and Control Engineering', 'ICE'],
+  IT: ['Information Technology', 'IT'],
+  ME: ['Mechanical Engineering', 'ME'],
+  CE: ['Civil Engineering', 'CE'],
+  CHE: ['Chemical Engineering', 'CHE'],
+  IPE: ['Industrial & Production Engineering', 'Industrial and Production Engineering', 'IPE'],
+  TT: ['Textile Technology', 'TT'],
+  TXT: ['Textile Technology', 'TXT'],
+  BT: ['Biotechnology', 'BT'],
+  HM: ['Humanities & Management', 'Humanities and Management', 'HM'],
+  MA: ['Mathematics', 'MA'],
+  PH: ['Physics', 'PH'],
+  CY: ['Chemistry', 'CY'],
+};
+
+/**
+ * Helper to match department strings taking into account acronyms and substring matching.
+ */
+function matchDept(targetDept, availableDepts) {
+  if (!targetDept || !availableDepts || !availableDepts.length) return targetDept;
+
+  const targetLower = targetDept.trim().toLowerCase();
+
+  // 1. Direct case-insensitive match
+  const directMatch = availableDepts.find(
+    (d) => d.toLowerCase() === targetLower || d.toLowerCase().includes(targetLower) || targetLower.includes(d.toLowerCase()),
+  );
+  if (directMatch) return directMatch;
+
+  // 2. Acronym dictionary match
+  const upper = targetDept.trim().toUpperCase();
+  for (const [acronym, variations] of Object.entries(DEPT_ACRONYMS)) {
+    const isTargetVariant = upper === acronym || variations.some((v) => v.toLowerCase() === targetLower);
+    if (isTargetVariant) {
+      const matched = availableDepts.find((d) =>
+        variations.some((v) => v.toLowerCase() === d.toLowerCase() || d.toLowerCase().includes(v.toLowerCase())),
+      );
+      if (matched) return matched;
+    }
+  }
+
+  return availableDepts[0] || targetDept;
+}
+
+/**
+ * Authenticated fetch wrapper for mobile WebView/PWA environments.
+ * Attaches the Bearer token from localStorage alongside cookies.
+ */
+async function fetchWithAuth(url) {
+  const token = localStorage.getItem('token');
+  const headers = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(url, {
+    credentials: 'include',
+    headers,
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Checks if raw timetable data contains any actual class entries.
+ */
+function hasRawClasses(rawData) {
+  if (!rawData || typeof rawData !== 'object') return false;
+  const grid = rawData.timetableData || rawData;
+  if (!grid || typeof grid !== 'object') return false;
+
+  return Object.values(grid).some((dayData) => {
+    if (!dayData || typeof dayData !== 'object') return false;
+    return Object.values(dayData).some((slots) => {
+      if (!Array.isArray(slots)) return false;
+      return slots.some((slot) => {
+        if (Array.isArray(slot)) {
+          return slot.some((cell) => cell && (cell.subject || cell.room || cell.faculty));
+        }
+        return slot && (slot.subject || slot.room || slot.faculty);
+      });
+    });
+  });
+}
+
+/**
+ * Sanitizes subject data to ensure it satisfies TimetableSummary expectations.
+ */
+function sanitizeSubjectData(rawSubjects) {
+  if (!Array.isArray(rawSubjects)) return [];
+  return rawSubjects
+    .filter(Boolean)
+    .map((sub) => ({
+      subCode: String(sub.subCode || ''),
+      subName: String(sub.subName || sub.subCode || ''),
+      subjectFullName: String(sub.subjectFullName || sub.subFullName || sub.subName || sub.subCode || ''),
+      type: String(sub.type || sub.subType || 'Theory'),
+      sem: String(sub.sem || ''),
+    }));
+}
+
+/**
+ * The timetable tab in Learning Module.
  *
  * ## Student Timetable View (Issue #2065)
- *
- * Uses the official XCEED timetable design (`ViewTimetable` + `TimetableSummary` + notes)
- * from https://xceed.nitj.ac.in/timetable.
- *
- * - Auto-detects the student's primary registered department and semester from active enrolments.
- * - Handles normalization of raw batch/section names (e.g., "B.Tech-ICE-SectionA6" -> "6") so
- *   the dropdown always selects a valid timetable semester.
- * - Provides a "My Registered Semesters" quick dropdown as well as full Department and Semester
- *   selectors to view any registered or departmental semester timetable.
- * - Shows the official colored period badges, period timings (8:30 AM - 5:25 PM), lunch break,
- *   course credit breakdown, and coordinator notes.
- *
- * ## Faculty Timetable View
- *
- * Uses `TimetableWidget`, keyed by faculty name against the active session.
+ * Uses the official XCEED timetable design (`ViewTimetable` + `TimetableSummary` + notes).
+ * - Auto-detects student registered department & semester from active enrolments.
+ * - Provides quick "My Registered Semesters" picker and manual department/semester selectors.
+ * - Dual-fetch with live fallback: Reads locked timetable (`/lockclasstt`), falling back to
+ *   active saved class timetable (`/viewclasstt`) if the coordinator has saved without locking.
+ * - Token-authenticated requests for robust mobile app / WebView / PWA compatibility.
+ * - Local `<SafeChild>` error boundaries to guarantee app stability without modifying `timetableadmin`.
  */
 export default function Timetable() {
   const { me } = useOutletContext();
   const isStudent = isStudentOnly(me?.roles);
+
+  // Faculty can switch between their personal schedule and student semester timetable
+  const [viewStudentSchedule, setViewStudentSchedule] = useState(isStudent);
 
   const [options, setOptions] = useState(null);
   const [dept, setDept] = useState('');
@@ -64,15 +175,18 @@ export default function Timetable() {
   const [ttData, setTTData] = useState(null);
   const [semNotes, setSemNotes] = useState([]);
   const [lockedTime, setLockedTime] = useState('');
+  const [isSavedFallback, setIsSavedFallback] = useState(false);
 
   const apiUrl = getEnvironment();
 
-  /* Which timetable is theirs, and what else they could pick. */
   useEffect(() => {
-    if (!isStudent) {
-      setLoadingOptions(false);
-      return;
+    if (isStudent) {
+      setViewStudentSchedule(true);
     }
+  }, [isStudent]);
+
+  /* Fetch timetable options (enrolment suggestions, active departments, semesters) */
+  useEffect(() => {
     let cancelled = false;
 
     (async () => {
@@ -81,13 +195,13 @@ export default function Timetable() {
         if (cancelled) return;
         setOptions(fetched);
 
-        const validDepts = fetched.depts || [];
-        const semsMap = fetched.semsByDept || {};
+        const validDepts = fetched?.depts || [];
+        const semsMap = fetched?.semsByDept || {};
 
-        // Resolve initial department
+        // Resolve initial department matching suggestion or first available
         let initialDept = '';
-        if (fetched.suggested?.dept && validDepts.includes(fetched.suggested.dept)) {
-          initialDept = fetched.suggested.dept;
+        if (fetched?.suggested?.dept) {
+          initialDept = matchDept(fetched.suggested.dept, validDepts);
         } else if (validDepts.length > 0) {
           initialDept = validDepts[0];
         }
@@ -95,11 +209,10 @@ export default function Timetable() {
         // Resolve initial semester for that department
         const availableSems = semsMap[initialDept] || [];
         let initialSem = '';
-        if (fetched.suggested?.sem && availableSems.includes(fetched.suggested.sem)) {
-          initialSem = fetched.suggested.sem;
+        if (fetched?.suggested?.sem && availableSems.includes(String(fetched.suggested.sem))) {
+          initialSem = String(fetched.suggested.sem);
         } else {
-          // Normalize if suggested sem is a batch/section code like "B.Tech-ICE-SectionA6"
-          const digit = String(fetched.suggested?.sem || '').match(/\d+/)?.[0];
+          const digit = String(fetched?.suggested?.sem || '').match(/\d+/)?.[0];
           if (digit && availableSems.includes(digit)) {
             initialSem = digit;
           } else if (availableSems.length > 0) {
@@ -119,7 +232,7 @@ export default function Timetable() {
     return () => {
       cancelled = true;
     };
-  }, [isStudent]);
+  }, []);
 
   const semsForDept = useMemo(
     () => (dept && options?.semsByDept?.[dept]) || [],
@@ -141,7 +254,6 @@ export default function Timetable() {
     }
     if (semsForDept.includes(sem)) return;
 
-    // Check if the current sem or suggested sem number matches an available semester
     const digit = String(sem || options?.suggested?.sem || '').match(/\d+/)?.[0];
     if (digit && semsForDept.includes(digit)) {
       setSem(digit);
@@ -152,6 +264,7 @@ export default function Timetable() {
 
   /**
    * Load the locked class timetable and subject summary for the chosen dept & sem.
+   * Seamlessly falls back to active saved class timetable if the timetable has not been locked.
    */
   const loadTimetable = useCallback(async () => {
     if (!dept || !sem) {
@@ -160,6 +273,7 @@ export default function Timetable() {
       setTTData(null);
       setSemNotes([]);
       setLockedTime('');
+      setIsSavedFallback(false);
       return;
     }
     const currentCode = sessionObj?.code;
@@ -169,56 +283,57 @@ export default function Timetable() {
       setTTData(null);
       setSemNotes([]);
       setLockedTime('');
+      setIsSavedFallback(false);
       return;
     }
 
     setLoadingTT(true);
     setError(null);
+    setIsSavedFallback(false);
 
     try {
-      // 1. Fetch locked timetable
-      const ttPromise = fetch(
+      // 1. Fetch locked timetable first
+      let ttResult = await fetchWithAuth(
         `${apiUrl}/timetablemodule/lock/lockclasstt/${currentCode}/${sem}`,
-        { credentials: 'include' },
-      ).then((res) => (res.ok ? res.json() : null));
+      );
 
-      // 2. Fetch subject details for summary
-      const subPromise = fetch(
-        `${apiUrl}/timetablemodule/subject/subjectdetails/${currentCode}`,
-        { credentials: 'include' },
-      ).then((res) => (res.ok ? res.json() : []));
+      let rawData = ttResult?.timetableData || ttResult;
+      let notes = ttResult?.notes || [];
+      let isFallback = false;
 
-      // 3. Fetch timetable all details
-      const detailsPromise = fetch(
-        `${apiUrl}/timetablemodule/timetable/alldetails/${currentCode}`,
-        { credentials: 'include' },
-      ).then((res) => (res.ok ? res.json() : null));
+      // 2. If locked timetable is empty, fallback to saved class timetable
+      if (!hasRawClasses(rawData)) {
+        const savedResult = await fetchWithAuth(
+          `${apiUrl}/timetablemodule/tt/viewclasstt/${currentCode}/${sem}`,
+        );
+        if (hasRawClasses(savedResult)) {
+          rawData = savedResult?.timetableData || savedResult;
+          notes = savedResult?.notes || notes || [];
+          isFallback = true;
+        }
+      }
 
-      // 4. Fetch locked time
-      const timePromise = fetch(
-        `${apiUrl}/timetablemodule/lock/viewsem/${currentCode}`,
-        { credentials: 'include' },
-      ).then((res) => (res.ok ? res.json() : null));
+      setIsSavedFallback(isFallback);
 
-      const [ttResult, subResult, detailsResult, timeResult] = await Promise.all([
-        ttPromise,
-        subPromise,
-        detailsPromise,
-        timePromise,
-      ]);
-
-      if (ttResult) {
-        const rawData = ttResult.timetableData || ttResult;
-        const initialData = generateInitialTimetableData(rawData, 'sem');
+      if (rawData && typeof rawData === 'object') {
+        const gridObj = rawData.timetableData || rawData;
+        const initialData = generateInitialTimetableData(gridObj, 'sem');
         setTimetableData(initialData);
-        setSemNotes(ttResult.notes || []);
+        setSemNotes(Array.isArray(notes) ? notes : []);
       } else {
         setTimetableData({});
         setSemNotes([]);
       }
 
-      setSubjectData(Array.isArray(subResult) ? subResult : []);
-      setTTData(detailsResult);
+      // 3. Concurrently fetch subject details, timetable details, and lock time
+      const [subResult, detailsResult, timeResult] = await Promise.all([
+        fetchWithAuth(`${apiUrl}/timetablemodule/subject/subjectdetails/${currentCode}`),
+        fetchWithAuth(`${apiUrl}/timetablemodule/timetable/alldetails/${currentCode}`),
+        fetchWithAuth(`${apiUrl}/timetablemodule/lock/viewsem/${currentCode}`),
+      ]);
+
+      setSubjectData(sanitizeSubjectData(subResult));
+      setTTData(detailsResult && typeof detailsResult === 'object' ? detailsResult : null);
       setLockedTime(timeResult?.updatedTime?.lockTimeIST || timeResult?.updatedTime || '');
     } catch (err) {
       console.error('Error fetching timetable data:', err);
@@ -230,19 +345,10 @@ export default function Timetable() {
   }, [apiUrl, dept, sem, sessionObj]);
 
   useEffect(() => {
-    loadTimetable();
-  }, [loadTimetable]);
-
-  if (!isStudent) {
-    return (
-      <Box>
-        <Header />
-        <SectionCard title="Weekly Timetable">
-          <TimetableWidget me={me} />
-        </SectionCard>
-      </Box>
-    );
-  }
+    if (viewStudentSchedule) {
+      loadTimetable();
+    }
+  }, [loadTimetable, viewStudentSchedule]);
 
   const basis = options?.basis || [];
   const suggestion = options?.suggested;
@@ -254,18 +360,10 @@ export default function Timetable() {
     const semsMap = options.semsByDept || {};
 
     return basis.map((item) => {
-      // Find matching live department
-      const matchedDept =
-        validDepts.find(
-          (d) =>
-            d.toLowerCase() === item.dept.toLowerCase() ||
-            d.toLowerCase().includes(item.dept.toLowerCase()) ||
-            item.dept.toLowerCase().includes(d.toLowerCase()),
-        ) || item.dept;
-
-      // Find matching valid semester in that department
+      const matchedDept = matchDept(item.dept, validDepts);
       const availableSems = semsMap[matchedDept] || [];
-      let matchedSem = item.sem;
+      let matchedSem = String(item.sem);
+
       if (!availableSems.includes(matchedSem)) {
         const digit = String(item.sem).match(/\d+/)?.[0];
         if (digit && availableSems.includes(digit)) {
@@ -276,7 +374,7 @@ export default function Timetable() {
       }
 
       const isPrimary =
-        suggestion?.dept === item.dept &&
+        (suggestion?.dept === item.dept || matchedDept === matchDept(suggestion?.dept, validDepts)) &&
         String(suggestion?.sem) === String(item.sem);
 
       return {
@@ -305,13 +403,74 @@ export default function Timetable() {
   );
 
   const currentSelectionKey = `${dept}|${sem}`;
-  const isRegisteredMatch = registeredOptions.some(
-    (r) => r.key === currentSelectionKey,
-  );
+  const isRegisteredMatch = registeredOptions.some((r) => r.key === currentSelectionKey);
+
+  // Loading state while user profile is in flight
+  if (!me) {
+    return (
+      <Box py={12} textAlign="center">
+        <Spinner size="xl" color="purple.500" />
+        <Text mt={3} color="gray.500" fontSize="sm">
+          Loading timetable...
+        </Text>
+      </Box>
+    );
+  }
+
+  // If user is faculty/admin and toggles to their faculty widget
+  if (!isStudent && !viewStudentSchedule) {
+    return (
+      <Box>
+        <Header />
+        <Flex justify="flex-end" align="center" mb={4} gap={3} wrap="wrap">
+          <Button
+            size="sm"
+            colorScheme="purple"
+            variant="solid"
+            onClick={() => setViewStudentSchedule(false)}
+          >
+            My Faculty Schedule
+          </Button>
+          <Button
+            size="sm"
+            colorScheme="purple"
+            variant="outline"
+            onClick={() => setViewStudentSchedule(true)}
+          >
+            Student Semester Timetable
+          </Button>
+        </Flex>
+        <SectionCard title="Weekly Timetable">
+          <TimetableWidget me={me} />
+        </SectionCard>
+      </Box>
+    );
+  }
 
   return (
     <Box>
       <Header />
+
+      {!isStudent && (
+        <Flex justify="flex-end" align="center" mb={4} gap={3} wrap="wrap">
+          <Button
+            size="sm"
+            colorScheme="purple"
+            variant="outline"
+            onClick={() => setViewStudentSchedule(false)}
+          >
+            My Faculty Schedule
+          </Button>
+          <Button
+            size="sm"
+            colorScheme="purple"
+            variant="solid"
+            onClick={() => setViewStudentSchedule(true)}
+          >
+            Student Semester Timetable
+          </Button>
+        </Flex>
+      )}
 
       <SectionCard mb={4}>
         <Flex gap={3} align="flex-end" wrap="wrap">
@@ -477,6 +636,15 @@ export default function Timetable() {
               </Alert>
             )}
 
+            {isSavedFallback && (
+              <Alert status="info" borderRadius="md" fontSize="sm" mb={4}>
+                <AlertIcon />
+                <Box>
+                  Showing active saved class schedule from the department timetable coordinator.
+                </Box>
+              </Alert>
+            )}
+
             {lockedTime && (
               <HStack spacing={2} mb={4}>
                 <TimeIcon color="green.500" />
@@ -486,29 +654,33 @@ export default function Timetable() {
               </HStack>
             )}
 
-            {/* Official XCEED Timetable Grid */}
-            <ViewTimetable timetableData={timetableData} />
+            {/* Official XCEED Timetable Grid protected by SafeChild */}
+            <SafeChild title="Timetable Grid">
+              <ViewTimetable timetableData={timetableData} />
+            </SafeChild>
 
-            {/* Official XCEED Timetable Summary */}
-            {Array.isArray(subjectData) && subjectData.length > 0 ? (
-              <TimetableSummary
-                timetableData={timetableData}
-                type={'sem'}
-                code={sessionObj.code}
-                time={lockedTime}
-                headTitle={sem}
-                subjectData={subjectData}
-                TTData={ttData}
-                notes={semNotes}
-              />
-            ) : (
-              <Flex justify="center" align="center" p={4}>
-                <Spinner size="md" color="purple.500" mr={2} />
-                <Text color="gray.600" fontWeight="bold">
-                  Loading Timetable Summary...
-                </Text>
-              </Flex>
-            )}
+            {/* Official XCEED Timetable Summary protected by SafeChild */}
+            <SafeChild title="Timetable Summary">
+              {Array.isArray(subjectData) && subjectData.length > 0 ? (
+                <TimetableSummary
+                  timetableData={timetableData}
+                  type={'sem'}
+                  code={sessionObj.code}
+                  time={lockedTime}
+                  headTitle={sem}
+                  subjectData={subjectData}
+                  TTData={ttData}
+                  notes={semNotes}
+                />
+              ) : (
+                <Flex justify="center" align="center" p={4}>
+                  <Spinner size="md" color="purple.500" mr={2} />
+                  <Text color="gray.600" fontWeight="bold">
+                    Loading Timetable Summary...
+                  </Text>
+                </Flex>
+              )}
+            </SafeChild>
 
             {/* Notes Section */}
             {semNotes && semNotes.length > 0 && (
@@ -523,12 +695,14 @@ export default function Timetable() {
                 <Text fontSize="md" fontWeight="bold" color="yellow.800" mb={2}>
                   Notes:
                 </Text>
-                {semNotes.map((noteArray, index) => (
+                {semNotes.map((noteItem, index) => (
                   <UnorderedList key={index} color="yellow.700" spacing={1}>
-                    {(Array.isArray(noteArray) ? noteArray : [noteArray]).map(
+                    {(Array.isArray(noteItem) ? noteItem : [noteItem]).map(
                       (note, noteIndex) => (
                         <ListItem key={noteIndex} fontSize="sm">
-                          {note}
+                          {typeof note === 'object' && note !== null
+                            ? JSON.stringify(note)
+                            : String(note || '')}
                         </ListItem>
                       ),
                     )}

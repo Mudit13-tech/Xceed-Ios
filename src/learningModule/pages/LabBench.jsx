@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import DOMPurify from 'dompurify';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import {
   Badge,
@@ -291,7 +292,7 @@ export default function LabBench() {
 
       {lab.brief && (
         <SectionCard mb={3}>
-          <Box fontSize="sm" color="lmFg.body" dangerouslySetInnerHTML={{ __html: lab.brief }} />
+          <Box fontSize="sm" color="lmFg.body" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(lab.brief) }} />
         </SectionCard>
       )}
 

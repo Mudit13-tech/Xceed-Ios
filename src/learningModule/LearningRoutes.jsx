@@ -82,6 +82,9 @@ const ShortsManual = lazyWithPreload(() => import('./pages/ShortsManual'));
 const AssignmentManual = lazyWithPreload(() => import('./pages/AssignmentManual'));
 const TutorialManual = lazyWithPreload(() => import('./pages/TutorialManual'));
 const CodingManual = lazyWithPreload(() => import('./pages/CodingManual'));
+const FormsManual = lazyWithPreload(() => import('./pages/FormsManual'));
+const SetupManual = lazyWithPreload(() => import('./pages/SetupManual'));
+const GettingStartedManual = lazyWithPreload(() => import('./pages/GettingStartedManual'));
 
 /**
  * The whole learning module hangs off one route in App.jsx (`/learning/*`),
@@ -122,6 +125,12 @@ const LEARNING_ROUTES = (
       <Route path="assignmentmanual" element={<AssignmentManual standalone />} />
       <Route path="tutorialmanual" element={<TutorialManual standalone />} />
       <Route path="codingmanual" element={<CodingManual standalone />} />
+      <Route path="formsmanual" element={<FormsManual standalone />} />
+      <Route path="setupmanual" element={<SetupManual standalone />} />
+      {/* The introduction the others hang off — every manual link on it is one
+          of the public routes above, so the whole set can be forwarded to staff
+          who have not been given an account yet. */}
+      <Route path="manual" element={<GettingStartedManual standalone />} />
 
       {/* `seb-check` is deliberately NOT a route here. It is served as plain HTML
           by the server, above the app's catch-all — see

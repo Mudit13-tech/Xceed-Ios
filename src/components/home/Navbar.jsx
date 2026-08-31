@@ -45,6 +45,12 @@ function SunIcon({ size = 18 }) {
   );
 }
 
+/* /learning/manual and every /learning/<thing>manual beside it — public by
+   design, see the redirect below. Anchored at both ends so it cannot be
+   widened by a path that merely contains the word, and kept at module scope so
+   it is not a dependency of the effect that reads it. */
+const LEARNING_MANUAL_PATH = /^\/learning\/[a-z]*manual$/;
+
 export default function Navbar() {
   const { colorMode, toggleColorMode } = useColorMode();
   const [navbarOpen, setNavbarOpen] = useState(false);
@@ -175,7 +181,15 @@ export default function Navbar() {
       // per-deck setting the teacher controls, so the server decides; forcing a
       // login here would make the open decks impossible to reach.
       location.pathname.startsWith('/learning/short/join') ||
-      location.pathname.startsWith('/learning/short/live/');
+      location.pathname.startsWith('/learning/short/live/') ||
+      // The learning module's teacher manuals. They are onboarding
+      // documentation for staff who have not been given an account yet, which
+      // is exactly who cannot get past this redirect — the routes were already
+      // mounted outside LearningLayout so an anonymous reader would not be
+      // bounced by its bootstrap fetch (see LearningRoutes.jsx), and this gate
+      // undid that a layer higher up. Matched by shape rather than listed one
+      // by one so a manual added later is public without a second edit here.
+      LEARNING_MANUAL_PATH.test(location.pathname);
 
     if (!isEvaluatingAuth && !isAuthenticated && !isPublicPath) {
       // Replace, not push: the user never chose to visit the login page, so it

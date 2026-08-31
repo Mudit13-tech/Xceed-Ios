@@ -6,7 +6,6 @@ import {
   Badge,
   Box,
   Button,
-  Checkbox,
   Divider,
   Flex,
   FormControl,
@@ -50,8 +49,6 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
       setRole(defaultRole);
     }
   }, [isOpen, defaultRole]);
-  const [createAccounts, setCreateAccounts] = useState(true);
-  const [grantRoleToExisting, setGrantRoleToExisting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState(null);
   // Mail for an invite goes out in the background after the membership rows
@@ -156,11 +153,7 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
         classId,
         isRoll ? [] : list,
         role,
-        {
-          rollNumbers: isRoll ? list : [],
-          createAccounts,
-          grantRoleToExisting,
-        }
+        { rollNumbers: isRoll ? list : [] }
       );
       setReport(result.results);
       // Membership rows are already written — the roster and counts are
@@ -232,41 +225,15 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
           </FormControl>
 
           <Box mt={5} p={4} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" bg="lmBg.sunken">
-            <Checkbox
-              isChecked={createAccounts}
-              onChange={(event) => setCreateAccounts(event.target.checked)}
-            >
-              <Text fontSize="sm" fontWeight="600">
-                Create XCEED accounts for addresses that don&apos;t have one
-              </Text>
-            </Checkbox>
-            <Text fontSize="xs" color="lmFg.subtle" mt={2} ml={6}>
-              {createAccounts ? (
-                <>
-                  Each new person gets an account with the <Badge colorScheme="cyan">{platformRole}</Badge>{' '}
-                  role and is enrolled straight away. They receive an email inviting them to set their own
-                  password — no password is ever emailed, and the account cannot be signed into until they
-                  do.
-                </>
-              ) : (
-                <>
-                  Addresses without an account are stored as pending invites and enrolled automatically the
-                  first time that person signs in to XCEED.
-                </>
-              )}
+            <Text fontSize="sm" fontWeight="600">
+              Accounts are created automatically
             </Text>
-
-            <Checkbox
-              mt={3}
-              size="sm"
-              isChecked={grantRoleToExisting}
-              onChange={(event) => setGrantRoleToExisting(event.target.checked)}
-            >
-              Also give the {platformRole} role to people who already have an account without it
-            </Checkbox>
-            <Text fontSize="xs" color="lmFg.muted" mt={1} ml={6}>
-              Off by default — changing an existing user&apos;s platform roles is usually an
-              administrator&apos;s decision.
+            <Text fontSize="xs" color="lmFg.subtle" mt={2}>
+              Each person without an XCEED account gets one with the{' '}
+              <Badge colorScheme="cyan">{platformRole}</Badge> role and is enrolled straight away. They
+              receive an email inviting them to set their own password — no password is ever emailed, and
+              the account cannot be signed into until they do. People who already have an account are
+              given the <Badge colorScheme="cyan">{platformRole}</Badge> role if they do not have it yet.
             </Text>
           </Box>
 
@@ -516,7 +483,6 @@ function ErpImportModal({ isOpen, onClose, classId, onDone, klass }) {
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [createAccounts, setCreateAccounts] = useState(true);
   const [mailProgress, setMailProgress] = useState(null);
   const pollRef = useRef(null);
   const toast = useToast();
@@ -587,7 +553,7 @@ function ErpImportModal({ isOpen, onClose, classId, onDone, klass }) {
     if (!preview || preview.newCount === 0) return;
     setImporting(true);
     try {
-      const res = await lmApi.importErpMembers(classId, { createAccounts });
+      const res = await lmApi.importErpMembers(classId);
       onDone();
       if (res.batchId) {
         setMailProgress({ completed: 0, total: res.mailPending });
@@ -663,15 +629,9 @@ function ErpImportModal({ isOpen, onClose, classId, onDone, klass }) {
                 </Box>
               </HStack>
 
-              <Box mb={4}>
-                <Checkbox
-                  isChecked={createAccounts}
-                  onChange={(e) => setCreateAccounts(e.target.checked)}
-                  size="sm"
-                >
-                  Create XCEED accounts for students who don&apos;t have one yet
-                </Checkbox>
-              </Box>
+              <Text fontSize="xs" color="lmFg.subtle" mb={4}>
+                XCEED accounts are created automatically for students who don&apos;t have one yet.
+              </Text>
 
               {mailProgress && (
                 <Box mb={4}>

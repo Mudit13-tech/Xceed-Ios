@@ -98,6 +98,19 @@ describe('learningModule <NotebookCell />', () => {
     expect(screen.getByLabelText('Run cell')).toBeEnabled();
   });
 
+  it('offers delete on a cell the student added themselves', () => {
+    render(<NotebookCell {...props} cell={codeCell({ sourceCellId: null })} />);
+    expect(screen.getByLabelText('Delete cell')).toBeInTheDocument();
+  });
+
+  it('hides delete on a teacher-authored cell, but still allows moving it', () => {
+    // Only a cell the student added themselves (no sourceCellId) may be
+    // removed — a faculty cell can be reordered but not dropped.
+    render(<NotebookCell {...props} cell={codeCell({ sourceCellId: 'orig1' })} />);
+    expect(screen.queryByLabelText('Delete cell')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Move cell down')).toBeInTheDocument();
+  });
+
   it('shows the execution count so a stale cell is visible', () => {
     render(<NotebookCell {...props} cell={codeCell({ runCount: 3 })} />);
     expect(screen.getByText('[3]')).toBeInTheDocument();
@@ -137,6 +150,16 @@ describe('learningModule <NotebookCell />', () => {
   it('opens a brand-new markdown cell in the editor, since there is no prose yet', () => {
     render(<NotebookCell {...props} cell={{ _id: 'm1', type: 'markdown', source: '' }} />);
     expect(screen.getByTestId('editor')).toBeInTheDocument();
+  });
+
+  it('hides delete on a teacher-authored markdown cell', () => {
+    render(
+      <NotebookCell
+        {...props}
+        cell={{ _id: 'm1', type: 'markdown', source: '# Lab 1', sourceCellId: 'orig1' }}
+      />,
+    );
+    expect(screen.queryByLabelText('Delete cell')).not.toBeInTheDocument();
   });
 
   /* ---- run status ---- */

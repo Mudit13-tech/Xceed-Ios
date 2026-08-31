@@ -307,12 +307,12 @@ const lmApi = {
     }),
   inviteStatus: (classId, batchId) => request(`/classes/${classId}/members/invite-status/${batchId}`),
   previewErpImport: (classId) => request(`/classes/${classId}/members/erp-preview`),
-  importErpMembers: (classId, options = {}) =>
+  importErpMembers: (classId) =>
     request(`/classes/${classId}/members/import-erp`, {
       method: 'POST',
       body: {
-        createAccounts: options.createAccounts !== false,
-        grantRoleToExisting: Boolean(options.grantRoleToExisting),
+        createAccounts: true,
+        grantRoleToExisting: true,
       },
     }),
   decideJoinRequest: (classId, membershipId, approve) =>

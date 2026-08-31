@@ -158,7 +158,14 @@ function MarkdownCell({ cell, index, total, locked, readOnly, onChange, onMove, 
             {editing ? 'Done' : 'Edit'}
           </Button>
         </HintTooltip>
-        <CellControls index={index} total={total} onMove={onMove} onDelete={onDelete} readOnly={readOnly} />
+        <CellControls
+          index={index}
+          total={total}
+          onMove={onMove}
+          onDelete={onDelete}
+          readOnly={readOnly}
+          canDelete={cell.sourceCellId == null}
+        />
       </Flex>
 
       {editing ? (
@@ -609,7 +616,14 @@ export default function NotebookCell({
         )}
 
         <Box flex="1" />
-        <CellControls index={index} total={total} onMove={onMove} onDelete={onDelete} readOnly={readOnly || cell.locked} />
+        <CellControls
+          index={index}
+          total={total}
+          onMove={onMove}
+          onDelete={onDelete}
+          readOnly={readOnly || cell.locked}
+          canDelete={cell.sourceCellId == null}
+        />
       </Flex>
 
       <CodeMirror
@@ -660,7 +674,13 @@ export default function NotebookCell({
   );
 }
 
-function CellControls({ index, total, onMove, onDelete, readOnly }) {
+/**
+ * Move stays available on a teacher's cell — reordering the notebook is fine —
+ * but delete does not: `canDelete` is false for anything with a `sourceCellId`,
+ * which only the student's own added cells lack. Only the teacher may remove
+ * their own cells, from the authoring page.
+ */
+function CellControls({ index, total, onMove, onDelete, readOnly, canDelete = true }) {
   if (readOnly) return null;
   return (
     <HStack spacing={0}>
@@ -680,14 +700,16 @@ function CellControls({ index, total, onMove, onDelete, readOnly }) {
         isDisabled={index === total - 1}
         onClick={() => onMove(1)}
       />
-      <IconButton
-        aria-label="Delete cell"
-        icon={<FiTrash2 />}
-        size="xs"
-        variant="ghost"
-        colorScheme="red"
-        onClick={onDelete}
-      />
+      {canDelete && (
+        <IconButton
+          aria-label="Delete cell"
+          icon={<FiTrash2 />}
+          size="xs"
+          variant="ghost"
+          colorScheme="red"
+          onClick={onDelete}
+        />
+      )}
     </HStack>
   );
 }

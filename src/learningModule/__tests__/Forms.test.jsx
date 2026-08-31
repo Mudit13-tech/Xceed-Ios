@@ -47,19 +47,24 @@ beforeEach(() => {
 });
 
 describe('as a teacher', () => {
-  it('offers a New form button and lists existing forms with an Edit/Responses pair', async () => {
+  it('offers a New form button and lists existing forms with an Edit/Preview/Responses group', async () => {
     listForms.mockResolvedValue([
-      { _id: 'f1', title: 'Feedback', published: true, questions: [{ }], responseCount: 3, settings: {} },
+      { _id: 'f1', title: 'Feedback', published: true, questions: [{ _id: 'q1', type: 'short_answer', title: 'Your Feedback' }], responseCount: 3, settings: {} },
     ]);
     await open();
     expect(screen.getByRole('button', { name: /new form/i })).toBeInTheDocument();
     expect(await screen.findByText('Feedback')).toBeInTheDocument();
     expect(screen.getByText(/3 response/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /^edit$/i })).toHaveAttribute('href', '/learning/class/c1/form/f1/edit');
+    expect(screen.getByRole('button', { name: /^preview$/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /responses/i })).toHaveAttribute(
       'href',
       '/learning/class/c1/form/f1/responses',
     );
+
+    fireEvent.click(screen.getByRole('button', { name: /^preview$/i }));
+    expect(await screen.findByText(/Student Preview: Feedback/i)).toBeInTheDocument();
+    expect(screen.getByText('Your Feedback')).toBeInTheDocument();
   });
 
   it('shows how many of the class have filled a class-scoped form', async () => {

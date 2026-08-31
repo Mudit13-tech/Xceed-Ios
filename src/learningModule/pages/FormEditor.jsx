@@ -25,12 +25,14 @@ import {
   Textarea,
   VStack,
   useClipboard,
+  useDisclosure,
   useToast,
 } from '@chakra-ui/react';
 import { FiArrowDown, FiArrowUp, FiCopy, FiTrash2 } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
 import { ErrorState, Loading, SectionCard } from '../components/common';
+import FormPreviewModal from '../components/FormPreviewModal';
 
 /**
  * Authoring surface for a form — a Google-Forms-like builder. Entirely
@@ -298,6 +300,7 @@ export default function FormEditor() {
   const { formId } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const previewDialog = useDisclosure();
 
   const [form, setForm] = useState(null);
   const [questions, setQuestions] = useState([]);
@@ -388,6 +391,9 @@ export default function FormEditor() {
         </Heading>
         <Button size="sm" variant="ghost" onClick={() => navigate(`/learning/class/${classId}/forms`)}>
           Back
+        </Button>
+        <Button size="sm" variant="outline" colorScheme="purple" onClick={previewDialog.onOpen}>
+          👁️ Preview
         </Button>
         <Button size="sm" onClick={() => save()} isLoading={saving}>
           Save
@@ -534,6 +540,13 @@ export default function FormEditor() {
           </Button>
         ))}
       </HStack>
+
+      <FormPreviewModal
+        isOpen={previewDialog.isOpen}
+        onClose={previewDialog.onClose}
+        form={form ? { ...form, questions } : null}
+        classId={classId}
+      />
     </VStack>
   );
 }
