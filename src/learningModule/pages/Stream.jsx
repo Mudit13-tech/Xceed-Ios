@@ -56,7 +56,7 @@ function Composer({ classId, onPosted }) {
         text,
         attachments,
         pinned,
-        scheduledFor: scheduledFor || undefined,
+        scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : undefined,
       });
       reset();
       onPosted();

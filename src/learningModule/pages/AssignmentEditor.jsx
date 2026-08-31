@@ -36,6 +36,7 @@ import { ErrorState, Loading, SectionCard } from '../components/common';
 import RichText from '../components/RichText';
 import RichTextEditor from '../components/RichTextEditor';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
+import { toDateTimeInput } from '../format';
 
 const BLANK_VARIABLE = { name: '', type: 'range', min: 1, max: 10, step: 0, decimals: 2, values: [], unit: '' };
 const BLANK_ANSWER = { key: '', label: '', formula: '', unit: '', tolerancePercent: 1, toleranceAbs: 0, marks: 1 };
@@ -765,8 +766,8 @@ export default function AssignmentEditor() {
             <Input
               size="sm"
               type="datetime-local"
-              value={assignment.settings.dueDate ? new Date(assignment.settings.dueDate).toISOString().slice(0, 16) : ''}
-              onChange={(e) => setSetting('dueDate', e.target.value || null)}
+              value={toDateTimeInput(assignment.settings?.dueDate)}
+              onChange={(e) => setSetting('dueDate', e.target.value ? new Date(e.target.value).toISOString() : null)}
             />
           </FormControl>
         </SimpleGrid>

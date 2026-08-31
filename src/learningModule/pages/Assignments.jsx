@@ -13,6 +13,7 @@ import {
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { toDateTimeInput } from '../format';
 
 /**
  * Lists the class's parameterised assignments — the ones where every student
@@ -102,9 +103,11 @@ export default function Assignments() {
 
   const togglePublish = async (assignment) => {
     try {
+      const rawDate = dueDates[assignment._id];
+      const isoDueDate = rawDate ? new Date(rawDate).toISOString() : (assignment.settings?.dueDate || undefined);
       const result = await lmApi.publishAssignment(classId, assignment._id, {
         publish: !assignment.published,
-        dueDate: dueDates[assignment._id] || undefined,
+        dueDate: isoDueDate,
       });
       toast({
         status: 'success',
@@ -245,7 +248,11 @@ export default function Assignments() {
                         size="sm"
                         type="datetime-local"
                         maxW="200px"
-                        value={dueDates[assignment._id] || ''}
+                        value={
+                          dueDates[assignment._id] !== undefined
+                            ? dueDates[assignment._id]
+                            : toDateTimeInput(assignment.settings?.dueDate)
+                        }
                         onChange={(event) =>
                           setDueDates((prev) => ({ ...prev, [assignment._id]: event.target.value }))
                         }

@@ -17,6 +17,7 @@ import {
 import lmApi from '../api/lmApi';
 import { AttachmentPicker } from './Attachments';
 import RichTextEditor from './RichTextEditor';
+import { toDateTimeInput } from '../format';
 
 // Material is reading material and nothing else. Assessed work lives on its own
 // tabs — Quizzes, Shorts, Tutorials — each of which owns its own editor, so
@@ -59,7 +60,7 @@ export default function MaterialModal({ isOpen, onClose, classId, topics = [], o
         instructions: form.instructions,
         attachments,
         topicId: form.topicId || null,
-        scheduledFor: form.scheduledFor || undefined,
+        scheduledFor: form.scheduledFor ? new Date(form.scheduledFor).toISOString() : undefined,
         draft: asDraft,
         // Material is never assessed, so it carries no points and no deadline.
         graded: false,
@@ -119,7 +120,7 @@ export default function MaterialModal({ isOpen, onClose, classId, topics = [], o
               <Input
                 type="datetime-local"
                 maxW="260px"
-                value={form.scheduledFor}
+                value={toDateTimeInput(form.scheduledFor)}
                 onChange={(e) => set('scheduledFor', e.target.value)}
               />
             </FormControl>
