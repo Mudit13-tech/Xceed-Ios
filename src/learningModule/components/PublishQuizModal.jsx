@@ -226,10 +226,10 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
     try {
       const payload = {
         publish: true,
-        availableFrom: availableFrom || null,
-        availableTo: availableTo || null,
-        startDeadline: cutOff || null,
-        resultReleaseAt: releaseAt || null,
+        availableFrom: availableFrom ? new Date(availableFrom).toISOString() : null,
+        availableTo: availableTo ? new Date(availableTo).toISOString() : null,
+        startDeadline: cutOff ? new Date(cutOff).toISOString() : null,
+        resultReleaseAt: releaseAt ? new Date(releaseAt).toISOString() : null,
       };
       /* Only ever sent as an instruction, never as a code: the server mints it,
          so a code cannot be chosen (and so guessed) by whoever sets it up.
@@ -241,7 +241,7 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
         payload.roomCode = 'none';
       }
       if (!isAlreadyPublished) {
-        payload.publishAt = publishAt || null;
+        payload.publishAt = publishAt ? new Date(publishAt).toISOString() : null;
       }
       const result = await lmApi.publishQuiz(classId, quiz._id, payload);
       setLink(result.link);

@@ -37,9 +37,11 @@ import { DeleteIcon } from '@chakra-ui/icons';
 import lmApi from '../api/lmApi';
 import PublishQuizModal from '../components/PublishQuizModal';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
+import QuizPreviewModal from '../components/QuizPreviewModal';
 import RichTextEditor from '../components/RichTextEditor';
 import { CopyLinkButton, ErrorState, Loading, SectionCard } from '../components/common';
 import { duplicateOptionIndexes, questionsWithDuplicateOptions } from '../questionRules';
+import { toDateTimeInput } from '../format';
 
 const BLANK_QUESTION = {
   question: '',
@@ -113,8 +115,7 @@ const methodologyOf = (settings) => {
   return settings.perQuestionTiming ? 'sequential_question_timer' : 'sequential_paper_timer';
 };
 
-const toLocalInput = (value) =>
-  value ? new Date(new Date(value).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+const toLocalInput = toDateTimeInput;
 
 function QuestionCard({ question, index, sections, onChange, onRemove, onDuplicate, perQuestionTiming }) {
   const set = (field, value) => onChange({ ...question, [field]: value });
@@ -399,6 +400,7 @@ export default function QuizEditor({ mode = 'questions' }) {
   const [collaboratorEmails, setCollaboratorEmails] = useState('');
   const publishDialog = useDisclosure();
   const importDialog = useDisclosure();
+  const previewDialog = useDisclosure();
   const [wentLive, setWentLive] = useState(false);
   // Safe Exam Browser authoring. Kept local rather than folded into `quiz`:
   // the file itself and the once-shown bypass code are never part of the
@@ -622,10 +624,9 @@ export default function QuizEditor({ mode = 'questions' }) {
         </Box>
         <HStack>
           {quiz.published && <CopyLinkButton to={`/learning/class/${classId}/quiz/${quizId}`} />}
-          {/* The way in to the settings is the gear on the quiz card now — the
-              row a teacher is already on when they decide to change how a paper
-              runs, rather than a button they have to open the editor to find.
-              Leaving here saves first, which is why `goto` still exists. */}
+          <Button size="sm" variant="outline" colorScheme="purple" onClick={previewDialog.onOpen}>
+            👁️ Preview
+          </Button>
           <Button size="sm" variant="outline" onClick={save} isLoading={saving}>
             Save
           </Button>
@@ -755,8 +756,8 @@ export default function QuizEditor({ mode = 'questions' }) {
                     <Input
                       size="sm"
                       type="datetime-local"
-                      value={toLocalInput(settings.startDeadline)}
-                      onChange={(e) => setSetting('startDeadline', e.target.value || null)}
+                      value={toDateTimeInput(settings.startDeadline)}
+                      onChange={(e) => setSetting('startDeadline', e.target.value ? new Date(e.target.value).toISOString() : null)}
                     />
                     <FormHelperText fontSize="xs">
                       Blank = anyone may start while the quiz is open. Also set when you publish.
@@ -788,8 +789,8 @@ export default function QuizEditor({ mode = 'questions' }) {
                     <Input
                       size="sm"
                       type="datetime-local"
-                      value={toLocalInput(settings.availableFrom)}
-                      onChange={(e) => setSetting('availableFrom', e.target.value || null)}
+                      value={toDateTimeInput(settings.availableFrom)}
+                      onChange={(e) => setSetting('availableFrom', e.target.value ? new Date(e.target.value).toISOString() : null)}
                     />
                   </FormControl>
                   <FormControl>
@@ -797,8 +798,8 @@ export default function QuizEditor({ mode = 'questions' }) {
                     <Input
                       size="sm"
                       type="datetime-local"
-                      value={toLocalInput(settings.availableTo)}
-                      onChange={(e) => setSetting('availableTo', e.target.value || null)}
+                      value={toDateTimeInput(settings.availableTo)}
+                      onChange={(e) => setSetting('availableTo', e.target.value ? new Date(e.target.value).toISOString() : null)}
                     />
                   </FormControl>
                   <FormControl>
@@ -808,8 +809,8 @@ export default function QuizEditor({ mode = 'questions' }) {
                     <Input
                       size="sm"
                       type="datetime-local"
-                      value={toLocalInput(settings.resultReleaseAt)}
-                      onChange={(e) => setSetting('resultReleaseAt', e.target.value || null)}
+                      value={toDateTimeInput(settings.resultReleaseAt)}
+                      onChange={(e) => setSetting('resultReleaseAt', e.target.value ? new Date(e.target.value).toISOString() : null)}
                     />
                     <FormHelperText fontSize="xs">
                       Blank shows each student their result as they submit. Confirmed when you publish.
@@ -1525,6 +1526,9 @@ export default function QuizEditor({ mode = 'questions' }) {
                   pair a few screens up, and scrolling back to save is exactly the
                   moment a teacher loses the work they just typed. */}
               <Flex justify="flex-end" gap={2} mt={6} pt={4} borderTopWidth="1px" borderColor="lmBorder.base">
+                <Button size="sm" variant="outline" colorScheme="purple" onClick={previewDialog.onOpen}>
+                  👁️ Preview
+                </Button>
                 <Button size="sm" variant="outline" onClick={save} isLoading={saving}>
                   Save
                 </Button>
@@ -1627,6 +1631,12 @@ export default function QuizEditor({ mode = 'questions' }) {
           setWentLive(true);
           await load();
         }}
+      />
+
+      <QuizPreviewModal
+        isOpen={previewDialog.isOpen}
+        onClose={previewDialog.onClose}
+        quiz={quiz}
       />
     </Box>
   );

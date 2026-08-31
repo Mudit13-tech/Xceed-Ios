@@ -13,6 +13,7 @@ import {
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { toDateTimeInput } from '../format';
 
 /**
  * Lists the class's parameterised tutorials — the ones where every student
@@ -102,9 +103,11 @@ export default function Tutorials() {
 
   const togglePublish = async (tutorial) => {
     try {
+      const rawDate = dueDates[tutorial._id];
+      const isoDueDate = rawDate ? new Date(rawDate).toISOString() : (tutorial.settings?.dueDate || undefined);
       const result = await lmApi.publishTutorial(classId, tutorial._id, {
         publish: !tutorial.published,
-        dueDate: dueDates[tutorial._id] || undefined,
+        dueDate: isoDueDate,
       });
       toast({
         status: 'success',
@@ -244,7 +247,11 @@ export default function Tutorials() {
                         size="sm"
                         type="datetime-local"
                         maxW="200px"
-                        value={dueDates[tutorial._id] || ''}
+                        value={
+                          dueDates[tutorial._id] !== undefined
+                            ? dueDates[tutorial._id]
+                            : toDateTimeInput(tutorial.settings?.dueDate)
+                        }
                         onChange={(event) =>
                           setDueDates((prev) => ({ ...prev, [tutorial._id]: event.target.value }))
                         }

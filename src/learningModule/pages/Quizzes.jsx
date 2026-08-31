@@ -49,6 +49,7 @@ import RoomCodeButton from '../components/RoomCodeButton';
 import ExamCodes from '../components/ExamCodes';
 import { CopyLinkButton, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import PublishQuizModal from '../components/PublishQuizModal';
+import QuizPreviewModal from '../components/QuizPreviewModal';
 import { formatDateTime, relativeTime } from '../format';
 import { generateQuizPdf } from '../utils/quizPdfGenerator';
 
@@ -656,7 +657,7 @@ function liveState(quiz, isTeacher) {
   };
 }
 
-function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, onRefresh }) {
+function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, onRefresh, onPreview }) {
   const [downloadingPdf, setDownloadingPdf] = useState(null);
   const toast = useToast();
   const navigate = useNavigate();
@@ -1020,6 +1021,9 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
               {hasStarted && (
                 <AttendanceControl classId={classId} quiz={quiz} onDone={onRefresh} />
               )}
+              <Button size="sm" variant="outline" colorScheme="purple" onClick={onPreview}>
+                Preview
+              </Button>
               <Button as={RouterLink} to={`/learning/class/${classId}/quiz/${quiz._id}/edit`} size="sm" variant="outline">
                 Edit
               </Button>
@@ -1155,7 +1159,24 @@ export default function Quizzes() {
   const [publishing, setPublishing] = useState(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const publishDialog = useDisclosure();
+  const previewDialog = useDisclosure();
+  const [previewQuiz, setPreviewQuiz] = useState(null);
   const toast = useToast();
+
+  const openPreview = async (quiz) => {
+    if (quiz.questions && Array.isArray(quiz.questions)) {
+      setPreviewQuiz(quiz);
+      previewDialog.onOpen();
+      return;
+    }
+    try {
+      const fullQuiz = await lmApi.getQuiz(classId, quiz._id);
+      setPreviewQuiz(fullQuiz);
+      previewDialog.onOpen();
+    } catch (err) {
+      toast({ status: 'error', title: 'Could not load quiz preview', description: err.message });
+    }
+  };
 
   const load = useCallback(async () => {
     setError(null);
@@ -1276,6 +1297,7 @@ export default function Quizzes() {
               onUnpublish={() => unpublish(quiz)}
               onDelete={() => remove(quiz)}
               onRefresh={load}
+              onPreview={() => openPreview(quiz)}
             />
           ))
         )}
@@ -1288,6 +1310,11 @@ export default function Quizzes() {
         quiz={publishing}
         classId={classId}
         onPublished={load}
+      />
+      <QuizPreviewModal
+        isOpen={previewDialog.isOpen}
+        onClose={previewDialog.onClose}
+        quiz={previewQuiz}
       />
     </Box>
   );
