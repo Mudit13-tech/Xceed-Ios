@@ -59,6 +59,13 @@ it('adds a new question card of the chosen type', async () => {
   expect(await screen.findByText(/pick one from a list/i)).toBeInTheDocument();
 });
 
+it('opens student preview modal when Preview button is clicked', async () => {
+  await open();
+  fireEvent.click(screen.getByRole('button', { name: /preview/i }));
+  expect(await screen.findByText(/Student Preview: Feedback/i)).toBeInTheDocument();
+  expect(screen.getByText('Your name')).toBeInTheDocument();
+});
+
 it('blocks Save and explains why when a question has no title', async () => {
   await open(baseForm({ questions: [{ _id: 'q1', type: 'short_answer', title: '', required: false, options: [] }] }));
   fireEvent.click(screen.getByRole('button', { name: /^save$/i }));

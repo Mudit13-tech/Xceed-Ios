@@ -855,6 +855,17 @@ export default function RollAssign({ fixedDepartment = '' }) {
                         onNext={() => openQueueItem(currentQueue, modal.item.folderName, 1)}
                         position={queueIdx + 1} total={currentQueue.length}
                         toast={toast}
+                        showToast={showToast}
+                        onPhotoDeleted={(filename) => {
+                            setModal(prev => ({
+                                ...prev,
+                                item: {
+                                    ...prev.item,
+                                    previewFiles: (prev.item.previewFiles || []).filter(f => f !== filename),
+                                    imageFiles:   (prev.item.imageFiles   || []).filter(f => f !== filename),
+                                },
+                            }));
+                        }}
                     />
                 );
             })(), document.body)}
@@ -2725,7 +2736,7 @@ function InModalToast({ toast }) {
     );
 }
 
-function VerifyModal({ item, match, batchName, photoUrl, erpPhotoUrl, overrideRoll, setOverrideRoll, saving, onApprove, onFlag, onClose, hasPrev, hasNext, onPrev, onNext, position, total, toast }) {
+function VerifyModal({ item, match, batchName, photoUrl, erpPhotoUrl, overrideRoll, setOverrideRoll, saving, onApprove, onFlag, onClose, hasPrev, hasNext, onPrev, onNext, position, total, toast, showToast, onPhotoDeleted }) {
     const conf           = match?.confidence;
     const allCandidates  = match?.candidates || [];
     const candMap        = {};
@@ -2737,6 +2748,21 @@ function VerifyModal({ item, match, batchName, photoUrl, erpPhotoUrl, overrideRo
     const displayRoll    = match?.rollNo || primaryMatch?.rollNo || null;
     const folderForPhoto = item.currentFolder || item.folderName;
     const [candOpen, setCandOpen] = useState(false);
+    const [deleting, setDeleting] = useState(null);
+    const photos = item.imageFiles?.length > 0 ? item.imageFiles : item.previewFiles || [];
+
+    const deletePhoto = async (filename) => {
+        if (!window.confirm(`Delete this photo?\nRemoves from disk + database.`)) return;
+        setDeleting(filename);
+        try {
+            const res  = await fetch(`${RA_BASE}/cluster-photo/${encodeURIComponent(item._id)}/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Delete failed');
+            onPhotoDeleted(filename);
+            showToast(`Deleted ${filename}`);
+        } catch (err) { showToast(err.message, 'error'); }
+        finally { setDeleting(null); }
+    };
     useEffect(() => {
         const handler = (e) => {
             if (e.key === 'ArrowLeft'  && hasPrev && !saving) onPrev();
@@ -2756,7 +2782,7 @@ function VerifyModal({ item, match, batchName, photoUrl, erpPhotoUrl, overrideRo
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 700, fontSize: '13px', color: theme.text, display: 'flex', alignItems: 'center', gap: 8 }}>
                             <span style={{ fontFamily: theme.fontMono }}>{item.folderName}</span>
-                            <span style={{ fontSize: '11px', color: theme.textMuted, fontWeight: 400 }}>{item.imageCount} imgs</span>
+                            <span style={{ fontSize: '11px', color: theme.textMuted, fontWeight: 400 }}>{photos.length} imgs</span>
                             {total > 1 && <span style={{ marginLeft: 'auto', fontSize: '10px', color: theme.textMuted, background: theme.bg, padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap' }}>{position} / {total}</span>}
                         </div>
                     </div>
@@ -2767,9 +2793,18 @@ function VerifyModal({ item, match, batchName, photoUrl, erpPhotoUrl, overrideRo
                     <div>
                         <div style={{ fontSize: '11px', fontWeight: 600, color: theme.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Extracted Face Images</div>
                         <div className="roll-photo-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 5 }}>
-                            {(item.imageFiles?.length > 0 ? item.imageFiles : item.previewFiles || []).map((f, i) => (
-                                <img key={i} src={photoUrl(batchName, folderForPhoto, f)} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 6, border: `1px solid ${theme.border}` }} onError={e => { e.target.style.display = 'none'; }} />
+                            {photos.map((f, i) => (
+                                <div key={f + i} style={{ position: 'relative' }}>
+                                    <img src={photoUrl(batchName, folderForPhoto, f)} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 6, border: `1px solid ${theme.border}`, display: 'block', opacity: deleting === f ? 0.2 : 1, transition: 'opacity 0.15s' }} onError={e => { e.target.style.display = 'none'; }} />
+                                    <button
+                                        onClick={() => deletePhoto(f)}
+                                        disabled={!!deleting} title="Delete this photo"
+                                        style={{ position: 'absolute', top: 3, right: 3, width: 20, height: 20, borderRadius: 5, background: '#ffffff', border: '1.5px solid #f87171', color: '#f87171', cursor: deleting ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                                        <svg width="10" height="11" viewBox="0 0 12 13" fill="none"><path d="M1.5 3.5h9M4.5 3.5V2.5h3v1M3 3.5l.6 7.5a.5.5 0 00.5.5h3.8a.5.5 0 00.5-.5L9 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/><line x1="5" y1="6" x2="5" y2="10" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/><line x1="7" y1="6" x2="7" y2="10" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/></svg>
+                                    </button>
+                                </div>
                             ))}
+                            {photos.length === 0 && <div style={{ gridColumn: '1 / -1', padding: '20px 0', textAlign: 'center', color: theme.textMuted, fontSize: '12px' }}>No preview images</div>}
                         </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

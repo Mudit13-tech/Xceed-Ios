@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useNavigate, useOutletContext } from 'react-router-dom';
-import { Badge, Box, Button, Flex, HStack, Heading, Text } from '@chakra-ui/react';
+import { Badge, Box, Button, Flex, HStack, Heading, Text, useDisclosure } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { DeadlineCountdown, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import FormPreviewModal from '../components/FormPreviewModal';
 
 /**
  * Lists the class's forms — a Google-Forms-like builder, entirely separate
@@ -15,6 +16,8 @@ export default function Forms() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const previewDialog = useDisclosure();
+  const [previewForm, setPreviewForm] = useState(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -56,9 +59,14 @@ export default function Forms() {
           </Text>
         </Box>
         {isTeacher && (
-          <Button colorScheme="teal" onClick={create}>
-            + New form
-          </Button>
+          <>
+            <Button as="a" href="/learning/formsmanual" target="_blank" rel="noreferrer" variant="ghost" size="sm">
+              📖 Manual
+            </Button>
+            <Button colorScheme="teal" onClick={create}>
+              + New form
+            </Button>
+          </>
         )}
       </Flex>
 
@@ -127,6 +135,17 @@ export default function Forms() {
                       Edit
                     </Button>
                     <Button
+                      size="sm"
+                      variant="outline"
+                      colorScheme="purple"
+                      onClick={() => {
+                        setPreviewForm(form);
+                        previewDialog.onOpen();
+                      }}
+                    >
+                      Preview
+                    </Button>
+                    <Button
                       as={RouterLink}
                       to={`/learning/class/${classId}/form/${form._id}/responses`}
                       size="sm"
@@ -151,6 +170,13 @@ export default function Forms() {
           </SectionCard>
         ))
       )}
+
+      <FormPreviewModal
+        isOpen={previewDialog.isOpen}
+        onClose={previewDialog.onClose}
+        form={previewForm}
+        classId={classId}
+      />
     </Box>
   );
 }

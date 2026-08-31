@@ -708,6 +708,11 @@ export default function Dashboard() {
             offered twice on the same screen. Joining stays here: it is the
             action a student came for. */}
         <HStack>
+          {/* The introduction to the whole module. Public, so a teacher who has
+              not set anything up yet can also forward it to a colleague. */}
+          <Button as="a" href="/learning/manual" target="_blank" rel="noreferrer" variant="ghost">
+            📖 Getting started
+          </Button>
           <Button variant="outline" onClick={() => setSearchParams({ join: '1' })}>
             Join class
           </Button>
