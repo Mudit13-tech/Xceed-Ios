@@ -331,6 +331,15 @@ export default function Shorts() {
                     <Button
                       size="sm"
                       variant="outline"
+                      colorScheme="yellow"
+                      as={RouterLink}
+                      to={`/learning/class/${classId}/short/${short._id}/preview`}
+                    >
+                      Preview
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
                       as={RouterLink}
                       to={`/learning/class/${classId}/short/${short._id}/edit`}
                     >
