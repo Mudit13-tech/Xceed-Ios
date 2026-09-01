@@ -10,6 +10,7 @@ import { Preferences } from '@capacitor/preferences'
 import PinEntry from './PinEntry'
 import AccountSwitcher from './AccountSwitcher'
 import { useAccountManager } from '../../utils/useAccountManager'
+import { activateAccount } from '../../utils/sessionSwitch'
 import {
   Box,
   Button,
@@ -74,19 +75,22 @@ const LoginForm = () => {
       if (accounts.length > 0) {
         const lastUsed = accounts.find(a => a.email === lastActiveEmail) || accounts[0];
         setActiveAccount(lastUsed);
-        
+
         // Try biometric immediately if they have a saved token
         const available = await isAvailable();
-        if (available) {
-          const result = await authenticate();
+        if (available && lastUsed.token) {
+          const result = await authenticate(`Log in as ${lastUsed.email}`);
           if (result.success) {
-            localStorage.setItem('token', lastUsed.token);
-            queryClient.invalidateQueries({ queryKey: ['user', 'details'] });
-            window.location.href = redirectTargetFrom(location.search) || '/userroles';
+            await activateAccount({
+              account: lastUsed,
+              queryClient,
+              updateLastActiveEmail,
+              fallbackTarget: redirectTargetFrom(location.search) || '/userroles',
+            });
             return; // Redirecting immediately
           }
         }
-        
+
         // If biometric skipped or failed, determine next screen
         if (lastUsed.pin) {
           setCurrentView('pin');
@@ -100,6 +104,46 @@ const LoginForm = () => {
     
     initAuth();
   }, [isAccountsLoading, isInitialized, hasLegacyData, accounts, lastActiveEmail]);
+
+  /**
+   * Picking an account in the switcher signs into it there and then.
+   *
+   * It used to set the account and drop the user on the password form unless
+   * that account had a PIN, which meant a saved, still-valid session was worth
+   * nothing: switching cost a full password login every time. The saved token
+   * is the credential — this uses it, behind whichever lock the account has.
+   */
+  const handleSelectAccount = async (acc) => {
+    setActiveAccount(acc);
+
+    // Nothing to sign in with. Only a password can restore this one.
+    if (!acc.token) {
+      setCurrentView('form');
+      return;
+    }
+
+    if (acc.pin) {
+      setCurrentView('pin');
+      return;
+    }
+
+    const available = await isAvailable();
+    if (available) {
+      const result = await authenticate(`Switch to ${acc.email}`);
+      // A declined prompt leaves them on the switcher. Falling through to the
+      // password form would be a worse answer to "not now" than simply staying
+      // put, and falling through to the switch would make the prompt a
+      // formality.
+      if (!result.success) return;
+    }
+
+    await activateAccount({
+      account: acc,
+      queryClient,
+      updateLastActiveEmail,
+      fallbackTarget: redirectTargetFrom(location.search) || '/userroles',
+    });
+  };
 
   const handleForgotPassword = () => {
     navigate(`/forgot-password`);
@@ -273,12 +317,9 @@ const LoginForm = () => {
       {currentView === 'loading' || !isInitialized ? (
         <Text>Loading...</Text>
       ) : currentView === 'switcher' ? (
-        <AccountSwitcher 
-          accounts={accounts} 
-          onSelectAccount={(acc) => {
-            setActiveAccount(acc);
-            setCurrentView(acc.pin ? 'pin' : 'form');
-          }}
+        <AccountSwitcher
+          accounts={accounts}
+          onSelectAccount={handleSelectAccount}
           onAddAccount={() => setCurrentView('form')}
           onRemoveAccount={removeAccount}
         />
