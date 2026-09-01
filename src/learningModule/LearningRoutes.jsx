@@ -40,6 +40,7 @@ const NotebookEditor = lazyWithPreload(() => import('./pages/NotebookEditor'));
 const NotebookPlayer = lazyWithPreload(() => import('./pages/NotebookPlayer'));
 const NotebookSubmissions = lazyWithPreload(() => import('./pages/NotebookSubmissions'));
 const Shorts = lazyWithPreload(() => import('./pages/Shorts'));
+const ShortPreview = lazyWithPreload(() => import('./pages/ShortPreview'));
 const ShortEditor = lazyWithPreload(() => import('./pages/ShortEditor'));
 const ShortPresent = lazyWithPreload(() => import('./pages/ShortPresent'));
 const ShortSessions = lazyWithPreload(() => import('./pages/ShortSessions'));
@@ -221,6 +222,7 @@ const LEARNING_ROUTES = (
             <Route path="notebook/:notebookId/submissions" element={<NotebookSubmissions />} />
             <Route path="short/:shortId/edit" element={<ShortEditor />} />
             <Route path="short/:shortId/present/:sessionId" element={<ShortPresent />} />
+            <Route path="short/:shortId/preview" element={<ShortPreview />} />
             <Route path="short/:shortId/sessions" element={<ShortSessions />} />
             <Route path="short/:shortId/report/:sessionId" element={<ShortReport />} />
             <Route path="tutorial/:tutorialId/edit" element={<TutorialEditor />} />

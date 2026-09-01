@@ -35,6 +35,7 @@ import RichTextEditor from '../components/RichTextEditor';
 import { isRichTextEmpty } from '../richTextUtils';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
 import StartShortModal from '../components/StartShortModal';
+import { Link as RouterLink } from 'react-router-dom';
 
 /**
  * Authoring surface for a Short.
@@ -687,6 +688,15 @@ export default function ShortEditor() {
         </Button>
         <Button size="sm" onClick={() => save()} isLoading={saving}>
           Save
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          colorScheme="yellow"
+          as={RouterLink}
+          to={`/learning/class/${classId}/short/${shortId}/preview`}
+        >
+          Preview
         </Button>
         {/* The mail question first — the deck's setting picks the answer this
             dialog opens on, it does not decide for the teacher. */}
