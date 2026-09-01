@@ -1,0 +1,3452 @@
+// client/src/attendancemodule/AttendanceReport.jsx
+// Input: room + slot + RTSP URL → auto-lookup from LockSem → attendance report
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { DEGREES, YEARS, theme, styles, cssReset } from './config';
+import { useDepartments } from './useDepartments';
+import { usePeriods } from './usePeriods';
+import UnknownFaces from './UnknownFaces';
+import RejectedSamples from './RejectedSamples';
+import getEnvironment from '../getenvironment';
+import ExportReportsTab from './ExportReportsTab';
+import CumulativeAttendanceTab from './CumulativeAttendanceTab';
+import ProxyModal from './ProxyModal';
+import StudentGroundTruthModal from './StudentGroundTruthModal';
+import EnrollmentWarning from './EnrollmentWarning';
+import { AmsSubtab } from './SubtabNewTabButton';
+import { readSubtabFromSearch } from './subtabNavigation';
+
+const apiUrl = getEnvironment();
+const REPORT_API = `${apiUrl}/attendancemodule/reports`;
+const REPORT_DELETE_SETTINGS_API = `${apiUrl}/attendancemodule/settings/report-deletion`;
+const USER_API = `${apiUrl}/user/getuser`;
+const ML_API = `${apiUrl}/ml`;
+const SCHEDULER_API = `${apiUrl}/attendancemodule/scheduler`;
+const OTHER_CONTROLS_API = `${apiUrl}/attendancemodule/settings/other-controls`;
+const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
+
+const RESPONSIVE_CSS = `
+  ${cssReset}
+  .report-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .report-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .report-run-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+  .report-grid-3 > *, .report-grid-2 > *, .report-run-grid > * { min-width: 0; }
+  .report-stat-grid { display: grid; gap: 12px; margin-bottom: 16px; }
+  .report-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  .report-history-table { min-width: 860px; }
+  .report-attendance-table { min-width: 920px; }
+
+  @media (max-width: 900px) {
+    .report-grid-3, .report-run-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .report-run-actions { grid-column: 1 / -1; width: 100%; }
+    .report-run-actions > button { flex: 1; min-width: 0 !important; }
+    .report-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  }
+
+  @media (max-width: 600px) {
+    .report-page { overflow-x: hidden; }
+    .report-grid-2, .report-grid-3, .report-run-grid, .report-stat-grid { grid-template-columns: 1fr !important; }
+    .report-card { padding: 16px !important; }
+    .report-run-actions { display: grid !important; grid-template-columns: 1fr; }
+    .report-toast { left: 12px !important; right: 12px !important; transform: none !important; white-space: normal; }
+    .report-modal-overlay { padding: 10px !important; }
+    .report-modal-shell { width: 100% !important; max-height: calc(100dvh - 20px); overflow-y: auto; padding: 20px !important; }
+    .report-modal-actions { display: grid !important; grid-template-columns: 1fr; }
+  }
+`;
+
+// Current minutes-of-day (0–1439) in Asia/Kolkata, independent of the browser
+// timezone — mirrors the server-side timeWindowGuard.
+function nowMinIST() {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+  const h = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
+  const m = Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
+  return ((h % 24) * 60 + m) % (24 * 60);
+}
+
+function timeStrToMin(hhmm, fallback) {
+  if (!hhmm || typeof hhmm !== 'string' || !hhmm.includes(':')) return fallback;
+  const [h, m] = hhmm.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return fallback;
+  return h * 60 + m;
+}
+// Fallback only — the live value is the admin-set
+// attendanceThresholds.camera_switch_sec, fetched below and passed to the ML
+// service by Node on every run. Matches the schema default in
+// server/src/models/acquisitionControl.js.
+const DEFAULT_CAMERA_SWITCH_SEC = 30;
+const REPORT_TAB_OPTIONS = [
+  ['run', 'Run Attendance (Developers Only)'],
+  ['history', 'Saved Reports'],
+  // Two distinct pipeline stages, named so they cannot be confused:
+  // 'unknown' = matched nothing in ground truth (matching stage),
+  // 'rejected' = never reached matching at all (detector stage).
+  ['unknown', 'Unknown Faces (No GT Match)'],
+  ['rejected', 'Detector Rejects'],
+  ['export', 'Export Reports'],
+  ['cumulative', 'Cumulative (XCEED vs ERP)'],
+  ['detail', 'Report Detail'],
+];
+// ── LT103 dual-camera preset (same as groundtruthgen_rtsp) ───────────────────
+//const LT103L_URL = 'rtsp://admin:Admin%401234%23@10.10.177.249:554/video/live?channel=1&subtype=0&rtsp_transport=tcp';
+//const LT103R_URL = 'rtsp://admin:Admin%401234%23@10.10.177.250:554/video/live?channel=1&subtype=0&rtsp_transport=tcp';
+export default function AttendanceReport() {
+  const { slotLabel, slotKeys } = usePeriods();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [tab, setTab] = useState(() => readSubtabFromSearch(
+    REPORT_TAB_OPTIONS.map(([id]) => id),
+    'run',
+  ));
+
+  // ── Inputs ────────────────────────────────────────────────────
+  const [room, setRoom] = useState('');
+  const [slot, setSlot] = useState('');
+  const [rtspUrl, setRtspUrl] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [duration, setDuration] = useState(120);
+  const [rtspUrl2, setRtspUrl2] = useState('');
+  const [checkIntervalMin, setCheckIntervalMin] = useState(5);
+
+  // ── Room list from DB (only rooms that have cameras registered) ──
+  const [rooms, setRooms] = useState([]);
+  const [roomsLoading, setRoomsLoading] = useState(true);
+
+  // ── Timetable auto-lookup state ───────────────────────────────
+  const [ttStatus, setTtStatus] = useState(null); // null | 'loading' | 'found' | 'notfound'
+
+  // ── Fallback batch (if LockSem lookup fails) ──────────────────
+  const [degree, setDegree] = useState('BTECH');
+  const [department, setDepartment] = useState('');
+  const [year, setYear] = useState('');
+  const { departments, deptLoading, deptError } = useDepartments();
+  const sanitizeDept = (d) =>
+    (d || '').trim().replace(/\s+/g, '_').toUpperCase();
+  const manualBatch =
+    degree && department && year
+      ? `${degree}_${sanitizeDept(department)}_${year}`
+      : null;
+
+  // ── Run state ─────────────────────────────────────────────────
+  const [processing, setProcessing] = useState(false);
+  const [streamLog, setStreamLog] = useState([]);
+  // resolveEnrollment's diagnostic block for the run in flight — see the
+  // 'enrollment' SSE event below and EnrollmentWarning.
+  const [enrollment, setEnrollment] = useState(null);
+  const [liveStats, setLiveStats] = useState(null);
+  const [liveFrame, setLiveFrame] = useState(null);
+  const [activeCam, setActiveCam] = useState(null); // 1 | 2 | null
+  const [camSwitchAt, setCamSwitchAt] = useState(null); // timestamp when last switched
+  const [camCountdown, setCamCountdown] = useState(0); // seconds shown in banner
+  // Admin-configured dwell time (ML Fine Tuning → Live Attendance Thresholds).
+  // Display only: Node sends the same value to the ML service, so this just
+  // keeps the banner honest instead of assuming the old hardcoded 30s.
+  const [camSwitchSec, setCamSwitchSec] = useState(DEFAULT_CAMERA_SWITCH_SEC);
+  const camCountdownRef = useRef(null);
+  const activeCamRef = useRef(null);
+  const rtspUrl2Ref = useRef('');
+
+  const [jobId, setJobId] = useState(null);
+  const [snapshots, setSnapshots] = useState([]);
+  const [previewActive, setPreviewActive] = useState(false);
+  const [mlResult, setMlResult] = useState(null);
+  const [savedReport, setSavedReport] = useState(null);
+  const [saveError, setSaveError] = useState('');
+  const [derivedCtx, setDerivedCtx] = useState(null);
+
+  // Batch the just-finished one-shot run belongs to — the ground-truth folder
+  // to look a roll number up under. Same resolution runAttendance uses.
+  const effectiveBatchForGt = derivedCtx?.batch || manualBatch;
+
+  // ── Session state (multi-run) ─────────────────────────────────
+  const [sessionReportId, setSessionReportId] = useState(null);
+  const [sessionActive, setSessionActive] = useState(false);
+  const [sessionChecks, setSessionChecks] = useState(0);
+
+  // ── Optional 08:30–17:30 IST attendance-run window (admin toggle, off by default) ──
+  const [runWindow, setRunWindow] = useState({ enabled: false, start: '08:30', end: '17:30' });
+  const [nowMin, setNowMin] = useState(nowMinIST());
+
+  useEffect(() => {
+    fetch(`${OTHER_CONTROLS_API}/`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => {
+        const s = d?.settings || {};
+        setRunWindow({
+          enabled: !!s.attendanceRunTimeWindowEnabled,
+          start: s.windowStart || '08:30',
+          end: s.windowEnd || '17:30',
+        });
+      })
+      .catch(() => { });
+    const id = setInterval(() => setNowMin(nowMinIST()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ── Camera-switch dwell time (for the countdown banner) ───────────────────
+  useEffect(() => {
+    fetch(`${apiUrl}/attendancemodule/acquisitioncontrol/attendance-thresholds`, {
+      credentials: 'include',
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        const sec = Number(d?.camera_switch_sec);
+        if (Number.isFinite(sec) && sec > 0) setCamSwitchSec(sec);
+      })
+      .catch(() => { });
+  }, []);
+
+  const windowOpen =
+    !runWindow.enabled ||
+    (nowMin >= timeStrToMin(runWindow.start, 510) &&
+      nowMin <= timeStrToMin(runWindow.end, 1050));
+
+  // ── History ───────────────────────────────────────────────────
+  const [reports, setReports] = useState([]);
+  const [histLoading, setHistLoading] = useState(false);
+  const [filterDept, setFilterDept] = useState('');
+  const [filterSem, setFilterSem] = useState('');
+  const [filterDate, setFilterDate] = useState(new Date().toISOString().split("T")[0]); // Get Todays Date by Default
+  const [availableSems, setAvailableSems] = useState([]);
+  const [semsLoading, setSemsLoading] = useState(false);
+  const [canDeleteReports, setCanDeleteReports] = useState(false);
+  const [isDeptAdminOnly, setIsDeptAdminOnly] = useState(false);
+  const [deletingReportId, setDeletingReportId] = useState(null);
+
+  // ── Detail ────────────────────────────────────────────────────
+  const [detailReport, setDetailReport] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  // Proxy Info of the detail report
+  const [proxyInfo, setProxyInfo] = useState(null);
+  const [proxyInfoLoading, setProxyInfoLoading] = useState(true);
+  const [showProxyModal, setshowProxyModal] = useState(false);
+
+  // ── Ground truth behind one attendance row ────────────────────────────────
+  // Clicking a roll number anywhere in a report table opens the photos the
+  // match was made against, split embedding vs backup, with the option to
+  // re-assign them. { batch, rollNo, student } | null.
+  const [gtModal, setGtModal] = useState(null);
+
+  // ── Camera status from DB ─────────────────────────────────────────────────
+  const [cameraStatus, setCameraStatus] = useState(null); // null | 'ok' | 'inactive' | 'none'
+  const [cameraWarnAck, setCameraWarnAck] = useState(false);
+  const [showCameraWarn, setShowCameraWarn] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null); // 'run' | 'session'
+
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 5000);
+  };
+
+  // ── Fetch room list from DB on mount ──────────────────────────
+  // Only rooms that already have a camera registered are shown
+  // (Camera registry → distinct roomId).
+  useEffect(() => {
+    (async () => {
+      setRoomsLoading(true);
+      try {
+        const res = await fetch(`${apiUrl}/attendancemodule/cameras/rooms`);
+        const data = await res.json();
+        setRooms(data.rooms || []);
+      } catch {
+        /* silently ignore */
+      } finally {
+        setRoomsLoading(false);
+      }
+    })();
+  }, []);
+
+  // ── Timetable auto-lookup when room + slot change ─────────────
+  useEffect(() => {
+    if (!room || !slot || !date) {
+      setDerivedCtx(null);
+      setTtStatus(null);
+      return;
+    }
+    const ctrl = new AbortController();
+    setTtStatus('loading');
+    (async () => {
+      try {
+        // date matters: the same room+slot holds a different subject each
+        // weekday, and extra classes / alterations are per-date.
+        const params = new URLSearchParams({ room, slot, date });
+        const res = await fetch(
+          `${apiUrl}/timetablemodule/lock/attendance-lookup?${params}`,
+          { signal: ctrl.signal },
+        );
+        if (!res.ok) throw new Error('not found');
+        const data = await res.json();
+        setDerivedCtx(data);
+        setTtStatus('found');
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        setDerivedCtx(null);
+        setTtStatus('notfound');
+      }
+    })();
+    return () => ctrl.abort();
+  }, [room, slot, date]);
+
+  // ── Auto-fetch camera RTSPs for the selected room from Camera model ────────
+  useEffect(() => {
+    if (!room) {
+      setRtspUrl('');
+      setRtspUrl2('');
+      rtspUrl2Ref.current = '';
+      setCameraStatus(null);
+      setCameraWarnAck(false);
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch(
+          `${apiUrl}/attendancemodule/cameras?roomId=${encodeURIComponent(room)}`,
+        );
+        if (!res.ok) return;
+        const cams = await res.json();
+        const cam1 = cams.find((c) => c.position === 'front-left');
+        const cam2 = cams.find((c) => c.position === 'front-right');
+        if (cam1?.streamUrl) setRtspUrl(cam1.streamUrl);
+        if (cam2?.streamUrl) {
+          setRtspUrl2(cam2.streamUrl);
+          rtspUrl2Ref.current = cam2.streamUrl;
+        } else {
+          setRtspUrl2('');
+          rtspUrl2Ref.current = '';
+        }
+        const anyInactive = cams.some(
+          (c) =>
+            !c.isActive || c.status === 'offline' || c.status === 'maintenance',
+        );
+        const noCameras = cams.length === 0;
+        setCameraWarnAck(false);
+        if (noCameras) setCameraStatus('none');
+        else if (anyInactive) setCameraStatus('inactive');
+        else setCameraStatus('ok');
+      } catch {
+        setCameraStatus(null);
+      }
+    })();
+  }, [room]);
+
+  // ── Fetch saved reports ───────────────────────────────────────
+  const fetchReports = useCallback(async () => {
+    setHistLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filterDept) params.set('department', filterDept);
+      if (filterDate) params.set('date', filterDate);
+      const res = await fetch(`${REPORT_API}?${params}`);
+      const data = await res.json();
+
+      let fetchedReports = data.reports || [];
+      if (filterSem) {
+        fetchedReports = fetchedReports.filter((r) => String(r.semester) === String(filterSem));
+      }
+
+      fetchedReports.sort((a, b) => {
+        const dateA = a.date || '';
+        const dateB = b.date || '';
+        if (dateA !== dateB) return dateA < dateB ? 1 : -1;
+
+        const deptA = a.department || '';
+        const deptB = b.department || '';
+        if (deptA !== deptB) return deptA.localeCompare(deptB);
+
+        const semA = a.semester || '';
+        const semB = b.semester || '';
+        return String(semA).localeCompare(String(semB));
+      });
+
+      setReports(fetchedReports);
+    } catch {
+      showToast('Failed to load reports', 'error');
+    }
+    setHistLoading(false);
+  }, [filterDept, filterSem, filterDate]);
+
+  // ── Fetch semesters for selected department ─────────────────────────
+  useEffect(() => {
+    if (!filterDept) {
+      setAvailableSems([]);
+      setFilterSem('');
+      return;
+    }
+    setSemsLoading(true);
+    fetch(`${apiUrl}/timetablemodule/lock/sems-by-dept?dept=${encodeURIComponent(filterDept)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const sems = data.sems || [];
+        setAvailableSems(sems);
+        setFilterSem((current) => (
+          current && !sems.includes(String(current)) ? '' : current
+        ));
+      })
+      .catch(() => setAvailableSems([]))
+      .finally(() => setSemsLoading(false));
+  }, [filterDept]);
+
+  useEffect(() => {
+    if (tab === 'history') fetchReports();
+  }, [tab, fetchReports]);
+
+  // Belt-and-braces: if role loads in as dept-admin-only while somehow
+  // already on the run tab (the initial tab is 'run' on mount), bounce to
+  // a tab they're actually allowed to see.
+  useEffect(() => {
+    if (isDeptAdminOnly && tab === 'run') setTab('history');
+  }, [isDeptAdminOnly, tab]);
+
+  // Platform admins and iams-admin have deletion access by default. The
+  // platform-admin setting only opts iams-dept-admin into the action; the
+  // backend independently enforces the same role and department rules.
+  useEffect(() => {
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const userResponse = await fetch(USER_API, {
+          credentials: 'include',
+          signal: controller.signal,
+        });
+        if (!userResponse.ok) return;
+        const userData = await userResponse.json();
+        const roles = Array.isArray(userData?.user?.role) ? userData.user.role : [];
+        const isFullAccess = roles.includes('admin') || roles.includes('iams-admin');
+        setIsDeptAdminOnly(!isFullAccess && roles.includes('iams-dept-admin'));
+        if (isFullAccess) {
+          setCanDeleteReports(true);
+          return;
+        }
+        if (!roles.includes('iams-dept-admin')) return;
+
+        const settingsResponse = await fetch(REPORT_DELETE_SETTINGS_API, {
+          credentials: 'include',
+          signal: controller.signal,
+        });
+        if (!settingsResponse.ok) return;
+        const settings = await settingsResponse.json();
+        setCanDeleteReports(settings.enabled === true);
+      } catch (error) {
+        if (error.name !== 'AbortError') setCanDeleteReports(false);
+      }
+    })();
+    return () => controller.abort();
+  }, []);
+
+  // ── Auto-poll detail report when session is live ──────────────
+  useEffect(() => {
+    if (detailReport?.status !== 'live') return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${REPORT_API}/${detailReport._id}`);
+        const updated = await res.json();
+        setDetailReport(updated);
+        setSessionChecks(updated.slotResults?.length || 0);
+      } catch {
+        /* ignore */
+      }
+    }, 10000); // poll every 10 seconds
+    return () => clearInterval(interval);
+  }, [detailReport?._id, detailReport?.status]);
+
+  // ── Camera-switch countdown ticker ────────────────────────────────────────
+  // Python switches cameras every camSwitchSec, not every `duration`. We count
+  // down from camSwitchSec using camSwitchAt as the reference point.
+  useEffect(() => {
+    // Only run countdown when processing AND a camera is active AND cam2 is configured
+    const hasCam2 = rtspUrl2.trim().length > 0;
+    if (!processing || !activeCam || !hasCam2) {
+      // Still clear the interval, but DO NOT clear camCountdown to 0 if activeCam is set
+      // (so the banner stays visible in single-cam mode without countdown)
+      if (camCountdownRef.current) {
+        clearInterval(camCountdownRef.current);
+        camCountdownRef.current = null;
+      }
+      if (!processing || !activeCam) setCamCountdown(0);
+      return;
+    }
+    // (Re)start the ticker whenever camSwitchAt changes (i.e. every real switch)
+    if (camCountdownRef.current) {
+      clearInterval(camCountdownRef.current);
+      camCountdownRef.current = null;
+    }
+    const switchedAt = camSwitchAt || Date.now();
+    camCountdownRef.current = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - switchedAt) / 1000);
+      const remaining = Math.max(0, camSwitchSec - elapsed);
+      setCamCountdown(remaining);
+    }, 500); // 500ms tick is more responsive than 1000ms
+    return () => {
+      if (camCountdownRef.current) {
+        clearInterval(camCountdownRef.current);
+        camCountdownRef.current = null;
+      }
+    };
+  }, [processing, activeCam, camSwitchAt, rtspUrl2, camSwitchSec]);
+
+  // ── Run attendance — SSE stream ───────────────────────────────
+  const runAttendance = async () => {
+    if (!rtspUrl.trim()) {
+      showToast('Paste the RTSP URL', 'error');
+      return;
+    }
+    if (!room) {
+      showToast('Enter room number', 'error');
+      return;
+    }
+    if (!slot) {
+      showToast('Select a slot', 'error');
+      return;
+    }
+
+    const effectiveBatch = derivedCtx?.batch || manualBatch;
+    if (!effectiveBatch) {
+      showToast(
+        'Batch not found — expand "Batch override" and fill in Degree/Dept/Year',
+        'error',
+      );
+      return;
+    }
+    // ── Camera inactive/none warning gate ────────────────────
+    if (
+      (cameraStatus === 'inactive' || cameraStatus === 'none') &&
+      !cameraWarnAck
+    ) {
+      setPendingAction('run');
+      setShowCameraWarn(true);
+      return;
+    }
+
+    setProcessing(true);
+    setMlResult(null);
+    setSavedReport(null);
+    setSaveError('');
+    setSnapshots([]);
+    setLiveFrame(null);
+    setPreviewActive(true);
+    setStreamLog([]);
+    setLiveStats(null);
+    setJobId(null);
+    setActiveCam(rtspUrl2.trim() ? 1 : null); // show cam 1 immediately if dual-cam
+    activeCamRef.current = rtspUrl2.trim() ? 1 : null;
+    setCamSwitchAt(Date.now()); // start countdown immediately
+    setCamCountdown(camSwitchSec);
+    rtspUrl2Ref.current = rtspUrl2.trim();
+
+    try {
+      const response = await fetch(`${ML_API}/run-attendance-rtsp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rtspUrl: rtspUrl.trim(),
+          rtspUrl2: rtspUrl2.trim(),
+          batch: effectiveBatch,
+          room,
+          slot,
+          date,
+          durationSec: duration,
+          checkIntervalMin: checkIntervalMin,
+          frameSkip: 10,
+          subject: derivedCtx?.subject || '',
+          faculty: derivedCtx?.faculty || '',
+          semester: derivedCtx?.sem || '',
+          locksemId: derivedCtx?.locksemId || '',
+          // Roll numbers enrolled in THIS subject. Without them the ML service
+          // matches against every student in the batch's embedding store, so an
+          // elective's report lists the whole year and its present/absent
+          // counts move with the embedding store rather than the class.
+          enrolledRollNos: derivedCtx?.enrolledRollNos || [],
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        showToast(errData.error || `Server error ${response.status}`, 'error');
+        setProcessing(false);
+        setPreviewActive(false);
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      let streamDone = false;
+      while (!streamDone) {
+        const { done, value } = await reader.read();
+        if (done) {
+          streamDone = true;
+          continue;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop();
+        for (const part of parts) {
+          const dataLine = part.split('\n').find((l) => l.startsWith('data: '));
+          if (!dataLine) continue;
+          try {
+            const ev = JSON.parse(dataLine.slice(6).trim());
+            if (ev.type === 'job_id') {
+              setJobId(ev.jobId);
+            }
+            if (ev.type === 'stage') {
+              setStreamLog((prev) => [...prev, ev.message]);
+            }
+            // Emitted by the server before Python's own stream: which gallery
+            // this run is matching against. A run is never skipped for missing
+            // embeddings any more, so this is the only warning that the result
+            // came from a fallback rather than the class's own data.
+            if (ev.type === 'enrollment') {
+              setEnrollment(ev);
+            }
+
+            if (ev.type === 'frame') {
+              setLiveStats({
+                frames: ev.frame,
+                faces: ev.total_embs,
+                elapsed: ev.elapsed,
+                remaining: ev.remaining,
+              });
+              setLiveFrame({
+                faces: ev.faces,
+                camera: ev.camera,
+                elapsed: ev.elapsed,
+              });
+              // Camera switch tracking — use ref so the closure always sees
+              // the latest activeCam value, not the stale one from when
+              // runAttendance was first called.
+              // Always update activeCam on first frame (null → 1) and on real switches
+              if (ev.camera != null && ev.camera !== activeCamRef.current) {
+                activeCamRef.current = ev.camera;
+                setActiveCam(ev.camera);
+                setCamSwitchAt(Date.now());
+              }
+            }
+            if (ev.type === 'done') {
+              setMlResult(ev.result);
+              if (ev.savedReport) {
+                setSavedReport(ev.savedReport);
+                setSaveError('');
+              } else if (ev.saveError) {
+                setSavedReport(null);
+                setSaveError(ev.saveError);
+              }
+              if (ev.result?.metadata) {
+                setDerivedCtx((prev) => ({ ...prev, ...ev.result.metadata }));
+              }
+              setSnapshots(ev.result?.frame_snapshots || []);
+              setPreviewActive(false);
+              showToast(
+                ev.savedReport
+                  ? 'Processed and saved'
+                  : ev.saveError
+                    ? `Processed but save failed: ${ev.saveError}`
+                    : 'Processed',
+                ev.saveError ? 'error' : 'success',
+              );
+              setProcessing(false);
+            }
+            if (ev.type === 'error') {
+              showToast(ev.message, 'error');
+              setPreviewActive(false);
+              setProcessing(false);
+            }
+          } catch {
+            continue;
+          }
+        }
+      }
+    } catch (e) {
+      showToast('Failed: ' + e.message, 'error');
+      setProcessing(false);
+    }
+  };
+
+  // ── Start multi-run session ───────────────────────────────────
+  const startSession = async () => {
+    if (!rtspUrl.trim()) {
+      showToast('Paste Camera 1 RTSP URL', 'error');
+      return;
+    }
+    if (!room) {
+      showToast('Enter room number', 'error');
+      return;
+    }
+    if (!slot) {
+      showToast('Select a slot', 'error');
+      return;
+    }
+
+    // ── Camera inactive/none warning gate ────────────────────
+    if (
+      (cameraStatus === 'inactive' || cameraStatus === 'none') &&
+      !cameraWarnAck
+    ) {
+      setPendingAction('session');
+      setShowCameraWarn(true);
+      return;
+    }
+
+    // Batch, subject, faculty and roster are all resolved server-side by
+    // runRoom()'s own resolveClassContext, so nothing is sent from here. That
+    // also drops the old `derivedCtx?.batch || manualBatch` fallback, which
+    // could quietly substitute a batch string assembled from the Degree/Dept/
+    // Year dropdowns when the timetable did not match — and a batch that does
+    // not match the enrolled data is what produced the opaque 422s. A
+    // timetable that does not resolve now comes back as an explicit
+    // "skipped" with its reason instead.
+    setSessionActive(true);
+    setSessionChecks(0);
+    setProcessing(true);
+    setStreamLog([]);
+    setActiveCam(rtspUrl2.trim() ? 1 : null);
+    activeCamRef.current = rtspUrl2.trim() ? 1 : null;
+    setCamSwitchAt(Date.now());
+    setCamCountdown(camSwitchSec);
+    rtspUrl2Ref.current = rtspUrl2.trim();
+
+    try {
+      // Holds open for the whole run — see the note on POST /scheduler/run-room.
+      const res = await fetch(`${SCHEDULER_API}/run-room`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room,
+          slot,
+          date,
+          rtspUrl1: rtspUrl.trim(),
+          rtspUrl2: rtspUrl2.trim(),
+        }),
+      });
+      const data = await res.json();
+
+      // runRoom reports its own outcome in `log` whether it succeeded, skipped
+      // or errored, so surface it before branching on status.
+      if (Array.isArray(data.log)) {
+        setStreamLog(data.log.map((l) => l.msg));
+      }
+
+      if (!res.ok || data.error) {
+        showToast(data.error || `Server error ${res.status}`, 'error');
+        return;
+      }
+      if (data.status === 'skipped' || data.status === 'error') {
+        showToast(`${data.room}: ${data.reason || data.status}`, 'error');
+        return;
+      }
+
+      if (data.reportId) {
+        setSessionReportId(data.reportId);
+        openDetail(data.reportId);
+      }
+      const s = data.summary;
+      showToast(
+        s ? `Run complete — P:${s.present} A:${s.absent} R:${s.review}` : 'Run complete',
+      );
+    } catch (e) {
+      showToast('Failed to run: ' + e.message, 'error');
+    } finally {
+      setSessionActive(false);
+      setProcessing(false);
+      setActiveCam(null);
+      activeCamRef.current = null;
+    }
+  };
+
+  // ── Stop multi-run session ────────────────────────────────────
+  const stopSession = async (reportId) => {
+    try {
+      await fetch(`${REPORT_API}/stop-session/${reportId}`, { method: 'POST' });
+      setSessionActive(false);
+      setSessionReportId(null);
+      // Refresh detail report to show draft status
+      const res = await fetch(`${REPORT_API}/${reportId}`);
+      const updated = await res.json();
+      setDetailReport(updated);
+      showToast('Session stopped');
+    } catch (e) {
+      showToast('Failed to stop session: ' + e.message, 'error');
+    }
+  };
+
+  const openDetail = async (id) => {
+    setTab('detail');
+    setDetailLoading(true);
+    setDetailReport(null);
+    try {
+      const report = await (await fetch(`${REPORT_API}/${id}`)).json()
+      setDetailReport(report);
+      setProxyInfo(report.proxyStudents);
+    } catch {
+      showToast('Failed to load report', 'error');
+    }
+    setDetailLoading(false);
+    setProxyInfoLoading(false);
+  };
+
+  // ── Auto-open report when navigated from Live Report page ─────────────────
+  useEffect(() => {
+    const linkedReportId = new URLSearchParams(location.search).get('reportId');
+    if (tab === 'detail' && linkedReportId) {
+      openDetail(linkedReportId);
+      return;
+    }
+    const s = location.state;
+    if (!s) return;
+    if (s.reportId) {
+      openDetail(s.reportId);
+    } else {
+      // No report yet — at least pre-fill the selectors so user lands in context
+      if (s.prefillRoom) setRoom(s.prefillRoom);
+      if (s.prefillSlot) setSlot(s.prefillSlot);
+      if (s.prefillDate) setDate(s.prefillDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const finalizeReport = async (id) => {
+    if (!window.confirm('Finalize? Cannot edit after.')) return;
+    try {
+      const data = await (
+        await fetch(`${REPORT_API}/${id}/finalize`, { method: 'POST' })
+      ).json();
+      if (data.error) {
+        showToast(data.error, 'error');
+        return;
+      }
+      setDetailReport((prev) => ({ ...prev, status: 'finalized' }));
+      showToast('Report finalized');
+    } catch {
+      showToast('Finalize failed', 'error');
+    }
+  };
+
+  const deleteReport = async (id) => {
+    if (!window.confirm(
+      'Permanently delete this attendance report and its associated data? This cannot be undone.',
+    )) return;
+    setDeletingReportId(id);
+    try {
+      const response = await fetch(`${REPORT_API}/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Delete failed');
+      setReports((current) => current.filter((report) => report._id !== id));
+      if (detailReport?._id === id) setDetailReport(null);
+      showToast('Attendance report deleted');
+    } catch (error) {
+      showToast(error.message || 'Delete failed', 'error');
+    } finally {
+      setDeletingReportId(null);
+    }
+  };
+
+  return (
+    <div className="report-page" style={styles.page}>
+      <style>{RESPONSIVE_CSS}</style>
+      {/* ── Camera warning modal ── */}
+      <CameraWarningModal
+        status={showCameraWarn ? cameraStatus : null}
+        room={room}
+        onCancel={() => {
+          setShowCameraWarn(false);
+          setPendingAction(null);
+        }}
+        onProceed={() => {
+          setShowCameraWarn(false);
+          setCameraWarnAck(true);
+          if (pendingAction === 'run') runAttendance();
+          if (pendingAction === 'session') startSession();
+          setPendingAction(null);
+        }}
+      />
+
+      {toast && (
+        <div
+          className="report-toast"
+          style={{
+            position: 'fixed',
+            top: 96,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 9000,
+            padding: '12px 24px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            fontWeight: 700,
+            animation: 'fadeIn 0.3s',
+            background: toast.type === 'error' ? theme.danger : theme.success,
+            color: '#ffffff',
+            border: 'none',
+          }}
+        >
+          {toast.msg}
+        </div>
+      )}
+
+      <div style={{ marginBottom: 24 }}>
+        <div style={styles.heading}>Attendance Reports</div>
+        <div style={styles.subheading}>
+          Enter room + slot + RTSP URL — faculty, subject, batch auto-fetched
+          from timetable
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="ams-tabs">
+        {REPORT_TAB_OPTIONS.map(
+          ([id, label]) =>
+            (id !== 'detail' || detailReport) &&
+            (id !== 'run' || !isDeptAdminOnly) && (
+              <AmsSubtab
+                key={id}
+                value={id}
+                label={label}
+                active={tab === id}
+                onSelect={setTab}
+                extraParams={id === 'detail' ? { reportId: detailReport?._id } : {}}
+              />
+            ),
+        )}
+      </div>
+
+      {/* ════ RUN TAB ════ */}
+      {tab === 'run' && !isDeptAdminOnly && (
+        <div>
+          <div className="report-card" style={{ ...styles.card, marginBottom: 16 }}>
+            <div style={{ ...styles.sectionTitle, marginBottom: 14 }}>
+              Class Identification
+            </div>
+
+            {/* Room + Slot + Date */}
+            <div
+              className="report-grid-3"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr 1fr',
+                gap: 14,
+                marginBottom: 14,
+              }}
+            >
+              <div>
+                <label style={styles.label}>Room No</label>
+                <select
+                  value={room}
+                  onChange={(e) => setRoom(e.target.value)}
+                  style={styles.select}
+                  disabled={roomsLoading}
+                >
+                  <option value="">
+                    {roomsLoading ? 'Loading rooms with cameras...' : 'Select room with camera...'}
+                  </option>
+                  {rooms.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+                {!roomsLoading && rooms.length === 0 && (
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontSize: '11px',
+                      color: theme.danger,
+                    }}
+                  >
+                    No cameras registered for any room. Add a camera in the
+                    Camera Registry first.
+                  </div>
+                )}
+              </div>
+              <div>
+                <label style={styles.label}>Slot</label>
+                <select
+                  value={slot}
+                  onChange={(e) => setSlot(e.target.value)}
+                  style={styles.select}
+                >
+                  <option value="">Select slot...</option>
+                  {slotKeys.map((val) => (
+                    <option key={val} value={val}>
+                      {slotLabel(val)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={styles.label}>Date</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  style={styles.input}
+                />
+              </div>
+            </div>
+
+            {/* Timetable lookup status banners */}
+            {ttStatus === 'loading' && (
+              <div
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '6px',
+                  marginBottom: 14,
+                  background: theme.accentDim,
+                  border: `1px solid ${theme.accent}`,
+                  fontSize: '11px',
+                  color: theme.accent,
+                }}
+              >
+                🔍 Looking up timetable for {room} / {slotLabel(slot)}…
+              </div>
+            )}
+            {ttStatus === 'notfound' && (
+              <div
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '6px',
+                  marginBottom: 14,
+                  background: theme.warningDim,
+                  border: `1px solid ${theme.warning}`,
+                  fontSize: '12px',
+                  color: theme.warning,
+                }}
+              >
+                ⚠️ No timetable entry found for this room/slot — expand &quot;Batch
+                override&quot; below and fill in manually.
+              </div>
+            )}
+
+            {/* Derived context display after timetable lookup */}
+            {derivedCtx && ttStatus === 'found' && (
+              <div
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '6px',
+                  marginBottom: 14,
+                  background: theme.successDim,
+                  border: `1px solid ${theme.success}`,
+                  fontSize: '12px',
+                  display: 'flex',
+                  gap: 20,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <span style={{ color: theme.success, fontWeight: 700 }}>
+                  ✓ Timetable matched{derivedCtx.day ? ` (${derivedCtx.day})` : ''}
+                </span>
+                {[
+                  ['Batch', derivedCtx.batch],
+                  ['Subject', derivedCtx.subject],
+                  ['Faculty', derivedCtx.faculty],
+                  ['Sem', derivedCtx.sem],
+                  ['Dept', derivedCtx.dept],
+                ]
+                  .filter(([, v]) => v)
+                  .map(([k, v]) => (
+                    <span key={k} style={{ color: theme.textMuted }}>
+                      <span
+                        style={{ textTransform: 'uppercase', fontSize: '10px' }}
+                      >
+                        {k}:{' '}
+                      </span>
+                      <span style={{ color: theme.text, fontWeight: 600 }}>
+                        {v}
+                      </span>
+                    </span>
+                  ))}
+                {derivedCtx.altered && (
+                  <span style={{ color: theme.warning, fontWeight: 600 }}>
+                    ⇄ Altered for this date — originally{' '}
+                    {derivedCtx.originalSubject || '—'} /{' '}
+                    {derivedCtx.originalFaculty || '—'}
+                  </span>
+                )}
+                {derivedCtx.source === 'extraClass' && (
+                  <span style={{ color: theme.warning, fontWeight: 600 }}>
+                    ➕ Extra class (not on the regular timetable)
+                  </span>
+                )}
+                {derivedCtx.ambiguous && (
+                  <span style={{ color: theme.danger, fontWeight: 600 }}>
+                    ⚠ More than one current-session timetable books this room in
+                    this slot — verify the batch before running.
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Fallback batch selector */}
+            <details style={{ marginBottom: 14 }}>
+              <summary
+                style={{
+                  fontSize: '12px',
+                  color: theme.textMuted,
+                  cursor: 'pointer',
+                  marginBottom: 10,
+                }}
+              >
+                ▶ Batch override (if timetable lookup fails)
+              </summary>
+              <div
+                className="report-grid-3"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3,1fr)',
+                  gap: 12,
+                  marginTop: 10,
+                }}
+              >
+                <div>
+                  <label style={styles.label}>Degree</label>
+                  <select
+                    value={degree}
+                    onChange={(e) => setDegree(e.target.value)}
+                    style={styles.select}
+                  >
+                    {DEGREES.map((d) => (
+                      <option key={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={styles.label}>Department</label>
+                  <select
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    style={styles.select}
+                    disabled={deptLoading}
+                  >
+                    <option value="">
+                      {deptLoading
+                        ? 'Loading…'
+                        : deptError
+                          ? 'Error'
+                          : 'Select...'}
+                    </option>
+                    {departments.map((d) => (
+                      <option key={d} value={d}>
+                        {d.replace(/_/g, ' ')}
+                      </option>
+                    ))}
+                  </select>
+                  {deptError && (
+                    <div
+                      style={{
+                        fontSize: '11px',
+                        color: theme.danger,
+                        marginTop: 3,
+                      }}
+                    >
+                      {deptError}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label style={styles.label}>Year</label>
+                  <select
+                    value={year}
+                    onChange={(e) => setYear(e.target.value)}
+                    style={styles.select}
+                  >
+                    <option value="">Select...</option>
+                    {YEARS.map((y) => (
+                      <option key={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {manualBatch && (
+                <div
+                  style={{
+                    marginTop: 10,
+                    fontSize: '12px',
+                    color: theme.accent,
+                    fontFamily: theme.fontMono,
+                  }}
+                >
+                  Fallback batch: {manualBatch}
+                </div>
+              )}
+            </details>
+
+            {/* Enrolled Roll Numbers manual-entry UI removed — embeddings
+                for enrolled students are now fetched automatically, directly
+                from the ground-truth folders on disk (buildEnrolledEmbeddings
+                on the backend), so there is nothing left to type here. */}
+
+            {/* Camera URLs + Interval + Duration + Run */}
+            <div
+              className="report-grid-2"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: 12,
+                marginBottom: 12,
+              }}
+            >
+              <div>
+                <label style={styles.label}>Camera 1 — RTSP URL</label>
+                <input
+                  placeholder="rtsp://...camera1..."
+                  value={rtspUrl}
+                  onChange={(e) => setRtspUrl(e.target.value)}
+                  style={{ ...styles.input, fontFamily: theme.fontMono }}
+                />
+              </div>
+              <div>
+                <label style={styles.label}>
+                  Camera 2 — RTSP URL (optional)
+                </label>
+                <input
+                  placeholder="rtsp://...camera2..."
+                  value={rtspUrl2}
+                  onChange={(e) => {
+                    setRtspUrl2(e.target.value);
+                    rtspUrl2Ref.current = e.target.value;
+                  }}
+                  style={{ ...styles.input, fontFamily: theme.fontMono }}
+                />
+              </div>
+            </div>
+            {!windowOpen && (
+              <div style={{
+                margin: '4px 0 12px',
+                padding: '10px 16px',
+                borderRadius: 8,
+                fontSize: 13,
+                background: 'rgba(239,68,68,0.10)',
+                color: theme.danger,
+                border: '1px solid rgba(239,68,68,0.30)',
+              }}>
+                ⛔ Attendance runs are restricted to {runWindow.start}–{runWindow.end} IST. Run Once and Start Session are disabled outside this window.
+              </div>
+            )}
+            <div
+              className="report-run-grid"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr auto',
+                gap: 12,
+                alignItems: 'flex-end',
+              }}
+            >
+              <div>
+                <label style={styles.label}>Check interval (mins)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={checkIntervalMin}
+                  onChange={(e) => setCheckIntervalMin(Number(e.target.value))}
+                  style={styles.input}
+                  placeholder="e.g. 5"
+                />
+              </div>
+              <div>
+                <label style={styles.label}>Duration per check</label>
+                <select
+                  value={duration}
+                  onChange={(e) => setDuration(Number(e.target.value))}
+                  style={styles.select}
+                >
+                  <option value={30}>30 seconds</option>
+                  <option value={60}>60 seconds</option>
+                  <option value={120}>120 seconds</option>
+                  <option value={180}>180 seconds</option>
+                  <option value={300}>300 seconds</option>
+                </select>
+              </div>
+              <div className="report-run-actions" style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={runAttendance}
+                  disabled={
+                    processing ||
+                    !windowOpen ||
+                    !rtspUrl.trim() ||
+                    !room ||
+                    !slot ||
+                    (!derivedCtx?.batch && !manualBatch)
+                  }
+                  title={!windowOpen ? `Attendance runs are restricted to ${runWindow.start}–${runWindow.end} IST` : undefined}
+                  style={{
+                    ...styles.btnPrimary,
+                    minWidth: 140,
+                    opacity:
+                      processing ||
+                        !windowOpen ||
+                        !rtspUrl.trim() ||
+                        !room ||
+                        !slot ||
+                        (!derivedCtx?.batch && !manualBatch)
+                        ? 0.5
+                        : 1,
+                  }}
+                >
+                  {processing ? (
+                    <span
+                      style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                    >
+                      <span
+                        style={{
+                          width: 13,
+                          height: 13,
+                          border: '2px solid rgba(0,0,0,0.3)',
+                          borderTopColor: theme.accentText,
+                          borderRadius: '50%',
+                          animation: 'spin 0.8s linear infinite',
+                          display: 'inline-block',
+                        }}
+                      />
+                      {liveStats
+                        ? `${liveStats.remaining}s left…`
+                        : activeCam
+                          ? `Cam ${activeCam} — starting…`
+                          : 'Connecting…'}
+                    </span>
+                  ) : (
+                    'Run Once'
+                  )}
+                </button>
+
+                <button
+                  onClick={startSession}
+                  disabled={
+                    processing ||
+                    sessionActive ||
+                    !windowOpen ||
+                    !rtspUrl.trim() ||
+                    !room ||
+                    !slot ||
+                    (!derivedCtx?.batch && !manualBatch)
+                  }
+                  title={!windowOpen ? `Attendance runs are restricted to ${runWindow.start}–${runWindow.end} IST` : undefined}
+                  style={{
+                    ...styles.btnPrimary,
+                    minWidth: 140,
+                    background: theme.success,
+                    opacity:
+                      processing ||
+                        sessionActive ||
+                        !windowOpen ||
+                        !rtspUrl.trim() ||
+                        !room ||
+                        !slot ||
+                        (!derivedCtx?.batch && !manualBatch)
+                        ? 0.5
+                        : 1,
+                  }}
+                >
+                  {sessionActive ? `Session running…` : `Start Session`}
+                </button>
+              </div>
+            </div>
+
+            {/* Which gallery this run matched against. Shown above the log
+                because it decides how to read everything below it: with a
+                fallback gallery, "absent" may mean "never enrolled". */}
+            {enrollment && (
+              <div style={{ marginTop: 14 }}>
+                <EnrollmentWarning enrollment={enrollment} />
+              </div>
+            )}
+
+            {/* Run log — kept visible after the run ends, since a run-room
+                call reports its preflight trail only in its final response */}
+            {streamLog.length > 0 && (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: '10px 14px',
+                  background: theme.bg,
+                  borderRadius: 6,
+                  fontFamily: theme.fontMono,
+                  fontSize: '12px',
+                  color: theme.textMuted,
+                  maxHeight: 120,
+                  overflowY: 'auto',
+                }}
+              >
+                {streamLog.map((msg, i) => (
+                  <div key={i}>{msg}</div>
+                ))}
+                {liveStats && (
+                  <div style={{ color: theme.accent, marginTop: 4 }}>
+                    Frame {liveStats.frames} | {liveStats.faces} faces |{' '}
+                    {liveStats.remaining}s remaining
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Live frame preview while processing */}
+          {processing && (
+            <div style={{ ...styles.card, marginBottom: 16 }}>
+              <div style={{ position: 'relative', marginBottom: 12 }}>
+                <img
+                  src={
+                    previewActive && jobId
+                      ? `${ML_API.replace('/ml', '')}/ml/rtsp-frame-preview?jobId=${jobId}`
+                      : undefined
+                  }
+                  alt="Live frame"
+                  style={{
+                    width: '100%',
+                    borderRadius: 8,
+                    background: '#0d0f14',
+                    minHeight: 200,
+                    display: 'block',
+                    objectFit: 'contain',
+                  }}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+                {liveFrame?.camera && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 10,
+                      left: 10,
+                      background: 'rgba(0,0,0,0.7)',
+                      color: theme.accent,
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '4px 10px',
+                      borderRadius: 4,
+                      fontFamily: theme.fontMono,
+                    }}
+                  >
+                    CAM {liveFrame.camera}
+                  </div>
+                )}
+                {liveFrame !== null && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 10,
+                      right: 10,
+                      background:
+                        liveFrame.faces > 0
+                          ? 'rgba(0,200,100,0.85)'
+                          : 'rgba(200,60,60,0.8)',
+                      color: '#fff',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      padding: '4px 12px',
+                      borderRadius: 4,
+                      fontFamily: theme.fontMono,
+                    }}
+                  >
+                    {liveFrame.faces} face{liveFrame.faces !== 1 ? 's' : ''}{' '}
+                    detected
+                  </div>
+                )}
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 20,
+                  fontSize: '12px',
+                  color: theme.textMuted,
+                  fontFamily: theme.fontMono,
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: theme.accent,
+                      animation: 'spin 1s linear infinite',
+                      display: 'inline-block',
+                    }}
+                  />
+                  Processing…
+                </span>
+                {liveStats && (
+                  <>
+                    <span>
+                      Frame{' '}
+                      <b style={{ color: theme.text }}>{liveStats.frames}</b>
+                    </span>
+                    <span>
+                      Total faces{' '}
+                      <b style={{ color: theme.success }}>{liveStats.faces}</b>
+                    </span>
+                    <span>
+                      Elapsed{' '}
+                      <b style={{ color: theme.text }}>{liveStats.elapsed}s</b>
+                    </span>
+                    <span>
+                      Remaining{' '}
+                      <b style={{ color: theme.warning }}>
+                        {liveStats.remaining}s
+                      </b>
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+          {/* ── Camera switch banner (shown during and after processing) ── */}
+          {activeCam && (
+            <div
+              style={{
+                marginTop: 12,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '10px 16px',
+                borderRadius: 8,
+                background:
+                  activeCam === 1 ? theme.accentDim : 'rgba(240,192,64,0.1)',
+                border: `1px solid ${activeCam === 1 ? theme.accent : '#f0c040'}`,
+              }}
+            >
+              <span style={{ fontSize: '20px', lineHeight: 1 }}>🎥</span>
+              <div style={{ flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: activeCam === 1 ? theme.accent : '#f0c040',
+                  }}
+                >
+                  Camera {activeCam} Active
+                </div>
+                {rtspUrl2.trim() && camCountdown > 0 && (
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      color: theme.textMuted,
+                      marginTop: 2,
+                    }}
+                  >
+                    Switching to Camera {activeCam === 1 ? 2 : 1} in{' '}
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        fontFamily: theme.fontMono,
+                        color: activeCam === 1 ? theme.accent : '#f0c040',
+                      }}
+                    >
+                      {String(Math.floor(camCountdown / 60)).padStart(2, '0')}:
+                      {String(camCountdown % 60).padStart(2, '0')}
+                    </span>
+                  </div>
+                )}
+                {!rtspUrl2.trim() && (
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      color: theme.textMuted,
+                      marginTop: 2,
+                    }}
+                  >
+                    Single camera mode
+                  </div>
+                )}
+              </div>
+              {rtspUrl2.trim() && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {[1, 2].map((n) => (
+                    <span
+                      key={n}
+                      style={{
+                        padding: '3px 12px',
+                        borderRadius: '999px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        fontFamily: theme.fontMono,
+                        background:
+                          activeCam === n
+                            ? n === 1
+                              ? theme.accent
+                              : '#f0c040'
+                            : theme.border,
+                        color:
+                          activeCam === n
+                            ? n === 1
+                              ? theme.accentText || '#fff'
+                              : '#000'
+                            : theme.textMuted,
+                        transition: 'all 0.3s',
+                      }}
+                    >
+                      CAM {n}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {mlResult &&
+            !processing &&
+            (() => {
+              const arr = Object.values(mlResult.attendance || {});
+              const stats = {
+                present: arr.filter((s) => s.status === 'present').length,
+                review: arr.filter((s) => s.status === 'review').length,
+                absent: arr.filter((s) => s.status === 'absent').length,
+                flagged: arr.filter((s) => s.flagged === true).length,
+                total: arr.length,
+              };
+              return (
+                <div style={{ animation: 'fadeIn 0.4s' }}>
+                  <StatBar
+                    stats={[
+                      { label: 'Total', val: stats.total, color: theme.text },
+                      {
+                        label: 'Present',
+                        val: stats.present,
+                        color: theme.success,
+                      },
+                      {
+                        label: 'Review',
+                        val: stats.review,
+                        color: theme.warning,
+                      },
+                      {
+                        label: 'Absent',
+                        val: stats.absent,
+                        color: theme.danger,
+                      },
+                      ...(stats.flagged > 0
+                        ? [
+                          {
+                            label: 'Flagged 🚩',
+                            val: stats.flagged,
+                            color: theme.warning,
+                          },
+                        ]
+                        : []),
+                    ]}
+                    theme={theme}
+                    styles={styles}
+                  />
+
+                  {/* Max-of-K shadow comparison — diagnostic only, never affects the stats above */}
+                  {mlResult.matching_comparison?.enabled && (
+                    <div style={{ ...styles.card, marginBottom: 16, fontSize: '12px' }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                        Max-of-K Comparison (experimental)
+                      </div>
+                      {mlResult.matching_comparison.skipped ? (
+                        <div style={{ color: theme.textMuted }}>
+                          {mlResult.matching_comparison.reason || 'Skipped — no cached top-K embeddings yet.'}
+                        </div>
+                      ) : (
+                        <div style={{ color: theme.textMuted }}>
+                          Scoring against each student&rsquo;s top-{mlResult.matching_comparison.top_k}{' '}
+                          stored embeddings agreed with the mean-embedding assignment on{' '}
+                          <strong style={{ color: theme.text }}>
+                            {mlResult.matching_comparison.agree}/{mlResult.matching_comparison.clusters_compared}
+                          </strong>{' '}
+                          compared clusters
+                          {mlResult.matching_comparison.disagree > 0
+                            ? ` (${mlResult.matching_comparison.disagree} disagreed — ${mlResult.matching_comparison.mean_only_matches} mean-only, ${mlResult.matching_comparison.max_k_only_matches} max-of-K-only).`
+                            : '.'}
+                          {' '}This does not affect the attendance decision above.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Saved frame snapshots */}
+                  {snapshots.length > 0 && (
+                    <div style={{ ...styles.card, marginBottom: 16 }}>
+                      <div
+                        style={{
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          marginBottom: 10,
+                        }}
+                      >
+                        Captured Frames ({snapshots.length})
+                      </div>
+                      <div
+                        style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}
+                      >
+                        {snapshots.map((snap, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              background: theme.bg,
+                              borderRadius: 6,
+                              padding: '8px 12px',
+                              fontSize: '11px',
+                              fontFamily: theme.fontMono,
+                              color: theme.textMuted,
+                              border: `1px solid ${theme.border}`,
+                            }}
+                          >
+                            <div
+                              style={{ color: theme.accent, fontWeight: 700 }}
+                            >
+                              Cam {snap.cam} — {snap.elapsed_sec}s
+                            </div>
+                            {/* Elapsed seconds restart every run, so on their
+                                own they don't say when the frame was taken. */}
+                            {snap.captured_at && (
+                              <div style={{ color: theme.textMuted }}>
+                                {snap.captured_at.replace('T', ' ')}
+                                {snap.check_index ? ` · run ${snap.check_index}` : ''}
+                              </div>
+                            )}
+                            <div
+                              style={{
+                                color:
+                                  snap.faces_count > 0
+                                    ? theme.success
+                                    : theme.danger,
+                              }}
+                            >
+                              {snap.faces_count} face
+                              {snap.faces_count !== 1 ? 's' : ''}
+                            </div>
+                            <div
+                              style={{
+                                color: theme.textMuted,
+                                fontSize: '10px',
+                                marginTop: 2,
+                                wordBreak: 'break-all',
+                              }}
+                            >
+                              {snap.filename}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      ...styles.card,
+                      marginBottom: 16,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 600 }}>
+                        Database Record
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '12px',
+                          color: theme.textMuted,
+                          marginTop: 2,
+                        }}
+                      >
+                        {derivedCtx
+                          ? `${derivedCtx.batch} · ${derivedCtx.subject || '—'} · ${derivedCtx.faculty || '—'}`
+                          : 'Saved automatically after the ML run completes'}
+                      </div>
+                    </div>
+                    <div
+                      style={{ display: 'flex', gap: 10, alignItems: 'center' }}
+                    >
+                      {savedReport && (
+                        <span
+                          style={{
+                            ...styles.badge('success'),
+                            fontSize: '12px',
+                          }}
+                        >
+                          Saved
+                        </span>
+                      )}
+                      {saveError && (
+                        <span
+                          style={{
+                            ...styles.badge('danger'),
+                            fontSize: '12px',
+                          }}
+                        >
+                          Save failed
+                        </span>
+                      )}
+                      {!savedReport && !saveError && (
+                        <span
+                          style={{
+                            ...styles.badge('warning'),
+                            fontSize: '12px',
+                          }}
+                        >
+                          Save pending
+                        </span>
+                      )}
+                      {savedReport && (
+                        <button
+                          onClick={() => openDetail(savedReport.reportId)}
+                          style={styles.btnGhost}
+                        >
+                          View Detail
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <AttendanceTable
+                    rows={Object.entries(mlResult.attendance || {}).map(
+                      ([rollNo, d]) => ({
+                        rollNo,
+                        status: d.status,
+                        avgConfidence: d.avg_confidence,
+                        confidenceZone: d.confidence_zone,
+                        firstSeenSec: d.first_seen_sec,
+                        inList: d.in_list,
+                        flagged: d.flagged,
+                        finalStatus:
+                          d.status === 'present'
+                            ? 'P'
+                            : d.status === 'review'
+                              ? 'R'
+                              : 'A',
+                      }),
+                    )}
+                    readOnly
+                    onOpenGroundTruth={
+                      effectiveBatchForGt
+                        ? (student) => setGtModal({ batch: effectiveBatchForGt, rollNo: student.rollNo, student })
+                        : undefined
+                    }
+                    theme={theme}
+                    styles={styles}
+                  />
+                </div>
+              );
+            })()}
+        </div>
+      )}
+
+      {/* ════ HISTORY TAB ════ */}
+      {tab === 'history' && (
+        <div>
+          <div
+            style={{
+              ...styles.card,
+              marginBottom: 16,
+              display: 'flex',
+              gap: 12,
+              flexWrap: 'wrap',
+              alignItems: 'flex-end',
+            }}
+          >
+            <div>
+              <label style={styles.label}>Date</label>
+              <input
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                style={{ ...styles.input, width: 150 }}
+              />
+            </div>
+            <div>
+              <label style={styles.label}>Department</label>
+              <select
+                value={filterDept}
+                onChange={(e) => {
+                  setFilterDept(e.target.value);
+                  setFilterSem('');
+                }}
+                style={{ ...styles.select, width: 200 }}
+                disabled={deptLoading}
+              >
+                <option value="">
+                  {deptLoading ? 'Loading…' : deptError ? 'Error' : 'All'}
+                </option>
+                {departments.map((d) => (
+                  <option key={d} value={d}>
+                    {d.replace(/_/g, ' ')}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={styles.label}>Semester</label>
+              <select
+                value={filterSem}
+                onChange={(e) => setFilterSem(e.target.value)}
+                style={{ ...styles.select, width: 120 }}
+                disabled={!filterDept || semsLoading}
+              >
+                <option value="">
+                  {!filterDept ? 'Select Dept First' : semsLoading ? 'Loading...' : 'All'}
+                </option>
+                {availableSems.map((sem) => (
+                  <option key={sem} value={sem}>
+                    {sem}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button onClick={fetchReports} style={styles.btnPrimary}>
+              Search
+            </button>
+            <button
+              onClick={() => {
+                setFilterDate('');
+                setFilterDept('');
+                setFilterSem('');
+              }}
+              style={styles.btnGhost}
+            >
+              Clear
+            </button>
+          </div>
+
+          {histLoading ? (
+            <div
+              style={{
+                textAlign: 'center',
+                padding: 48,
+                color: theme.textMuted,
+              }}
+            >
+              Loading...
+            </div>
+          ) : reports.length === 0 ? (
+            <div
+              style={{
+                ...styles.card,
+                textAlign: 'center',
+                padding: 48,
+                color: theme.textMuted,
+              }}
+            >
+              No reports found.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              {Object.values(
+                reports.reduce((acc, r) => {
+                  const dept = r.department ? r.department.replace(/_/g, ' ') : 'Unknown Department';
+                  const sem = r.semester || 'Unknown';
+                  const key = `${dept}-${sem}`;
+                  if (!acc[key]) acc[key] = { dept, sem, items: [] };
+                  acc[key].items.push(r);
+                  return acc;
+                }, {})
+              ).map((group, idx) => (
+                <div className="report-table-scroll" key={idx} style={{ ...styles.card, padding: 0 }}>
+                  <div style={{ padding: '16px 20px', background: theme.surfaceAlt, borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: '15px', fontWeight: 600, color: theme.text }}>
+                      {filterDept ? (
+                        <span>Semester {group.sem}</span>
+                      ) : (
+                        <span>
+                          {group.dept} <span style={{ color: theme.textMuted, fontSize: '13px', marginLeft: 8 }}>Semester {group.sem}</span>
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '12px', color: theme.textMuted, fontFamily: theme.fontMono }}>
+                      {group.items.length} report{group.items.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                  <table className="ams-table report-history-table">
+                    <thead>
+                      <tr>
+                        {[
+                          'Batch',
+                          'Date',
+                          'Slot',
+                          'Subject',
+                          'Faculty',
+                          'P',
+                          'A',
+                          '%',
+                          'Status',
+                          'Action',
+                        ].map((h) => (
+                          <th key={h}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.items.map((r) => (
+                        <tr
+                          key={r._id}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => openDetail(r._id)}
+                        >
+                          <td
+                            style={{
+                              padding: '11px 14px',
+                              fontFamily: theme.fontMono,
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              color: theme.text,
+                            }}
+                          >
+                            {r.batch}
+                          </td>
+                          <td style={{ padding: '11px 14px', color: theme.text }}>
+                            {r.date}
+                          </td>
+                          <td
+                            style={{ padding: '11px 14px', color: theme.textMuted }}
+                          >
+                            {r.timeSlot ? slotLabel(r.timeSlot) : '—'}
+                          </td>
+                          <td style={{ padding: '11px 14px', color: theme.text }}>
+                            {r.subject || '—'}
+                          </td>
+                          <td
+                            style={{ padding: '11px 14px', color: theme.textMuted }}
+                          >
+                            {r.faculty || '—'}
+                          </td>
+                          <td
+                            style={{
+                              padding: '11px 14px',
+                              color: theme.success,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {r.summary?.present ?? '—'}
+                          </td>
+                          <td
+                            style={{
+                              padding: '11px 14px',
+                              color: theme.danger,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {r.summary?.absent ?? '—'}
+                          </td>
+                          <td
+                            style={{
+                              padding: '11px 14px',
+                              fontFamily: theme.fontMono,
+                            }}
+                          >
+                            {r.summary
+                              ? pct(r.summary.present, r.summary.totalStudents) +
+                              '%'
+                              : '—'}
+                          </td>
+                          <td style={{ padding: '11px 14px' }}>
+                            <span
+                              style={styles.badge(
+                                r.status === 'live' ? 'warning' : 'success',
+                              )}
+                            >
+                              {r.status === 'live' ? 'Running' : 'Completed'}
+                            </span>
+                          </td>
+                          <td
+                            style={{
+                              padding: '11px 14px',
+                              fontSize: '12px',
+                            }}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <button
+                                type="button"
+                                onClick={() => openDetail(r._id)}
+                                style={{
+                                  ...styles.btnGhost,
+                                  padding: '6px 10px',
+                                  fontSize: 11,
+                                }}
+                              >
+                                View
+                              </button>
+                              {canDeleteReports && (
+                                <button
+                                  type="button"
+                                  onClick={() => deleteReport(r._id)}
+                                  disabled={deletingReportId === r._id}
+                                  style={{
+                                    ...styles.btnDanger,
+                                    padding: '6px 10px',
+                                    fontSize: 11,
+                                    opacity: deletingReportId === r._id ? 0.6 : 1,
+                                  }}
+                                >
+                                  {deletingReportId === r._id ? 'Deleting…' : 'Delete'}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ════ DETAIL TAB ════ */}
+      {tab === 'detail' && (
+        <div>
+          {/* Show Detailed Proxy Info */}
+          <ProxyModal
+            open={showProxyModal}
+            onClose={() => setshowProxyModal(false)}
+            proxyStudents={proxyInfo || []}
+            theme={theme}
+            styles={styles}
+          />
+          {detailLoading && (
+            <div
+              style={{
+                textAlign: 'center',
+                padding: 48,
+                color: theme.textMuted,
+              }}
+            >
+              Loading...
+            </div>
+          )}
+          {detailReport && !detailLoading && (
+            <div style={{ animation: 'fadeIn 0.3s' }}>
+              <div style={{ ...styles.card, marginBottom: 16 }}>
+                {/* Live session banner */}
+                {detailReport.status === 'live' && (
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      borderRadius: 8,
+                      marginBottom: 16,
+                      background: theme.accentDim,
+                      border: `1px solid ${theme.accent}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        background: theme.accent,
+                        display: 'inline-block',
+                        animation: 'spin 1.5s linear infinite',
+                      }}
+                    />
+                    <span
+                      style={{
+                        color: theme.accent,
+                        fontWeight: 700,
+                        fontSize: '13px',
+                      }}
+                    >
+                      Live Session — {detailReport.slotResults?.length || 0}{' '}
+                      run(s) completed
+                    </span>
+                    <span style={{ fontSize: '12px', color: theme.textMuted }}>
+                      Auto-updating every 10 seconds
+                    </span>
+                    <button
+                      onClick={() => stopSession(detailReport._id)}
+                      style={{
+                        ...styles.btnDanger,
+                        padding: '6px 14px',
+                        fontSize: '12px',
+                        marginLeft: 'auto',
+                      }}
+                    >
+                      Stop Session
+                    </button>
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    flexWrap: 'wrap',
+                    gap: 12,
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontFamily: theme.fontMono,
+                        fontSize: '18px',
+                        fontWeight: 700,
+                        marginBottom: 6,
+                      }}
+                    >
+                      {detailReport.batch}
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 20,
+                        fontSize: '13px',
+                        color: theme.textMuted,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      {[
+                        ['Date', detailReport.date],
+                        [
+                          'Slot',
+                          slotLabel(detailReport.timeSlot) ||
+                          detailReport.timeSlot ||
+                          '—',
+                        ],
+                        ['Subject', detailReport.subject || '—'],
+                        ['Faculty', detailReport.faculty || '—'],
+                        ['Room', detailReport.room || '—'],
+                        ['Sem', detailReport.semester || '—'],
+                      ].map(([k, v]) => (
+                        <span key={k}>
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.08em',
+                            }}
+                          >
+                            {k}:{' '}
+                          </span>
+                          <span style={{ color: theme.text, fontWeight: 600 }}>
+                            {v}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: 10,
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <span
+                      style={styles.badge(
+                        detailReport.status === 'finalized'
+                          ? 'success'
+                          : detailReport.status === 'live'
+                            ? 'warning'
+                            : 'primary',
+                      )}
+                    >
+                      {detailReport.status === 'finalized'
+                        ? 'Verified'
+                        : detailReport.status === 'live'
+                          ? 'Live'
+                          : 'Completed'}
+                    </span>
+                    <button
+                      onClick={() => setTab('unknown')}
+                      style={{
+                        ...styles.btnPrimary,
+                        background: theme.accent,
+                        padding: '8px 18px',
+                        fontSize: '13px',
+                      }}
+                    >
+                      Review Unknown Faces (
+                      {detailReport.summary?.unknownFaceCount ?? 0})
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {
+                // If there are proxies shows the number of possible proxies
+                !proxyInfoLoading && proxyInfo.length > 0 && (
+                  <div style={{ marginBottom: 16, cursor: "pointer" }}>
+                    <span onClick={() => setshowProxyModal(true)} style={{ ...styles.badge('warning'), fontSize: 14, width: "fit-content", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, fontWeight: 600 }}>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-triangle-alert-icon lucide-triangle-alert"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
+                      {proxyInfo.length} Possible {proxyInfo.length > 1 ? "Proxies" : "Proxy"}
+                    </span>
+                  </div>
+                )
+              }
+              <StatBar
+                stats={[
+                  {
+                    label: 'Total',
+                    val: detailReport.summary?.totalStudents ?? 0,
+                    color: theme.text,
+                  },
+                  {
+                    label: 'Present',
+                    val: detailReport.summary?.present ?? 0,
+                    color: theme.success,
+                  },
+                  {
+                    label: 'Absent',
+                    val: detailReport.summary?.absent ?? 0,
+                    color: theme.danger,
+                  },
+                  {
+                    label: 'Att. %',
+                    val: (detailReport.summary?.attendancePct ?? 0) + '%',
+                    color: theme.accent,
+                  },
+                  {
+                    label: 'Unknown',
+                    val: detailReport.summary?.unknownFaceCount ?? 0,
+                    color: theme.warning,
+                    onClick: () => setTab('unknown'),
+                    hint: 'Open the Unknown Faces tab',
+                  },
+                  {
+                    label: 'Overrides',
+                    val: (detailReport.finalReport || []).filter(s => s.isOverridden).length,
+                    color: theme.accent,
+                  },
+                ]}
+                theme={theme}
+                styles={styles}
+              />
+
+              {detailReport.slotResults?.length > 0 ? (
+                <MultiRunTable
+                  report={detailReport}
+                  readOnly={true}
+                  onOpenGroundTruth={
+                    detailReport.batch
+                      ? (student) => setGtModal({ batch: detailReport.batch, rollNo: student.rollNo, student })
+                      : undefined
+                  }
+                  theme={theme}
+                  styles={styles}
+                />
+              ) : (
+                <AttendanceTable
+                  rows={detailReport.finalReport || []}
+                  readOnly={true}
+                  onOpenGroundTruth={
+                    detailReport.batch
+                      ? (student) => setGtModal({ batch: detailReport.batch, rollNo: student.rollNo, student })
+                      : undefined
+                  }
+                  theme={theme}
+                  styles={styles}
+                />
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      {tab === 'export' && <ExportReportsTab />}
+
+      {/* ════ CUMULATIVE TAB (read-only: XCEED vs ERP) ════ */}
+      {tab === 'cumulative' && <CumulativeAttendanceTab />}
+      {/* ════ UNKNOWN FACES TAB ════ */}
+      {tab === 'unknown' && (
+        <div style={{ marginTop: 16 }}>
+          <UnknownFaces
+            embedded={true}
+            defaultDate={date}
+            defaultDept={derivedCtx?.dept || department}
+          />
+        </div>
+      )}
+      {tab === 'rejected' && <RejectedSamples />}
+
+      {gtModal && (
+        <StudentGroundTruthModal
+          batch={gtModal.batch}
+          rollNo={gtModal.rollNo}
+          student={gtModal.student}
+          onClose={() => setGtModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Roll number as an affordance into that student's ground truth. Falls back
+// to plain text when no handler is wired, so both tables render the same
+// whether or not the ground-truth lookup is available.
+function RollNoCell({ rollNo, student, onOpenGroundTruth, theme }) {
+  if (!onOpenGroundTruth) return rollNo;
+
+  return (
+    <button
+      type="button"
+      title="View the ground truth photos this match was made against"
+      onClick={() => onOpenGroundTruth(student || { rollNo })}
+      style={{
+        background: 'none',
+        border: 'none',
+        padding: 0,
+        font: 'inherit',
+        color: theme.accent,
+        cursor: 'pointer',
+        textDecoration: 'underline',
+        textDecorationStyle: 'dotted',
+        textUnderlineOffset: 3,
+      }}
+    >
+      {rollNo}
+    </button>
+  );
+}
+
+function MultiRunTable({ report, readOnly, onOverride, onOpenGroundTruth, theme, styles }) {
+  const runs = report.slotResults || [];
+  const finalLookup = {};
+  for (const s of report.finalReport || []) {
+    finalLookup[s.rollNo] = s;
+  }
+
+  // Collect all roll numbers across all runs + finalReport
+  const allRollNos = [
+    ...new Set([
+      ...runs.flatMap((r) => r.students.map((s) => s.rollNo)),
+      ...Object.keys(finalLookup),
+    ]),
+  ].sort();
+
+  // Build lookup: rollNo → runIndex → student record
+  const runLookup = {};
+  for (const rollNo of allRollNos) {
+    runLookup[rollNo] = {};
+    for (let ri = 0; ri < runs.length; ri++) {
+      runLookup[rollNo][ri] =
+        runs[ri].students.find((s) => s.rollNo === rollNo) || null;
+    }
+  }
+
+  // Max-of-K shadow comparison (diagnostic only) — fires on at most one run
+  // per period (the middle one for scheduled sessions). Find the last run
+  // that actually carries a completed comparison, and use its per-student
+  // breakdown for the trailing "Max-of-K" column below. If the toggle was on
+  // but every attempt was skipped (missing prerequisites), fall back to that
+  // skipped run so the column still surfaces the fact instead of vanishing
+  // as if the toggle were simply off.
+  const comparisonRun = [...runs].reverse().find(
+    (r) => r.matchingComparison?.enabled && !r.matchingComparison?.skipped,
+  );
+  const comparisonSkippedRun = !comparisonRun && [...runs].reverse().find(
+    (r) => r.matchingComparison?.enabled && r.matchingComparison?.skipped,
+  );
+  const comparisonByRoll = comparisonRun?.matchingComparison?.per_student || {};
+
+  // Same idea, for the FAISS shadow comparison (independent on/off toggle).
+  const faissRun = [...runs].reverse().find(
+    (r) => r.faissComparison?.enabled && !r.faissComparison?.skipped,
+  );
+  const faissSkippedRun = !faissRun && [...runs].reverse().find(
+    (r) => r.faissComparison?.enabled && r.faissComparison?.skipped,
+  );
+  const faissByRoll = faissRun?.faissComparison?.per_student || {};
+
+  // Same idea, for the AdaFace shadow comparison (independent on/off toggle).
+  const adafaceRun = [...runs].reverse().find(
+    (r) => r.adafaceComparison?.enabled && !r.adafaceComparison?.skipped,
+  );
+  const adafaceSkippedRun = !adafaceRun && [...runs].reverse().find(
+    (r) => r.adafaceComparison?.enabled && r.adafaceComparison?.skipped,
+  );
+  const adafaceByRoll = adafaceRun?.adafaceComparison?.per_student || {};
+
+  // Mean-as-shadow — populated only when another model was the primary
+  // decision-maker (Model Pipeline card, ML Fine Tuning page).
+  const meanRun = [...runs].reverse().find(
+    (r) => r.meanComparison?.enabled && !r.meanComparison?.skipped,
+  );
+  const meanSkippedRun = !meanRun && [...runs].reverse().find(
+    (r) => r.meanComparison?.enabled && r.meanComparison?.skipped,
+  );
+  const meanByRoll = meanRun?.meanComparison?.per_student || {};
+
+  const skippedBadgeStyle = {
+    padding: '2px 6px',
+    borderRadius: 4,
+    fontSize: '10px',
+    fontWeight: 600,
+    color: theme.textMuted,
+    background: theme.accentDim,
+  };
+
+  const cellStyle = (status) => ({
+    padding: '2px 6px',
+    borderRadius: 4,
+    fontSize: '11px',
+    fontWeight: 600,
+    background:
+      status === 'present'
+        ? theme.successDim
+        : status === 'review'
+          ? theme.warningDim
+          : status === 'absent'
+            ? theme.dangerDim
+            : theme.accentDim,
+    color:
+      status === 'present'
+        ? theme.success
+        : status === 'review'
+          ? theme.warning
+          : status === 'absent'
+            ? theme.danger
+            : theme.accent,
+  });
+
+  return (
+    <div style={{ ...styles.card, padding: 0, overflowX: 'auto' }}>
+      <table className="ams-table" style={{ minWidth: 600, fontSize: '12px' }}>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Roll No</th>
+            {runs.map((r, i) => (
+              <th
+                key={i}
+                style={{
+                  textAlign: 'center',
+                  color: theme.accent,
+                  borderLeft: '1px solid #e4e8f5',
+                }}
+              >
+                Run {i + 1}
+                <div
+                  style={{
+                    fontSize: '9px',
+                    color: theme.textMuted,
+                    fontWeight: 400,
+                    marginTop: 2,
+                  }}
+                >
+                  {r.processedAt
+                    ? new Date(r.processedAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                    : '—'}
+                </div>
+                <div
+                  style={{
+                    fontSize: '9px',
+                    color: theme.textMuted,
+                    fontWeight: 400,
+                  }}
+                >
+                  P:{r.summary?.present ?? 0} A:{r.summary?.absent ?? 0} R:
+                  {r.summary?.review ?? 0}
+                </div>
+                {r.primaryModel && r.primaryModel !== 'mean' && (
+                  <div
+                    title="Which model decided attendance for this run (Model Pipeline card)"
+                    style={{ fontSize: '9px', fontWeight: 700, color: theme.accent, marginTop: 2 }}
+                  >
+                    {r.primaryModel}
+                    {r.primaryFallback ? ' (fallback)' : ''}
+                  </div>
+                )}
+              </th>
+            ))}
+            {(comparisonRun || comparisonSkippedRun) && (
+              <th
+                title={
+                  comparisonRun
+                    ? "Max-of-K shadow comparison — diagnostic only, does not affect Final"
+                    : `Max-of-K shadow comparison skipped: ${comparisonSkippedRun.matchingComparison.reason || 'prerequisites not met'}`
+                }
+                style={{ textAlign: 'center', borderLeft: '2px solid #e4e8f5', color: theme.accent }}
+              >
+                Max-of-K
+                <div style={{ fontSize: '9px', color: theme.textMuted, fontWeight: 400, marginTop: 2 }}>
+                  {comparisonRun
+                    ? `${comparisonRun.matchingComparison.agree}/${comparisonRun.matchingComparison.clusters_compared} agree`
+                    : 'skipped'}
+                </div>
+              </th>
+            )}
+            {(faissRun || faissSkippedRun) && (
+              <th
+                title={
+                  faissRun
+                    ? "FAISS shadow comparison — diagnostic only, does not affect Final"
+                    : `FAISS shadow comparison skipped: ${faissSkippedRun.faissComparison.reason || 'prerequisites not met'}`
+                }
+                style={{ textAlign: 'center', borderLeft: '2px solid #e4e8f5', color: theme.accent }}
+              >
+                FAISS
+                <div style={{ fontSize: '9px', color: theme.textMuted, fontWeight: 400, marginTop: 2 }}>
+                  {faissRun
+                    ? `${faissRun.faissComparison.agree}/${faissRun.faissComparison.clusters_compared} agree`
+                    : 'skipped'}
+                </div>
+              </th>
+            )}
+            {(adafaceRun || adafaceSkippedRun) && (
+              <th
+                title={
+                  adafaceRun
+                    ? "AdaFace shadow comparison — diagnostic only, does not affect Final"
+                    : `AdaFace shadow comparison skipped: ${adafaceSkippedRun.adafaceComparison.reason || 'prerequisites not met'}`
+                }
+                style={{ textAlign: 'center', borderLeft: '2px solid #e4e8f5', color: theme.accent }}
+              >
+                AdaFace
+                <div style={{ fontSize: '9px', color: theme.textMuted, fontWeight: 400, marginTop: 2 }}>
+                  {adafaceRun
+                    ? `${adafaceRun.adafaceComparison.agree}/${adafaceRun.adafaceComparison.clusters_compared} agree`
+                    : 'skipped'}
+                </div>
+              </th>
+            )}
+            {(meanRun || meanSkippedRun) && (
+              <th
+                title={
+                  meanRun
+                    ? "Mean (InsightFace) run as a shadow — another model was the primary decision-maker"
+                    : `Mean shadow comparison skipped: ${meanSkippedRun.meanComparison.reason || 'prerequisites not met'}`
+                }
+                style={{ textAlign: 'center', borderLeft: '2px solid #e4e8f5', color: theme.accent }}
+              >
+                Mean
+                <div style={{ fontSize: '9px', color: theme.textMuted, fontWeight: 400, marginTop: 2 }}>
+                  {meanRun
+                    ? `${meanRun.meanComparison.agree}/${meanRun.meanComparison.clusters_compared} agree`
+                    : 'skipped'}
+                </div>
+              </th>
+            )}
+            <th
+              style={{ textAlign: 'center', borderLeft: '2px solid #e4e8f5' }}
+            >
+              Final
+            </th>
+            <th style={{ textAlign: 'center' }}>ERP</th>
+            {!readOnly && <th>Override</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {allRollNos.map((rollNo, idx) => {
+            const final = finalLookup[rollNo];
+            return (
+              <tr
+                key={rollNo}
+                style={{
+                  background:
+                    final?.finalStatus === 'R'
+                      ? theme.warningDim
+                      : 'transparent',
+                }}
+              >
+                <td style={{ padding: '9px 12px', color: theme.textMuted }}>
+                  {idx + 1}
+                </td>
+                <td
+                  style={{
+                    padding: '9px 12px',
+                    fontFamily: theme.fontMono,
+                    fontWeight: 600,
+                    color: '#111',
+                  }}
+                >
+                  <RollNoCell
+                    rollNo={rollNo}
+                    student={final || { rollNo }}
+                    onOpenGroundTruth={onOpenGroundTruth}
+                    theme={theme}
+                  />
+                  {/* Recognised, but not on this subject's roll list — kept
+                      visible (wrong room? proxy?) and excluded from the
+                      present/absent counts. */}
+                  {final?.inList === false && (
+                    <span
+                      title="Not enrolled in this subject — excluded from the counts"
+                      style={{
+                        marginLeft: 6,
+                        padding: '1px 5px',
+                        borderRadius: 4,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        background: theme.warningDim,
+                        color: theme.textMuted,
+                      }}
+                    >
+                      not enrolled
+                    </span>
+                  )}
+                </td>
+                {runs.map((_, ri) => {
+                  const s = runLookup[rollNo][ri];
+                  return (
+                    <td
+                      key={ri}
+                      style={{
+                        textAlign: 'center',
+                        borderLeft: '1px solid #e4e8f5',
+                      }}
+                    >
+                      {s ? (
+                        <span style={cellStyle(s.status)}>
+                          {s.status === 'present'
+                            ? '✓'
+                            : s.status === 'review'
+                              ? '?'
+                              : s.status === 'absent'
+                                ? '✗'
+                                : '—'}
+                          {s.avgConfidence > 0 && (
+                            <span style={{ marginLeft: 4, fontWeight: 400 }}>
+                              {(s.avgConfidence * 100).toFixed(0)}%
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span
+                          style={{ color: theme.textMuted, fontSize: '11px' }}
+                        >
+                          —
+                        </span>
+                      )}
+                    </td>
+                  );
+                })}
+                {(comparisonRun || comparisonSkippedRun) && (() => {
+                  if (!comparisonRun) {
+                    return (
+                      <td style={{ textAlign: 'center', borderLeft: '2px solid #e4e8f5' }}>
+                        <span
+                          title={comparisonSkippedRun.matchingComparison.reason || 'Skipped — prerequisites not met'}
+                          style={skippedBadgeStyle}
+                        >
+                          skipped
+                        </span>
+                      </td>
+                    );
+                  }
+                  const cmp = comparisonByRoll[rollNo];
+                  return (
+                    <td style={{ textAlign: 'center', borderLeft: '2px solid #e4e8f5' }}>
+                      {!cmp ? (
+                        <span style={{ color: theme.textMuted, fontSize: '11px' }}>—</span>
+                      ) : cmp.agree ? (
+                        <span
+                          title={`Agrees (max-of-K score ${cmp.max_k_score ?? '—'})`}
+                          style={{ ...cellStyle('present'), background: theme.successDim, color: theme.success }}
+                        >
+                          ✓
+                        </span>
+                      ) : (
+                        <span
+                          title={
+                            cmp.max_k_roll
+                              ? `Max-of-K would instead match ${cmp.max_k_roll} (score ${cmp.max_k_score ?? '—'})`
+                              : `Max-of-K found no match here (mean score ${cmp.mean_score ?? '—'})`
+                          }
+                          style={{ ...cellStyle('review'), background: theme.warningDim, color: theme.warning }}
+                        >
+                          ⚠
+                        </span>
+                      )}
+                    </td>
+                  );
+                })()}
+                {(faissRun || faissSkippedRun) && (() => {
+                  if (!faissRun) {
+                    return (
+                      <td style={{ textAlign: 'center', borderLeft: '2px solid #e4e8f5' }}>
+                        <span
+                          title={faissSkippedRun.faissComparison.reason || 'Skipped — prerequisites not met'}
+                          style={skippedBadgeStyle}
+                        >
+                          skipped
+                        </span>
+                      </td>
+                    );
+                  }
+                  const cmp = faissByRoll[rollNo];
+                  return (
+                    <td style={{ textAlign: 'center', borderLeft: '2px solid #e4e8f5' }}>
+                      {!cmp ? (
+                        <span style={{ color: theme.textMuted, fontSize: '11px' }}>—</span>
+                      ) : cmp.agree ? (
+                        <span
+                          title={`Agrees (FAISS score ${cmp.faiss_score ?? '—'})`}
+                          style={{ ...cellStyle('present'), background: theme.successDim, color: theme.success }}
+                        >
+                          ✓
+                        </span>
+                      ) : (
+                        <span
+                          title={
+                            cmp.faiss_roll
+                              ? `FAISS would instead match ${cmp.faiss_roll} (score ${cmp.faiss_score ?? '—'})`
+                              : `FAISS found no match here (mean score ${cmp.mean_score ?? '—'})`
+                          }
+                          style={{ ...cellStyle('review'), background: theme.warningDim, color: theme.warning }}
+                        >
+                          ⚠
+                        </span>
+                      )}
+                    </td>
+                  );
+                })()}
+                {(adafaceRun || adafaceSkippedRun) && (() => {
+                  if (!adafaceRun) {
+                    return (
+                      <td style={{ textAlign: 'center', borderLeft: '2px solid #e4e8f5' }}>
+                        <span
+                          title={adafaceSkippedRun.adafaceComparison.reason || 'Skipped — prerequisites not met'}
+                          style={skippedBadgeStyle}
+                        >
+                          skipped
+                        </span>
+                      </td>
+                    );
+                  }
+                  const cmp = adafaceByRoll[rollNo];
+                  return (
+                    <td style={{ textAlign: 'center', borderLeft: '2px solid #e4e8f5' }}>
+                      {!cmp ? (
+                        <span style={{ color: theme.textMuted, fontSize: '11px' }}>—</span>
+                      ) : cmp.agree ? (
+                        <span
+                          title={`Agrees (AdaFace score ${cmp.adaface_score ?? '—'})`}
+                          style={{ ...cellStyle('present'), background: theme.successDim, color: theme.success }}
+                        >
+                          ✓
+                        </span>
+                      ) : (
+                        <span
+                          title={
+                            cmp.adaface_roll
+                              ? `AdaFace would instead match ${cmp.adaface_roll} (score ${cmp.adaface_score ?? '—'})`
+                              : `AdaFace found no match here (mean score ${cmp.mean_score ?? '—'})`
+                          }
+                          style={{ ...cellStyle('review'), background: theme.warningDim, color: theme.warning }}
+                        >
+                          ⚠
+                        </span>
+                      )}
+                    </td>
+                  );
+                })()}
+                {(meanRun || meanSkippedRun) && (() => {
+                  if (!meanRun) {
+                    return (
+                      <td style={{ textAlign: 'center', borderLeft: '2px solid #e4e8f5' }}>
+                        <span
+                          title={meanSkippedRun.meanComparison.reason || 'Skipped — prerequisites not met'}
+                          style={skippedBadgeStyle}
+                        >
+                          skipped
+                        </span>
+                      </td>
+                    );
+                  }
+                  const cmp = meanByRoll[rollNo];
+                  return (
+                    <td style={{ textAlign: 'center', borderLeft: '2px solid #e4e8f5' }}>
+                      {!cmp ? (
+                        <span style={{ color: theme.textMuted, fontSize: '11px' }}>—</span>
+                      ) : cmp.agree ? (
+                        <span
+                          title={`Agrees (mean score ${cmp.mean_score ?? '—'})`}
+                          style={{ ...cellStyle('present'), background: theme.successDim, color: theme.success }}
+                        >
+                          ✓
+                        </span>
+                      ) : (
+                        <span
+                          title={
+                            cmp.mean_roll
+                              ? `Mean would instead match ${cmp.mean_roll} (score ${cmp.mean_score ?? '—'})`
+                              : `Mean found no match here (primary score ${cmp.primary_score ?? '—'})`
+                          }
+                          style={{ ...cellStyle('review'), background: theme.warningDim, color: theme.warning }}
+                        >
+                          ⚠
+                        </span>
+                      )}
+                    </td>
+                  );
+                })()}
+                <td
+                  style={{
+                    textAlign: 'center',
+                    borderLeft: '2px solid #e4e8f5',
+                  }}
+                >
+                  {final ? (
+                    <span
+                      style={{
+                        padding: '3px 10px',
+                        borderRadius: '999px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        fontFamily: theme.fontMono,
+                        background:
+                          final.finalStatus === 'P'
+                            ? theme.successDim
+                            : final.finalStatus === 'R'
+                              ? theme.warningDim
+                              : theme.dangerDim,
+                        color:
+                          final.finalStatus === 'P'
+                            ? theme.success
+                            : final.finalStatus === 'R'
+                              ? theme.warning
+                              : theme.danger,
+                      }}
+                    >
+                      {final.finalStatus}
+                    </span>
+                  ) : (
+                    <span style={{ color: theme.textMuted }}>—</span>
+                  )}
+                </td>
+                <td style={{ textAlign: 'center', padding: '9px 8px' }}>
+                  {final?.isOverridden ? (
+                    <span
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: 4,
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: theme.accentDim,
+                        color: theme.accent,
+                      }}
+                    >
+                      Overridden
+                    </span>
+                  ) : (
+                    <span style={{ color: theme.textMuted, fontSize: '11px' }}>—</span>
+                  )}
+                </td>
+                {!readOnly && (
+                  <td style={{ padding: '9px 12px' }}>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {['P', 'A', 'R'].map((st) => (
+                        <button
+                          key={st}
+                          onClick={() => onOverride(rollNo, st)}
+                          disabled={final?.finalStatus === st}
+                          style={{
+                            padding: '2px 8px',
+                            borderRadius: 4,
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            border: 'none',
+                            fontFamily: theme.fontMono,
+                            opacity: final?.finalStatus === st ? 0.3 : 1,
+                            background:
+                              st === 'P'
+                                ? theme.successDim
+                                : st === 'R'
+                                  ? theme.warningDim
+                                  : theme.dangerDim,
+                            color:
+                              st === 'P'
+                                ? theme.success
+                                : st === 'R'
+                                  ? theme.warning
+                                  : theme.danger,
+                          }}
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StatBar({ stats, theme, styles }) {
+  return (
+    <div
+      className="report-stat-grid"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${stats.length},1fr)`,
+        gap: 12,
+        marginBottom: 16,
+      }}
+    >
+      {stats.map((s) => (
+        <div
+          key={s.label}
+          onClick={s.onClick}
+          role={s.onClick ? 'button' : undefined}
+          tabIndex={s.onClick ? 0 : undefined}
+          title={s.onClick ? s.hint || `View ${s.label}` : undefined}
+          onKeyDown={
+            s.onClick
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    s.onClick();
+                  }
+                }
+              : undefined
+          }
+          style={{
+            ...styles.card,
+            textAlign: 'center',
+            padding: '18px 12px',
+            ...(s.onClick
+              ? {
+                  cursor: 'pointer',
+                  border: `1px solid ${s.color}`,
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                }
+              : {}),
+          }}
+          onMouseEnter={
+            s.onClick
+              ? (e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = `0 6px 16px ${theme.shadow || 'rgba(0,0,0,0.12)'}`;
+                }
+              : undefined
+          }
+          onMouseLeave={
+            s.onClick
+              ? (e) => {
+                  e.currentTarget.style.transform = 'none';
+                  e.currentTarget.style.boxShadow = styles.card.boxShadow || 'none';
+                }
+              : undefined
+          }
+        >
+          <div
+            style={{
+              fontSize: '28px',
+              fontWeight: 700,
+              color: s.color,
+              fontFamily: theme.fontMono,
+            }}
+          >
+            {s.val}
+          </div>
+          <div
+            style={{
+              fontSize: '11px',
+              color: theme.textMuted,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              marginTop: 4,
+            }}
+          >
+            {s.label}
+            {s.onClick && (
+              <span style={{ marginLeft: 4, color: s.color }}>&rsaquo;</span>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CameraWarningModal({ status, room, onProceed, onCancel }) {
+  if (!status || status === 'ok') return null;
+
+  const isNone = status === 'none';
+  const title = isNone ? '⚠️ No Cameras Found' : '⚠️ Camera Offline / Inactive';
+  const bodyText = isNone
+    ? `No cameras are registered for room "${room}". Add cameras in Camera Management before running attendance.`
+    : `One or more cameras for room "${room}" are currently offline or inactive. The RTSP stream may fail or produce incomplete results.`;
+
+  return (
+    <div
+      className="report-modal-overlay"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1000,
+        background: 'rgba(0,0,0,0.7)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        animation: 'fadeIn 0.2s',
+      }}
+    >
+      <div
+        className="report-modal-shell"
+        style={{
+          background: '#ffffff',
+          border: `1px solid ${isNone ? '#ef4444' : '#f59e0b'}`,
+          borderRadius: 12,
+          padding: '32px 36px',
+          maxWidth: 480,
+          width: '90%',
+          boxShadow: '0 24px 64px rgba(26,31,60,0.18)',
+        }}
+      >
+        <div
+          style={{
+            fontSize: 20,
+            fontWeight: 800,
+            marginBottom: 14,
+            color: isNone ? '#ef4444' : '#f59e0b',
+          }}
+        >
+          {title}
+        </div>
+        <div
+          style={{
+            fontSize: 14,
+            color: '#7b84ab',
+            lineHeight: 1.7,
+            marginBottom: 24,
+          }}
+        >
+          {bodyText}
+        </div>
+        <div
+          style={{
+            padding: '10px 14px',
+            borderRadius: 8,
+            marginBottom: 24,
+            background: isNone
+              ? 'rgba(248,113,113,0.08)'
+              : 'rgba(251,191,36,0.08)',
+            border: `1px solid ${isNone ? 'rgba(248,113,113,0.3)' : 'rgba(251,191,36,0.3)'}`,
+            fontSize: 13,
+            fontFamily: "'IBM Plex Mono', monospace",
+            color: isNone ? '#f87171' : '#fbbf24',
+          }}
+        >
+          Room: {room} &nbsp;·&nbsp; Status:{' '}
+          {isNone ? 'No cameras registered' : 'Offline / Inactive'}
+        </div>
+        <div className="report-modal-actions" style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+          <button
+            onClick={onCancel}
+            style={{
+              padding: '10px 22px',
+              borderRadius: 6,
+              background: 'transparent',
+              border: '1px solid #242a45',
+              color: '#636e8a',
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          {!isNone && (
+            <button
+              onClick={onProceed}
+              style={{
+                padding: '10px 22px',
+                borderRadius: 6,
+                background: 'rgba(251,191,36,0.15)',
+                border: '1px solid #fbbf24',
+                color: '#fbbf24',
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              Proceed Anyway
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+// `onOpenGroundTruth(student)` — when supplied, roll numbers become buttons
+// that open that student's ground-truth photos. Omitted where the report has
+// no batch to look them up under.
+function AttendanceTable({ rows, readOnly, onOverride, onOpenGroundTruth, theme, styles }) {
+  return (
+    <div className="report-table-scroll" style={{ ...styles.card, padding: 0 }}>
+      <table className="ams-table report-attendance-table">
+        <thead>
+          <tr>
+            {[
+              '#',
+              'Roll No',
+              'In List',
+              'ML Status',
+              'Confidence',
+              'Zone',
+              'First Seen',
+              'Final',
+              'ERP',
+              !readOnly && 'Override',
+            ]
+              .filter(Boolean)
+              .map((h) => (
+                <th key={h}>{h}</th>
+              ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((s, i) => (
+            <tr
+              key={s.rollNo}
+              style={{
+                background: s.flagged
+                  ? 'rgba(251,191,36,0.07)'
+                  : s.finalStatus === 'R'
+                    ? theme.warningDim
+                    : 'transparent',
+              }}
+            >
+              <td style={{ padding: '10px 14px', color: theme.textMuted }}>
+                {i + 1}
+              </td>
+              <td
+                style={{
+                  padding: '10px 14px',
+                  fontFamily: theme.fontMono,
+                  fontWeight: 600,
+                  color: '#111',
+                }}
+              >
+                <RollNoCell
+                  rollNo={s.rollNo}
+                  student={s}
+                  onOpenGroundTruth={onOpenGroundTruth}
+                  theme={theme}
+                />
+              </td>
+
+              {/* ── In List column ── */}
+              <td style={{ padding: '10px 14px' }}>
+                {s.flagged === true ? (
+                  <span
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      background: 'rgba(251,191,36,0.15)',
+                      color: theme.warning,
+                    }}
+                  >
+                    🚩 Flagged
+                  </span>
+                ) : s.inList === true ? (
+                  <span style={{ fontSize: '12.5px', color: theme.success }}>
+                    ✓
+                  </span>
+                ) : s.inList === false ? (
+                  <span style={{ fontSize: '11px', color: theme.textMuted }}>
+                    —
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '11px', color: theme.textMuted }}>
+                    —
+                  </span>
+                )}
+              </td>
+
+              <td style={{ padding: '10px 14px' }}>
+                <span
+                  style={{
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    background:
+                      s.status === 'present'
+                        ? theme.successDim
+                        : s.status === 'review'
+                          ? theme.warningDim
+                          : s.status === 'no_photo'
+                            ? theme.accentDim
+                            : theme.dangerDim,
+                    color:
+                      s.status === 'present'
+                        ? theme.success
+                        : s.status === 'review'
+                          ? theme.warning
+                          : s.status === 'no_photo'
+                            ? theme.accent
+                            : theme.danger,
+                  }}
+                >
+                  {s.status === 'no_photo' ? 'no photo' : s.status || '—'}
+                </span>
+              </td>
+              <td style={{ padding: '10px 14px' }}>
+                {s.avgConfidence > 0 ? (
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                  >
+                    <div
+                      style={{
+                        width: 70,
+                        height: 5,
+                        borderRadius: '3px',
+                        background: theme.border,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${s.avgConfidence * 100}%`,
+                          height: '100%',
+                          background:
+                            s.avgConfidence >= 0.65
+                              ? theme.success
+                              : s.avgConfidence >= 0.45
+                                ? theme.warning
+                                : theme.danger,
+                        }}
+                      />
+                    </div>
+                    <span
+                      style={{
+                        fontFamily: theme.fontMono,
+                        fontSize: '12px',
+                        color: theme.textMuted,
+                      }}
+                    >
+                      {(s.avgConfidence * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                ) : (
+                  <span style={{ color: theme.textMuted }}>—</span>
+                )}
+              </td>
+              <td
+                style={{
+                  padding: '10px 14px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color:
+                    s.confidenceZone === 'high'
+                      ? theme.success
+                      : s.confidenceZone === 'medium'
+                        ? theme.warning
+                        : theme.textMuted,
+                }}
+              >
+                {s.confidenceZone || '—'}
+              </td>
+              <td
+                style={{
+                  padding: '10px 14px',
+                  color: theme.textMuted,
+                  fontFamily: theme.fontMono,
+                  fontSize: '12px',
+                }}
+              >
+                {s.firstSeenSec != null
+                  ? `${Math.floor(s.firstSeenSec / 60)}m ${Math.round(s.firstSeenSec % 60)}s`
+                  : '—'}
+              </td>
+              <td style={{ padding: '10px 14px' }}>
+                <span
+                  style={{
+                    padding: '3.5px 12px',
+                    borderRadius: '999px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    fontFamily: theme.fontMono,
+                    background:
+                      s.finalStatus === 'P'
+                        ? theme.successDim
+                        : s.finalStatus === 'R'
+                          ? theme.warningDim
+                          : theme.dangerDim,
+                    color:
+                      s.finalStatus === 'P'
+                        ? theme.success
+                        : s.finalStatus === 'R'
+                          ? theme.warning
+                          : theme.danger,
+                  }}
+                >
+                  {s.finalStatus}
+                </span>
+              </td>
+              <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                {s.isOverridden ? (
+                  <span
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      background: theme.accentDim,
+                      color: theme.accent,
+                    }}
+                  >
+                    Overridden
+                  </span>
+                ) : (
+                  <span style={{ color: theme.textMuted, fontSize: '11px' }}>—</span>
+                )}
+              </td>
+              {!readOnly && (
+                <td style={{ padding: '10px 14px' }}>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {['P', 'A', 'R'].map((st) => (
+                      <button
+                        key={st}
+                        onClick={() => onOverride(s.rollNo, st)}
+                        disabled={s.finalStatus === st}
+                        style={{
+                          padding: '3px 10px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          border: 'none',
+                          fontFamily: theme.fontMono,
+                          opacity: s.finalStatus === st ? 0.3 : 1,
+                          background:
+                            st === 'P'
+                              ? theme.successDim
+                              : st === 'R'
+                                ? theme.warningDim
+                                : theme.dangerDim,
+                          color:
+                            st === 'P'
+                              ? theme.success
+                              : st === 'R'
+                                ? theme.warning
+                                : theme.danger,
+                        }}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

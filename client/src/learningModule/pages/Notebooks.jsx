@@ -1,0 +1,315 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import { Link as RouterLink, useNavigate, useOutletContext } from 'react-router-dom';
+import {
+  Badge,
+  Box,
+  Button,
+  Flex,
+  HStack,
+  Heading,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
+  Text,
+  VStack,
+  useToast,
+} from '@chakra-ui/react';
+import { FiChevronDown } from 'react-icons/fi';
+
+import lmApi from '../api/lmApi';
+import { DeadlineCountdown, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { formatDate, relativeTime } from '../format';
+
+/**
+ * The class's coding notebooks.
+ *
+ * Python here runs in the student's own browser rather than on a server, so
+ * there is no queue, no per-run cost and nothing for a teacher to provision —
+ * which is what makes handing one to two hundred students at once reasonable.
+ */
+
+const STATUS_META = {
+  'not-started': ['gray', 'not started'],
+  'in-progress': ['blue', 'in progress'],
+  submitted: ['green', 'submitted'],
+};
+
+const STARTER_CELLS = {
+  python: [
+    {
+      type: 'markdown',
+      source: '## Getting started\n\nRun the cell below with the ▶ button, then change the numbers and run it again.',
+    },
+    { type: 'code', source: 'for i in range(5):\n    print(i, i ** 2)\n' },
+    { type: 'markdown', source: '### Your turn\n\nWrite a function that returns the mean of a list.' },
+    { type: 'code', source: 'def mean(values):\n    # your code here\n    pass\n\n\nmean([1, 2, 3, 4])\n' },
+  ],
+  // Every C cell is a complete program, so each one carries its own includes
+  // and its own main. The second exercise reads stdin, because that is the part
+  // a student cannot discover from the cell alone — the Input box under the
+  // editor is where it comes from.
+  c: [
+    {
+      type: 'markdown',
+      source:
+        '## Getting started\n\nEach cell is a whole program with its own `main()`.'
+        + '\n\nRun the cell below with the ▶ button, then change the numbers and run it again.',
+    },
+    {
+      type: 'code',
+      source:
+        '#include <stdio.h>\n\nint main(void) {\n'
+        + '    for (int i = 0; i < 5; i++) {\n'
+        + '        printf("%d squared is %d\\n", i, i * i);\n'
+        + '    }\n    return 0;\n}\n',
+    },
+    {
+      type: 'markdown',
+      source:
+        '### Your turn\n\nRead two integers and print their sum.'
+        + '\n\nPut the numbers in the **Input** box under the editor first — that is this program’s stdin.',
+    },
+    {
+      type: 'code',
+      source:
+        '#include <stdio.h>\n\nint main(void) {\n'
+        + '    int a, b;\n'
+        + '    /* your code here */\n'
+        + '    return 0;\n}\n',
+      stdin: '3 4\n',
+    },
+  ],
+};
+
+const LANGUAGE_META = {
+  python: ['green', 'Python'],
+  c: ['blue', 'C'],
+};
+
+export default function Notebooks() {
+  const { classId, isTeacher } = useOutletContext();
+  const [notebooks, setNotebooks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState('');
+  const navigate = useNavigate();
+  const toast = useToast();
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      setNotebooks(await lmApi.listNotebooks(classId));
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [classId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const create = async (language = 'python') => {
+    setBusy('new');
+    try {
+      const created = await lmApi.createNotebook(classId, {
+        title: language === 'c' ? 'Untitled C notebook' : 'Untitled notebook',
+        // Fixed at creation. The server refuses to change it once the notebook
+        // is published, because students' attempts hold code written for the
+        // kernel it had at the time.
+        language,
+        cells: STARTER_CELLS[language] || STARTER_CELLS.python,
+      });
+      navigate(`/learning/class/${classId}/notebook/${created._id}/edit`);
+    } catch (err) {
+      toast({ status: 'error', title: err.message });
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const togglePublish = async (notebook) => {
+    try {
+      const result = await lmApi.publishNotebook(classId, notebook._id, { publish: !notebook.published });
+      toast({ status: 'success', title: result.published ? 'Published to the class' : 'Unpublished' });
+      await load();
+    } catch (err) {
+      toast({
+        status: 'error',
+        title: err.message,
+        description: err.payload?.errors?.slice(1).join(' '),
+      });
+    }
+  };
+
+  const remove = async (notebook) => {
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(`Delete "${notebook.title}" and every student's work on it?`)) return;
+    try {
+      await lmApi.deleteNotebook(classId, notebook._id);
+      toast({ status: 'success', title: 'Notebook deleted' });
+      await load();
+    } catch (err) {
+      toast({ status: 'error', title: err.message });
+    }
+  };
+
+  if (loading) return <Loading label="Loading notebooks…" />;
+  if (error) return <ErrorState error={error} onRetry={load} />;
+
+  return (
+    <VStack align="stretch" spacing={5}>
+      <Flex align="center" gap={3} wrap="wrap">
+        <Box>
+          <Heading size="md">Coding notebooks</Heading>
+          <Text fontSize="sm" opacity={0.7}>
+            Python and C cells that run in the browser — nothing to install.
+          </Text>
+        </Box>
+        <Box flex="1" />
+        {isTeacher && (
+          <Button as="a" href="/learning/codingmanual" target="_blank" rel="noreferrer" variant="ghost" size="sm">
+            📖 Manual
+          </Button>
+        )}
+        {isTeacher && (
+          <Menu>
+            <MenuButton
+              as={Button}
+              colorScheme="purple"
+              size="sm"
+              rightIcon={<FiChevronDown />}
+              isLoading={busy === 'new'}
+            >
+              New notebook
+            </MenuButton>
+            <MenuList>
+              <MenuItem onClick={() => create('python')}>Python notebook</MenuItem>
+              <MenuItem onClick={() => create('c')}>C notebook</MenuItem>
+            </MenuList>
+          </Menu>
+        )}
+      </Flex>
+
+      {notebooks.length === 0 ? (
+        <EmptyState
+          icon="🐍"
+          title="No notebooks yet"
+          description={
+            isTeacher
+              ? 'Write a worksheet of prose and code cells, in Python or C. Students run it in their own browser — no setup, no server, no accounts anywhere else.'
+              : 'Your teacher has not published any coding notebooks for this class yet.'
+          }
+          action={
+            isTeacher ? (
+              <HStack>
+                <Button colorScheme="purple" onClick={() => create('python')}>
+                  New Python notebook
+                </Button>
+                <Button variant="outline" colorScheme="purple" onClick={() => create('c')}>
+                  New C notebook
+                </Button>
+              </HStack>
+            ) : null
+          }
+        />
+      ) : (
+        <VStack align="stretch" spacing={3}>
+          {notebooks.map((notebook) => {
+            let [scheme, label] = STATUS_META[notebook.myStatus] || [];
+            if (!isTeacher && notebook.myStatus === 'submitted' && notebook.mySubmittedAt && notebook.dueDate) {
+              if (new Date(notebook.mySubmittedAt) > new Date(notebook.dueDate)) {
+                scheme = 'orange';
+                label = 'submitted late';
+              }
+            }
+            return (
+              <SectionCard key={notebook._id}>
+                <Flex gap={4} wrap="wrap" align="flex-start">
+                  <Box flex="1" minW="220px">
+                    <HStack spacing={2} mb={1} wrap="wrap">
+                      <Text fontWeight="700">{notebook.title}</Text>
+                      {/* The language decides what a cell even means, so it sits
+                          with the title rather than in the small print. */}
+                      <Badge colorScheme={(LANGUAGE_META[notebook.language] || LANGUAGE_META.python)[0]}>
+                        {(LANGUAGE_META[notebook.language] || LANGUAGE_META.python)[1]}
+                      </Badge>
+                      {isTeacher && !notebook.published && <Badge>draft</Badge>}
+                      {!isTeacher && label && <Badge colorScheme={scheme}>{label}</Badge>}
+                      {!isTeacher && notebook.myGraded && <Badge colorScheme="purple">graded</Badge>}
+                      {notebook.packages?.length ? (
+                        <Badge variant="subtle" fontSize="2xs">
+                          {notebook.packages.join(', ')}
+                        </Badge>
+                      ) : null}
+                      {/* Up here with the title rather than in the metadata
+                          line below: the deadline is the one thing on this card
+                          that changes while you are looking at it. */}
+                      {notebook.myStatus !== 'submitted' && !notebook.myGraded && (
+                        <DeadlineCountdown dueDate={notebook.dueDate} size="xs" />
+                      )}
+                    </HStack>
+
+                    {notebook.description ? (
+                      <Text fontSize="sm" opacity={0.75} noOfLines={2}>
+                        {notebook.description}
+                      </Text>
+                    ) : null}
+
+                    <Text fontSize="xs" opacity={0.6} mt={1}>
+                      {notebook.codeCellCount} code {notebook.codeCellCount === 1 ? 'cell' : 'cells'} ·{' '}
+                      {notebook.cellCount} total
+                      {notebook.dueDate ? ` · due ${formatDate(notebook.dueDate)}` : ''}
+                      {isTeacher
+                        ? ` · ${notebook.submittedCount}/${notebook.startedCount} submitted`
+                        : ` · added ${relativeTime(notebook.created_at)}`}
+                    </Text>
+                  </Box>
+
+                  <HStack spacing={2} wrap="wrap">
+                    <Button
+                      as={RouterLink}
+                      to={`/learning/class/${classId}/notebook/${notebook._id}`}
+                      size="sm"
+                      colorScheme="purple"
+                    >
+                      {isTeacher ? 'Open' : notebook.myStatus === 'not-started' ? 'Start' : 'Continue'}
+                    </Button>
+                    {isTeacher && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          as={RouterLink}
+                          to={`/learning/class/${classId}/notebook/${notebook._id}/edit`}
+                        >
+                          Edit
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => togglePublish(notebook)}>
+                          {notebook.published ? 'Unpublish' : 'Publish'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          as={RouterLink}
+                          to={`/learning/class/${classId}/notebook/${notebook._id}/submissions`}
+                        >
+                          Submissions
+                        </Button>
+                        <Button size="sm" variant="ghost" colorScheme="red" onClick={() => remove(notebook)}>
+                          Delete
+                        </Button>
+                      </>
+                    )}
+                  </HStack>
+                </Flex>
+              </SectionCard>
+            );
+          })}
+        </VStack>
+      )}
+    </VStack>
+  );
+}

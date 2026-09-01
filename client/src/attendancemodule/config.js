@@ -1,0 +1,276 @@
+// client/src/attendancemodule/config.js
+
+import getEnvironment from '../getenvironment';
+
+const apiUrl = getEnvironment();
+const API_BASE = `${apiUrl}/attendancemodule/ground-truth`;
+const TIMETABLE_API = `${apiUrl}/timetablemodule`;
+
+// Dropdown options
+const DEGREES = ['BTECH', 'MTECH', 'BSC', 'MSC', 'MBA', 'PHD', 'INTEGRATED BSC-BED'];
+// Degrees as the ERP spells them in its roster request ("B.Tech", not "BTECH").
+// Kept separate from DEGREES above, which is the ground-truth folder format.
+const ERP_DEGREES = ['B.Tech', 'M.Tech', 'B.Sc.', 'M.Sc.', 'MBA', 'Ph.D.', 'Integrated B.Sc.-B.Ed.'];
+// DEPARTMENTS is intentionally removed — always fetched live from /departments
+const DEPARTMENTS = [];
+
+const currentYear = new Date().getFullYear();
+const YEARS = Array.from({ length: 7 }, (_, i) => String(currentYear - i));
+
+// ── Period / slot identity ──────────────────────────────────────────────────
+// Only the *names* live here. Timings are configured per-period in Acquisition
+// Control and stored in the AcquisitionControl document, so they must always be
+// read from there — four pages used to hard-code their own copy of the times
+// and none of them changed when an admin edited a period.
+const PERIOD_KEYS = [
+    'period1', 'period2', 'period3', 'period4',
+    'period5', 'period6', 'period7', 'period8',
+    'lunch1', 'lunch2',
+];
+
+const SLOT_NAMES = {
+    period1: 'Period 1',
+    period2: 'Period 2',
+    period3: 'Period 3',
+    period4: 'Period 4',
+    period5: 'Period 5',
+    period6: 'Period 6',
+    period7: 'Period 7',
+    period8: 'Period 8',
+    lunch1:  'Lunch Slot 1',
+    lunch2:  'Lunch Slot 2',
+};
+
+// "Period 1 — 08:30–09:20" from the live config; falls back to the bare name
+// while the config is still loading or if the period has no timing set.
+function formatSlotLabel(periodKey, periods) {
+    const name = SLOT_NAMES[periodKey] || periodKey || '';
+    const p = (periods || []).find((x) => x.periodKey === periodKey);
+    if (!p || !p.startTime) return name;
+    return p.endTime ? `${name} — ${p.startTime}–${p.endTime}` : `${name} — ${p.startTime}`;
+}
+
+// ── Light colorful theme ────────────────────────────────────────────────────
+const theme = {
+    bg:           '#f5f6fb',
+    surface:      '#ffffff',
+    surfaceAlt:   '#f0f2f9',
+    border:       '#e4e8f5',
+    borderFocus:  '#6366f1',
+    text:         '#1a1f3c',
+    textMuted:    '#7b84ab',
+    accent:       '#6366f1',
+    accentDim:    'rgba(99,102,241,0.09)',
+    accentText:   '#ffffff',
+    success:      '#10b981',
+    successDim:   'rgba(16,185,129,0.10)',
+    warning:      '#f59e0b',
+    warningDim:   'rgba(245,158,11,0.10)',
+    danger:       '#ef4444',
+    dangerDim:    'rgba(239,68,68,0.10)',
+    fontMono:     "'IBM Plex Mono', 'Fira Code', monospace",
+    fontBody:     "'IBM Plex Sans', 'Segoe UI', sans-serif",
+};
+
+// ── Reusable style objects ──────────────────────────────────────────────────
+const styles = {
+    page: {
+        minHeight: '100vh',
+        maxWidth: '100%',
+        overflowX: 'hidden',
+        boxSizing: 'border-box',
+        background: theme.bg,
+        color: theme.text,
+        fontFamily: theme.fontBody,
+        padding: 'clamp(14px, 3vw, 28px) clamp(12px, 4vw, 32px)',
+        paddingBottom: '80px',
+    },
+    card: {
+        background: theme.surface,
+        border: `1px solid ${theme.border}`,
+        borderRadius: '12px',
+        padding: '24px',
+        boxShadow: '0 1px 6px rgba(26,31,60,0.06)',
+    },
+    input: {
+        padding: '10px 14px',
+        background: '#f8f9fd',
+        border: `1px solid ${theme.border}`,
+        borderRadius: '8px',
+        color: theme.text,
+        fontSize: '14px',
+        fontFamily: theme.fontBody,
+        outline: 'none',
+        width: '100%',
+        boxSizing: 'border-box',
+    },
+    select: {
+        padding: '10px 14px',
+        background: '#f8f9fd',
+        border: `1px solid ${theme.border}`,
+        borderRadius: '8px',
+        color: theme.text,
+        fontSize: '14px',
+        fontFamily: theme.fontBody,
+        outline: 'none',
+        cursor: 'pointer',
+        width: '100%',
+        boxSizing: 'border-box',
+    },
+    btnPrimary: {
+        padding: '10px 24px',
+        background: theme.accent,
+        color: '#ffffff',
+        border: 'none',
+        borderRadius: '8px',
+        fontSize: '14px',
+        fontWeight: 600,
+        cursor: 'pointer',
+        fontFamily: theme.fontBody,
+        boxShadow: '0 2px 8px rgba(99,102,241,0.25)',
+    },
+    btnGhost: {
+        padding: '10px 24px',
+        background: '#ffffff',
+        color: theme.textMuted,
+        border: `1px solid ${theme.border}`,
+        borderRadius: '8px',
+        fontSize: '14px',
+        fontWeight: 500,
+        cursor: 'pointer',
+        fontFamily: theme.fontBody,
+    },
+    btnDanger: {
+        padding: '8px 16px',
+        background: theme.dangerDim,
+        color: theme.danger,
+        border: `1px solid rgba(239,68,68,0.25)`,
+        borderRadius: '8px',
+        fontSize: '13px',
+        fontWeight: 600,
+        cursor: 'pointer',
+        fontFamily: theme.fontBody,
+    },
+    label: {
+        display: 'block',
+        fontSize: '11px',
+        color: theme.textMuted,
+        marginBottom: '6px',
+        textTransform: 'uppercase',
+        letterSpacing: '0.08em',
+        fontWeight: 700,
+    },
+    badge: (color) => ({
+        display: 'block',
+        padding: '8px 10px',
+        borderRadius: '6px',
+        fontSize: '11px',
+        fontWeight: 700,
+        background: color === 'success' ? theme.successDim :
+                    color === 'danger'  ? theme.dangerDim  :
+                    color === 'warning' ? theme.warningDim : theme.accentDim,
+        color: color === 'success' ? theme.success :
+               color === 'danger'  ? theme.danger  :
+               color === 'warning' ? theme.warning  : theme.accent,
+        border: `1px solid ${
+            color === 'success' ? 'rgba(16,185,129,0.30)' :
+            color === 'danger'  ? 'rgba(239,68,68,0.30)'  :
+            color === 'warning' ? 'rgba(245,158,11,0.30)' : 'rgba(99,102,241,0.30)'
+        }`,
+        wordBreak: 'break-word',
+        lineHeight: '1.3',
+    }),
+    sectionTitle: {
+        fontSize: '11px',
+        color: theme.textMuted,
+        textTransform: 'uppercase',
+        letterSpacing: '0.1em',
+        fontWeight: 700,
+        marginBottom: '12px',
+    },
+    heading: {
+        fontSize: '22px',
+        fontWeight: 700,
+        letterSpacing: '-0.02em',
+        marginBottom: '4px',
+        color: theme.text,
+    },
+    subheading: {
+        fontSize: '13px',
+        color: theme.textMuted,
+        marginBottom: '24px',
+    },
+};
+
+const cssReset = `
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+    * { box-sizing: border-box; }
+    body { background: ${theme.bg}; }
+    input:focus, select:focus, textarea:focus {
+        border-color: ${theme.borderFocus} !important;
+        box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: ${theme.bg}; }
+    ::-webkit-scrollbar-thumb { background: ${theme.border}; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #c5cadf; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
+    @keyframes pulse  { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+    @keyframes spin   { to { transform: rotate(360deg); } }
+
+    /* ── Responsive grid helpers (used across all module pages) ── */
+    .r-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .r-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    .r-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .r-flex   { display: flex; flex-wrap: wrap; gap: 12px; }
+    @media (max-width: 900px) {
+        .r-grid-3, .r-grid-4 { grid-template-columns: 1fr 1fr !important; }
+    }
+    @media (max-width: 600px) {
+        .r-grid-2, .r-grid-3, .r-grid-4 { grid-template-columns: 1fr !important; }
+        .r-flex { flex-direction: column; }
+    }
+
+    /* ── Table overflow wrapper ── */
+    .r-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+    /* ── Page header responsive ── */
+    .ams-page-header {
+        display: flex; align-items: flex-start; justify-content: space-between;
+        flex-wrap: wrap; gap: 12px; margin-bottom: 20px;
+    }
+    .ams-page-header h1 {
+        font-size: clamp(16px, 2.5vw, 22px); font-weight: 700;
+        letter-spacing: -0.02em; margin: 0 0 3px; color: ${theme.text};
+    }
+    .ams-page-header p {
+        font-size: 13px; color: ${theme.textMuted}; margin: 0;
+    }
+
+    /* ── Unified tab bar (segmented control) ── */
+    .ams-tabs { display: inline-flex; gap: 2px; background: #eef0f8; border-radius: 10px; padding: 4px; margin-bottom: 24px; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; -ms-overflow-style: none; }
+    .ams-tabs::-webkit-scrollbar { display: none; width: 0; height: 0; }
+    .ams-tab  { padding: 7px 20px; border: none; background: transparent; border-radius: 7px; font-size: 13px; font-weight: 600; color: #7b84ab; cursor: pointer; transition: background .15s, color .15s, box-shadow .15s; white-space: nowrap; font-family: inherit; line-height: 1.5; }
+    .ams-tab:hover  { color: #1a1f3c; background: rgba(255,255,255,0.65); }
+    .ams-tab.active { background: #ffffff; color: #6366f1; box-shadow: 0 1px 4px rgba(26,31,60,0.12); }
+    .ams-subtab-option.active { border-radius: 7px; box-shadow: 0 1px 4px rgba(26,31,60,0.12); }
+    .ams-subtab-option.active .ams-tab { box-shadow: none; }
+    .ams-subtab-newtab-btn { transition: background .15s, color .15s; }
+    .ams-subtab-newtab-btn:hover, .ams-subtab-newtab-btn:focus-visible { background: rgba(99,102,241,0.12) !important; color: #6366f1 !important; outline: none; }
+    .ams-subtab-newtab-btn.compact:hover, .ams-subtab-newtab-btn.compact:focus-visible { background: rgba(99,102,241,0.12) !important; }
+
+    /* ── Unified table ── */
+    .ams-table { width: 100%; border-collapse: collapse; font-size: 13px; border: none; }
+    .ams-table th { background: #f0f2f9; padding: 10px 16px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #7b84ab; border: none; border-bottom: 1px solid #e4e8f5; white-space: nowrap; }
+    .ams-table td { padding: 11px 16px; border: none; border-bottom: 1px solid #e4e8f5; color: #1a1f3c; vertical-align: middle; }
+    .ams-table tbody tr:last-child td { border-bottom: none; }
+    .ams-table tbody tr { transition: background .1s; }
+    .ams-table tbody tr:hover td { background: #f8f9ff; }
+    .ams-table tfoot td { padding: 10px 16px; background: #f0f2f9; font-weight: 700; font-size: 12px; border: none; border-top: 1px solid #e4e8f5; }
+`;
+
+export {
+    API_BASE, TIMETABLE_API, DEGREES, ERP_DEGREES, DEPARTMENTS, YEARS,
+    PERIOD_KEYS, SLOT_NAMES, formatSlotLabel,
+    theme, styles, cssReset,
+};

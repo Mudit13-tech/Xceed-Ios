@@ -1,0 +1,715 @@
+import React, { useMemo, useState } from 'react';
+import {
+  Badge,
+  Box,
+  Button,
+  Collapse,
+  Flex,
+  HStack,
+  IconButton,
+  Image,
+  Spinner,
+  Table,
+  Tbody,
+  Td,
+  Text,
+  Textarea,
+  Th,
+  Thead,
+  Tr,
+  VStack,
+  useColorMode,
+  useColorModeValue,
+} from '@chakra-ui/react';
+import {
+  FiAlertCircle,
+  FiArrowDown,
+  FiArrowUp,
+  FiCheckCircle,
+  FiCheckSquare,
+  FiChevronDown,
+  FiChevronUp,
+  FiEdit2,
+  FiEye,
+  FiLock,
+  FiPlay,
+  FiPlus,
+  FiSquare,
+  FiTerminal,
+  FiTrash2,
+  FiXCircle,
+} from 'react-icons/fi';
+import CodeMirror, { keymap } from '@uiw/react-codemirror';
+import { python } from '@codemirror/lang-python';
+import { cpp } from '@codemirror/lang-cpp';
+import { Prec } from '@codemirror/state';
+
+import HintTooltip from './HintTooltip';
+import RichText from './RichText';
+
+/**
+ * One notebook cell: source on top, output underneath.
+ *
+ * Stacked output pane below editor for maximum readability.
+ */
+
+/** stderr and tracebacks read as errors; everything else gets its own tint. */
+const OUTPUT_COLOUR = {
+  stderr: 'red.400',
+  error: 'red.400',
+  result: 'purple.400',
+  stdout: 'green.400',
+};
+
+function OutputBlock({ outputs, onClear }) {
+  const bg = useColorModeValue('gray.50', 'blackAlpha.400');
+  const border = useColorModeValue('gray.200', 'whiteAlpha.200');
+
+  if (!outputs || outputs.length === 0) return null;
+
+  return (
+    <Box bg={bg} borderTopWidth="1px" borderColor={border}>
+      <Flex align="center" justify="space-between" px={4} pt={2}>
+        <Text fontSize="2xs" fontWeight="600" opacity={0.5} textTransform="uppercase">
+          Output
+        </Text>
+        <HintTooltip label="Clear this cell's output">
+          <IconButton
+            aria-label="Clear output"
+            icon={<FiXCircle />}
+            size="xs"
+            variant="ghost"
+            onClick={onClear}
+          />
+        </HintTooltip>
+      </Flex>
+
+      <Box
+        px={4}
+        pb={3}
+        pt={1}
+        fontSize="sm"
+        maxH="480px"
+        overflowY="auto"
+        overflowX="auto"
+      >
+        {(outputs || []).map((output, index) =>
+          output.type === 'image' ? (
+            <Image
+              key={index}
+              src={`data:image/png;base64,${output.text}`}
+              alt="Figure produced by this cell"
+              maxW="100%"
+              my={2}
+            />
+          ) : (
+            <Box
+              key={index}
+              as="pre"
+              fontFamily="mono"
+              fontSize="13px"
+              lineHeight="1.5"
+              whiteSpace="pre-wrap"
+              wordBreak="break-word"
+              color={OUTPUT_COLOUR[output.type] || 'inherit'}
+              fontStyle={output.type === 'result' ? 'italic' : 'normal'}
+              m={0}
+            >
+              {output.text}
+            </Box>
+          ),
+        )}
+      </Box>
+    </Box>
+  );
+}
+
+function MarkdownCell({ cell, index, total, locked, readOnly, onChange, onMove, onDelete }) {
+  const { colorMode } = useColorMode();
+  const border = useColorModeValue('gray.200', 'whiteAlpha.200');
+  const gutter = useColorModeValue('gray.50', 'whiteAlpha.50');
+
+  const [editing, setEditing] = useState(() => !locked && !String(cell.source || '').trim());
+
+  if (locked) {
+    return (
+      <Box borderWidth="1px" borderColor={border} borderRadius="md" overflow="hidden">
+        <Box px={4} py={3}>
+          <RichText markdown>{cell.source}</RichText>
+        </Box>
+      </Box>
+    );
+  }
+
+  return (
+    <Box borderWidth="1px" borderColor={border} borderRadius="md" overflow="hidden">
+      <Flex align="center" gap={2} px={3} py={1} bg={gutter} borderBottomWidth="1px" borderColor={border}>
+        <Badge fontSize="2xs">markdown</Badge>
+        <Box flex="1" />
+        <HintTooltip
+          label={editing ? 'Show it the way it will be read' : 'Edit the Markdown source'}
+        >
+          <Button
+            size="xs"
+            variant="ghost"
+            leftIcon={editing ? <FiEye /> : <FiEdit2 />}
+            onClick={() => setEditing((current) => !current)}
+          >
+            {editing ? 'Done' : 'Edit'}
+          </Button>
+        </HintTooltip>
+        <CellControls
+          index={index}
+          total={total}
+          onMove={onMove}
+          onDelete={onDelete}
+          readOnly={readOnly}
+          canDelete={cell.sourceCellId == null}
+        />
+      </Flex>
+
+      {editing ? (
+        <CodeMirror
+          value={cell.source}
+          onChange={(source) => onChange({ source })}
+          theme={colorMode === 'dark' ? 'dark' : 'light'}
+          basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false }}
+          minHeight="60px"
+        />
+      ) : (
+        <Box px={4} py={3} cursor="text" onDoubleClick={() => setEditing(true)}>
+          <RichText
+            markdown
+            fallback={
+              <Text fontSize="sm" opacity={0.5} fontStyle="italic">
+                Empty — press Edit to write something.
+              </Text>
+            }
+          >
+            {cell.source}
+          </RichText>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+function CellStatus({ running, cell }) {
+  if (running) {
+    return (
+      <HStack spacing={1.5} color="blue.400" flexShrink={0}>
+        <Spinner size="xs" speed="0.7s" />
+        <Text fontSize="xs" fontWeight="500">
+          Running…
+        </Text>
+      </HStack>
+    );
+  }
+
+  if (!cell.runCount) return null;
+
+  const failed = (cell.outputs || []).some((output) => output.type === 'error');
+  const at = cell.executedAt ? new Date(cell.executedAt) : null;
+  const when = at && !Number.isNaN(at.getTime()) ? ` at ${at.toLocaleTimeString()}` : '';
+
+  return (
+    <HintTooltip
+      label={
+        failed
+          ? `This cell finished with an error${when}`
+          : `Ran without errors${when}. A cell that assigns or defines something shows no output — that is normal.`
+      }
+    >
+      <Box as="span" display="inline-flex" color={failed ? 'red.400' : 'green.400'} fontSize="14px">
+        {failed ? <FiAlertCircle aria-label="Finished with an error" /> : <FiCheckCircle aria-label="Ran successfully" />}
+      </Box>
+    </HintTooltip>
+  );
+}
+
+/**
+ * Panel for Faculty authoring of hidden test cases per cell
+ */
+function TestCasesEditorPanel({
+  testCases = [],
+  onChange,
+  onRunTestCases,
+  testing = false,
+  testSummary,
+}) {
+  const bg = useColorModeValue('purple.50', 'blackAlpha.300');
+  const border = useColorModeValue('purple.200', 'purple.800');
+
+  const addTestCase = () => {
+    onChange([...testCases, { input: '', output: '' }]);
+  };
+
+  const updateTestCase = (index, patch) => {
+    const next = [...testCases];
+    next[index] = { ...next[index], ...patch };
+    onChange(next);
+  };
+
+  const removeTestCase = (index) => {
+    onChange(testCases.filter((_, i) => i !== index));
+  };
+
+  return (
+    <Box bg={bg} borderTopWidth="1px" borderColor={border} p={3}>
+      <Flex align="center" justify="space-between" mb={2} wrap="wrap" gap={2}>
+        <HStack spacing={2}>
+          <Text fontSize="xs" fontWeight="700" color="purple.600" textTransform="uppercase">
+            Hidden Test Cases ({testCases.length})
+          </Text>
+          {testSummary?.total > 0 && (
+            <Badge colorScheme={testSummary.passedAll ? 'green' : 'red'} fontSize="2xs">
+              {testSummary.passedAll ? 'Completed (Yes)' : `Failed (No - ${testSummary.passed}/${testSummary.total})`}
+            </Badge>
+          )}
+        </HStack>
+        <HStack spacing={2}>
+          {typeof onRunTestCases === 'function' && testCases.length > 0 && (
+            <Button
+              size="xs"
+              colorScheme="purple"
+              leftIcon={testing ? <Spinner size="xs" /> : <FiPlay />}
+              isLoading={testing}
+              onClick={onRunTestCases}
+            >
+              Test Solution on Cell
+            </Button>
+          )}
+          <Button size="xs" variant="outline" colorScheme="purple" leftIcon={<FiPlus />} onClick={addTestCase}>
+            Add Test Case
+          </Button>
+        </HStack>
+      </Flex>
+      <Text fontSize="2xs" opacity={0.7} mb={3}>
+        Students will not see these inputs or expected outputs directly. They will click &quot;Run Hidden Test Case&quot; to test their code and receive Yes/No feedback.
+      </Text>
+
+      {testCases.length === 0 ? (
+        <Text fontSize="xs" fontStyle="italic" opacity={0.6} py={1}>
+          No test cases added yet. Click &quot;Add Test Case&quot; above.
+        </Text>
+      ) : (
+        <VStack align="stretch" spacing={3}>
+          {testCases.map((tc, idx) => (
+            <Box
+              key={tc._id || idx}
+              p={2.5}
+              borderWidth="1px"
+              borderRadius="md"
+              borderColor={border}
+              bg={useColorModeValue('white', 'gray.800')}
+            >
+              <Flex justify="space-between" align="center" mb={1.5}>
+                <Text fontSize="xs" fontWeight="600">
+                  Test Case #{idx + 1}
+                </Text>
+                <IconButton
+                  aria-label="Remove test case"
+                  icon={<FiTrash2 />}
+                  size="xs"
+                  variant="ghost"
+                  colorScheme="red"
+                  onClick={() => removeTestCase(idx)}
+                />
+              </Flex>
+              <Flex gap={3} direction={{ base: 'column', sm: 'row' }}>
+                <Box flex="1">
+                  <Text fontSize="2xs" fontWeight="600" opacity={0.6} mb={0.5}>
+                    Input (stdin)
+                  </Text>
+                  <Textarea
+                    size="xs"
+                    fontFamily="mono"
+                    rows={2}
+                    placeholder="Input passed to stdin (e.g. 5 10)"
+                    value={tc.input || ''}
+                    onChange={(e) => updateTestCase(idx, { input: e.target.value })}
+                  />
+                </Box>
+                <Box flex="1">
+                  <Text fontSize="2xs" fontWeight="600" opacity={0.6} mb={0.5}>
+                    Expected Output (stdout)
+                  </Text>
+                  <Textarea
+                    size="xs"
+                    fontFamily="mono"
+                    rows={2}
+                    placeholder="Expected output on stdout (e.g. 15)"
+                    value={tc.output || ''}
+                    onChange={(e) => updateTestCase(idx, { output: e.target.value })}
+                  />
+                </Box>
+              </Flex>
+            </Box>
+          ))}
+        </VStack>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * Interactive Test Results display for Student and Teacher
+ */
+function TestResultsPanel({ testResults = [], testSummary, isTeacher = false }) {
+  const bg = useColorModeValue('gray.50', 'blackAlpha.300');
+  const border = useColorModeValue('gray.200', 'whiteAlpha.200');
+
+  if (!testResults || testResults.length === 0) return null;
+
+  return (
+    <Box bg={bg} borderTopWidth="1px" borderColor={border} p={3}>
+      <Flex align="center" justify="space-between" mb={2}>
+        <HStack spacing={2}>
+          <Text fontSize="xs" fontWeight="700" textTransform="uppercase" opacity={0.7}>
+            Test Case Results
+          </Text>
+          <Badge
+            colorScheme={testSummary?.passedAll ? 'green' : 'red'}
+            fontSize="xs"
+            px={2}
+            py={0.5}
+            borderRadius="full"
+          >
+            {testSummary?.passedAll
+              ? 'Passed (Yes - All Completed)'
+              : `Failed (No - ${testSummary?.passed || 0}/${testSummary?.total || testResults.length} Passed)`}
+          </Badge>
+        </HStack>
+      </Flex>
+
+      <VStack align="stretch" spacing={2}>
+        {testResults.map((result, idx) => (
+          <Box
+            key={idx}
+            p={2}
+            borderWidth="1px"
+            borderRadius="md"
+            borderColor={result.passed ? 'green.200' : 'red.200'}
+            bg={result.passed ? useColorModeValue('green.50', 'rgba(72,187,120,0.1)') : useColorModeValue('red.50', 'rgba(245,101,101,0.1)')}
+          >
+            <Flex justify="space-between" align="center">
+              <HStack spacing={2}>
+                <Box color={result.passed ? 'green.500' : 'red.500'} fontSize="14px">
+                  {result.passed ? <FiCheckCircle /> : <FiXCircle />}
+                </Box>
+                <Text fontSize="xs" fontWeight="600">
+                  Test #{idx + 1}:
+                </Text>
+                <Badge colorScheme={result.passed ? 'green' : 'red'} fontSize="2xs">
+                  {result.passed ? 'Yes (Passed)' : 'No (Failed)'}
+                </Badge>
+              </HStack>
+              {result.executedAt && (
+                <Text fontSize="2xs" opacity={0.5}>
+                  {new Date(result.executedAt).toLocaleTimeString()}
+                </Text>
+              )}
+            </Flex>
+
+            {!result.passed && (
+              <Box mt={1.5} pt={1.5} borderTopWidth="1px" borderColor={result.passed ? 'green.200' : 'red.200'}>
+                {result.error ? (
+                  <Text fontSize="2xs" fontFamily="mono" color="red.500">
+                    Error: {result.error}
+                  </Text>
+                ) : (
+                  <VStack align="stretch" spacing={1} fontSize="2xs" fontFamily="mono">
+                    {isTeacher && (
+                      <>
+                        {result.input && <Text opacity={0.8}>Input: {result.input}</Text>}
+                        <Text color="green.600">Expected: {result.expectedOutput}</Text>
+                      </>
+                    )}
+                    <Text color="red.500">
+                      {isTeacher ? `Actual: ${result.actualOutput || '(empty)'}` : 'Output did not match expected result.'}
+                    </Text>
+                  </VStack>
+                )}
+              </Box>
+            )}
+          </Box>
+        ))}
+      </VStack>
+    </Box>
+  );
+}
+
+export default function NotebookCell({
+  cell,
+  index,
+  total,
+  language = 'python',
+  readOnly = false,
+  running = false,
+  testing = false,
+  canRun = true,
+  isEditor = false,
+  testCases = null,
+  onChange,
+  onRun,
+  onStop,
+  onMove,
+  onDelete,
+  onRunTests,
+}) {
+  const { colorMode } = useColorMode();
+  const border = useColorModeValue('gray.200', 'whiteAlpha.200');
+  const gutter = useColorModeValue('gray.50', 'whiteAlpha.50');
+
+  const isC = language === 'c';
+
+  const runKeymap = useMemo(
+    () =>
+      Prec.highest(
+        keymap.of([
+          {
+            key: 'Shift-Enter',
+            run: () => {
+              if (canRun && !running) onRun();
+              return true;
+            },
+          },
+        ]),
+      ),
+    [canRun, running, onRun],
+  );
+
+  const extensions = useMemo(() => [isC ? cpp() : python(), runKeymap], [isC, runKeymap]);
+  const locked = cell.locked || readOnly;
+
+  const [showStdin, setShowStdin] = useState(() => isC || Boolean(cell.stdin));
+  const [showTestCases, setShowTestCases] = useState(false);
+  const [showTestResults, setShowTestResults] = useState(true);
+
+  if (cell.type === 'markdown') {
+    return (
+      <MarkdownCell
+        cell={cell}
+        index={index}
+        total={total}
+        locked={locked}
+        readOnly={readOnly}
+        onChange={onChange}
+        onMove={onMove}
+        onDelete={onDelete}
+      />
+    );
+  }
+
+  // Active test cases from either cell definition or passed testCases prop
+  const activeTestCases = testCases || cell.testCases || [];
+  const hasTestCases = activeTestCases.length > 0;
+  const testResults = cell.testResults || [];
+  const testSummary = cell.testSummary;
+
+  return (
+    <Box borderWidth="1px" borderColor={border} borderRadius="md" overflow="hidden">
+      <Flex align="center" gap={2} px={3} py={1.5} bg={gutter} borderBottomWidth="1px" borderColor={border} wrap="wrap">
+        <HintTooltip label={running ? 'Stop the kernel' : 'Run this cell'}>
+          <IconButton
+            aria-label={running ? 'Stop' : 'Run cell'}
+            icon={running ? <FiSquare /> : <FiPlay />}
+            size="xs"
+            colorScheme={running ? 'red' : 'green'}
+            variant={running ? 'solid' : 'ghost'}
+            isDisabled={!canRun && !running}
+            onClick={running ? onStop : onRun}
+          />
+        </HintTooltip>
+
+        <Text fontSize="xs" fontFamily="mono" opacity={0.55} minW="36px">
+          [{cell.runCount || ' '}]
+        </Text>
+
+        <CellStatus running={running} cell={cell} />
+
+        {cell.locked && (
+          <HintTooltip label="Set up by your teacher — you can run it but not change it">
+            <Badge display="flex" alignItems="center" gap={1} fontSize="2xs">
+              <FiLock /> locked
+            </Badge>
+          </HintTooltip>
+        )}
+
+        {/* Hidden Test Case badges & Execution action */}
+        {hasTestCases && (
+          <HStack spacing={1.5}>
+            <Badge colorScheme="purple" fontSize="2xs" px={1.5}>
+              Hidden Tests ({activeTestCases.length})
+            </Badge>
+            {testSummary?.total > 0 && (
+              <Badge
+                colorScheme={testSummary.passedAll ? 'green' : 'red'}
+                display="flex"
+                alignItems="center"
+                gap={1}
+                fontSize="2xs"
+                px={1.5}
+              >
+                {testSummary.passedAll ? <FiCheckCircle /> : <FiXCircle />}
+                {testSummary.passedAll
+                  ? 'Completed (Yes)'
+                  : `Failed (No - ${testSummary.passed}/${testSummary.total})`}
+              </Badge>
+            )}
+            {typeof onRunTests === 'function' && !cell.hidden && (
+              <HintTooltip label="Evaluate cell against hidden test cases">
+                <Button
+                  size="xs"
+                  colorScheme={testSummary?.passedAll ? 'green' : 'purple'}
+                  variant="solid"
+                  leftIcon={testing ? <Spinner size="xs" /> : <FiCheckSquare />}
+                  isLoading={testing}
+                  isDisabled={!canRun || testing || running}
+                  onClick={() => onRunTests(cell)}
+                >
+                  Run Hidden Test Case
+                </Button>
+              </HintTooltip>
+            )}
+          </HStack>
+        )}
+
+        <HintTooltip
+          label={
+            isC
+              ? 'What this program reads with scanf or fgets'
+              : 'What input() reads in this cell'
+          }
+        >
+          <Button
+            size="xs"
+            variant="ghost"
+            leftIcon={<FiTerminal />}
+            onClick={() => setShowStdin((current) => !current)}
+          >
+            Input
+          </Button>
+        </HintTooltip>
+
+        {isEditor && !cell.hidden && (
+          <Button
+            size="xs"
+            variant={showTestCases ? 'solid' : 'ghost'}
+            colorScheme="purple"
+            leftIcon={<FiCheckSquare />}
+            onClick={() => setShowTestCases((current) => !current)}
+          >
+            Test Cases ({activeTestCases.length})
+          </Button>
+        )}
+
+        {testResults.length > 0 && (
+          <Button
+            size="xs"
+            variant="ghost"
+            rightIcon={showTestResults ? <FiChevronUp /> : <FiChevronDown />}
+            onClick={() => setShowTestResults((c) => !c)}
+          >
+            Test Results
+          </Button>
+        )}
+
+        <Box flex="1" />
+        <CellControls
+          index={index}
+          total={total}
+          onMove={onMove}
+          onDelete={onDelete}
+          readOnly={readOnly || cell.locked}
+          canDelete={cell.sourceCellId == null}
+        />
+      </Flex>
+
+      <CodeMirror
+        value={cell.source}
+        onChange={(source) => onChange({ source })}
+        theme={colorMode === 'dark' ? 'dark' : 'light'}
+        extensions={extensions}
+        editable={!locked}
+        basicSetup={{ lineNumbers: true, foldGutter: false, autocompletion: false }}
+        minHeight="72px"
+      />
+
+      {showStdin && (
+        <Box px={3} py={2} borderTopWidth="1px" borderColor={border}>
+          <Text fontSize="2xs" fontWeight="600" opacity={0.5} textTransform="uppercase" mb={1}>
+            Input (stdin)
+          </Text>
+          <Textarea
+            value={cell.stdin || ''}
+            onChange={(event) => onChange({ stdin: event.target.value })}
+            isDisabled={readOnly}
+            placeholder={isC ? 'Typed as if at a terminal, e.g. 3 4' : 'Read line by line by input()'}
+            rows={2}
+            fontFamily="mono"
+            fontSize="13px"
+          />
+        </Box>
+      )}
+
+      {/* Editor Test Cases Panel */}
+      {isEditor && showTestCases && (
+        <TestCasesEditorPanel
+          testCases={cell.testCases || []}
+          onChange={(newTestCases) => onChange({ testCases: newTestCases })}
+          onRunTestCases={onRunTests ? () => onRunTests(cell) : null}
+          testing={testing}
+          testSummary={testSummary}
+        />
+      )}
+
+      {/* Test Results Output */}
+      {showTestResults && testResults.length > 0 && (
+        <TestResultsPanel testResults={testResults} testSummary={testSummary} isTeacher={isEditor} />
+      )}
+
+      <OutputBlock outputs={cell.outputs} onClear={() => onChange({ outputs: [] })} />
+    </Box>
+  );
+}
+
+/**
+ * Move stays available on a teacher's cell — reordering the notebook is fine —
+ * but delete does not: `canDelete` is false for anything with a `sourceCellId`,
+ * which only the student's own added cells lack. Only the teacher may remove
+ * their own cells, from the authoring page.
+ */
+function CellControls({ index, total, onMove, onDelete, readOnly, canDelete = true }) {
+  if (readOnly) return null;
+  return (
+    <HStack spacing={0}>
+      <IconButton
+        aria-label="Move cell up"
+        icon={<FiArrowUp />}
+        size="xs"
+        variant="ghost"
+        isDisabled={index === 0}
+        onClick={() => onMove(-1)}
+      />
+      <IconButton
+        aria-label="Move cell down"
+        icon={<FiArrowDown />}
+        size="xs"
+        variant="ghost"
+        isDisabled={index === total - 1}
+        onClick={() => onMove(1)}
+      />
+      {canDelete && (
+        <IconButton
+          aria-label="Delete cell"
+          icon={<FiTrash2 />}
+          size="xs"
+          variant="ghost"
+          colorScheme="red"
+          onClick={onDelete}
+        />
+      )}
+    </HStack>
+  );
+}
