@@ -27,32 +27,55 @@ jobs:
 
       - name: Safe Pull from AMS
         run: |
+          set -euo pipefail
+
           # 1. Switch to ams-update branch
           git checkout ams-update || git checkout -b ams-update
 
-          # 2. Replicate git archive behavior
-          echo "Copying client folder from AMS..."
-          rm -rf client # Clean existing just in case
-          cp -r temp-ams-repo/client .
+          # 2. Unpack AMS's client folder OVER the app at the repo root.
+          #
+          # This is the half that has to match safe-pull-from-ams.ps1, which runs
+          # `git archive HEAD:client | tar -x`. Archiving the *tree at* client
+          # yields entries with no `client/` prefix, so they land on the root app:
+          # src/, index.html, vite.config.js. The trailing `/.` below is what makes
+          # cp copy the folder's *contents* rather than the folder itself — without
+          # it you get a nested ./client/, a second copy of the whole app, and the
+          # root app the OTA actually builds from receives nothing.
+          echo "Copying client contents from AMS..."
+          rm -rf client # drop the nested copy an earlier run may have committed
+          cp -r temp-ams-repo/client/. .
 
-          # 3. Commit changes to ams-update
-          git add client
+          # 3. Drop the AMS checkout BEFORE staging — `git add -A` would otherwise
+          # commit the entire AMS repo, embedded .git and all.
+          rm -rf temp-ams-repo
+
+          # 4. Commit changes to ams-update. Must be `-A`, not `add client`: the
+          # sync lands on src/ and public/, so a client-only add stages nothing.
+          git add -A
           if git diff --staged --quiet; then
             echo "No new changes found in AMS client."
           else
             git commit -m "Automated AMS Sync via GitHub Actions"
           fi
 
-          # 4. Switch to main and attempt merge
+          # 5. Switch to main and merge.
+          #
+          # ams-update is a vendor branch: it records what AMS looked like at the
+          # last sync and nothing else, which is why it still carries AMS's own
+          # package.json (version 0.0.0, no Capacitor). That is what makes this a
+          # real three-way merge rather than an overwrite — base is AMS-then,
+          # theirs is AMS-now, ours is main with the local work on top. Files only
+          # this repo changed keep our version, files only AMS changed take theirs,
+          # and the same lines on both sides stop here for a human. Do not "fix"
+          # this by resetting ams-update to main: that makes the base equal to ours,
+          # so every local edit reads as a change AMS is reverting, and it is
+          # discarded without a conflict.
           git checkout main
-          if ! git merge ams-update; then
+          if ! git merge --no-edit ams-update; then
             echo "::error::Merge conflict detected! Aborting merge."
             git merge --abort
             exit 1
           fi
-
-          # Clean up temporary ams repo
-          rm -rf temp-ams-repo
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -68,14 +91,21 @@ jobs:
           OTA_SERVER_URL: ${{ secrets.OTA_SERVER_URL }}
         run: npm run deploy:ota
 
-      - name: Push version bump back to repository
+      - name: Push AMS sync and version bump back to repository
         run: |
+          set -euo pipefail
+
           git add package.json package-lock.json
-          # Only commit if package.json was changed by the deploy script
+          # The deploy script only writes the bump once the upload is accepted, so
+          # no staged change here just means no new version was published.
           if ! git diff --staged --quiet; then
             git commit -m "Bump version for OTA update [skip ci]"
-            git push origin main
-            git push origin ams-update
           else
-            echo "No version changes detected."
+            echo "No version change (deploy published nothing new)."
           fi
+
+          # Push unconditionally. Gating this on the version bump meant a run that
+          # synced AMS without publishing a new version left its sync commit on the
+          # runner and threw it away.
+          git push origin main
+          git push origin ams-update

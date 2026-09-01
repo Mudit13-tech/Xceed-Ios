@@ -30,16 +30,18 @@ async function deploy() {
     process.exit(1);
   }
 
-  // 2. Read current version and bump patch version
+  // 2. Read current version and work out the next patch version.
+  // The bump is only written to package.json once the upload has actually been
+  // accepted (step 5). Writing it here left the repo claiming a version that was
+  // never published whenever the upload failed — and the workflow then committed
+  // and pushed that phantom bump.
   const pkg = require(PACKAGE_JSON_PATH);
   const currentVersion = pkg.version;
   const parts = currentVersion.split('.');
   parts[2] = parseInt(parts[2]) + 1;
   const newVersion = parts.join('.');
-  
-  pkg.version = newVersion;
-  fs.writeFileSync(PACKAGE_JSON_PATH, JSON.stringify(pkg, null, 2));
-  console.log(`📈 Bumped version: ${currentVersion} -> ${newVersion}`);
+
+  console.log(`📈 Publishing version: ${currentVersion} -> ${newVersion}`);
 
   // 3. Zip the dist folder
   console.log('🗜️ Zipping dist folder...');
@@ -68,18 +70,33 @@ async function deploy() {
       headers: {
         ...form.getHeaders(),
         'x-ota-secret-key': SECRET_KEY,
+        /* The server's csrfGuard refuses a state-changing request that carries no
+           header a cross-site form could not have set, so every browser call goes
+           out with this — see the axios interceptor in src/main.jsx. This script
+           runs in Node and never loads that interceptor, so it has to set the
+           header itself; without it the upload comes back CSRF_HEADER_REQUIRED. */
+        'X-App-Name': 'xceed-learning',
       },
     });
 
     console.log('🎉 OTA Update Published Successfully!');
     console.log('URL:', response.data.url);
+
+    // Only now is the new version real, so record it.
+    pkg.version = newVersion;
+    fs.writeFileSync(PACKAGE_JSON_PATH, JSON.stringify(pkg, null, 2));
+    console.log(`📝 package.json set to ${newVersion}`);
   } catch (error) {
     console.error('❌ Upload failed:');
     if (error.response) {
-      console.error(error.response.data);
+      console.error(error.response.status, error.response.data);
     } else {
       console.error(error.message);
     }
+    console.error(`⚠️  Nothing was published. package.json left at ${currentVersion}.`);
+    // Exit non-zero so CI fails loudly instead of reporting a green run for a
+    // release that never happened.
+    process.exitCode = 1;
   } finally {
     // Cleanup zip
     if (fs.existsSync(ZIP_PATH)) {
