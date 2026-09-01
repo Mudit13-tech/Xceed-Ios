@@ -349,7 +349,7 @@ export default function Shorts() {
                     </Button>
                   </HStack>
                 ) : (
-                  short.liveSession && (
+                  short.liveSession ? (
                     <Button
                       as={RouterLink}
                       to={`/learning/short/join/${short.liveSession.joinCode}`}
@@ -358,6 +358,22 @@ export default function Shorts() {
                     >
                       Join
                     </Button>
+                  ) : short.runCount > 0 && short.participated === false && (
+                    <Badge
+                      colorScheme="red"
+                      variant="subtle"
+                      px={3}
+                      py={1.5}
+                      borderRadius="full"
+                      fontSize="xs"
+                      fontWeight="700"
+                      letterSpacing="0.5px"
+                      textTransform="uppercase"
+                      border="1.5px solid"
+                      borderColor="red.300"
+                    >
+                      Missed
+                    </Badge>
                   )
                 )}
               </Flex>

@@ -81,11 +81,22 @@ describe('Student view of Quiz live status and published results (Issue #2115)',
     expect(screen.queryByText(/🟢 Live/)).toBeNull();
     // Start test MUST NOT be rendered
     expect(screen.queryByRole('link', { name: /Start test/i })).toBeNull();
-    // It should render disabled "Quiz ended" button
-    const endedBtn = screen.getByRole('button', { name: /Quiz ended/i });
-    expect(endedBtn).toBeTruthy();
-    expect(endedBtn.disabled).toBe(true);
-    // Explanatory text should explain results are published
+    /* A "Missed" badge, not a disabled "Quiz ended" button.
+     *
+     * This assertion used to demand the button, which is what this row rendered
+     * when the test was written for #2115. The Missed badge replaced it
+     * deliberately — a student who never sat a paper that has now closed is
+     * told what happened to *them*, rather than being handed a greyed-out
+     * control naming the one thing it refuses to do.
+     *
+     * The row falls here rather than to "View Result" because `reviewable`
+     * needs a `lastAttemptId`, and somebody who never started has none — so
+     * published results give them nothing to open. What #2115 actually fixed is
+     * asserted above and is untouched: no Live pill, and no way to start a
+     * closed paper. */
+    expect(screen.getByText('Missed')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Quiz ended/i })).toBeNull();
+    // Explanatory text should still explain results are published
     expect(screen.getByText(/Quiz ended · Results published/i)).toBeTruthy();
   });
 

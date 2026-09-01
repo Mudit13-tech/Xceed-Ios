@@ -357,7 +357,7 @@ function TabOverview({ setTab }) {
                     <li><strong>Publish</strong> — on a draft. Opens the Schedule dialog and mints the student link.</li>
                     <li><strong>Edit</strong> — the question editor.</li>
                     <li><strong>🧾 Attendance</strong> — on a published paper. The hall register, taken down the class roster. This is also where a paper is <strong>terminated</strong> — see Monitor &amp; Fix.</li>
-                    <li><strong>Live control</strong> — while the paper is running. Who is writing, who has been shut out, and <strong>Let in</strong> — see the Let a Student In tab.</li>
+                    <li><strong>Live control</strong> — while the paper is running. Who is writing, who has been shut out, and <strong>Let in</strong> — see the Let a Student In tab. <strong>Let in lives here only while the paper is live, plus five minutes after the window closes</strong>; once the exam is over the panel still lists everyone who was shut out, but a sitting is reopened from <strong>Results</strong>.</li>
                     <li><strong>🔑 Access code</strong> — only on a paper that requires Safe Exam Browser. One code, for a student whose machine genuinely cannot run SEB — see the Locked Out of SEB tab for what it does <em>not</em> cover. The code itself is printed on the card beside the room code, so you can read it off without opening anything.</li>
                     <li><strong>📍 Room code</strong> — on any published paper. The code you read out to the hall; a student cannot start without entering it. Shown on the card itself, so this button is only needed to replace the code or turn the requirement off.</li>
                     <li><strong>Results</strong> — scores, analysis and the answer key, live from the first submission.</li>
@@ -569,6 +569,8 @@ function TabSettings() {
                 ends a sitting, and the student then appears under <strong>Shut out</strong> in Live control,
                 where <strong>Let in</strong> hands the paper straight back with every answer intact. Expect a
                 few of these in any large sitting and treat them as routine — see the Let a Student In tab.
+                Deal with them while the paper is still running: Live control stops offering Let in five
+                minutes after the window closes, and after that a sitting is reopened from Results.
             </Note>
 
             <SectionTitle>Safe Exam Browser (SEB)</SectionTitle>
@@ -860,7 +862,9 @@ function TabMonitor() {
                         <strong> Attendance</strong>, which lists the whole hall and carries Terminate on the row.</li>
                     <li><strong>Shut out</strong> — sittings that ended themselves: a dropped connection, the
                         window closing, a proctoring rule tripping, or a termination you just issued.
-                        <strong> Let in</strong> hands the paper straight back — see the next tab.</li>
+                        <strong> Let in</strong> hands the paper straight back — see the next tab. Once the
+                        exam is over the list stays, as the record of who lost the paper and why, but the
+                        Minutes box and Let in are no longer offered here.</li>
                     <li><strong>Submitted or closed</strong> — finished papers, for reference.</li>
                     <li><strong>Safe Exam Browser status</strong> — how many of the students currently writing are
                         actually inside SEB, counted live.</li>
@@ -895,9 +899,22 @@ function TabLetIn() {
                 the paper with every answer they had already given, at the question they were on.
             </Note>
 
+            <Note type="warning">
+                <strong>Live control carries Let in while the paper is live, and for five minutes after the
+                window closes.</strong> Those five minutes are for the student thrown out on the last question,
+                who reaches your desk a minute after the bell — the panel counts them down for you. After that,
+                and as soon as results are announced, Live control becomes a record: it still lists everyone who
+                was shut out, with the reason and the time, but the Minutes box and the Let in button are gone.
+                Reopening a sitting is still possible and nothing has been lost — open <strong>Results</strong>,
+                find the student, and use <strong>Let in / Reopen</strong> on their row, which is the same act
+                with a confirmation on it. Deal with shut-out students <em>during</em> the exam wherever you can.
+            </Note>
+
             <SectionTitle>Step by Step</SectionTitle>
             <Step n={1} title="Open Live control on the quiz card">
-                Only a published, currently-running paper has the button. The panel refreshes itself.
+                Only a published, currently-running paper has the button. The panel refreshes itself. If the
+                window has already closed by more than five minutes, go to <strong>Results</strong> instead —
+                the steps below are the same, on the student&apos;s row.
             </Step>
             <Step n={2} title="Find them under Shut out">
                 Each row shows the student, a badge for how the sitting ended (<em>terminated</em> or

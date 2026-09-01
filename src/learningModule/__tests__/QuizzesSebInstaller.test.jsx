@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 
 import { renderWithProviders } from '../../test/renderWithProviders';
 
@@ -82,9 +82,18 @@ describe('the Safe Exam Browser download on the quiz list', () => {
     await render();
 
     const menu = await screen.findByRole('button', { name: /safe exam browser/i });
-    menu.click();
+    // fireEvent, not the DOM's own click(): a raw click dispatches outside
+    // act(), so the menu's state update is not flushed before the query below
+    // starts retrying — which is fine on an idle machine and a race under load.
+    fireEvent.click(menu);
 
-    const items = await screen.findAllByRole('menuitem');
+    /* Longer than Testing Library's 1s default, for this query alone.
+       The menu opens behind a Chakra transition and its list is portalled, so
+       the items appear a frame or two after the click — comfortably inside a
+       second on an idle machine, and not always when seventy test files are
+       competing for the CPU. Raising it globally was worse: it also stretches
+       every query written to fail fast. */
+    const items = await screen.findAllByRole('menuitem', {}, { timeout: 5000 });
     expect(items.map((i) => i.textContent)).toEqual(['Download for Mac', 'Download for Windows']);
   });
 

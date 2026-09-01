@@ -107,18 +107,15 @@ describe('learningModule <SetupManual />', () => {
     expect(container.textContent).toMatch(/xceed\.nitj\.ac\.in\/login/);
   });
 
-  /* ERP import is unfinished, so it is not documented as a way to build a
-     roster. It cannot be silently ignored either: the create-class dialog ships
-     with its checkbox ticked and the screenshot shows it, so the page warns the
-     reader off it instead. Both halves are asserted — the warning must stay, and
-     it must not grow back into instructions. */
-  it('documents only the two roster routes that work, and warns off ERP import', () => {
+  /* Email is the only roster route the manual teaches. ERP import and
+     roll-number invitation are both gone from the UI, so neither may grow
+     back into instructions here. */
+  it('teaches email invitation only', () => {
     const { container } = render(<SetupManual />);
     const text = container.textContent;
-    expect(text).toMatch(/Adding students by roll number or email/);
-    expect(text).toMatch(/still being finished/);
-    expect(text).not.toMatch(/From the attendance ERP/i);
-    expect(text).not.toMatch(/Import from ERP/i);
+    expect(text).toMatch(/Adding students by email/);
+    expect(text).not.toMatch(/ERP/i);
+    expect(text).not.toMatch(/roll number/i);
   });
 
   it('tells a reader with no account how to ask for one', () => {

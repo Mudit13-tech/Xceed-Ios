@@ -39,7 +39,7 @@ export default class SafeChild extends React.Component {
             <Text fontWeight="semibold">
               {this.props.title || 'Component could not be displayed'}
             </Text>
-            <Text fontSize="xs" color="gray.600">
+            <Text fontSize="xs" color="lmFg.subtle">
               {this.state.error?.message || 'An error occurred while rendering this section.'}
             </Text>
           </Box>

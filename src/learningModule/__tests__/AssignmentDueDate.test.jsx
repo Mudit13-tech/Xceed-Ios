@@ -9,9 +9,21 @@ import lmApi from '../api/lmApi';
 
 vi.mock('../api/lmApi');
 
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useOutletContext: () => ({ classId: 'c1', klass: { name: 'Circuits' }, isTeacher: true }),
+  };
+});
+
 describe('Due Date Timezone & Formatting (Issue #2131)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Each answer row debounce-checks its formula 350ms after mount; give it
+    // a well-shaped result so that timer firing mid-test doesn't crash on
+    // `undefined.error` when the mount outlives the assertions.
+    lmApi.validateAssignmentFormula.mockResolvedValue({ ok: true, error: null });
   });
 
   describe('toDateTimeInput helper', () => {
@@ -69,6 +81,7 @@ describe('Due Date Timezone & Formatting (Issue #2131)', () => {
     it('populates input with local wall-clock time without timezone loss', async () => {
       lmApi.getAssignment.mockResolvedValue(mockAssignment);
       lmApi.listTopics.mockResolvedValue([]);
+      lmApi.assignmentFormulaReference.mockResolvedValue(null);
 
       render(
         <ChakraProvider>
@@ -94,6 +107,7 @@ describe('Due Date Timezone & Formatting (Issue #2131)', () => {
     it('converts newly selected local date into ISO format on change and save', async () => {
       lmApi.getAssignment.mockResolvedValue(mockAssignment);
       lmApi.listTopics.mockResolvedValue([]);
+      lmApi.assignmentFormulaReference.mockResolvedValue(null);
       lmApi.updateAssignment.mockResolvedValue({ ...mockAssignment });
 
       render(
@@ -118,7 +132,7 @@ describe('Due Date Timezone & Formatting (Issue #2131)', () => {
       // Simulate teacher changing due date to local 2026-10-01 15:30
       fireEvent.change(dateInput, { target: { value: '2026-10-01T15:30' } });
 
-      const saveButton = screen.getByRole('button', { name: /save changes/i });
+      const saveButton = screen.getByRole('button', { name: /^save$/i });
       fireEvent.click(saveButton);
 
       await waitFor(() => {

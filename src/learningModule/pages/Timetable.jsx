@@ -410,7 +410,7 @@ export default function Timetable() {
     return (
       <Box py={12} textAlign="center">
         <Spinner size="xl" color="purple.500" />
-        <Text mt={3} color="gray.500" fontSize="sm">
+        <Text mt={3} color="lmFg.muted" fontSize="sm">
           Loading timetable...
         </Text>
       </Box>
@@ -675,7 +675,7 @@ export default function Timetable() {
               ) : (
                 <Flex justify="center" align="center" p={4}>
                   <Spinner size="md" color="purple.500" mr={2} />
-                  <Text color="gray.600" fontWeight="bold">
+                  <Text color="lmFg.subtle" fontWeight="bold">
                     Loading Timetable Summary...
                   </Text>
                 </Flex>

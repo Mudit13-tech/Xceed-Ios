@@ -11,8 +11,6 @@ import shotClassHeader from '../manualAssets/setup/class-header.png';
 import shotPeople from '../manualAssets/setup/people-tab.png';
 import shotSettings from '../manualAssets/setup/class-settings.png';
 import shotInviteEmail from '../manualAssets/setup/invite-email.png';
-import shotInviteRoll from '../manualAssets/setup/invite-roll-toggle.png';
-import shotInvitePaste from '../manualAssets/setup/invite-roll-paste.png';
 import shotInviteResults from '../manualAssets/setup/invite-results.png';
 import shotApprove from '../manualAssets/setup/approve-request.png';
 import shotJoinSent from '../manualAssets/setup/join-request-sent.png';
@@ -201,7 +199,7 @@ const SECTIONS = [
     { id: 'accounts', icon: '👤', label: 'Accounts, roles and where to sign in' },
     { id: 'create-class', icon: '🏫', label: 'Creating a class' },
     { id: 'class-code', icon: '🔑', label: 'The class code, and how to use it' },
-    { id: 'invite', icon: '✉️', label: 'Adding students by roll number or email' },
+    { id: 'invite', icon: '✉️', label: 'Adding students by email' },
     { id: 'join-settings', icon: '⚙️', label: 'Join settings and approving requests' },
     { id: 'student-join', icon: '🎓', label: 'What a student does to join' },
     { id: 'password', icon: '🔒', label: 'Setting or resetting a password' },
@@ -334,8 +332,8 @@ export default function SetupManual({ standalone = false }) {
                         teacher adds them to a class.
                     </Note>
                     <Note type="info">
-                        You do not have to create accounts before you start. Adding someone by email or roll
-                        number creates their account for them if it does not exist — see
+                        You do not have to create accounts before you start. Adding someone by email creates
+                        their account for them if it does not exist — see
                         <a href="#invite" onClick={jumpTo('invite')} style={{ color: T.accent, fontWeight: 600 }}> Adding students</a>.
                     </Note>
 
@@ -361,10 +359,9 @@ export default function SetupManual({ standalone = false }) {
                             image: { src: shotClassHeader, alt: 'A class, just created, on its Stream tab' },
                         },
                     ]} />
-                    <Note type="warning">
-                        The dialog carries an <em>Import students automatically from ERP</em> checkbox, and it is
-                        ticked by default. That path is still being finished — untick it, and put your roster in
-                        by roll number or email instead, as below.
+                    <Note type="info">
+                        Creating the class does not bring a roster in with it. Fill the roster in yourself
+                        afterwards — by email, below, or by giving out the class code.
                     </Note>
 
                     <Heading id="class-code">The class code, and how to use it</Heading>
@@ -396,41 +393,34 @@ export default function SetupManual({ standalone = false }) {
                         <em> require approval</em>, or switch code joining off once the roster is complete.
                     </Note>
 
-                    <Heading id="invite">Adding students by roll number or email</Heading>
+                    <Heading id="invite">Adding students by email</Heading>
                     <P>
                         The code is the self-service route. Most of the time you will want to put the roster in
-                        yourself, from the <strong>People</strong> tab of the class. There are two ways, and they
-                        can be mixed.
+                        yourself, from the <strong>People</strong> tab of the class, by pasting in the addresses.
                     </P>
                     <Shot
                         src={shotPeople}
                         alt="The People tab, showing teachers and the student roster"
                         caption="The People tab. Invite people sits above the roster."
                     />
-
-                    <SectionTitle>1 · By roll number</SectionTitle>
                     <Steps items={[
                         {
                             title: 'On the People tab, press “+ Invite” beside Students',
-                            body: 'The dialog opens with Role set to Student and Invite by set to Email Addresses. Switch it to Student Roll Numbers.',
-                            image: { src: shotInviteRoll, alt: 'The Invite-people dialog with Student Roll Numbers selected', width: 512 },
+                            body: 'The dialog opens with Role set to Student and Invite by set to Email Addresses, which is what you want.',
+                            image: { src: shotInviteEmail, alt: 'The Invite-people dialog in email mode', width: 512 },
                         },
                         {
-                            title: 'Paste the list',
-                            body: 'Roll numbers separated by commas, spaces or new lines. Each one is looked up in the student directory to find the matching email address.',
-                            image: { src: shotInvitePaste, alt: 'The dialog with a list of roll numbers pasted in', width: 512 },
+                            title: 'Paste the addresses',
+                            body: 'Separated by commas, spaces or new lines — up to 500 at a time.',
                         },
                         {
                             title: 'Send invites, and read the result rows',
-                            body: 'Each address comes back with what happened to it — enrolled, invited, an account created, or already a member. The roll number is stored on the roster row, so the gradebook arrives already labelled rather than as a column you fill in later.',
+                            body: 'Each address comes back with what happened to it: enrolled, invited, an account created, or already a member.',
                             image: { src: shotInviteResults, alt: 'The invite dialog’s result rows', width: 512 },
                         },
                     ]} />
-
-                    <SectionTitle>2 · By email address</SectionTitle>
                     <P>
-                        The same modal, with the toggle on <em>Email addresses</em> — up to 500 at a time. What
-                        happens to each address depends on whether an account already exists:
+                        What happens to an address depends on whether it already has an account:
                     </P>
                     <div className="sum-grid-2" style={{ marginBottom: 16 }}>
                         {[
@@ -445,12 +435,10 @@ export default function SetupManual({ standalone = false }) {
                             </div>
                         ))}
                     </div>
-                    <Shot
-                        src={shotInviteEmail}
-                        alt="The Invite-people dialog in email mode"
-                        width={512}
-                        caption="The dialog spells out what it is about to do. “+ Invite” beside Teachers opens the same one with Role set to co-teacher — everything you can do in the class, except transfer ownership."
-                    />
+                    <Note type="tip">
+                        &ldquo;+ Invite&rdquo; beside <strong>Teachers</strong> opens the same dialog with Role set
+                        to co-teacher — everything you can do in the class, except transfer ownership.
+                    </Note>
                     <Note type="info">
                         Invitation mail goes out in the background after the roster rows are written, so the modal
                         returns immediately and then reports each address as its mail lands. An address that
@@ -495,7 +483,7 @@ export default function SetupManual({ standalone = false }) {
                         first-day confusion is a student following the wrong one.
                     </P>
 
-                    <SectionTitle>They were added by you (email or roll number)</SectionTitle>
+                    <SectionTitle>You added them by email</SectionTitle>
                     <Steps items={[
                         {
                             title: 'Open the invitation email',
@@ -557,7 +545,7 @@ export default function SetupManual({ standalone = false }) {
                         },
                         {
                             title: 'Enter the registered email address',
-                            body: 'It must be the address the account was created with — for students added by roll number, that is the address held in the student directory.',
+                            body: 'It must be the address the account was created with — the one their teacher invited.',
                             image: { src: shotForgotEmail, alt: 'The forgot-password page, asking for a registered email address', width: 403 },
                         },
                         {

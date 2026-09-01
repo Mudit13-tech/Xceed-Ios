@@ -179,7 +179,7 @@ export default function SubjectAttendanceStrip({ klass }) {
       >
         {/* Left Side: Summary Metrics */}
         <HStack spacing={2} flexShrink={0} wrap="wrap">
-          <Text fontSize="xs" fontWeight="700" color="gray.700" _dark={{ color: 'gray.200' }}>
+          <Text fontSize="xs" fontWeight="700" color="lmFg.body">
             📊 Attendance:
           </Text>
           {stats.total > 0 ? (

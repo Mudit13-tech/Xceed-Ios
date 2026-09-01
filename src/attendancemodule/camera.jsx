@@ -48,6 +48,12 @@ const protocolPorts = {
     onvif: '8899',
 };
 
+const CAMERA_CSV_TEMPLATE = [
+    'cameraId,roomId,position,pairedWith,streamUrl,protocol,ipAddress,port,resolutionWidth,resolutionHeight,fps,isActive',
+    'LT103-L,LT-103,front-left,LT103-R,rtsp://user:password@10.10.177.249:554/video/live?channel=1&subtype=0,rtsp,10.10.177.249,554,1920,1080,25,true',
+    'LT103-R,LT-103,front-right,LT103-L,rtsp://user:password@10.10.177.250:554/video/live?channel=1&subtype=0,rtsp,10.10.177.250,554,1920,1080,25,true',
+].join('\r\n');
+
 const statusColor = (status) => {
     if (status === 'online') return 'success';
     if (status === 'maintenance') return 'warning';
@@ -219,9 +225,13 @@ export default function Camera() {
     const [saving, setSaving] = useState(false);
     const [roomsLoading, setRoomsLoading] = useState(false);
     const [toast, setToast] = useState(null);
+    const [csvFile, setCsvFile] = useState(null);
+    const [importing, setImporting] = useState(false);
+    const [importResult, setImportResult] = useState(null);
 
     const [filters, setFilters] = useState({ roomId: '', status: '', isActive: '' });
     const toastTimer = useRef(null);
+    const csvInputRef = useRef(null);
 
     const showToast = useCallback((msg, type = 'success') => {
         clearTimeout(toastTimer.current);
@@ -417,6 +427,51 @@ export default function Camera() {
         }
     };
 
+    const downloadCsvTemplate = () => {
+        const blob = new Blob([CAMERA_CSV_TEMPLATE], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'camera-registry-import-template.csv';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    };
+
+    const importCameras = async () => {
+        if (!csvFile) {
+            showToast('Choose a CSV file first', 'error');
+            return;
+        }
+
+        setImporting(true);
+        setImportResult(null);
+        try {
+            const body = new FormData();
+            body.append('file', csvFile);
+            const response = await fetch(`${CAMERA_API}/import`, { method: 'POST', body });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || `Import failed (${response.status})`);
+
+            setImportResult(data);
+            const imported = Number(data.created || 0) + Number(data.updated || 0);
+            showToast(
+                `CSV processed: ${data.created || 0} created, ${data.updated || 0} updated, ${data.failed || 0} failed.`,
+                data.failed ? 'warning' : 'success',
+            );
+            if (imported > 0) fetchCameras();
+            if (!data.failed) {
+                setCsvFile(null);
+                if (csvInputRef.current) csvInputRef.current.value = '';
+            }
+        } catch (error) {
+            showToast(error.message, 'error');
+        } finally {
+            setImporting(false);
+        }
+    };
+
     const applyProtocol = (protocol) => {
         setForm((prev) => ({
             ...prev,
@@ -494,6 +549,18 @@ export default function Camera() {
                     flex-wrap: wrap;
                     align-items: center;
                 }
+                .camera-import-summary {
+                    display: grid;
+                    grid-template-columns: repeat(4, minmax(0, 1fr));
+                    gap: 10px;
+                    margin-top: 16px;
+                }
+                .camera-import-stat {
+                    padding: 12px;
+                    border: 1px solid ${theme.border};
+                    border-radius: 8px;
+                    background: #f8f9fd;
+                }
                 .camera-mini-btn {
                     width: 30px;
                     height: 30px;
@@ -519,6 +586,7 @@ export default function Camera() {
                 @media (max-width: 700px) {
                     .camera-filter-grid { grid-template-columns: 1fr; }
                     .camera-actions     { flex-direction: column; align-items: stretch; }
+                    .camera-import-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
                 }
             `}</style>
 
@@ -530,6 +598,76 @@ export default function Camera() {
                     <div style={{ ...styles.subheading, marginBottom: 0 }}>Register classroom cameras and pair front-angle feeds</div>
                 </div>
             </div>
+
+            <section style={{ ...styles.card, marginBottom: 18 }}>
+                <div className="camera-header" style={{ marginBottom: 14 }}>
+                    <div>
+                        <div style={{ ...styles.heading, fontSize: 18 }}>Import Cameras from CSV</div>
+                        <div style={{ ...styles.subheading, marginBottom: 0 }}>
+                            Existing Camera IDs are updated; new IDs are created. Building and status remain backend-managed.
+                        </div>
+                    </div>
+                    <button type="button" onClick={downloadCsvTemplate} style={styles.btnGhost}>
+                        Download CSV Template
+                    </button>
+                </div>
+
+                <div className="camera-actions">
+                    <input
+                        ref={csvInputRef}
+                        type="file"
+                        accept=".csv,text/csv"
+                        onChange={(event) => {
+                            setCsvFile(event.target.files?.[0] || null);
+                            setImportResult(null);
+                        }}
+                        style={{ ...styles.input, flex: '1 1 320px' }}
+                    />
+                    <button
+                        type="button"
+                        onClick={importCameras}
+                        disabled={!csvFile || importing}
+                        style={{
+                            ...styles.btnPrimary,
+                            opacity: !csvFile || importing ? 0.55 : 1,
+                            cursor: !csvFile || importing ? 'not-allowed' : 'pointer',
+                        }}
+                    >
+                        {importing ? 'Importing...' : 'Import CSV'}
+                    </button>
+                </div>
+                <div style={{ marginTop: 9, color: theme.textMuted, fontSize: 11 }}>
+                    Required: cameraId, roomId, position, streamUrl, protocol, ipAddress, port. Optional: pairedWith, resolutionWidth, resolutionHeight, fps, isActive.
+                </div>
+
+                {importResult && (
+                    <div>
+                        <div className="camera-import-summary">
+                            {[
+                                ['Rows', importResult.totalRows || 0, theme.text],
+                                ['Created', importResult.created || 0, theme.success],
+                                ['Updated', importResult.updated || 0, theme.accent],
+                                ['Failed', importResult.failed || 0, theme.danger],
+                            ].map(([label, value, color]) => (
+                                <div key={label} className="camera-import-stat">
+                                    <div style={{ color: theme.textMuted, fontSize: 11, fontWeight: 700 }}>{label}</div>
+                                    <div style={{ color, fontSize: 20, fontWeight: 800, marginTop: 3 }}>{value}</div>
+                                </div>
+                            ))}
+                        </div>
+                        {Boolean(importResult.errors?.length) && (
+                            <div style={{ marginTop: 14, padding: 12, borderRadius: 8, background: theme.dangerDim, color: theme.danger }}>
+                                <div style={{ fontWeight: 800, marginBottom: 6 }}>Rows requiring correction</div>
+                                {importResult.errors.map((item) => (
+                                    <div key={`${item.row}-${item.cameraId || ''}`} style={{ fontSize: 12, marginTop: 4 }}>
+                                        Row {item.row}{item.cameraId ? ` (${item.cameraId})` : ''}: {item.error}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </section>
 
             <div className="camera-grid">
                 <section style={styles.card}>
@@ -769,6 +907,7 @@ export default function Camera() {
                                                 className="camera-mini-btn"
                                                 title="Preview"
                                                 target='_blank'
+                                                rel="noreferrer"
                                                 href={`/cameras/preview?cameraId=${encodeURIComponent(camera.cameraId)}`}
                                                 style={{ textDecoration: 'none' }}
                                             >

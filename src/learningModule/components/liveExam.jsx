@@ -327,6 +327,60 @@ export function formatCountdown(ms) {
 }
 
 /**
+ * How long after the window shuts a shut-out student can still be let back in
+ * from this panel.
+ *
+ * Not zero, because the sitting this panel exists for is the one that ends
+ * *at* the bell: a student thrown out at 10:59 on an 11:00 paper is found by
+ * an invigilator at 11:01, and a control that vanished on the stroke of the
+ * hour would send them to the results page for the one case it was built for.
+ * Not open-ended either — that is the complaint this grace answers. Five
+ * minutes is the walk from a seat to the invigilator's desk.
+ */
+export const LET_IN_GRACE_MS = 5 * 60 * 1000;
+
+/** When Let in stops being offered here — null on a paper with no closing time. */
+export function letInClosesAt(quiz) {
+  const closesAt = quiz?.settings?.availableTo;
+  if (!closesAt) return null;
+  return new Date(new Date(closesAt).getTime() + LET_IN_GRACE_MS);
+}
+
+/**
+ * Whether the exam is over, for the purpose of what this panel offers.
+ *
+ * Live control is an invigilation tool, and once the hall has emptied it stops
+ * being one: handing back time on a paper that finished an hour ago is not a
+ * decision made while walking a hall, it is an exception granted afterwards.
+ * So the panel keeps *showing* who was shut out — that is the record staff came
+ * for — and stops offering to reopen them. The exception still exists; it moved
+ * to the results page, where it is a deliberate act with a confirmation on it.
+ *
+ * The results signals are read exactly as `examEngine.windowState` reads them,
+ * so a paper that is closed there is closed here; only the closing time carries
+ * the grace, because only the closing time arrives while people are still in
+ * the room. Announced results, or a paper pulled from publication, are somebody
+ * deciding it is finished — there is nothing to be late for.
+ */
+export function examIsOver(quiz, now = new Date()) {
+  if (!quiz) return false;
+  const settings = quiz.settings || {};
+
+  const resultsPublished =
+    (quiz.resultsAnnouncedAt && now >= new Date(quiz.resultsAnnouncedAt)) ||
+    (settings.resultReleaseAt && now >= new Date(settings.resultReleaseAt));
+  if (resultsPublished) return true;
+
+  // Releasing results unpublishes the quiz, so this is rarely the signal that
+  // fires first; it is here for the paper a teacher pulls down by hand to stop
+  // it, which is as final a "this is over" as the clock running out.
+  if (quiz.published === false) return true;
+
+  const closes = letInClosesAt(quiz);
+  return Boolean(closes && now >= closes);
+}
+
+/**
  * The clock at the top of the panel, and the counts beside it.
  *
  * It counts down to the *last* paper still running rather than the first,
@@ -1002,6 +1056,21 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
 
   const sebRequired = Boolean(quiz?.settings?.requireSafeExamBrowser);
   const now = new Date();
+  /* Whether the paper is finished, and so whether this panel is still an
+     invigilation tool or has become a record of one. Recomputed on every tick
+     rather than held in state, so a panel left open across the closing bell
+     puts its own controls away without being reopened. */
+  const over = examIsOver(quiz, now);
+  /* The last few minutes of Let in, counted down where staff can see it: the
+     control is about to go, and a teacher deciding whether to walk back to
+     their desk should not have to work out when from the window's closing
+     time. Null outside the grace, and on a paper that has no closing time to
+     count from. */
+  const letInClosingAt = letInClosesAt(quiz);
+  const graceLeftMs =
+    !over && letInClosingAt && now >= new Date(quiz.settings.availableTo)
+      ? letInClosingAt.getTime() - now.getTime()
+      : null;
 
   const writing = attempts.filter((attempt) => attempt.status === 'in_progress');
   const offSeb = writing.filter((attempt) => attempt.sebBypassed);
@@ -1168,7 +1237,17 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
           {/* ---- who has been shut out ---- */}
           <SectionCard
             title={`Shut out (${lockedOut.length})`}
-            subtitle="Terminated or expired sittings. Letting one back in returns their paper with every answer intact."
+            /* Three subtitles, because the card is three different things over
+               the life of a paper: the control while the hall sits, a warning
+               that the control is about to go, and afterwards a record with the
+               way to reopen a sitting named rather than left to be hunted. */
+            subtitle={
+              over
+                ? 'Terminated or expired sittings. The exam is over, so they are no longer let back in from here — to reopen one, open Results and use the action beside the student.'
+                : graceLeftMs !== null
+                  ? `Terminated or expired sittings. The window has closed: Let in is available for another ${formatCountdown(graceLeftMs)}, then only from Results.`
+                  : 'Terminated or expired sittings. Letting one back in returns their paper with every answer intact.'
+            }
             mb={4}
           >
             {lockedOut.length === 0 ? (
@@ -1177,7 +1256,10 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
               </Text>
             ) : (
               <>
-                {sebRequired && (
+                {/* The waiver configures a Let in and nothing else, so it goes
+                    when the button does — a tickbox that changes nothing is
+                    worse than no tickbox. */}
+                {sebRequired && !over && (
                   <FormControl mb={3}>
                     <Checkbox
                       size="sm"
@@ -1234,43 +1316,50 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
                           </Text>
                         </Box>
 
-                        <HStack spacing={2} align="flex-end" w={{ base: '100%', md: 'auto' }}>
-                          <FormControl w="110px" flexShrink={0}>
-                            <FormLabel fontSize="xs" mb={1}>
-                              Minutes
-                            </FormLabel>
-                            <NumberInput
-                              size="sm"
-                              min={1}
-                              max={600}
-                              value={minutes}
-                              onChange={(value) =>
-                                setMinutesById((current) => ({ ...current, [attempt._id]: value }))
-                              }
+                        {/* The whole control column, gone once the paper is
+                            over: the row keeps every fact about the sitting —
+                            who, which roll number, when it ended and why — and
+                            stops offering the one thing that is no longer this
+                            panel's to give. */}
+                        {!over && (
+                          <HStack spacing={2} align="flex-end" w={{ base: '100%', md: 'auto' }}>
+                            <FormControl w="110px" flexShrink={0}>
+                              <FormLabel fontSize="xs" mb={1}>
+                                Minutes
+                              </FormLabel>
+                              <NumberInput
+                                size="sm"
+                                min={1}
+                                max={600}
+                                value={minutes}
+                                onChange={(value) =>
+                                  setMinutesById((current) => ({ ...current, [attempt._id]: value }))
+                                }
+                              >
+                                <NumberInputField />
+                              </NumberInput>
+                            </FormControl>
+                            <Tooltip
+                              label={`Time left when it ended, plus the wait since — ${auto} min`}
                             >
-                              <NumberInputField />
-                            </NumberInput>
-                          </FormControl>
-                          <Tooltip
-                            label={`Time left when it ended, plus the wait since — ${auto} min`}
-                          >
-                            <Button
-                              /* Bigger on a handset: this is pressed with a
-                                 thumb, one-handed, while walking a hall, and a
-                                 32px target beside a number stepper was easy to
-                                 miss. Back to `sm` from md up, where it sits in
-                                 a row of small controls and is clicked. */
-                              size={{ base: 'md', md: 'sm' }}
-                              minH={{ base: '44px', md: 'auto' }}
-                              colorScheme="purple"
-                              onClick={() => letIn(attempt)}
-                              isLoading={busyId === attempt._id}
-                              flex={{ base: '1', md: 'none' }}
-                            >
-                              Let in
-                            </Button>
-                          </Tooltip>
-                        </HStack>
+                              <Button
+                                /* Bigger on a handset: this is pressed with a
+                                   thumb, one-handed, while walking a hall, and a
+                                   32px target beside a number stepper was easy to
+                                   miss. Back to `sm` from md up, where it sits in
+                                   a row of small controls and is clicked. */
+                                size={{ base: 'md', md: 'sm' }}
+                                minH={{ base: '44px', md: 'auto' }}
+                                colorScheme="purple"
+                                onClick={() => letIn(attempt)}
+                                isLoading={busyId === attempt._id}
+                                flex={{ base: '1', md: 'none' }}
+                              >
+                                Let in
+                              </Button>
+                            </Tooltip>
+                          </HStack>
+                        )}
                       </Flex>
                     );
                   })}
@@ -1409,7 +1498,11 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
           {/* ---- who is writing right now ---- */}
           <SectionCard
             title={`Writing now (${writing.length})`}
-            subtitle="Read-only. To stop somebody’s paper, use Attendance — the register lists the whole hall. They then appear under Shut out, where Let in hands the paper straight back."
+            subtitle={
+              over
+                ? 'Read-only. The exam is over — anyone still shown here is on a sitting that has outlived the window, and a paper is reopened from Results, not from here.'
+                : 'Read-only. To stop somebody’s paper, use Attendance — the register lists the whole hall. They then appear under Shut out, where Let in hands the paper straight back.'
+            }
           >
             {writing.length === 0 ? (
               <Text fontSize="sm" color="lmFg.muted">
@@ -1546,7 +1639,14 @@ export default function LiveExamControl({ classId, quiz, live, onDone }) {
   // What the panel would show as needing a decision: students shut out of the
   // paper, plus anyone writing outside the lockdown. Counted from the list
   // payload, so the badge is right before anything is opened.
-  const alerts = (live?.shutOut || 0) + (live?.offSeb || 0);
+  //
+  // Zero once the paper is over, and not because the numbers changed: an alert
+  // is a thing to act on, and the acting is what has just been taken out of
+  // this panel. A red button counting shut-out students across a finished exam
+  // sends staff in to find no control, then does it again tomorrow — which is
+  // how a badge stops being read at all. The list is still one click away for
+  // anyone who wants it.
+  const alerts = examIsOver(quiz) ? 0 : (live?.shutOut || 0) + (live?.offSeb || 0);
 
   return (
     <>

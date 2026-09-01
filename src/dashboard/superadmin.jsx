@@ -79,7 +79,8 @@ const MODULES = [
   },
   {
     title: 'Development Team Applications',
-    description: 'Students asking to help build XCEED. Read their work, then accept or reject with a message.',
+    description:
+      'Students asking to help build XCEED. Read their work, then accept or reject with a message — and spot-check the event proofs that let them apply.',
     to: '/superadmin/dev-team',
     icon: FiUserPlus,
     accent: 'teal',

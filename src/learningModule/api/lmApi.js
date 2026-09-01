@@ -294,27 +294,17 @@ const lmApi = {
   // Accounts are always provisioned for addresses without one, and the platform
   // role is always granted to people who already have an account without it —
   // both were once modal checkboxes and are now the only supported behaviour.
-  inviteMembers: (classId, emails, role, options = {}) =>
+  inviteMembers: (classId, emails, role) =>
     request(`/classes/${classId}/members/invite`, {
       method: 'POST',
       body: {
         emails,
-        rollNumbers: options?.rollNumbers,
         role,
         createAccounts: true,
         grantRoleToExisting: true,
       },
     }),
   inviteStatus: (classId, batchId) => request(`/classes/${classId}/members/invite-status/${batchId}`),
-  previewErpImport: (classId) => request(`/classes/${classId}/members/erp-preview`),
-  importErpMembers: (classId) =>
-    request(`/classes/${classId}/members/import-erp`, {
-      method: 'POST',
-      body: {
-        createAccounts: true,
-        grantRoleToExisting: true,
-      },
-    }),
   decideJoinRequest: (classId, membershipId, approve) =>
     request(`/classes/${classId}/members/${membershipId}/decide`, { method: 'POST', body: { approve } }),
   updateMember: (classId, membershipId, body) =>
@@ -926,11 +916,35 @@ const lmApi = {
   reviewDevApplication: (applicationId, body) =>
     request(`/dev-team/${applicationId}`, { method: 'PATCH', body }),
 
+  /* ---- XCEED event participation, the other half of dev-team eligibility ----
+     Multipart: the proof file and the fields describing it go together in one
+     request, so nothing is written to disk that no record points at. */
+  submitEventParticipation: ({ eventType, eventName, eventDate, role, description, proof }) => {
+    const form = new FormData();
+    form.append('proof', proof);
+    form.append('eventType', eventType || 'other');
+    form.append('eventName', eventName || '');
+    if (eventDate) form.append('eventDate', eventDate);
+    if (role) form.append('role', role);
+    if (description) form.append('description', description);
+    return request('/dev-team/events', { method: 'POST', body: form });
+  },
+  myEventParticipations: () => request('/dev-team/events/mine'),
+  // 403s for anyone who is not a platform admin, the same as the queues above.
+  allEventParticipations: ({ status } = {}) => request(`/dev-team/events${qs({ status })}`),
+  reviewEventParticipation: (participationId, body) =>
+    request(`/dev-team/events/${participationId}`, { method: 'PATCH', body }),
+
   /* lm-admin dashboard — platform-wide stats, 403 for anyone else */
   adminSummary: () => request('/admin/summary'),
   /* lm-admin — faculty accounts. Same 403 for anyone who is not a platform admin. */
-  adminListFaculty: (q) => request(`/admin/faculty${qs({ q })}`),
+  adminListFaculty: ({ q, dept } = {}) => request(`/admin/faculty${qs({ q, dept })}`),
   adminCreateFaculty: (body) => request('/admin/faculty', { method: 'POST', body }),
+  /* Bulk import from the timetable module's master faculty table. The preview
+     is a read — what the button would do, department by department — and the
+     import is the button. `dept` omitted imports every department. */
+  adminFacultyImportPreview: () => request('/admin/faculty/import'),
+  adminImportFaculty: (dept) => request('/admin/faculty/import', { method: 'POST', body: { dept } }),
   /* lm-admin — student accounts. Same 403 for anyone who is not a platform admin. */
   adminListStudents: (params = {}) => request(`/admin/students${qs(params)}`),
   adminCreateStudent: (body) => request('/admin/students', { method: 'POST', body }),

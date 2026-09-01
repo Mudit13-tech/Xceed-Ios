@@ -25,6 +25,7 @@ import {
   NumberInput,
   NumberInputField,
   NumberInputStepper,
+  Progress,
   Select,
   SimpleGrid,
   Stack,
@@ -41,6 +42,8 @@ import {
   useToast,
 } from '@chakra-ui/react';
 
+import { Link as RouterLink } from 'react-router-dom';
+
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import { formatDateTime, relativeTime } from '../format';
@@ -52,6 +55,19 @@ import { formatDateTime, relativeTime } from '../format';
  * page shows *before* anything is typed: somebody who has already applied sees
  * their standing application and its verdict where the form would be, rather
  * than filling it in a second time to be told no at the end.
+ *
+ * The form is no longer open to anybody who can type. Two things have to be
+ * done first — ten accepted bug reports or suggestions, and two XCEED events
+ * with proof uploaded — and both are shown as progress on this page rather than
+ * as a rule in a paragraph. Somebody four bugs short should be able to see that
+ * they are four bugs short, and see it before they have written a pitch.
+ *
+ * The form is shown to them all the same, filled in and disabled rather than
+ * hidden. A form nobody can see is a rule nobody can plan against: knowing what
+ * will be asked is half of deciding whether to go after it, and there is
+ * nothing secret on it. The server enforces the same gate on the endpoint, so
+ * the disabling is a courtesy rather than the rule — see
+ * services/devEligibility.js.
  *
  * The two warnings are the point of the form as much as the fields are. The
  * team is a working team, not a course — someone still learning to build, or
@@ -111,7 +127,7 @@ const EMPTY = {
  * question is asked four times in a row. Real `<button>`s, so it is keyboard
  * reachable and screen-reader legible in a way a row of styled divs is not.
  */
-function RatingRow({ label, hint, value, onChange }) {
+function RatingRow({ label, hint, value, onChange, isDisabled }) {
   const hintColor = useColorModeValue('gray.500', 'gray.400');
 
   return (
@@ -134,6 +150,7 @@ function RatingRow({ label, hint, value, onChange }) {
             variant={value === score ? 'solid' : 'outline'}
             colorScheme={value === score ? 'teal' : 'gray'}
             onClick={() => onChange(score)}
+            isDisabled={isDisabled}
             aria-label={`${label}: ${score} out of 5`}
             aria-pressed={value === score}
           >
@@ -316,7 +333,16 @@ function ConfirmSend({ isOpen, onClose, onConfirm, saving, session, warnings }) 
   );
 }
 
-function ApplicationForm({ suggested, session, onSent }) {
+/**
+ * The application itself, which is always on screen and not always live.
+ *
+ * `eligibility` decides which. Somebody short of the requirements gets every
+ * field, disabled, under a banner saying what is missing — they can read what
+ * will be asked and go and earn it, which is the whole point of showing it.
+ * Nothing about that is a security boundary: the endpoint refuses the same
+ * people, and this only spares them finding out at the end.
+ */
+function ApplicationForm({ suggested, session, eligibility, onSent }) {
   const [form, setForm] = useState({ ...EMPTY, department: suggested?.department || '' });
   const [saving, setSaving] = useState(false);
   const confirm = useDisclosure();
@@ -327,10 +353,12 @@ function ApplicationForm({ suggested, session, onSent }) {
   const setSkill = (key) => (score) =>
     setForm((current) => ({ ...current, skills: { ...current.skills, [key]: score } }));
 
+  const locked = !eligibility.eligible;
   const warnings = warningsFor(form);
   const githubError = githubProblem(form.githubLink);
   const deployedError = deployedProblem(form.deployedLink);
   const ready =
+    !locked &&
     form.rollNo.trim() &&
     form.department.trim() &&
     form.githubLink.trim() &&
@@ -362,9 +390,11 @@ function ApplicationForm({ suggested, session, onSent }) {
       // behind a dialog is a message nobody can act on.
       confirm.onClose();
       // A 409 means somebody applied from another tab, or the semester rule
-      // caught up with them. Reloading swaps this form for the real state
-      // rather than leaving a form that can never succeed.
-      if (err.payload?.code === 'ALREADY_APPLIED') onSent();
+      // caught up with them. NOT_ELIGIBLE means an admin struck one of their
+      // events while this form was open, so the gate closed under them. Either way
+      // reloading swaps this form for the real state rather than leaving a form
+      // that can never succeed.
+      if (err.payload?.code === 'ALREADY_APPLIED' || err.payload?.code === 'NOT_ELIGIBLE') onSent();
     } finally {
       setSaving(false);
     }
@@ -372,6 +402,10 @@ function ApplicationForm({ suggested, session, onSent }) {
 
   return (
     <VStack align="stretch" spacing={5}>
+      {/* Why the fields below will not take a keystroke, said before the first
+          one is clicked rather than after. */}
+      {locked ? <LockedBanner eligibility={eligibility} /> : null}
+
       {/* The rule, before anything has been typed. Learning it from a 409 after
           writing a pitch is the version of this that makes people angry. */}
       <Alert status="warning" borderRadius="md" fontSize="sm" alignItems="flex-start">
@@ -390,7 +424,13 @@ function ApplicationForm({ suggested, session, onSent }) {
       <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
         <FormControl isRequired>
           <FormLabel fontSize="sm">Roll number</FormLabel>
-          <Input value={form.rollNo} onChange={fromEvent('rollNo')} placeholder="e.g. 21103045" maxLength={40} />
+          <Input
+            value={form.rollNo}
+            onChange={fromEvent('rollNo')}
+            placeholder="e.g. 21103045"
+            maxLength={40}
+            isDisabled={locked}
+          />
         </FormControl>
 
         <FormControl isRequired>
@@ -400,6 +440,7 @@ function ApplicationForm({ suggested, session, onSent }) {
             onChange={fromEvent('department')}
             placeholder="e.g. Computer Science & Engineering"
             maxLength={120}
+            isDisabled={locked}
           />
           {suggested?.department ? (
             <FormHelperText fontSize="xs">Prefilled from your account — change it if it is wrong.</FormHelperText>
@@ -413,6 +454,7 @@ function ApplicationForm({ suggested, session, onSent }) {
             onChange={fromEvent('githubLink')}
             placeholder="https://github.com/yourname"
             type="url"
+            isDisabled={locked}
           />
           {githubError ? (
             <FormErrorMessage fontSize="xs">{githubError}</FormErrorMessage>
@@ -428,6 +470,7 @@ function ApplicationForm({ suggested, session, onSent }) {
             onChange={fromEvent('deployedLink')}
             placeholder="https://yourproject.vercel.app"
             type="url"
+            isDisabled={locked}
           />
           {deployedError ? (
             <FormErrorMessage fontSize="xs">{deployedError}</FormErrorMessage>
@@ -440,7 +483,14 @@ function ApplicationForm({ suggested, session, onSent }) {
 
         <FormControl isRequired>
           <FormLabel fontSize="sm">Hours you can give, per day</FormLabel>
-          <NumberInput min={0.5} max={16} step={0.5} value={form.dailyHours} onChange={set('dailyHours')}>
+          <NumberInput
+            min={0.5}
+            max={16}
+            step={0.5}
+            value={form.dailyHours}
+            onChange={set('dailyHours')}
+            isDisabled={locked}
+          >
             <NumberInputField />
             <NumberInputStepper>
               <NumberIncrementStepper />
@@ -452,7 +502,13 @@ function ApplicationForm({ suggested, session, onSent }) {
 
         <FormControl>
           <FormLabel fontSize="sm">Other projects you are on right now</FormLabel>
-          <NumberInput min={0} max={20} value={form.ongoingProjects} onChange={set('ongoingProjects')}>
+          <NumberInput
+            min={0}
+            max={20}
+            value={form.ongoingProjects}
+            onChange={set('ongoingProjects')}
+            isDisabled={locked}
+          >
             <NumberInputField />
             <NumberInputStepper>
               <NumberIncrementStepper />
@@ -464,7 +520,12 @@ function ApplicationForm({ suggested, session, onSent }) {
 
       <FormControl>
         <FormLabel fontSize="sm">Where are you with building things?</FormLabel>
-        <Select value={form.experienceLevel} onChange={fromEvent('experienceLevel')} maxW={{ md: '420px' }}>
+        <Select
+          value={form.experienceLevel}
+          onChange={fromEvent('experienceLevel')}
+          maxW={{ md: '420px' }}
+          isDisabled={locked}
+        >
           {LEVELS.map((level) => (
             <option key={level.value} value={level.value}>
               {level.label}
@@ -489,6 +550,7 @@ function ApplicationForm({ suggested, session, onSent }) {
               hint={skill.hint}
               value={form.skills[skill.key]}
               onChange={setSkill(skill.key)}
+              isDisabled={locked}
             />
           ))}
         </VStack>
@@ -502,6 +564,7 @@ function ApplicationForm({ suggested, session, onSent }) {
           rows={6}
           maxLength={3000}
           placeholder="What have you built, what do you want to work on here, and what will you bring that we do not already have?"
+          isDisabled={locked}
         />
         <FormHelperText fontSize="xs">
           {form.whyHire.trim().length < 40
@@ -525,11 +588,12 @@ function ApplicationForm({ suggested, session, onSent }) {
           isDisabled={!ready}
           w={{ base: '100%', sm: 'auto' }}
         >
-          Send my application
+          {locked ? 'Locked until both requirements are met' : 'Send my application'}
         </Button>
         <Text fontSize="xs" color="lmFg.muted">
-          This is your one application for {session}. It goes straight to the admins, and you will
-          hear back by email and in your notifications.
+          {locked
+            ? 'Meet both requirements above and this form unlocks itself.'
+            : `This is your one application for ${session}. It goes straight to the admins, and you will hear back by email and in your notifications.`}
         </Text>
       </Flex>
 
@@ -542,6 +606,438 @@ function ApplicationForm({ suggested, session, onSent }) {
         warnings={warnings}
       />
     </VStack>
+  );
+}
+
+/**
+ * The kinds of event a claim can name.
+ *
+ * `fe_course` is first and spelled out because it is the one people do not
+ * think of as an event: taking the Foundation Elective counts as one, and a
+ * student who does not know that will believe they are twice as far away as
+ * they are.
+ */
+const EVENT_TYPES = [
+  { value: 'fe_course', label: 'FE course (Foundation Elective) - counts as one event' },
+  { value: 'hackathon', label: 'Hackathon' },
+  { value: 'workshop', label: 'Workshop' },
+  { value: 'seminar', label: 'Seminar / talk' },
+  { value: 'competition', label: 'Competition' },
+  { value: 'other', label: 'Something else' },
+];
+
+const EVENT_TYPE_LABEL = Object.fromEntries(
+  EVENT_TYPES.map((type) => [type.value, type.label.split(' - ')[0]]),
+);
+
+const CLAIM_STATUS = {
+  counted: { colorScheme: 'green', label: 'counted' },
+  rejected: { colorScheme: 'red', label: 'not counted' },
+};
+
+/** Kept in step with PROOF_MAX_BYTES in the server's uploadController. */
+const PROOF_MAX_BYTES = 1024 * 1024;
+
+/**
+ * One requirement, drawn as a bar.
+ *
+ * The bar is the point. "8 of 10" is a fact somebody has to do arithmetic on;
+ * a bar four fifths full is a fact they can act on. The count still appears
+ * beside it, because a bar cannot say that two more are what is left.
+ *
+ * Anything still waiting on an admin is called out separately rather than
+ * folded into the bar. Counting unread claims towards the total would be a
+ * promise that reverses itself the moment one is rejected -- and somebody who
+ * cannot see that three are already in the queue will file three more.
+ */
+function RequirementBar({ title, done, required, remaining, pending, met, children }) {
+  const subColor = useColorModeValue('gray.600', 'gray.400');
+  const pct = required ? Math.min(100, (done / required) * 100) : 0;
+
+  return (
+    <Box>
+      <Flex justify="space-between" align="baseline" gap={3} wrap="wrap" mb={1}>
+        <Text fontSize="sm" fontWeight="600">
+          {met ? '✅ ' : ''}
+          {title}
+        </Text>
+        <Text fontSize="sm" fontWeight="700" color={met ? 'green.500' : undefined}>
+          {done} / {required}
+        </Text>
+      </Flex>
+      <Progress
+        value={pct}
+        size="sm"
+        borderRadius="full"
+        colorScheme={met ? 'green' : 'teal'}
+        aria-label={`${title}: ${done} of ${required}`}
+      />
+      <Text fontSize="xs" color={subColor} mt={1.5}>
+        {met ? 'Done — this requirement is met.' : `${remaining} to go.`}
+        {pending
+          ? ` ${pending} still waiting to be looked at — they do not count until they are.`
+          : ''}
+      </Text>
+      {children ? <Box mt={2}>{children}</Box> : null}
+    </Box>
+  );
+}
+
+/**
+ * The form for claiming one event.
+ *
+ * Proof is a file and not a link on purpose: a URL is something the claimant
+ * controls and can change afterwards, and a file cannot be. One image or PDF,
+ * under a megabyte -- the same limits the server applies, and checked here so an
+ * oversized photo is refused before it is uploaded rather than after.
+ *
+ * The event counts the moment this succeeds. Nobody approves it first, so the
+ * bar above moves as the page reloads, and the copy says so: a student told
+ * their submission is "being checked" will sit and wait for a mail that is
+ * never coming.
+ */
+function EventClaimForm({ onSubmitted }) {
+  const [form, setForm] = useState({
+    eventType: 'hackathon',
+    eventName: '',
+    eventDate: '',
+    role: '',
+    description: '',
+  });
+  const [file, setFile] = useState(null);
+  const [fileError, setFileError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const fileInput = useRef(null);
+  const toast = useToast();
+  const subColor = useColorModeValue('gray.600', 'gray.400');
+
+  const fromEvent = (key) => (event) =>
+    setForm((current) => ({ ...current, [key]: event.target.value }));
+
+  const pickFile = (event) => {
+    const chosen = event.target.files?.[0] || null;
+    if (!chosen) {
+      setFile(null);
+      setFileError('');
+      return;
+    }
+    if (!chosen.type.startsWith('image/') && chosen.type !== 'application/pdf') {
+      setFile(null);
+      setFileError('Proof has to be a photo or a PDF.');
+      return;
+    }
+    if (chosen.size > PROOF_MAX_BYTES) {
+      setFile(null);
+      setFileError(
+        `That file is ${(chosen.size / 1024 / 1024).toFixed(1)} MB — the limit is 1 MB. Save the photo smaller, or export the PDF at a lower quality.`,
+      );
+      return;
+    }
+    setFileError('');
+    setFile(chosen);
+  };
+
+  const ready = form.eventName.trim() && file && !fileError;
+
+  const submit = async () => {
+    if (!ready) return;
+    setSaving(true);
+    try {
+      await lmApi.submitEventParticipation({
+        ...form,
+        eventName: form.eventName.trim(),
+        proof: file,
+      });
+      toast({ status: 'success', title: 'Added — that event counts now', duration: 5000 });
+      setForm({ eventType: 'hackathon', eventName: '', eventDate: '', role: '', description: '' });
+      setFile(null);
+      // The input keeps the old file otherwise, and picking the same one again
+      // fires no change event -- so a resubmission would silently send nothing.
+      if (fileInput.current) fileInput.current.value = '';
+      onSubmitted();
+    } catch (err) {
+      toast({ status: 'error', title: err.message, duration: 8000 });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <VStack align="stretch" spacing={4}>
+      <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+        <FormControl isRequired>
+          <FormLabel fontSize="sm">What was it?</FormLabel>
+          <Select value={form.eventType} onChange={fromEvent('eventType')}>
+            {EVENT_TYPES.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label}
+              </option>
+            ))}
+          </Select>
+        </FormControl>
+
+        <FormControl isRequired>
+          <FormLabel fontSize="sm">Event name</FormLabel>
+          <Input
+            value={form.eventName}
+            onChange={fromEvent('eventName')}
+            placeholder="e.g. XCEED Hackathon 2026"
+            maxLength={160}
+          />
+        </FormControl>
+
+        <FormControl>
+          <FormLabel fontSize="sm">When</FormLabel>
+          <Input type="date" value={form.eventDate} onChange={fromEvent('eventDate')} />
+          <FormHelperText fontSize="xs">
+            Roughly is fine. Leave it empty for something that ran a whole semester.
+          </FormHelperText>
+        </FormControl>
+
+        <FormControl>
+          <FormLabel fontSize="sm">What you did there</FormLabel>
+          <Input
+            value={form.role}
+            onChange={fromEvent('role')}
+            placeholder="e.g. participant, volunteer, runner-up"
+            maxLength={120}
+          />
+        </FormControl>
+      </SimpleGrid>
+
+      <FormControl isRequired isInvalid={Boolean(fileError)}>
+        <FormLabel fontSize="sm">Proof</FormLabel>
+        <Input
+          ref={fileInput}
+          type="file"
+          accept="image/*,application/pdf"
+          onChange={pickFile}
+          p={1.5}
+          height="auto"
+        />
+        {fileError ? (
+          <FormErrorMessage fontSize="xs">{fileError}</FormErrorMessage>
+        ) : (
+          <FormHelperText fontSize="xs">
+            One photo or PDF, 1 MB at most — a certificate, a participation slip, the
+            confirmation mail. It has to show your name and the event: nobody checks it up
+            front, but an admin can look at any of these later and strike one that shows
+            nothing.
+          </FormHelperText>
+        )}
+        {file ? (
+          <Text fontSize="xs" color={subColor} mt={1}>
+            {file.name} · {(file.size / 1024).toFixed(0)} KB
+          </Text>
+        ) : null}
+      </FormControl>
+
+      <FormControl>
+        <FormLabel fontSize="sm">Anything else worth knowing</FormLabel>
+        <Textarea
+          value={form.description}
+          onChange={fromEvent('description')}
+          rows={3}
+          maxLength={2000}
+          placeholder="Optional - what you built, who ran it, anything that makes the proof easier to place."
+        />
+      </FormControl>
+
+      <Flex gap={3} wrap="wrap" align="center">
+        <Button
+          colorScheme="teal"
+          onClick={submit}
+          isLoading={saving}
+          isDisabled={!ready}
+          w={{ base: '100%', sm: 'auto' }}
+        >
+          Add this event
+        </Button>
+        <Text fontSize="xs" color={subColor}>
+          It counts straight away — nothing to wait for.
+        </Text>
+      </Flex>
+    </VStack>
+  );
+}
+
+/** The claims already filed, and what became of them. */
+function EventClaimList({ participations }) {
+  const subColor = useColorModeValue('gray.600', 'gray.400');
+
+  if (!participations.length) {
+    return (
+      <Text fontSize="sm" color={subColor}>
+        No events added yet.
+      </Text>
+    );
+  }
+
+  return (
+    <VStack align="stretch" spacing={2}>
+      {participations.map((claim) => {
+        const style = CLAIM_STATUS[claim.status] || CLAIM_STATUS.counted;
+        return (
+          <Box key={claim._id} borderWidth="1px" borderRadius="md" p={3}>
+            <Flex justify="space-between" gap={2} wrap="wrap" align="baseline">
+              <Text fontSize="sm" fontWeight="600">
+                {claim.eventName}
+              </Text>
+              <Badge colorScheme={style.colorScheme} borderRadius="full" px={2}>
+                {style.label}
+              </Badge>
+            </Flex>
+            <Text fontSize="xs" color={subColor} mt={0.5}>
+              {EVENT_TYPE_LABEL[claim.eventType] || claim.eventType}
+              {claim.role ? ` · ${claim.role}` : ''}
+              {claim.eventDate ? ` · ${formatDateTime(claim.eventDate)}` : ''}
+              {' · '}
+              submitted {relativeTime(claim.created_at)}
+            </Text>
+            {claim.proof?.url ? (
+              <Link
+                href={lmApi.fileUrl(claim.proof.url)}
+                isExternal
+                color="teal.500"
+                fontSize="xs"
+                wordBreak="break-all"
+              >
+                {claim.proof.name || 'proof'} ↗
+              </Link>
+            ) : null}
+            {claim.adminNote ? (
+              <Text fontSize="xs" mt={2} color={subColor}>
+                {claim.reviewedByName ? `${claim.reviewedByName}: ` : ''}
+                {claim.adminNote}
+              </Text>
+            ) : null}
+            {claim.status === 'rejected' ? (
+              <Text fontSize="xs" mt={1} fontWeight="600">
+                An admin has taken this one out of your total. Fix what it says and add the
+                event again.
+              </Text>
+            ) : null}
+          </Box>
+        );
+      })}
+    </VStack>
+  );
+}
+
+/**
+ * The gate, and how far along somebody is through it.
+ *
+ * Shown whether or not they are eligible, and whether or not they have already
+ * applied. Somebody through it should still be able to see what they did;
+ * somebody not through it should see why before they see a locked form, which
+ * is why this card sits above the application rather than inside it.
+ */
+function EligibilityPanel({ eligibility, participations, onChanged }) {
+  const subColor = useColorModeValue('gray.600', 'gray.400');
+
+  return (
+    <SectionCard
+      title={eligibility.eligible ? '✅ You are eligible to apply' : '🔓 Unlock the application'}
+      subtitle={
+        eligibility.eligible
+          ? 'Both requirements are met. The application form is below.'
+          : 'The development team is not open to everyone — it is open to people already helping. Two things unlock the form, and both are earned.'
+      }
+    >
+      <VStack align="stretch" spacing={6}>
+        <RequirementBar
+          title="Bugs reported or improvements suggested, and accepted"
+          done={eligibility.bugs.done}
+          required={eligibility.bugs.required}
+          remaining={eligibility.bugs.remaining}
+          pending={eligibility.bugs.pending}
+          met={eligibility.bugs.met}
+        >
+          <Text fontSize="xs" color={subColor}>
+            Only reports an admin has accepted count — a duplicate or a rejected one does not.
+            Report what you find on the{' '}
+            <Link as={RouterLink} to="/learning/bugs" color="teal.500" fontWeight="600">
+              Report a problem
+            </Link>{' '}
+            page.
+          </Text>
+        </RequirementBar>
+
+        <Divider />
+
+        <RequirementBar
+          title="XCEED events taken part in, with proof uploaded"
+          done={eligibility.events.done}
+          required={eligibility.events.required}
+          remaining={eligibility.events.remaining}
+          pending={eligibility.events.pending}
+          met={eligibility.events.met}
+        >
+          <Text fontSize="xs" color={subColor}>
+            Hackathons, workshops and the like. Taking the FE course counts as one event. Add
+            each one below with its proof — it counts as soon as you add it.
+          </Text>
+        </RequirementBar>
+
+        <Divider />
+
+        <Box>
+          <Text fontSize="sm" fontWeight="600" mb={3}>
+            Add an event
+          </Text>
+          <EventClaimForm onSubmitted={onChanged} />
+        </Box>
+
+        <Box>
+          <Text fontSize="sm" fontWeight="600" mb={2}>
+            Events you have added
+          </Text>
+          <EventClaimList participations={participations} />
+        </Box>
+      </VStack>
+    </SectionCard>
+  );
+}
+
+/**
+ * The banner across the top of a form that cannot be sent yet.
+ *
+ * Sits inside the form rather than in place of it: the fields below it are
+ * visible and disabled, so this has to say why they will not take a keystroke,
+ * and say it where somebody who has just clicked one is looking.
+ */
+function LockedBanner({ eligibility }) {
+  const short = [
+    !eligibility.bugs.met
+      ? `${eligibility.bugs.remaining} more accepted bug report${
+          eligibility.bugs.remaining === 1 ? '' : 's'
+        } or suggestion${eligibility.bugs.remaining === 1 ? '' : 's'}`
+      : null,
+    !eligibility.events.met
+      ? `${eligibility.events.remaining} more XCEED event${
+          eligibility.events.remaining === 1 ? '' : 's'
+        } with proof`
+      : null,
+  ].filter(Boolean);
+
+  return (
+    <Alert status="info" borderRadius="md" fontSize="sm" alignItems="flex-start">
+      <AlertIcon />
+      <Box>
+        <Text fontWeight="700" mb={1}>
+          You can read the form, but not send it yet.
+        </Text>
+        <Text>
+          You still need {short.join(' and ')}. It unlocks itself the moment you are through —
+          there is nothing else to do and nobody to ask.
+        </Text>
+        <Text mt={2} fontSize="xs">
+          This is not busywork. The people who are useful on this team are the ones who already use
+          XCEED closely enough to find what is wrong with it, and who turn up when it runs
+          something. Both requirements are just that, written down.
+        </Text>
+      </Box>
+    </Alert>
   );
 }
 
@@ -763,6 +1259,7 @@ function AdminQueue({ applications, counts }) {
 
 export default function DevTeam() {
   const [mine, setMine] = useState(null);
+  const [events, setEvents] = useState([]);
   const [queue, setQueue] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -770,13 +1267,15 @@ export default function DevTeam() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [own, admin] = await Promise.all([
+      const [own, claims, admin] = await Promise.all([
         lmApi.myDevApplication(),
+        lmApi.myEventParticipations(),
         // 403 for everyone who is not a platform admin, which is how this page
         // decides whether to show the queue at all.
         lmApi.allDevApplications().catch(() => null),
       ]);
       setMine(own);
+      setEvents(claims.participations || []);
       setQueue(admin);
     } catch (err) {
       setError(err);
@@ -792,6 +1291,20 @@ export default function DevTeam() {
   if (loading) return <Loading label="Loading…" />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
+  /* A server that has not been upgraded sends no eligibility block. Treating
+     that as "met" rather than "locked out" is the right way round: the endpoint
+     is the thing that actually enforces the gate, and a page that hid the form
+     on a missing field would be a page nobody could apply from. */
+  const eligibility = mine.eligibility || {
+    bugs: { done: 0, required: 0, remaining: 0, pending: 0, met: true },
+    events: { done: 0, required: 0, remaining: 0, pending: 0, met: true },
+    eligible: true,
+  };
+
+  const eligibilityPanel = mine.eligibility ? (
+    <EligibilityPanel eligibility={eligibility} participations={events} onChanged={load} />
+  ) : null;
+
   const applyPanel = (
     <SectionCard
       title="🚀 Join our development team"
@@ -800,9 +1313,30 @@ export default function DevTeam() {
       {mine.current ? (
         <MyApplication application={mine.current} />
       ) : (
-        <ApplicationForm suggested={mine.suggested} session={mine.session} onSent={load} />
+        <ApplicationForm
+          suggested={mine.suggested}
+          session={mine.session}
+          eligibility={eligibility}
+          onSent={load}
+        />
       )}
     </SectionCard>
+  );
+
+  /* Order matters. Somebody who has not applied reads the gate first — it is
+     what stands between them and the form directly below it. Somebody whose
+     application is already in reads that first; their progress through the gate
+     is then a record, not an instruction, and belongs underneath. */
+  const applySection = mine.current ? (
+    <>
+      {applyPanel}
+      {eligibilityPanel}
+    </>
+  ) : (
+    <>
+      {eligibilityPanel}
+      {applyPanel}
+    </>
   );
 
   // Earlier semesters, once there are any. Kept out of the way — it is a record,
@@ -836,7 +1370,7 @@ export default function DevTeam() {
   if (!queue) {
     return (
       <VStack align="stretch" spacing={4}>
-        {applyPanel}
+        {applySection}
         {history}
       </VStack>
     );
@@ -858,7 +1392,7 @@ export default function DevTeam() {
       <TabPanels>
         <TabPanel px={0}>
           <VStack align="stretch" spacing={4}>
-            {applyPanel}
+            {applySection}
             {history}
           </VStack>
         </TabPanel>
