@@ -35,13 +35,12 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { FiMail, FiDownload } from 'react-icons/fi';
+import { FiMail } from 'react-icons/fi';
 import { EmptyState, ErrorState, Loading, SectionCard, buttonTextStyles } from '../components/common';
 import { formatDate, initials, relativeTime } from '../format';
 
 function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student', availableRoles = ['student', 'co-teacher'] }) {
   const [emails, setEmails] = useState('');
-  const [inputType, setInputType] = useState('emails');
   const [role, setRole] = useState(defaultRole);
 
   useEffect(() => {
@@ -148,13 +147,7 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
     setMailProgress(null);
     stopPolling();
     try {
-      const isRoll = inputType === 'rollNumbers';
-      const result = await lmApi.inviteMembers(
-        classId,
-        isRoll ? [] : list,
-        role,
-        { rollNumbers: isRoll ? list : [] }
-      );
+      const result = await lmApi.inviteMembers(classId, list, role);
       setReport(result.results);
       // Membership rows are already written — the roster and counts are
       // correct now, regardless of how long the mail queue below takes.
@@ -188,39 +181,15 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
             </Select>
           </FormControl>
           <FormControl>
-            <FormLabel fontSize="sm">Invite by</FormLabel>
-            <HStack spacing={2} mb={2}>
-              <Button
-                size="xs"
-                colorScheme={inputType === 'emails' ? 'blue' : 'gray'}
-                variant={inputType === 'emails' ? 'solid' : 'outline'}
-                onClick={() => setInputType('emails')}
-              >
-                Email Addresses
-              </Button>
-              <Button
-                size="xs"
-                colorScheme={inputType === 'rollNumbers' ? 'blue' : 'gray'}
-                variant={inputType === 'rollNumbers' ? 'solid' : 'outline'}
-                onClick={() => setInputType('rollNumbers')}
-              >
-                Student Roll Numbers
-              </Button>
-            </HStack>
+            <FormLabel fontSize="sm">Email addresses</FormLabel>
             <Textarea
               rows={6}
               value={emails}
               onChange={(event) => setEmails(event.target.value)}
-              placeholder={
-                inputType === 'emails'
-                  ? 'one@nitj.ac.in\ntwo@nitj.ac.in, three@nitj.ac.in'
-                  : '21103001\n21103002, 21103003'
-              }
+              placeholder={'one@nitj.ac.in\ntwo@nitj.ac.in, three@nitj.ac.in'}
             />
             <FormHelperText fontSize="xs">
-              {inputType === 'emails'
-                ? 'Separate with commas, spaces or new lines.'
-                : 'Separate student roll numbers with commas, spaces or new lines.'}
+              Separate with commas, spaces or new lines.
             </FormHelperText>
           </FormControl>
 
@@ -479,225 +448,6 @@ function EmailModal({ isOpen, onClose, classId, membership, className }) {
   );
 }
 
-function ErpImportModal({ isOpen, onClose, classId, onDone, klass }) {
-  const [preview, setPreview] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [mailProgress, setMailProgress] = useState(null);
-  const pollRef = useRef(null);
-  const toast = useToast();
-
-  const stopPolling = () => {
-    if (pollRef.current) {
-      clearTimeout(pollRef.current);
-      pollRef.current = null;
-    }
-  };
-
-  useEffect(() => stopPolling, []);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setPreview(null);
-      setMailProgress(null);
-      stopPolling();
-      return undefined;
-    }
-    let active = true;
-    setLoading(true);
-    lmApi
-      .previewErpImport(classId)
-      .then((res) => {
-        if (active) setPreview(res);
-      })
-      .catch((err) => {
-        if (active) toast({ status: 'error', title: 'Failed to fetch ERP preview', description: err.message });
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [isOpen, classId, toast]);
-
-  const pollMailStatus = (batchId) => {
-    pollRef.current = setTimeout(async () => {
-      let status;
-      try {
-        status = await lmApi.inviteStatus(classId, batchId);
-      } catch {
-        pollMailStatus(batchId);
-        return;
-      }
-
-      setMailProgress({ completed: status.completed, total: status.total });
-
-      if (status.done) {
-        setMailProgress(null);
-        onDone();
-        toast({
-          status: 'success',
-          title: 'ERP Import Complete',
-          description: `Successfully processed invitations for ${preview?.newCount || 0} student(s).`,
-        });
-        onClose();
-        return;
-      }
-      pollMailStatus(batchId);
-    }, 1200);
-  };
-
-  const handleImport = async () => {
-    if (!preview || preview.newCount === 0) return;
-    setImporting(true);
-    try {
-      const res = await lmApi.importErpMembers(classId);
-      onDone();
-      if (res.batchId) {
-        setMailProgress({ completed: 0, total: res.mailPending });
-        pollMailStatus(res.batchId);
-      } else {
-        toast({
-          status: 'success',
-          title: 'ERP Students Imported',
-          description: `Imported ${res.newCount} student(s) from ERP. ${res.existingCount} existing students were skipped.`,
-        });
-        onClose();
-      }
-    } catch (err) {
-      toast({ status: 'error', title: 'ERP import failed', description: err.message });
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} size="lg" scrollBehavior="inside">
-      <ModalOverlay />
-      <ModalContent>
-        <ModalHeader>Import Students from Attendance ERP</ModalHeader>
-        <ModalCloseButton />
-        <ModalBody>
-          {loading ? (
-            <Loading label="Fetching roster from ERP…" minH="180px" />
-          ) : !preview || preview.totalErp === 0 ? (
-            <EmptyState
-              icon="🔍"
-              title="No ERP Roster Found"
-              description={
-                preview?.message ||
-                `No student roster found in the Attendance Module ERP for "${klass?.subject || 'this subject'}" (Sem ${klass?.semester || ''}).`
-              }
-            />
-          ) : (
-            <>
-              <Box mb={4} p={3} bg="blue.50" borderRadius="md" borderWidth="1px" borderColor="blue.200">
-                <Text fontSize="sm" fontWeight="600" color="blue.900">
-                  Subject: {preview.subjectName || klass?.subject}
-                </Text>
-                <Text fontSize="xs" color="blue.700">
-                  Semester: {klass?.semester || 'N/A'} · Department: {klass?.dept || 'All'}
-                </Text>
-              </Box>
-
-              <HStack spacing={3} mb={4}>
-                <Box flex="1" p={3} bg="lmBg.sunken" borderRadius="md" textAlign="center" borderWidth="1px">
-                  <Text fontSize="xl" fontWeight="700" color="lmFg.heading">
-                    {preview.totalErp}
-                  </Text>
-                  <Text fontSize="xs" color="lmFg.muted">
-                    Total ERP Roster
-                  </Text>
-                </Box>
-                <Box flex="1" p={3} bg="orange.50" borderRadius="md" textAlign="center" borderWidth="1px" borderColor="orange.200">
-                  <Text fontSize="xl" fontWeight="700" color="orange.700">
-                    {preview.existingCount}
-                  </Text>
-                  <Text fontSize="xs" color="orange.600">
-                    Already in Class (Skipped)
-                  </Text>
-                </Box>
-                <Box flex="1" p={3} bg="green.50" borderRadius="md" textAlign="center" borderWidth="1px" borderColor="green.200">
-                  <Text fontSize="xl" fontWeight="700" color="green.700">
-                    {preview.newCount}
-                  </Text>
-                  <Text fontSize="xs" color="green.600">
-                    New to Invite
-                  </Text>
-                </Box>
-              </HStack>
-
-              <Text fontSize="xs" color="lmFg.subtle" mb={4}>
-                XCEED accounts are created automatically for students who don&apos;t have one yet.
-              </Text>
-
-              {mailProgress && (
-                <Box mb={4}>
-                  <Flex justify="space-between" mb={1}>
-                    <Text fontSize="xs" color="lmFg.subtle">
-                      Sending invitation emails…
-                    </Text>
-                    <Text fontSize="xs" color="lmFg.subtle">
-                      {mailProgress.completed} of {mailProgress.total}
-                    </Text>
-                  </Flex>
-                  <Progress
-                    value={mailProgress.total ? (mailProgress.completed / mailProgress.total) * 100 : 0}
-                    size="xs"
-                    colorScheme="blue"
-                    borderRadius="full"
-                    isIndeterminate={mailProgress.total === 0}
-                  />
-                </Box>
-              )}
-
-              <Text fontSize="xs" fontWeight="600" color="lmFg.muted" mb={2}>
-                ERP Student List ({preview.students.length}):
-              </Text>
-
-              <Box maxH="220px" overflowY="auto" borderWidth="1px" borderRadius="md" p={2} bg="lmBg.sunken">
-                {preview.students.map((st) => (
-                  <Flex key={st.rollNo} justify="space-between" align="center" py={1.5} borderBottomWidth="1px" borderColor="lmBorder.base">
-                    <Box minW={0} flex="1">
-                      <Text fontSize="xs" fontWeight="600" noOfLines={1}>
-                        {st.name} ({st.rollNo})
-                      </Text>
-                      <Text fontSize="xs" color="lmFg.muted" noOfLines={1}>
-                        {st.email}
-                      </Text>
-                    </Box>
-                    <Badge colorScheme={st.alreadyMember ? 'gray' : 'green'} fontSize="10px">
-                      {st.alreadyMember ? 'Already Member (Skip)' : 'Will Invite'}
-                    </Badge>
-                  </Flex>
-                ))}
-              </Box>
-            </>
-          )}
-        </ModalBody>
-        <ModalFooter gap={2}>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Close
-          </Button>
-          {preview && preview.newCount > 0 && (
-            <Button
-              colorScheme="blue"
-              size="sm"
-              onClick={handleImport}
-              isLoading={importing}
-              isDisabled={loading || !preview || preview.newCount === 0}
-            >
-              Import & Invite {preview.newCount} Student{preview.newCount === 1 ? '' : 's'}
-            </Button>
-          )}
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
-  );
-}
-
 function PersonRow({ member, isTeacher, isOwner, classId, onChanged, onViewProgress, onEmailMember }) {
   const toast = useToast();
 
@@ -835,7 +585,6 @@ export default function People() {
   const invite = useDisclosure();
   const progress = useDisclosure();
   const emailModal = useDisclosure();
-  const erpModal = useDisclosure();
 
   const {
     data: members = { teachers: [], students: [] },
@@ -918,20 +667,9 @@ export default function People() {
         title={`Students (${members.students.filter((m) => m.status !== 'pending').length})`}
         action={
           isTeacher ? (
-            <HStack spacing={2}>
-              <Button
-                size="sm"
-                colorScheme="blue"
-                variant="outline"
-                leftIcon={<FiDownload />}
-                onClick={erpModal.onOpen}
-              >
-                Fetch from ERP
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => { setInviteRole('student'); setAvailableRoles(['student']); invite.onOpen(); }}>
-                + Invite
-              </Button>
-            </HStack>
+            <Button size="sm" variant="outline" onClick={() => { setInviteRole('student'); setAvailableRoles(['student']); invite.onOpen(); }}>
+              + Invite
+            </Button>
           ) : null
         }
       >
@@ -941,19 +679,14 @@ export default function People() {
             title="No students yet"
             description={
               isTeacher
-                ? `Share the class code "${klass.code}" or invite students from ERP or by email.`
+                ? `Share the class code "${klass.code}" or invite students by email.`
                 : 'The roster is empty.'
             }
             action={
               isTeacher ? (
-                <HStack spacing={2}>
-                  <Button size="sm" colorScheme="blue" leftIcon={<FiDownload />} onClick={erpModal.onOpen}>
-                    Fetch from ERP
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => { setInviteRole('student'); setAvailableRoles(['student']); invite.onOpen(); }}>
-                    Invite students
-                  </Button>
-                </HStack>
+                <Button size="sm" variant="outline" onClick={() => { setInviteRole('student'); setAvailableRoles(['student']); invite.onOpen(); }}>
+                  Invite students
+                </Button>
               ) : null
             }
           />
@@ -990,13 +723,6 @@ export default function People() {
         onDone={afterChange}
         defaultRole={inviteRole}
         availableRoles={availableRoles}
-      />
-      <ErpImportModal
-        isOpen={erpModal.isOpen}
-        onClose={erpModal.onClose}
-        classId={classId}
-        onDone={afterChange}
-        klass={klass}
       />
       <ProgressModal
         isOpen={progress.isOpen}

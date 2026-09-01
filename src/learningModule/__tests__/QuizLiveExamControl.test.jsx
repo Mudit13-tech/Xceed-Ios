@@ -145,10 +145,24 @@ const listedLive = (quiz, attempts) => [
   },
 ];
 
+/**
+ * Imported here rather than inside the first test that needs it.
+ *
+ * This is a page and it pulls in a large tree; transforming and importing it
+ * costs seconds. Done inside a test body, only the *first* test pays — it ran
+ * at 4.3s against sibling tests at 0.6s, which is most of the way to the
+ * per-test timeout before the test has asserted anything, and over it the
+ * moment the machine is busy. At module scope the cost is paid once, at
+ * collection time, where no per-test budget applies.
+ *
+ * Safe above the mocks it depends on: `vi.mock` calls are hoisted above every
+ * import in the file, so this still resolves to the mocked modules.
+ */
+const { default: Quizzes } = await import('../pages/Quizzes');
+
 const openPanel = async (fixture) => {
   quizResults.mockResolvedValue(fixture);
   listQuizzes.mockResolvedValue(listedLive(fixture.quiz, fixture.attempts));
-  const { default: Quizzes } = await import('../pages/Quizzes');
   renderWithProviders(<Quizzes />);
   fireEvent.click(await screen.findByRole('button', { name: /live control/i }));
   await waitFor(() => expect(quizResults).toHaveBeenCalled());
@@ -180,7 +194,12 @@ describe('the live exam control panel', () => {
     const header = within(dialog);
 
     expect(header.getByText(/until the last paper ends/i)).toBeTruthy();
-    expect(header.getByText(/^54:5\d$/)).toBeTruthy();
+    /* 55 minutes left, give or take. Deliberately not /^54:5\d$/: that spelling
+       allowed ten seconds of real time between building the fixture and reading
+       the clock, so the assertion failed on a loaded machine for no reason but
+       its own arithmetic. The range still says what it means — 55 minutes and
+       not the 90-minute window or "No clock" the sibling tests check for. */
+    expect(header.getByText(/^5[3-5]:\d\d$/)).toBeTruthy();
     expect(header.getByText('Writing').nextSibling.textContent).toBe('2');
     expect(header.getByText('Submitted').nextSibling.textContent).toBe('1');
     expect(header.getByText('Shut out').nextSibling.textContent).toBe('0');
@@ -195,7 +214,9 @@ describe('the live exam control panel', () => {
     );
 
     expect(within(dialog).getByText(/until the window closes/i)).toBeTruthy();
-    expect(within(dialog).getByText(/^1:29:5\d$/)).toBeTruthy();
+    // Same ten-second trap as the countdown above; same fix. An hour and a half,
+    // to the minute, is still unambiguous against the other clocks tested here.
+    expect(within(dialog).getByText(/^1:2[7-9]:\d\d$/)).toBeTruthy();
   });
 
   it('says there is no clock on an untimed paper with no closing time', async () => {
@@ -262,6 +283,96 @@ describe('the live exam control panel', () => {
         expect.objectContaining({ minutes: 15 }),
       ),
     );
+  });
+
+  /**
+   * Issue #2139: once the exam is over, the panel stops offering to hand time
+   * back.
+   *
+   * It keeps the list — who was shut out, when and why, is exactly the record
+   * staff open this for after a paper — and drops the minutes box and the Let
+   * in button, because reopening a finished sitting is an exception granted
+   * afterwards rather than a decision made while walking a hall. The exception
+   * still exists on the results page, and the card says so rather than leaving
+   * a teacher to find it.
+   */
+  it('drops the minutes box and Let in once the exam is over, keeping the list', async () => {
+    const dialog = await openPanel(
+      resultsFixture(
+        quizWith({
+          requireSafeExamBrowser: true,
+          availableTo: new Date(Date.now() - 6 * MINUTES).toISOString(),
+        }),
+        [shutOut()],
+      ),
+    );
+    const panel = within(dialog);
+
+    // The record survives in full.
+    expect(panel.getByText('Asha Rao')).toBeTruthy();
+    expect(panel.getByText('asha@example.com')).toBeTruthy();
+    expect(panel.getByText(/shut out \(1\)/i)).toBeTruthy();
+    expect(panel.getByText(/safe exam browser was no longer active/i)).toBeTruthy();
+
+    // The controls do not.
+    expect(panel.queryByLabelText('Minutes')).toBeNull();
+    expect(panel.queryByRole('button', { name: 'Let in' })).toBeNull();
+    expect(
+      panel.queryByRole('checkbox', { name: /let them back in without safe exam browser/i }),
+    ).toBeNull();
+
+    // And the way back is named, not left to be hunted for.
+    expect(panel.getByText(/open Results and use the action beside the student/i)).toBeTruthy();
+  });
+
+  /**
+   * The five minutes after the bell, which is the whole reason "over" is not
+   * simply "the closing time has passed": a student thrown out at 10:59 on an
+   * 11:00 paper reaches the invigilator's desk at 11:01, and that is the case
+   * this panel was built for.
+   */
+  it('still lets a student in during the five minutes after the window closes', async () => {
+    const dialog = await openPanel(
+      resultsFixture(
+        quizWith({ availableTo: new Date(Date.now() - 2 * MINUTES).toISOString() }),
+        [shutOut()],
+      ),
+    );
+
+    expect(within(dialog).getByRole('button', { name: 'Let in' })).toBeTruthy();
+    expect(within(dialog).getByLabelText('Minutes')).toBeTruthy();
+    // And says how long is left of it, so nobody has to work it out.
+    expect(within(dialog).getByText(/Let in is available for another 2:\d\d/)).toBeTruthy();
+  });
+
+  it('drops the controls once results have been announced, whatever the clock says', async () => {
+    const quiz = {
+      ...quizWith(),
+      resultsAnnouncedAt: new Date(Date.now() - 1 * MINUTES).toISOString(),
+    };
+    const dialog = await openPanel(resultsFixture(quiz, [shutOut()]));
+
+    expect(within(dialog).getByText('Asha Rao')).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Let in' })).toBeNull();
+    expect(within(dialog).queryByLabelText('Minutes')).toBeNull();
+  });
+
+  /**
+   * The red badge is a call to act, and acting is what has just been removed.
+   * Left alone it would send staff into a finished panel to find no control,
+   * which is how a badge stops being read at all.
+   */
+  it('stops badging the Live control button red once the exam is over', async () => {
+    const fixture = resultsFixture(
+      quizWith({ availableTo: new Date(Date.now() - 6 * MINUTES).toISOString() }),
+      [shutOut()],
+    );
+    quizResults.mockResolvedValue(fixture);
+    listQuizzes.mockResolvedValue(listedLive(fixture.quiz, fixture.attempts));
+      renderWithProviders(<Quizzes />);
+
+    const button = await screen.findByRole('button', { name: /live control/i });
+    expect(button.textContent).not.toMatch(/\d/);
   });
 
   it('names who is writing outside Safe Exam Browser, with their progress', async () => {
@@ -404,5 +515,63 @@ describe('the live exam control panel', () => {
         settings: { invigilationPulseColor: '#00cc88' },
       }),
     );
+  });
+});
+
+/**
+ * The rule itself, away from the panel.
+ *
+ * Worth its own tests because it is the whole of issue #2139 in one function,
+ * and because the signals it reads are the ones `examEngine.windowState` reads
+ * server-side — if the two ever disagree, a paper is closed in one place and
+ * open in the other, and this is where that shows up first.
+ */
+describe('examIsOver', () => {
+  const at = (minutes) => new Date(Date.now() + minutes * MINUTES).toISOString();
+
+  it('is false while the window is open', async () => {
+    const { examIsOver } = await import('../components/liveExam');
+    expect(examIsOver(quizWith({ availableTo: at(30) }))).toBe(false);
+  });
+
+  it('is false inside the five-minute grace after the window closes', async () => {
+    const { examIsOver } = await import('../components/liveExam');
+    expect(examIsOver(quizWith({ availableTo: at(-4) }))).toBe(false);
+  });
+
+  it('is true once the grace has run out', async () => {
+    const { examIsOver } = await import('../components/liveExam');
+    expect(examIsOver(quizWith({ availableTo: at(-6) }))).toBe(true);
+  });
+
+  it('is true on announced results, whatever the window says', async () => {
+    const { examIsOver } = await import('../components/liveExam');
+    expect(
+      examIsOver({ ...quizWith({ availableTo: at(30) }), resultsAnnouncedAt: at(-1) }),
+    ).toBe(true);
+  });
+
+  it('is true once a scheduled release time has passed, and not before', async () => {
+    const { examIsOver } = await import('../components/liveExam');
+    expect(examIsOver(quizWith({ resultReleaseAt: at(-1) }))).toBe(true);
+    expect(examIsOver(quizWith({ resultReleaseAt: at(1) }))).toBe(false);
+  });
+
+  it('is true on a paper pulled from publication', async () => {
+    const { examIsOver } = await import('../components/liveExam');
+    expect(examIsOver({ ...quizWith(), published: false })).toBe(true);
+  });
+
+  /* An open-ended paper has no closing time to be late for, so nothing here
+     ends it on a clock. It ends when a teacher says it has, which is the
+     release above — until then the panel stays a live one. */
+  it('stays live on a paper with no closing time at all', async () => {
+    const { examIsOver } = await import('../components/liveExam');
+    expect(examIsOver(quizWith({ timeLimitMinutes: 0 }))).toBe(false);
+  });
+
+  it('is false on no quiz at all, rather than throwing', async () => {
+    const { examIsOver } = await import('../components/liveExam');
+    expect(examIsOver(null)).toBe(false);
   });
 });

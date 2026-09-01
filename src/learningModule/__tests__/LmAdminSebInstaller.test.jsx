@@ -116,6 +116,10 @@ describe('the installer card', () => {
       });
     const card = await openCard();
 
+    // Wait for the two platform rows to replace the "Checking…" placeholder
+    // before querying for their file inputs — the card mounts synchronously
+    // while `getSebInstallers` is still in flight.
+    await card.findAllByRole('button', { name: /^upload$/i });
     const fileInputs = card.cardEl.querySelectorAll('input[type="file"]');
     expect(fileInputs).toHaveLength(2); // windows, mac — nothing from the card next door
     const macInput = fileInputs[1];
@@ -143,6 +147,7 @@ describe('the installer card', () => {
     uploadSebInstaller.mockRejectedValue(new Error('The windows installer must be a .exe or .msi file.'));
     const card = await openCard();
 
+    await card.findAllByRole('button', { name: /^upload$/i });
     const [windowsInput] = card.cardEl.querySelectorAll('input[type="file"]');
     const file = new File(['bytes'], 'SafeExamBrowser.dmg', { type: 'application/octet-stream' });
     fireEvent.change(windowsInput, { target: { files: [file] } });

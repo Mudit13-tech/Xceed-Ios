@@ -83,9 +83,10 @@ export function AttachmentPicker({ attachments = [], onChange, disabled, classId
   const targetClassId = classId || params.classId;
   const [linkUrl, setLinkUrl] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
   const toast = useToast();
 
-  const handleFiles = async (event) => {
+  const handleFiles = (event) => {
     const { files } = event.target;
     if (!files?.length) return;
     if (!targetClassId) {
@@ -94,15 +95,44 @@ export function AttachmentPicker({ attachments = [], onChange, disabled, classId
       return;
     }
     setUploading(true);
-    try {
-      const result = await lmApi.uploadFiles(targetClassId, files);
-      onChange([...attachments, ...result.attachments]);
-    } catch (error) {
-      toast({ status: 'error', title: 'Upload failed', description: error.message });
-    } finally {
+    setUploadProgress({ loaded: 0, total: 0 });
+
+    const form = new FormData();
+    Array.from(files).forEach((file) => form.append('files', file));
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/v1/learningmodule/classes/${targetClassId}/uploads`);
+
+    // Copy auth token from existing requests
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        setUploadProgress({ loaded: e.loaded, total: e.total });
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const result = JSON.parse(xhr.responseText);
+        onChange([...attachments, ...result.attachments]);
+      } else {
+        toast({ status: 'error', title: 'Upload failed', description: 'Server error during upload.' });
+      }
       setUploading(false);
+      setUploadProgress(null);
       if (fileInput.current) fileInput.current.value = '';
-    }
+    });
+
+    xhr.addEventListener('error', () => {
+      toast({ status: 'error', title: 'Upload failed', description: 'Network error during upload.' });
+      setUploading(false);
+      setUploadProgress(null);
+      if (fileInput.current) fileInput.current.value = '';
+    });
+
+    xhr.send(form);
   };
 
   // Committed on Enter, on the Add button and on blur — a URL left sitting in
@@ -124,7 +154,7 @@ export function AttachmentPicker({ attachments = [], onChange, disabled, classId
           size="sm"
           variant="outline"
           onClick={() => fileInput.current?.click()}
-          isLoading={uploading}
+          isLoading={uploading && !uploadProgress}
           isDisabled={disabled}
           leftIcon={<span>📎</span>}
         >
@@ -149,7 +179,7 @@ export function AttachmentPicker({ attachments = [], onChange, disabled, classId
           Add link
         </Button>
       </HStack>
-      <input
+        <input
         ref={fileInput}
         type="file"
         multiple
@@ -157,6 +187,29 @@ export function AttachmentPicker({ attachments = [], onChange, disabled, classId
         onChange={handleFiles}
         aria-label="Attach files"
       />
+
+      {uploadProgress && uploadProgress.total > 0 && (
+        <Box mt={3}>
+          <Flex justify="space-between" mb={1}>
+            <Text fontSize="xs" color="lmFg.muted">Uploading…</Text>
+            <Text fontSize="xs" color="lmFg.muted">
+              {prettySize(uploadProgress.loaded)} / {prettySize(uploadProgress.total)}
+            </Text>
+          </Flex>
+          <Box w="100%" bg="lmBorder.base" borderRadius="full" h="6px" overflow="hidden">
+            <Box
+              h="100%"
+              bg="blue.500"
+              borderRadius="full"
+              transition="width 0.2s ease"
+              w={`${Math.round((uploadProgress.loaded / uploadProgress.total) * 100)}%`}
+            />
+          </Box>
+          <Text fontSize="xs" color="lmFg.muted" mt={1}>
+            {Math.round((uploadProgress.loaded / uploadProgress.total) * 100)}%
+          </Text>
+        </Box>
+      )}
 
       {attachments.length > 0 && (
         <Flex wrap="wrap" gap={2} mt={3}>

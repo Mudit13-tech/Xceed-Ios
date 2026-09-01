@@ -148,10 +148,24 @@ const attendanceFixture = (students) => ({
   serverTime: new Date().toISOString(),
 });
 
+/**
+ * Imported here rather than inside the first test that needs it.
+ *
+ * This is a page and it pulls in a large tree; transforming and importing it
+ * costs seconds. Done inside a test body, only the *first* test pays — it ran
+ * at 4.3s against sibling tests at 0.6s, which is most of the way to the
+ * per-test timeout before the test has asserted anything, and over it the
+ * moment the machine is busy. At module scope the cost is paid once, at
+ * collection time, where no per-test budget applies.
+ *
+ * Safe above the mocks it depends on: `vi.mock` calls are hoisted above every
+ * import in the file, so this still resolves to the mocked modules.
+ */
+const { default: Quizzes } = await import('../pages/Quizzes');
+
 const renderQuizzes = async (attempts) => {
   quizResults.mockResolvedValue(resultsFixture(attempts));
   listQuizzes.mockResolvedValue(listedLive(attempts));
-  const { default: Quizzes } = await import('../pages/Quizzes');
   renderWithProviders(<Quizzes />);
   return screen.findByRole('button', { name: /live control/i });
 };

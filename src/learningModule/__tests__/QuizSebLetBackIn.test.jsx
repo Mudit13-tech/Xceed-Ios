@@ -88,10 +88,24 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+/**
+ * Imported here rather than inside the first test that needs it.
+ *
+ * This is a page and it pulls in a large tree; transforming and importing it
+ * costs seconds. Done inside a test body, only the *first* test pays — it ran
+ * at 4.3s against sibling tests at 0.6s, which is most of the way to the
+ * per-test timeout before the test has asserted anything, and over it the
+ * moment the machine is busy. At module scope the cost is paid once, at
+ * collection time, where no per-test budget applies.
+ *
+ * Safe above the mocks it depends on: `vi.mock` calls are hoisted above every
+ * import in the file, so this still resolves to the mocked modules.
+ */
+const { default: QuizResults } = await import('../pages/QuizResults');
+
 describe('a quiz that requires Safe Exam Browser', () => {
   it('offers the exemption checkbox when letting a terminated student back in', async () => {
     quizResults.mockResolvedValue(resultsFixture(baseQuiz({ requireSafeExamBrowser: true }), terminatedAttempt));
-    const { default: QuizResults } = await import('../pages/QuizResults');
     renderWithProviders(<QuizResults />);
 
     fireEvent.click(await screen.findByRole('button', { name: /let back in/i }));
@@ -101,7 +115,6 @@ describe('a quiz that requires Safe Exam Browser', () => {
 
   it('leaves it unchecked by default — waiving the check is a decision made per reopen, not a default', async () => {
     quizResults.mockResolvedValue(resultsFixture(baseQuiz({ requireSafeExamBrowser: true }), terminatedAttempt));
-    const { default: QuizResults } = await import('../pages/QuizResults');
     renderWithProviders(<QuizResults />);
 
     fireEvent.click(await screen.findByRole('button', { name: /let back in/i }));
@@ -112,7 +125,6 @@ describe('a quiz that requires Safe Exam Browser', () => {
   it('sends sebExempt: true only when the teacher checks it, and does not send it at all otherwise', async () => {
     quizResults.mockResolvedValue(resultsFixture(baseQuiz({ requireSafeExamBrowser: true }), terminatedAttempt));
     reopenQuizAttempt.mockResolvedValue({ attempt: { ...terminatedAttempt, status: 'in_progress' }, mode: 'continue' });
-    const { default: QuizResults } = await import('../pages/QuizResults');
     renderWithProviders(<QuizResults />);
 
     fireEvent.click(await screen.findByRole('button', { name: /let back in/i }));
@@ -131,7 +143,6 @@ describe('a quiz that requires Safe Exam Browser', () => {
   it('does not send sebExempt when the box is left unchecked', async () => {
     quizResults.mockResolvedValue(resultsFixture(baseQuiz({ requireSafeExamBrowser: true }), terminatedAttempt));
     reopenQuizAttempt.mockResolvedValue({ attempt: { ...terminatedAttempt, status: 'in_progress' }, mode: 'continue' });
-    const { default: QuizResults } = await import('../pages/QuizResults');
     renderWithProviders(<QuizResults />);
 
     fireEvent.click(await screen.findByRole('button', { name: /let back in/i }));
@@ -146,7 +157,6 @@ describe('a quiz that requires Safe Exam Browser', () => {
 describe('an ordinary quiz with no Safe Exam Browser requirement', () => {
   it('never shows the checkbox at all', async () => {
     quizResults.mockResolvedValue(resultsFixture(baseQuiz(), terminatedAttempt));
-    const { default: QuizResults } = await import('../pages/QuizResults');
     renderWithProviders(<QuizResults />);
 
     fireEvent.click(await screen.findByRole('button', { name: /let back in/i }));

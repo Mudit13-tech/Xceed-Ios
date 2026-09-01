@@ -1100,45 +1100,58 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
                     🔒 Results pending
                   </Button>
                 </Tooltip>
-              ) : (
-                <Button
-                  as={!canOpen && !quiz.attemptsUsed ? undefined : RouterLink}
-                  to={
-                    quiz.attemptsUsed > 0 && quiz.lastAttemptId
-                      ? `/learning/class/${classId}/quiz/${quiz._id}/attempt/${quiz.lastAttemptId}`
-                      : `/learning/class/${classId}/quiz/${quiz._id}`
-                  }
-                  size="sm"
-                  isDisabled={!canOpen && !quiz.attemptsUsed}
-                  colorScheme={
-                    isLive || start.can
-                      ? 'green'
-                      : !canOpen && !quiz.attemptsUsed
-                        ? 'gray'
-                        : 'purple'
-                  }
-                  // Outline, not solid, while it only opens the instructions:
-                  // the filled green button is "start your test", and a paper
-                  // that has not opened must not look like one.
-                  variant={!start.can && !quiz.attemptsUsed ? 'outline' : 'solid'}
-                  sx={
-                    isLive && start.can && !isCompleted
-                      ? {
-                          animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`,
-                          fontWeight: 'bold',
-                        }
-                      : undefined
-                  }
-                >
-                  {quiz.attemptsUsed > 0
-                    ? 'Review answers'
-                    : start.can
-                      ? 'Start test'
-                      : quiz.window?.notYetOpen
-                        ? 'View instructions'
-                        : 'Quiz ended'}
-                </Button>
-              )}
+              ) : quiz.window?.closed && !quiz.attemptsUsed ? (
+          <Badge
+          colorScheme="red"
+          variant="subtle"
+          px={3}
+          py={1.5}
+          borderRadius="full"
+          fontSize="xs"
+          fontWeight="700"
+          letterSpacing="0.5px"
+          textTransform="uppercase"
+          border="1.5px solid"
+          borderColor="red.300"
+        >
+          Missed
+        </Badge>
+            ) : (
+              <Button
+                as={!canOpen && !quiz.attemptsUsed ? undefined : RouterLink}
+                to={
+                  quiz.attemptsUsed > 0 && quiz.lastAttemptId
+                    ? `/learning/class/${classId}/quiz/${quiz._id}/attempt/${quiz.lastAttemptId}`
+                    : `/learning/class/${classId}/quiz/${quiz._id}`
+                }
+                size="sm"
+                isDisabled={!canOpen && !quiz.attemptsUsed}
+                colorScheme={
+                  isLive || start.can
+                    ? 'green'
+                    : !canOpen && !quiz.attemptsUsed
+                      ? 'gray'
+                      : 'purple'
+                }
+                variant={!start.can && !quiz.attemptsUsed ? 'outline' : 'solid'}
+                sx={
+                  isLive && start.can && !isCompleted
+                    ? {
+                        animation: `${livePulseGlowGreen} 1.8s ease-in-out infinite`,
+                        fontWeight: 'bold',
+                      }
+                    : undefined
+                }
+              >
+                {quiz.attemptsUsed > 0
+                  ? 'Review answers'
+                  : start.can
+                    ? 'Start test'
+                    : quiz.window?.notYetOpen
+                      ? 'View instructions'
+                      : 'Quiz ended'}
+              </Button>
+            )}
             </>
           )}
         </Flex>
