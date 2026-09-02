@@ -792,6 +792,17 @@ export default function RollAssign({ fixedDepartment = '' }) {
         const trimmed = editRollInput.trim().toUpperCase();
         if (!trimmed) { showToast('Enter a roll number', 'error'); return; }
         if (!editRollModal?._id) { showToast('Cluster ID missing', 'error'); return; }
+
+        // Retyping a roll number that is already assigned merges the two —
+        // there is one folder per student on disk, so they cannot stay apart.
+        const owner = approvedItems.find(a => a.rollNo === trimmed && a._id !== editRollModal._id);
+        if (owner && !window.confirm(
+            `⚠ Ground truth for "${trimmed}" already exists!
+
+Click OK to merge these photos into the existing folder.
+Click Cancel to abort.`
+        )) return;
+
         setEditRollSaving(true);
         try {
             const res  = await fetch(`${RA_BASE}/approve`, {

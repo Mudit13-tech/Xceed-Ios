@@ -35,7 +35,10 @@ export default function DeployConsole() {
     const [unreachableSince, setUnreachableSince] = useState(null);
 
     const phase = status?.phase;
-    const active = phase === 'running' || phase === 'restarting';
+    // Everything the script can still be doing. 'verifying' is the wait for the
+    // restarted server to answer, 'rollback' is it undoing a deploy that never
+    // came up — both keep the page polling fast and the button disabled.
+    const active = ACTIVE_PHASES.includes(phase);
 
     const logRef = useRef(null);
     // Read by the polling effect without making it a dependency, so the
@@ -230,16 +233,52 @@ export default function DeployConsole() {
                         </div>
                     )}
 
+                    {phase === 'verifying' && (
+                        <div style={{ ...styles.badge('warning'), marginBottom: '12px' }}>
+                            Restarted — waiting for the server to answer on its own port. If it never
+                            does, the deploy rolls itself back to the previous commit.
+                        </div>
+                    )}
+
+                    {phase === 'rollback' && (
+                        <div style={{ ...styles.badge('danger'), marginBottom: '12px' }}>
+                            The new code did not come up. Rolling back to the previous commit — this
+                            rebuilds and restarts again, so it takes a few minutes and the site is down
+                            until it finishes.
+                        </div>
+                    )}
+
+                    {phase === 'rolledback' && (
+                        <div style={{ ...styles.badge('warning'), marginBottom: '12px' }}>
+                            The new code would not start, so the box was put back on{' '}
+                            {status.detail?.slice(0, 10) || 'the previous commit'} and the site is up on
+                            that. Fix the branch before deploying again.
+                        </div>
+                    )}
+
                     {phase === 'failed' && (
                         <div style={{ ...styles.badge('danger'), marginBottom: '12px' }}>
-                            Failed at: {status.detail || 'unknown step'} — the server was never restarted
-                            and is still running the previous code.
+                            {/* Two different failures share this phase. Before the restart nothing was
+                                stopped and the site is fine; after it, the site may genuinely be down —
+                                deploy.sh spells that out in the detail rather than leaving the reader
+                                with a reassurance that no longer holds. */}
+                            Failed at: {status.detail || 'unknown step'}
+                            {/DOWN/.test(status.detail || '')
+                                ? ' — the site needs SSH.'
+                                : ' — the server was never restarted and is still running the previous code.'}
                         </div>
                     )}
 
                     {phase === 'success' && (
                         <div style={{ ...styles.badge('success'), marginBottom: '12px' }}>
                             Deployed and restarted on {status.detail?.slice(0, 10) || 'the new commit'}.
+                        </div>
+                    )}
+
+                    {phase === 'dryrun' && (
+                        <div style={{ ...styles.badge('info'), marginBottom: '12px' }}>
+                            Dry run on {status.detail?.slice(0, 10) || 'the new commit'} — pulled, installed
+                            and built, but pm2 was never touched.
                         </div>
                     )}
 
@@ -267,11 +306,17 @@ export default function DeployConsole() {
     );
 }
 
+const ACTIVE_PHASES = ['running', 'restarting', 'verifying', 'rollback'];
+
 const PHASE_LABEL = {
     running: 'Deploying…',
     restarting: 'Restarting…',
+    verifying: 'Waiting for the server to answer…',
+    rollback: 'Rolling back…',
     success: 'Last deploy — succeeded',
+    rolledback: 'Last deploy — rolled back',
     failed: 'Last deploy — failed',
+    dryrun: 'Last run — dry run, nothing restarted',
 };
 
 function formatTime(iso) {
