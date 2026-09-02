@@ -285,7 +285,7 @@ export default function Calendar() {
       });
     });
 
-    data.shorts.forEach((short) => {
+    data.shorts.filter((short) => short.participantCount > 0).forEach((short) => {
       const subject = subjectShort(short.class);
       push(short.startedAt, {
         key: `sh-${short._id}`,

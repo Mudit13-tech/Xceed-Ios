@@ -114,7 +114,7 @@ export default function ShortSessions() {
                       >
                         Back to presenting
                       </Button>
-                    ) : (
+                    ) : session.participantCount > 0 ? (
                       <Button
                         as={RouterLink}
                         to={`/learning/class/${classId}/short/${shortId}/report/${session._id}`}
@@ -123,6 +123,8 @@ export default function ShortSessions() {
                       >
                         Report
                       </Button>
+                    ) : (
+                      <Text fontSize="xs" opacity={0.5}>No participants</Text>
                     )}
                   </Td>
                 </Tr>

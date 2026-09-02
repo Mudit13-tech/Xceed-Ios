@@ -408,6 +408,32 @@ export default function Camera() {
         }
     };
 
+    // Frees a camera that still reports "in use" by something that is no
+    // longer running — a preview whose tab was killed, a process that died
+    // without releasing. Holds normally release themselves and expire on their
+    // own; this is for when neither happened and the next class is about to
+    // start. It does not power-cycle the camera, only drops the claim and
+    // closes the stream the server knows about.
+    const resetCameraConnection = async (camera) => {
+        if (!camera?._id) return;
+        if (camera.inUseKind === 'ground-truth'
+            && !window.confirm(
+                `${camera.cameraId} is held by a ground truth capture (${camera.inUseBy}).`
+                + ' Resetting it will interrupt that enrollment. Continue?')) {
+            return;
+        }
+        setLoading(true);
+        try {
+            const data = await fetchJson(`${CAMERA_API}/${camera._id}/reset-connection`, { method: 'POST' });
+            showToast(data.message || `Reset ${camera.cameraId}`);
+            fetchCameras();
+        } catch (error) {
+            showToast(error.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const deleteCamera = async (camera = selectedCamera) => {
         if (!camera?._id) {
             showToast('Select a camera before deleting', 'error');
@@ -894,6 +920,19 @@ export default function Camera() {
                                         <div style={{ color: theme.textMuted, fontSize: 11, marginTop: 6 }}>
                                             {camera.isActive ? 'Active' : 'Inactive'} · {formatDateTime(camera.lastHeartbeat)}
                                         </div>
+                                        {camera.inUseBy && (
+                                            <div
+                                                title={`Holding this camera's connection since ${formatDateTime(camera.inUseSince)}`}
+                                                style={{
+                                                    marginTop: 6, fontSize: 11, fontWeight: 700,
+                                                    color: theme.warning || '#b45309',
+                                                    display: 'flex', alignItems: 'center', gap: 4,
+                                                }}
+                                            >
+                                                ● In use: {camera.inUseBy}
+                                                {camera.inUseKind === 'preview' && ' (yields to attendance)'}
+                                            </div>
+                                        )}
                                     </td>
                                     <td>{camera.pairedWith || '-'}</td>
                                     <td>
@@ -916,6 +955,20 @@ export default function Camera() {
                                                     <circle cx="12" cy="12" r="3" />
                                                 </svg>
                                             </a>
+                                            <button
+                                                type="button"
+                                                className="camera-mini-btn"
+                                                title={camera.inUseBy
+                                                    ? `Reset connection — drops the claim held by ${camera.inUseBy} and closes its stream`
+                                                    : 'Reset connection — nothing is currently holding this camera'}
+                                                onClick={() => resetCameraConnection(camera)}
+                                                style={camera.inUseBy ? { color: theme.warning || '#b45309' } : undefined}
+                                            >
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M23 4v6h-6M1 20v-6h6" />
+                                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                                                </svg>
+                                            </button>
                                             <button type="button" className="camera-mini-btn" title="Delete" onClick={() => deleteCamera(camera)} style={{ color: theme.danger }}>
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                     <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z" />

@@ -4,6 +4,7 @@ import getEnvironment from '../getenvironment';
 import { styles, theme } from '../attendancemodule/config';
 import DashboardProgress from '../attendancemodule/DashboardProgress';
 import PendingActionsCard from '../attendancemodule/PendingActionsCard';
+import LiveRoomCards from '../attendancemodule/LiveRoomCards';
 
 const apiUrl = getEnvironment();
 
@@ -105,6 +106,12 @@ export default function DeptDashboard() {
                 <StatCard icon={ScanFace} label="Match accuracy" value={displayPercent(stats.matchAccuracy)} detail="Average approved confidence" color={theme.success} />
                 <StatCard icon={CheckCircle2} label="Sessions today" value={stats.sessions} detail={`${stats.review} records need review`} color="#0ea5e9" />
             </div>
+
+            {/* Scoped server-side to this department's classes — see
+                schedulerController.liveStatus. Placed above the day's
+                summaries because it is the only part of this page that
+                changes minute to minute. */}
+            <LiveRoomCards title="Live classrooms" />
 
             <PendingActionsCard />
 
