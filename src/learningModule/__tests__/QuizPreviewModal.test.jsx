@@ -79,4 +79,15 @@ describe('QuizPreviewModal', () => {
     expect(screen.getAllByText(/✓ Correct/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Speed of light in vacuum is approximately/i)).toBeInTheDocument();
   });
+
+  it('toggles full screen mode on button click', () => {
+    renderWithProviders(<QuizPreviewModal isOpen={true} onClose={() => {}} quiz={sampleQuiz} />);
+
+    const fsBtn = screen.getByRole('button', { name: /🖥️ Full Screen/i });
+    expect(fsBtn).toBeInTheDocument();
+
+    fireEvent.click(fsBtn);
+
+    expect(screen.getByRole('button', { name: /📉 Exit Full Screen/i })).toBeInTheDocument();
+  });
 });

@@ -393,9 +393,14 @@ export default function LmAdminFaculty() {
               Everyone who can open a class, set coursework and run tests.
             </Text>
           </Box>
-          <RouterLinkStyle as={RouterLink} to="/learning/lm-admin" fontSize="sm" color="blue.600">
-            ← Admin dashboard
-          </RouterLinkStyle>
+          <Flex gap={4} align="center" wrap="wrap">
+            <RouterLinkStyle as={RouterLink} to="/learning/lm-admin/hod-dashboard" fontSize="sm" color="purple.600">
+              HOD Activity Dashboard →
+            </RouterLinkStyle>
+            <RouterLinkStyle as={RouterLink} to="/learning/lm-admin" fontSize="sm" color="blue.600">
+              ← Admin dashboard
+            </RouterLinkStyle>
+          </Flex>
         </Flex>
       </Box>
 
@@ -534,7 +539,16 @@ export default function LmAdminFaculty() {
                       <Td fontWeight="600">{person.name || '—'}</Td>
                       <Td>{person.email}</Td>
                       <Td whiteSpace="nowrap">{joinedOn(person.createdAt)}</Td>
-                      <Td isNumeric>{person.classCount}</Td>
+                      <Td isNumeric>
+                        <RouterLinkStyle
+                          as={RouterLink}
+                          to={`/learning/lm-admin/faculty/${person._id}/classes`}
+                          color="blue.600"
+                          fontWeight="600"
+                        >
+                          {person.classCount}
+                        </RouterLinkStyle>
+                      </Td>
                       <Td>
                         <ClaimBadge claimed={person.claimed} />
                       </Td>

@@ -201,6 +201,24 @@ function CameraPanel({ cameras, camLoading, open, onManage }) {
   );
 }
 
+// Recharts right-anchors a vertical-bar YAxis category label at the tick and
+// never wraps or truncates it — a label wider than the axis `width` just
+// extends past the chart SVG's left edge, where the SVG's own default
+// overflow:hidden clips it, cutting off the *start* of long department names
+// ("Electronics And Communication Engineering" -> visibly missing its first
+// few letters). Shortening the label before it reaches the axis avoids that;
+// mirrors DashboardProgress.jsx's compactDepartmentLabel.
+function compactDeptTick(value) {
+  const text = String(value || '').trim();
+  return text
+    .replace(/\bAnd\b/g, '&')
+    .replace(/\bEngineering\b/g, 'Engg')
+    .replace(/\bCommunication\b/g, 'Comm')
+    .replace(/\bInstrumentation\b/g, 'Instr')
+    .replace(/\bControl\b/g, 'Ctrl')
+    .replace(/\bTechnology\b/g, 'Tech');
+}
+
 /* ── chart tooltip ── */
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -834,7 +852,8 @@ export default function AMSDashboard() {
                   <YAxis
                     type="category"
                     dataKey="dept"
-                    width={150}
+                    width={160}
+                    tickFormatter={compactDeptTick}
                     tick={{ fontSize: 11, fill: T.textMuted }}
                     axisLine={false}
                     tickLine={false}

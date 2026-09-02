@@ -127,6 +127,11 @@ const NAV_ITEMS = [
   // something better — is not navigation: it is what you do *instead* of what
   // you came here for, and it has to be reachable from wherever the thing broke.
   { to: '/learning/bugs', label: 'Bug / Suggestion', icon: '🛠️', foot: true },
+  // Platform-wide stats and queues at a glance. Only an lm-admin (or other
+  // platform-admin) account can open it — the server 403s everyone else — so
+  // the link itself is hidden rather than left to dead-end.
+  { to: '/learning/lm-admin', label: 'Admin', icon: '🛡️', foot: true, adminOnly: true },
+  { to: '/learning/lm-admin/hod-dashboard', label: 'HOD Dashboard', icon: '📊', foot: true, adminOnly: true },
 ];
 
 /**
@@ -320,7 +325,7 @@ function NavItems({ onNavigate, studentOnly = false, isAdmin = false }) {
   const activeColor = useColorModeValue('blue.700', 'blue.100');
   return (
     <>
-      {NAV_ITEMS.filter((item) => !item.studentOnly || studentOnly).map((item) => (
+      {NAV_ITEMS.filter((item) => (!item.studentOnly || studentOnly) && (!item.adminOnly || isAdmin)).map((item) => (
         <Box
           key={item.to}
           as={NavLink}
@@ -579,7 +584,7 @@ export default function LearningLayout() {
             position="sticky"
             top="88px"
           >
-            <NavItems studentOnly={studentOnly} />
+            <NavItems studentOnly={studentOnly} isAdmin={Boolean(me?.isAdmin)} />
             <ClassSwitcher
               classes={classes}
               activeClassId={activeClassId}

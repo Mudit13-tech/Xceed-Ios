@@ -579,6 +579,20 @@ export default function LmAdmin() {
         </Text>
       </SectionCard>
 
+      <SectionCard
+        title="HOD Activity Dashboard"
+        subtitle="Track faculty & class activities, view semester-wise subjects created, posts, shorts, quizzes, coding exercises, and forms posted."
+        action={
+          <RouterLinkStyle as={RouterLink} to="/learning/lm-admin/hod-dashboard" fontSize="sm" color="purple.600" fontWeight="600">
+            Open HOD Dashboard →
+          </RouterLinkStyle>
+        }
+      >
+        <Text fontSize="sm" color="lmFg.muted">
+          Ranks classes by total activity score to give HODs and administrators immediate visibility into active vs idle classrooms across departments.
+        </Text>
+      </SectionCard>
+
       <SharedSebCard />
 
       <SebInstallerCard />

@@ -132,7 +132,9 @@ describe('Due Date Timezone & Formatting (Issue #2131)', () => {
       // Simulate teacher changing due date to local 2026-10-01 15:30
       fireEvent.change(dateInput, { target: { value: '2026-10-01T15:30' } });
 
-      const saveButton = screen.getByRole('button', { name: /^save$/i });
+      // Two now: the header's, and the one at the bottom of each question. The
+      // header's is the one this test is about, and it comes first in the DOM.
+      const [saveButton] = screen.getAllByRole('button', { name: /^save$/i });
       fireEvent.click(saveButton);
 
       await waitFor(() => {

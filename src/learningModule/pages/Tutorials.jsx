@@ -14,6 +14,15 @@ import {
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import { toDateTimeInput } from '../format';
+import PaperPreviewModal from '../components/PaperPreviewModal';
+
+/**
+ * Whether this row has a deadline to show: one already saved, or one the
+ * teacher has just opened the field for. `''` counts — it is the empty field
+ * they asked for, and must not collapse back the moment it renders.
+ */
+const hasDeadline = (tutorial, dueDates) =>
+  dueDates[tutorial._id] !== undefined || Boolean(tutorial.settings?.dueDate);
 
 /**
  * Lists the class's parameterised tutorials — the ones where every student
@@ -25,6 +34,8 @@ export default function Tutorials() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dueDates, setDueDates] = useState({});
+  // The tutorial whose sample papers are open, or null.
+  const [previewing, setPreviewing] = useState(null);
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -219,9 +230,9 @@ export default function Tutorials() {
                 <Text fontSize="xs" color="lmFg.muted" mt={1}>
                   {tutorial.questionCount ?? tutorial.questions?.length ?? 0} questions ·{' '}
                   {tutorial.totalMarks} marks
-                  {tutorial.settings?.attemptsAllowed > 1
-                    ? ` · ${tutorial.settings.attemptsAllowed} attempts`
-                    : ''}
+                  {tutorial.settings?.attemptsAllowed > 0
+                    ? ` · ${tutorial.settings.attemptsAllowed} attempt${tutorial.settings.attemptsAllowed === 1 ? '' : 's'}`
+                    : ' · unlimited attempts'}
                 </Text>
                 {isTeacher && tutorial.stats && (
                   <Text fontSize="xs" color="lmFg.muted">
@@ -232,7 +243,16 @@ export default function Tutorials() {
                   </Text>
                 )}
                 {!isTeacher && tutorial.bestAttempt && (
-                  <Badge colorScheme={tutorial.bestAttempt.passed ? 'green' : 'red'} mt={1}>
+                  <Badge
+                    colorScheme={
+                      tutorial.bestAttempt.passed === null || tutorial.bestAttempt.passed === undefined
+                        ? 'gray'
+                        : tutorial.bestAttempt.passed
+                          ? 'green'
+                          : 'red'
+                    }
+                    mt={1}
+                  >
                     Best: {tutorial.bestAttempt.score}/{tutorial.bestAttempt.maxScore} (
                     {tutorial.bestAttempt.percent}%)
                   </Badge>
@@ -242,21 +262,34 @@ export default function Tutorials() {
               <HStack>
                 {isTeacher ? (
                   <>
-                    {!tutorial.published && (
-                      <Input
-                        size="sm"
-                        type="datetime-local"
-                        maxW="200px"
-                        value={
-                          dueDates[tutorial._id] !== undefined
-                            ? dueDates[tutorial._id]
-                            : toDateTimeInput(tutorial.settings?.dueDate)
-                        }
-                        onChange={(event) =>
-                          setDueDates((prev) => ({ ...prev, [tutorial._id]: event.target.value }))
-                        }
-                      />
-                    )}
+                    {/* A deadline is optional, so an empty date box on every
+                        draft was showing a date that does not exist. The field
+                        appears once there is one to show, or once the teacher
+                        asks for one. */}
+                    {!tutorial.published &&
+                      (hasDeadline(tutorial, dueDates) ? (
+                        <Input
+                          size="sm"
+                          type="datetime-local"
+                          maxW="200px"
+                          value={
+                            dueDates[tutorial._id] !== undefined
+                              ? dueDates[tutorial._id]
+                              : toDateTimeInput(tutorial.settings?.dueDate)
+                          }
+                          onChange={(event) =>
+                            setDueDates((prev) => ({ ...prev, [tutorial._id]: event.target.value }))
+                          }
+                        />
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDueDates((prev) => ({ ...prev, [tutorial._id]: '' }))}
+                        >
+                          + Deadline
+                        </Button>
+                      ))}
                     <Button
                       as={RouterLink}
                       to={`/learning/class/${classId}/tutorial/${tutorial._id}/edit`}
@@ -272,6 +305,13 @@ export default function Tutorials() {
                       variant="outline"
                     >
                       Results
+                    </Button>
+                    {/* The whole paper, as three students would meet it. Here
+                        rather than in the editor: the editor previews one
+                        question at a time, which is the question you have while
+                        writing one. */}
+                    <Button size="sm" variant="outline" onClick={() => setPreviewing(tutorial)}>
+                      Preview
                     </Button>
                     {tutorial.published && tutorial.settings?.liveMode && (
                       <Button
@@ -310,6 +350,14 @@ export default function Tutorials() {
           </SectionCard>
         ))
       )}
+
+      <PaperPreviewModal
+        isOpen={Boolean(previewing)}
+        onClose={() => setPreviewing(null)}
+        classId={classId}
+        kind="tutorial"
+        item={previewing}
+      />
     </Box>
   );
 }

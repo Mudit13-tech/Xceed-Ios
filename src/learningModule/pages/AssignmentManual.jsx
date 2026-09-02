@@ -147,26 +147,45 @@ function TabCreate() {
                 caption="The question editor — identical shape to Tutorials: Prompt, Variables, Answers, an optional sub-question, Constraint, Hint, Worked solution." />
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    <li><strong>Prompt</strong> — write with <code>{'{{name}}'}</code> placeholders, inserted via the toolbar buttons rather than typed by hand (typing braces directly into the rich-text editor risks invisible formatting breaking the substitution).</li>
-                    <li><strong>Variables</strong> — Integer, Decimal, or From a list, each with a range/step and a unit.</li>
+                    <li><strong>Prompt</strong> — write the question and just <em>type</em> <code>{'{{R}}'}</code> where a value belongs; the variable is declared for you as you type it. The toolbar buttons remain for dropping an existing variable at the cursor. Placeholders typed into a hint, a sub-question or the worked solution count too.</li>
+                    <li><strong>Variables</strong> — Integer (the default), Decimal, or From a list, each with a range/step and a unit. A row you delete stays deleted, even with its placeholder still in the text.</li>
                     <li><strong>Answers</strong> — a formula, evaluated per student; set <strong>Tol %</strong> and/or <strong>Tol ±</strong> (whichever is looser wins).</li>
-                    <li><strong>Sub-questions</strong> — optional parts sharing the same drawn variables, each independently marked.</li>
-                    <li><strong>Constraint</strong> — re-draws values until it's true; use it to exclude divide-by-zero or nonsensical combinations.</li>
+                    <li><strong>Decimals</strong> — how many decimal places the student must give, per answer, defaulting to 2 dp. It appears on their paper, the answer key is stated to that precision, and Results repeats it so a near-miss reads as rounding rather than a wrong method. <em>Exact</em> leaves the value unrounded.</li>
+                    <li><strong>Reads as</strong> — each formula is echoed back below its box as a typeset equation, built from the same parsed formula the server evaluates. A mistyped formula usually looks wrong long before its value does.</li>
+                    <li><strong>Sub-questions</strong> — optional parts sharing the same drawn variables, each independently marked. Not auto-lettered; give them your own labels if you want them.</li>
+                    <li><strong>Constraints</strong> — one condition per cell, added with <strong>+ Add constraint</strong>; values are re-drawn until every one holds. Separate cells rather than one joined expression, so a broken condition is reported on its own.</li>
+                    <li><strong>Tables</strong> — <strong>⊞ Insert table</strong> builds the &quot;given values&quot; grid a design question usually opens with, and drops it at your cursor. Cells take <code>{'{{R}}'}</code> via the variable chips in the builder, so the given values differ per student. Tables save as you build them and are listed under the prompt with <strong>Edit table</strong> and <strong>Delete</strong>.</li>
                 </ul>
             </div>
 
-            <SectionTitle>Rolling Sample Papers</SectionTitle>
-            <Shot src={shotPreview} alt="Preview panel showing three rolled sample assignment papers"
-                caption="Roll samples before publishing — three different draws with their computed answers, so you catch a bad formula before a class sees it." />
+            <SectionTitle>One Question at a Time</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                Questions sit on their own tabs across the top of the editor. <strong>+ Add question</strong>
+                is in the tab strip and takes you straight to the new tab, and each question has its own
+                <strong> Save</strong> button at the bottom, after the worked solution.
+            </div>
+
+            <SectionTitle>Checking a Question</SectionTitle>
+            <Shot src={shotPreview} alt="Preview panel showing rolled sample assignment papers"
+                caption="Roll samples before publishing — different draws with their computed answers, so you catch a bad formula before a class sees it." />
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    <li><strong>Roll samples</strong>, under each question, shows the numbers two students would get for <em>that</em> question, sub-questions nested under the stem with their own answers.</li>
+                    <li><strong>Work it out for values you choose</strong> — when you already know the answer for a particular set of values, type them in and check the question agrees, instead of rolling until they come up. It runs the same evaluation students are marked against.</li>
+                    <li><strong>Preview</strong>, on the assignment&apos;s card in the list, rolls three complete papers end to end.</li>
+                </ul>
+            </div>
             <Note type="warning">
-                Preview rolls against the <strong>saved</strong> assignment, never unsaved edits — save first,
-                or a fix you just made won't show up in the sample.
+                Every preview rolls against the <strong>saved</strong> assignment, never unsaved edits — which
+                is why <em>Roll samples</em> is disabled until you save. Otherwise a fix you just made would
+                not show up in the sample and you would think it had failed.
             </Note>
 
             <SectionTitle>Reusing Questions</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
-                <strong>📥 Import questions</strong> copies whole questions from another assignment — this
-                class or any other you teach — as independent copies with no shared history.
+                <strong>📥 Import questions</strong>, in the toolbar at the top of the editor, copies whole
+                questions from another assignment — this class or any other you teach — as independent
+                copies with no shared history.
             </div>
         </div>
     );
@@ -178,18 +197,19 @@ function TabSettings() {
             <SectionTitle>Assignment Details</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    <li><strong>Attempts allowed</strong> — usually left at 1 for something assessed, but the field is there if you want a second chance policy.</li>
-                    <li><strong>Pass mark (%)</strong> — feeds the pass-rate stat in Results.</li>
-                    <li><strong>Due date</strong> — advisory only. Nothing locks submission at this time; a late submission is simply flagged.</li>
-                    <li><strong>Fresh numbers on each retry</strong>, <strong>Show the worked solution after submitting</strong>, <strong>Show hints</strong> — same meaning as in Tutorials.</li>
+                    <li><strong>Pass mark (%)</strong> — optional, and blank by default. Set one and it feeds the pass-rate stat in Results; leave it blank and no pass-or-fail verdict is shown, and the pass rate reads as a dash rather than a meaningless 0%.</li>
+                    <li><strong>Due date</strong> — optional, and advisory even when set. Nothing locks submission at this time; a late submission is simply flagged. An assignment with no deadline shows no date at all.</li>
+                    <li><strong>Show the worked solution after the deadline</strong> and <strong>Show hints</strong> — same meaning as in Tutorials, but off by default here: this is assessed work.</li>
+                    <li>Every student gets <strong>one attempt</strong>. Unlike a tutorial, that is not configurable — an assignment measures rather than teaches.</li>
                 </ul>
             </div>
             <Note type="warning">
-                Two different due-date fields exist and don't automatically sync: the one inside the
-                editor's Settings is the persisted value, saved by the normal Save button. The list page also
-                shows an inline date picker next to an unpublished assignment's row — that one is only sent
-                when you click Publish from the list, and it will silently override whatever you set in the
-                editor if you fill it in there too. Set the due date in one place, not both.
+                Two different due-date fields exist and don&apos;t automatically sync: the one inside the
+                editor&apos;s Settings is the persisted value, saved by the normal Save button. On the list
+                page, an unpublished assignment shows a <strong>+ Deadline</strong> button that opens a date
+                picker on that row — what you put there is only sent when you click Publish from the list,
+                and it will silently override whatever you set in the editor. Set the due date in one place,
+                not both. A row with no deadline now shows no date at all, rather than an empty picker.
             </Note>
 
             <SectionTitle>Instant Feedback</SectionTitle>

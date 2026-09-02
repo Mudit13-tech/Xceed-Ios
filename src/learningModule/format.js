@@ -107,3 +107,39 @@ export const courseworkLink = (item) =>
   item?.notebookId
     ? `/learning/class/${item.classId}/notebook/${item.notebookId}`
     : `/learning/class/${item?.classId}/work/${item?._id}`;
+
+/**
+ * Renders a computed answer value — the number a parameterised tutorial or
+ * assignment works out from the teacher's formula.
+ *
+ * Rounding is the teacher's call, not this function's. When they have set a
+ * decimal count on the answer that count is honoured exactly, trailing zeros
+ * and all ("2.50" when they asked for two places, because that is what the
+ * student is being told to write). When they have not, the value is shown in
+ * full and unrounded.
+ *
+ * The `Math.round(value * 1e6) / 1e6` this replaces did neither: it silently
+ * rounded to six decimal places, which printed a 1.6e-19 C charge as "0", and
+ * it overflowed the multiply past ~9e15 and printed "Infinity". Both look like
+ * the formula miscalculated when it did not.
+ */
+export function formatAnswerValue(value, decimals = null) {
+  const number = Number(value);
+  if (value === null || value === undefined || value === '' || !Number.isFinite(number)) return '—';
+
+  const places = Number(decimals);
+  if (decimals !== null && decimals !== undefined && decimals !== '' && Number.isFinite(places)) {
+    return number.toFixed(Math.max(0, Math.min(20, Math.trunc(places))));
+  }
+  // Shortest string that round-trips to exactly this number: no rounding, and
+  // correct at both ends of the range (1.6e-19, 2.5e+300).
+  return String(number);
+}
+
+/** "to 2 decimal places", for the instruction shown beside a student's input. */
+export function decimalPlacesHint(decimals) {
+  const places = Number(decimals);
+  if (decimals === null || decimals === undefined || decimals === '' || !Number.isFinite(places)) return '';
+  const whole = Math.max(0, Math.trunc(places));
+  return whole === 0 ? 'to the nearest whole number' : `to ${whole} decimal place${whole === 1 ? '' : 's'}`;
+}

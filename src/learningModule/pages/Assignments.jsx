@@ -14,17 +14,28 @@ import {
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import { toDateTimeInput } from '../format';
+import PaperPreviewModal from '../components/PaperPreviewModal';
 
 /**
  * Lists the class's parameterised assignments — the ones where every student
  * gets their own numbers.
  */
+/**
+ * Whether this row has a deadline to show: one already saved, or one the
+ * teacher has just opened the field for. `''` counts — it is the empty field
+ * they asked for, and must not collapse back the moment it renders.
+ */
+const hasDeadline = (assignment, dueDates) =>
+  dueDates[assignment._id] !== undefined || Boolean(assignment.settings?.dueDate);
+
 export default function Assignments() {
   const { classId, isTeacher } = useOutletContext();
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dueDates, setDueDates] = useState({});
+  // The assignment whose sample papers are open, or null.
+  const [previewing, setPreviewing] = useState(null);
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -233,7 +244,16 @@ export default function Assignments() {
                   </Text>
                 )}
                 {!isTeacher && assignment.bestAttempt && (
-                  <Badge colorScheme={assignment.bestAttempt.passed ? 'green' : 'red'} mt={1}>
+                  <Badge
+                    colorScheme={
+                      assignment.bestAttempt.passed === null || assignment.bestAttempt.passed === undefined
+                        ? 'gray'
+                        : assignment.bestAttempt.passed
+                          ? 'green'
+                          : 'red'
+                    }
+                    mt={1}
+                  >
                     Best: {assignment.bestAttempt.score}/{assignment.bestAttempt.maxScore} (
                     {assignment.bestAttempt.percent}%)
                   </Badge>
@@ -243,21 +263,33 @@ export default function Assignments() {
               <HStack>
                 {isTeacher ? (
                   <>
-                    {!assignment.published && (
-                      <Input
-                        size="sm"
-                        type="datetime-local"
-                        maxW="200px"
-                        value={
-                          dueDates[assignment._id] !== undefined
-                            ? dueDates[assignment._id]
-                            : toDateTimeInput(assignment.settings?.dueDate)
-                        }
-                        onChange={(event) =>
-                          setDueDates((prev) => ({ ...prev, [assignment._id]: event.target.value }))
-                        }
-                      />
-                    )}
+                    {/* A deadline is optional, so an empty date box on every draft
+                        was showing a date that does not exist. The field appears
+                        once there is one, or once the teacher asks for one. */}
+                    {!assignment.published &&
+                      (hasDeadline(assignment, dueDates) ? (
+                        <Input
+                          size="sm"
+                          type="datetime-local"
+                          maxW="200px"
+                          value={
+                            dueDates[assignment._id] !== undefined
+                              ? dueDates[assignment._id]
+                              : toDateTimeInput(assignment.settings?.dueDate)
+                          }
+                          onChange={(event) =>
+                            setDueDates((prev) => ({ ...prev, [assignment._id]: event.target.value }))
+                          }
+                        />
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDueDates((prev) => ({ ...prev, [assignment._id]: '' }))}
+                        >
+                          + Deadline
+                        </Button>
+                      ))}
                     <Button
                       as={RouterLink}
                       to={`/learning/class/${classId}/assignment/${assignment._id}/edit`}
@@ -273,6 +305,13 @@ export default function Assignments() {
                       variant="outline"
                     >
                       Results
+                    </Button>
+                    {/* The whole paper, as three students would meet it. Here
+                        rather than in the editor: the editor previews one
+                        question at a time, which is the question you have while
+                        writing one. */}
+                    <Button size="sm" variant="outline" onClick={() => setPreviewing(assignment)}>
+                      Preview
                     </Button>
                     <Button
                       size="sm"
@@ -301,6 +340,14 @@ export default function Assignments() {
           </SectionCard>
         ))
       )}
+
+      <PaperPreviewModal
+        isOpen={Boolean(previewing)}
+        onClose={() => setPreviewing(null)}
+        classId={classId}
+        kind="assignment"
+        item={previewing}
+      />
     </Box>
   );
 }
