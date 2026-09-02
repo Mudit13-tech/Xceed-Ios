@@ -32,6 +32,22 @@ jobs:
           # 1. Switch to ams-update branch
           git checkout ams-update || git checkout -b ams-update
 
+          # 1b. Guard the vendor-branch invariant.
+          #
+          # ams-update must hold ONLY the AMS client tree — never this repo's own
+          # files. `git pull origin main` while standing on ams-update quietly
+          # fast-forwards it to main, and then the merge in step 5 degenerates
+          # into a fast-forward: AMS's client/package.json (version 0.0.0, no
+          # Capacitor, no deploy:ota) lands on main wholesale and the run dies at
+          # `npm run deploy:ota` with "Missing script". Fail loudly here instead,
+          # while main is still untouched.
+          for marker in scripts/deploy-ota.cjs .github/workflows/deploy-ota.yml; do
+            if git cat-file -e "ams-update:$marker" 2>/dev/null; then
+              echo "::error::ams-update contains '$marker', which only exists on main — the vendor branch was fast-forwarded to main and no longer represents AMS. Reset it to the last 'Automated AMS Sync' commit (git branch -f ams-update <sha> && git push --force-with-lease origin ams-update) before re-running."
+              exit 1
+            fi
+          done
+
           # 2. Unpack AMS's client folder OVER the app at the repo root.
           #
           # This is the half that has to match safe-pull-from-ams.ps1, which runs
@@ -74,6 +90,13 @@ jobs:
           if ! git merge --no-edit ams-update; then
             echo "::error::Merge conflict detected! Aborting merge."
             git merge --abort
+            exit 1
+          fi
+
+          # 6. Last line of defence: whatever the merge did, main must still be
+          # this repo's app, not AMS's bare client.
+          if ! grep -q '"deploy:ota"' package.json; then
+            echo "::error::package.json lost the deploy:ota script in the AMS merge — AMS's client/package.json overwrote ours. Not deploying."
             exit 1
           fi
 
