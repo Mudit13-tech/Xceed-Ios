@@ -129,6 +129,7 @@ const NAV_ITEMS = [
   // platform-admin) account can open it — the server 403s everyone else — so
   // the link itself is hidden rather than left to dead-end.
   { to: '/learning/lm-admin', label: 'Admin', icon: '🛡️', foot: true, adminOnly: true },
+  { to: '/learning/lm-admin/hod-dashboard', label: 'HOD Dashboard', icon: '📊', foot: true, adminOnly: true },
 ];
 
 /**

@@ -668,6 +668,12 @@ const lmApi = {
     request(`/classes/${classId}/tutorials/${tutorialId}/publish`, { method: 'POST', body: body || {} }),
   tutorialResults: (classId, tutorialId) =>
     request(`/classes/${classId}/tutorials/${tutorialId}/results`),
+  // One question worked out for values the teacher typed, rather than drawn ones.
+  evaluateTutorialQuestion: (classId, tutorialId, questionIndex, values) =>
+    request(`/classes/${classId}/tutorials/${tutorialId}/questions/${questionIndex}/evaluate`, {
+      method: 'POST',
+      body: { values },
+    }),
   validateFormula: (classId, formula, variables) =>
     request(`/classes/${classId}/tutorials/validate-formula`, {
       method: 'POST',
@@ -745,6 +751,12 @@ const lmApi = {
     request(`/classes/${classId}/assignments/${assignmentId}/results`),
   // Its own formula endpoints, so a future divergence in either does not silently
   // change validation for the other.
+  // One question worked out for values the teacher typed, rather than drawn ones.
+  evaluateAssignmentQuestion: (classId, assignmentId, questionIndex, values) =>
+    request(`/classes/${classId}/assignments/${assignmentId}/questions/${questionIndex}/evaluate`, {
+      method: 'POST',
+      body: { values },
+    }),
   validateAssignmentFormula: (classId, formula, variables) =>
     request(`/classes/${classId}/assignments/validate-formula`, {
       method: 'POST',
@@ -948,6 +960,20 @@ const lmApi = {
   /* lm-admin — student accounts. Same 403 for anyone who is not a platform admin. */
   adminListStudents: (params = {}) => request(`/admin/students${qs(params)}`),
   adminCreateStudent: (body) => request('/admin/students', { method: 'POST', body }),
+  /* lm-admin — all classes owned by a specific faculty member.
+     Powers the class-count click-through on the faculty directory page. */
+  adminGetFacultyClasses: (facultyId) => request(`/admin/faculty/${facultyId}/classes`),
+  /* lm-admin / HOD — platform-wide per-class activity breakdown, ranked by score.
+     Accepts optional { semester, session } filters. */
+  adminGetHodDashboard: (params = {}) => request(`/admin/hod-dashboard${qs(params)}`),
+  /* Bulk import from a CSV of email addresses, parsed client-side — the server
+     only ever sees the plain address list. `preview` classifies each address
+     without creating anything; `import` is the button. Both take `emails`,
+     `import` also takes the `dept` the whole batch is filed under. */
+  adminPreviewStudentImport: (body) => request('/admin/students/import/preview', { method: 'POST', body }),
+  adminImportStudents: (body) => request('/admin/students/import', { method: 'POST', body }),
+  /* Editing a student's name/email/dept from the directory. */
+  adminUpdateStudent: (studentId, body) => request(`/admin/students/${studentId}`, { method: 'PATCH', body }),
 
   /* ---- discussion forum ---- */
   listDiscussions: (classId) => request(`/classes/${classId}/discussions`),

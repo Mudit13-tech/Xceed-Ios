@@ -26,6 +26,7 @@ import lmApi from '../api/lmApi';
 import RichText from '../components/RichText';
 import RichTextEditor from '../components/RichTextEditor';
 import { ErrorState, Loading, SectionCard } from '../components/common';
+import { formatAnswerValue } from '../format';
 
 /**
  * Building a parameterised assignment from a photographed or scanned paper.
@@ -425,7 +426,7 @@ function PreviewPanel({ classId, draftId, questionIds }) {
                 {(question.expected || []).map((slot, slotIndex) => (
                   <Text key={slotIndex} fontSize="xs" color={slot.error ? 'red.600' : 'lmHue.green800'}>
                     {slot.partLabel ? `${slot.partLabel} ` : ''}{slot.label}:{' '}
-                    <b>{slot.error ? `not markable — ${slot.error}` : `${Math.round(slot.value * 1e6) / 1e6} ${slot.unit || ''}`}</b>
+                    <b>{slot.error ? `not markable — ${slot.error}` : `${formatAnswerValue(slot.value, slot.decimals)} ${slot.unit || ''}`}</b>
                     {' '}({slot.marks} mark{slot.marks === 1 ? '' : 's'})
                   </Text>
                 ))}

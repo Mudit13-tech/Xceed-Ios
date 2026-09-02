@@ -24,7 +24,7 @@ import lmApi from '../api/lmApi';
 import { ErrorState, Loading, SectionCard, StatTile } from '../components/common';
 import RichText from '../components/RichText';
 import AssignmentUploads from '../components/AssignmentUploads';
-import { formatDateTime } from '../format';
+import { decimalPlacesHint, formatAnswerValue, formatDateTime } from '../format';
 
 const answerId = (questionId, key) => `${questionId}:${key}`;
 
@@ -190,6 +190,14 @@ export default function AssignmentPlayer() {
   // this cannot be pushed down next to its other use without a
   // temporal-dead-zone crash on first render.
   const submitted = attempt?.status !== 'in_progress';
+  // Neutral when the assignment sets no pass mark: green/red would be a verdict
+  // on a test the teacher never set.
+  const passAccent =
+    attempt?.passed === null || attempt?.passed === undefined
+      ? undefined
+      : attempt.passed
+        ? 'green.500'
+        : 'red.500';
 
   const saveDraft = async () => {
     if (!attempt || attempt.status !== 'in_progress') return;
@@ -285,7 +293,7 @@ export default function AssignmentPlayer() {
       const result = await lmApi.submitAssignmentAttempt(classId, attempt._id, responses);
       setAttempt(result.attempt);
       toast({
-        status: result.attempt.passed ? 'success' : 'info',
+        status: result.attempt.passed === false ? 'info' : 'success',
         title: `Scored ${result.attempt.score}/${result.attempt.maxScore} (${result.attempt.percent}%)`,
       });
     } catch (err) {
@@ -363,13 +371,13 @@ export default function AssignmentPlayer() {
           <StatTile
             label="Percent"
             value={`${attempt.percent}%`}
-            accent={attempt.passed ? 'green.500' : 'red.500'}
+            accent={passAccent}
           />
-          <StatTile
-            label="Outcome"
-            value={attempt.passed ? 'Passed' : 'Not passed'}
-            accent={attempt.passed ? 'green.500' : 'red.500'}
-          />
+          {/* Only where there is a bar to clear. An assignment with no pass mark
+              set says nothing about passing rather than saying "not passed". */}
+          {attempt.passed !== null && attempt.passed !== undefined && (
+            <StatTile label="Outcome" value={attempt.passed ? 'Passed' : 'Not passed'} accent={passAccent} />
+          )}
         </Flex>
       )}
 
@@ -509,6 +517,13 @@ export default function AssignmentPlayer() {
                   <Text fontSize="xs" color="lmFg.muted">
                     {answer.marks} mark{answer.marks === 1 ? '' : 's'}
                   </Text>
+                  {/* The precision the teacher asked for. Shown while the paper is
+                      still open — being told to round *after* submitting is no use. */}
+                  {decimalPlacesHint(answer.decimals) && (
+                    <Text fontSize="xs" color="lmFg.muted" fontStyle="italic">
+                      give your answer {decimalPlacesHint(answer.decimals)}
+                    </Text>
+                  )}
                   {submitted && graded && (
                     <Badge colorScheme={graded.correct ? 'green' : 'red'}>
                       {graded.correct ? `+${graded.awarded}` : '0'}
@@ -520,7 +535,7 @@ export default function AssignmentPlayer() {
                 </Flex>
                 {submitted && answer.expected !== undefined && (
                   <Text fontSize="xs" color="lmFg.subtle" mt={1} ml="122px">
-                    Correct answer: <b>{Math.round(answer.expected * 1e6) / 1e6}</b> {answer.unit}
+                    Correct answer: <b>{formatAnswerValue(answer.expected, answer.decimals)}</b> {answer.unit}
                   </Text>
                 )}
               </Box>

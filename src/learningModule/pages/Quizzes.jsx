@@ -1328,6 +1328,7 @@ export default function Quizzes() {
         isOpen={previewDialog.isOpen}
         onClose={previewDialog.onClose}
         quiz={previewQuiz}
+        classId={classId}
       />
     </Box>
   );

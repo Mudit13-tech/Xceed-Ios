@@ -174,6 +174,7 @@ export default function Navbar() {
       // login here would make the open decks impossible to reach.
       location.pathname.startsWith('/learning/short/join') ||
       location.pathname.startsWith('/learning/short/live/') ||
+      location.pathname.startsWith('/learning/form/link/') ||
       // The learning module's teacher manuals. They are onboarding
       // documentation for staff who have not been given an account yet, which
       // is exactly who cannot get past this redirect — the routes were already

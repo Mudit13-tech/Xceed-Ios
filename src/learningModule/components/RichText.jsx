@@ -38,7 +38,7 @@ const SANITISE_CONFIG = {
     'ul', 'ol', 'li',
     'blockquote', 'pre', 'code',
     'a', 'img',
-    'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    'table', 'caption', 'thead', 'tbody', 'tr', 'th', 'td',
     'hr',
   ],
   ALLOWED_ATTR: ['href', 'target', 'rel', 'src', 'alt', 'title', 'class', 'style', 'colspan', 'rowspan'],
@@ -155,8 +155,30 @@ const PROSE_STYLES = {
   code: { bg: 'gray.100', px: 1, borderRadius: 'sm', fontSize: '0.875em', fontFamily: 'mono', wordBreak: 'break-word' },
   pre: { bg: 'gray.900', color: 'gray.100', p: 3, borderRadius: 'md', overflowX: 'auto', my: 2, whiteSpace: 'pre-wrap', wordBreak: 'break-all' },
   'pre code': { bg: 'transparent', color: 'inherit', p: 0 },
-  table: { width: '100%', my: 2, borderCollapse: 'collapse', display: 'block', overflowX: 'auto' },
-  'th, td': { borderWidth: '1px', borderColor: 'gray.200', px: 2, py: 1, fontSize: 'sm' },
+  // `table-layout: fixed` is what makes a table behave: the columns share the
+  // available width, so a long cell wraps inside its column instead of
+  // stretching the table past the page. That replaces the previous
+  // `display: block` + horizontal scroll, which kept cells on one line and
+  // pushed the overflow onto the reader.
+  table: {
+    width: '100%',
+    maxWidth: '100%',
+    my: 2,
+    borderCollapse: 'collapse',
+    tableLayout: 'fixed',
+  },
+  'th, td': {
+    borderWidth: '1px',
+    borderColor: 'lmBorder.base',
+    px: 2,
+    py: 1,
+    fontSize: 'sm',
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+    verticalAlign: 'top',
+  },
+  th: { bg: 'lmBg.sunken', fontWeight: '700', textAlign: 'left' },
+  caption: { captionSide: 'top', textAlign: 'left', fontSize: 'sm', fontWeight: '600', pb: 1 },
   'sub, sup': { fontSize: '0.75em' },
 };
 

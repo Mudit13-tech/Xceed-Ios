@@ -149,11 +149,14 @@ function TabCreate() {
                 caption="The question editor. Prompt, Variables, Answers, an optional Sub-question part, Constraint, Hint and Worked solution — all for one question." />
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    <li><strong>Prompt</strong> — write the question with <code>{'{{name}}'}</code> placeholders where a variable's value should appear. Use the <em>Insert variable</em> buttons rather than typing braces by hand — a rich-text editor can silently embed formatting inside hand-typed braces and break the substitution.</li>
-                    <li><strong>Variables</strong> — each has a <strong>Type</strong> (Integer, Decimal, or From a list), a range or list of values, a <strong>Step</strong> (so values land on a clean grid — 4.5, not 4.5137), and a Unit.</li>
+                    <li><strong>Prompt</strong> — write the question and simply <em>type</em> <code>{'{{R}}'}</code> where a value should appear. The variable is declared for you the moment you type it, so there is no separate step; the <em>Insert variable</em> buttons remain for dropping an existing one at the cursor. A placeholder typed into a hint, a sub-question or the worked solution counts too.</li>
+                    <li><strong>Variables</strong> — each has a <strong>Type</strong> (Integer by default, or Decimal, or From a list), a range or list of values, a <strong>Step</strong> (so values land on a clean grid — 4.5, not 4.5137), and a Unit. A row you delete stays deleted, even if the placeholder is still in the text.</li>
                     <li><strong>Answers</strong> — a formula over the variables above, evaluated per student and compared with what they type. Set a <strong>Tol %</strong> and/or <strong>Tol ±</strong> tolerance — whichever is looser applies; the absolute tolerance matters most when the correct value is near zero.</li>
-                    <li><strong>Sub-questions</strong> — optional parts (a), (b), (c)… sharing the same drawn variables, each with its own prompt and its own separately-marked answers. Leave this empty for a single-answer question.</li>
-                    <li><strong>Constraint</strong> — an optional boolean expression (e.g. <code>R &gt; 0</code>); values are re-drawn until it's satisfied, so use it to rule out a divide-by-zero or a physically impossible combination.</li>
+                    <li><strong>Decimals</strong> — how many decimal places the student should give, set per answer and defaulting to 2 dp. It is shown on their paper (&quot;give your answer to 2 decimal places&quot;), the answer key is stated to the same precision, and it appears again in Results so a near-miss reads as rounding rather than a wrong method. Choose <em>Exact</em> to leave the value unrounded.</li>
+                    <li><strong>Reads as</strong> — under each formula box, the formula is echoed back as a typeset equation: <code>V/(R_1+R_2)</code> appears as a real fraction, <code>sqrt(2*g*h)</code> under a root sign, <code>omega</code> as ω. It is built from the same parsed formula the server will evaluate, so what you see cannot disagree with what gets marked — and a mistyped formula usually looks wrong long before its value does.</li>
+                    <li><strong>Sub-questions</strong> — optional parts sharing the same drawn variables, each with its own prompt and its own separately-marked answers. They are no longer auto-lettered; type your own label if you want one. Leave this empty for a single-answer question.</li>
+                    <li><strong>Constraints</strong> — one condition per cell (e.g. <code>R &gt; 0</code>), added with <strong>+ Add constraint</strong>. Every one must hold or the values are drawn again, so use them to rule out a divide-by-zero or a physically impossible combination. Separate cells rather than one joined expression: each is checked and explained on its own, so you are told <em>which</em> condition is broken.</li>
+                    <li><strong>Tables</strong> — <strong>⊞ Insert table</strong> opens a builder for the &quot;given values&quot; grid a lab or design question usually opens with. Set a caption, add rows and columns, fill the cells; the variable chips inside the builder drop a <code>{'{{R}}'}</code> into whichever cell you last clicked, so the given values differ per student. Inserting places the table at your cursor, mid-sentence if that is where it belongs. Tables save as soon as you build them and are listed under the prompt, drawn as they will appear, with <strong>Edit table</strong> and <strong>Delete</strong>.</li>
                     <li><strong>Hint</strong> and <strong>Worked solution</strong> — shown before and after submission respectively, each gated by its own setting (see Settings tab).</li>
                 </ul>
             </div>
@@ -162,18 +165,34 @@ function TabCreate() {
                 invalid formula shows its error inline immediately, not after you save.
             </Note>
 
-            <SectionTitle>Rolling Sample Papers</SectionTitle>
-            <Shot src={shotPreview} alt="Preview panel showing three rolled sample papers with their answers"
-                caption="Roll samples — three genuinely different draws of the same question, with the computed answer for each, so you can eyeball that the numbers behave sensibly before anyone sits the paper." />
+            <SectionTitle>One Question at a Time</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                Questions sit on their own tabs across the top of the editor, so you work on one at a time
+                rather than scrolling a wall of forms. <strong>+ Add question</strong> lives in the tab strip
+                and takes you straight to the new tab. Each question carries its own <strong>Save</strong>
+                button at the bottom, after the worked solution.
+            </div>
+
+            <SectionTitle>Checking a Question</SectionTitle>
+            <Shot src={shotPreview} alt="Preview panel showing rolled sample papers with their answers"
+                caption="Roll samples — genuinely different draws of the same question, with the computed answer for each, so you can eyeball that the numbers behave sensibly before anyone sits the paper." />
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    <li><strong>Roll samples</strong>, under each question, shows the actual numbers two students would be given for <em>that</em> question — sub-questions nested under the stem, each with the answers belonging to it.</li>
+                    <li><strong>Work it out for values you choose</strong> answers the other question you usually have: you already know that at <em>R</em> = 7 Ω and <em>I</em> = 2 A the answer is 28 W, and you want to check the question agrees. Type the values, press the button, and you get the answer for exactly those — no rolling until those numbers happen to come up. It runs the same evaluation students are marked against. Values that break a constraint still compute, with a note saying no student would be given them.</li>
+                    <li><strong>Preview</strong>, on the tutorial&apos;s card in the list, rolls three complete papers end to end — the whole thing as a student meets it, rather than one question.</li>
+                </ul>
+            </div>
             <Note type="warning">
-                Preview always runs against the <strong>saved</strong> version on the server, never your
-                unsaved edits — if you tweak a formula and immediately roll samples without saving first,
-                you'll see the old behaviour and may wrongly conclude your fix didn't work.
+                Every preview runs against the <strong>saved</strong> version on the server, never your
+                unsaved edits — which is why <em>Roll samples</em> is disabled until you save. If it were not,
+                you could tweak a formula, roll, see the old behaviour, and wrongly conclude your fix
+                didn&apos;t work.
             </Note>
 
             <SectionTitle>Reusing Questions</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
-                <strong>📥 Import questions</strong>, at the bottom of the editor, copies whole questions from
+                <strong>📥 Import questions</strong>, in the toolbar at the top of the editor, copies whole questions from
                 another tutorial — in this class or any other class you teach — into the one you have open.
                 Copies are independent from the moment they land: editing them never touches the original,
                 and no student work comes with them. This is separate from importing from a scanned paper —
@@ -189,9 +208,9 @@ function TabSettings() {
             <SectionTitle>Tutorial Details</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    <li><strong>Attempts allowed</strong> — how many times a student may sit the paper. More than one is normal for a tutorial.</li>
-                    <li><strong>Pass mark (%)</strong> — feeds the pass-rate stat in Results; doesn't restrict anything a student can do.</li>
-                    <li><strong>Due date</strong> — advisory only. Nothing locks at this time; a late submission is simply flagged so you can see who was on time.</li>
+                    <li><strong>Attempts allowed</strong> — blank means unlimited, and that is the default. A tutorial is practice, and capping practice at one go is a rule you should have to ask for.</li>
+                    <li><strong>Pass mark (%)</strong> — optional, and blank by default. Set one and it feeds the pass-rate stat in Results; leave it blank and no pass-or-fail verdict is shown anywhere — practice that says &quot;not passed&quot; at 39% discourages the retry it exists to encourage. It never restricts anything a student can do.</li>
+                    <li><strong>Due date</strong> — optional, and advisory even when set. Nothing locks at this time; a late submission is simply flagged so you can see who was on time. Tutorials with no deadline show no date at all.</li>
                     <li><strong>Fresh numbers on each retry</strong> — when on, a second or third attempt draws a genuinely new set of numbers rather than repeating the first attempt's paper. (The very first attempt is always randomly drawn regardless of this setting.)</li>
                     <li><strong>Show the worked solution after submitting</strong> and <strong>Show hints</strong> — self-explanatory, each controlling one of the per-question fields from the editor.</li>
                 </ul>

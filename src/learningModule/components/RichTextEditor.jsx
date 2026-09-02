@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useImperativeHandle, useMemo, useRef } from 'react';
 import ReactQuill from 'react-quill';
 import { Box, Button, HStack, Text, Tooltip } from '@chakra-ui/react';
 import 'react-quill/dist/quill.snow.css';
@@ -41,7 +41,7 @@ const COMPACT_TOOLBAR = [
   ['clean'],
 ];
 
-export default function RichTextEditor({
+function RichTextEditor({
   value,
   onChange,
   placeholder,
@@ -49,7 +49,7 @@ export default function RichTextEditor({
   minH,
   variables = null,
   isInvalid = false,
-}) {
+}, ref) {
   const quillRef = useRef(null);
 
   const modules = useMemo(
@@ -60,16 +60,29 @@ export default function RichTextEditor({
     [compact],
   );
 
-  const insertVariable = useCallback((name) => {
+  /**
+   * Writes plain characters at the cursor, so braces cannot end up wrapped in
+   * markup and break the server-side substitution.
+   */
+  const insertAtCursor = useCallback((text) => {
     const editor = quillRef.current?.getEditor();
-    if (!editor) return;
+    if (!editor) return null;
     const selection = editor.getSelection(true);
     const at = selection ? selection.index : editor.getLength();
-    // insertText writes plain characters, so the braces cannot end up wrapped
-    // in markup and break the server-side substitution.
-    editor.insertText(at, `{{${name}}}`, 'user');
-    editor.setSelection(at + name.length + 4, 0);
+    editor.insertText(at, text, 'user');
+    editor.setSelection(at + text.length, 0);
+    // Returned so a caller can fold the insertion into the same state update as
+    // whatever else it is changing. Quill mutates the DOM synchronously, so this
+    // is the finished HTML — waiting for the onChange that follows would mean
+    // two updates racing, and the loser silently discarded.
+    return editor.root.innerHTML;
   }, []);
+
+  const insertVariable = useCallback((name) => insertAtCursor(`{{${name}}}`), [insertAtCursor]);
+
+  // Exposed so a caller that builds something bigger than a chip — the table
+  // builder — can still drop its token exactly where the cursor is.
+  useImperativeHandle(ref, () => ({ insertAtCursor }), [insertAtCursor]);
 
   return (
     <Box
@@ -124,3 +137,5 @@ export default function RichTextEditor({
     </Box>
   );
 }
+
+export default React.forwardRef(RichTextEditor);

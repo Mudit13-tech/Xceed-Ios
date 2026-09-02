@@ -25,7 +25,7 @@ import useShortStream from '../hooks/useShortStream';
 import AssignmentUploads from '../components/AssignmentUploads';
 import { ErrorState, Loading, SectionCard, StatTile } from '../components/common';
 import RichText from '../components/RichText';
-import { formatDateTime } from '../format';
+import { decimalPlacesHint, formatAnswerValue, formatDateTime } from '../format';
 
 const answerId = (questionId, key) => `${questionId}:${key}`;
 
@@ -125,7 +125,8 @@ export default function TutorialPlayer() {
 
   const [tutorial, setTutorial] = useState(null);
   const [attempt, setAttempt] = useState(null);
-  const [meta, setMeta] = useState({ attemptsUsed: 0, attemptsAllowed: 1, exhausted: false });
+  // attemptsAllowed 0 means unlimited, which is a tutorial's default.
+  const [meta, setMeta] = useState({ attemptsUsed: 0, attemptsAllowed: 0, exhausted: false });
   const [inputs, setInputs] = useState({});
   const [verdicts, setVerdicts] = useState({});
   const [checking, setChecking] = useState(null);
@@ -318,7 +319,7 @@ export default function TutorialPlayer() {
       const result = await lmApi.submitTutorialAttempt(classId, attempt._id, responses);
       setAttempt(result.attempt);
       toast({
-        status: result.attempt.passed ? 'success' : 'info',
+        status: result.attempt.passed === false ? 'info' : 'success',
         title: `Scored ${result.attempt.score}/${result.attempt.maxScore} (${result.attempt.percent}%)`,
       });
     } catch (err) {
@@ -348,6 +349,14 @@ export default function TutorialPlayer() {
   }
 
   const isLive = Boolean(live);
+  // Neutral when the tutorial sets no pass mark: green/red would be a verdict
+  // on a test the teacher never set.
+  const passAccent =
+    attempt?.passed === null || attempt?.passed === undefined
+      ? undefined
+      : attempt.passed
+        ? 'green.500'
+        : 'red.500';
   const liveEnded = isLive && live.status === 'ended';
   const questionCount = (attempt.questions || []).length;
   // Only once something is on screen — with nothing opened the hold card below
@@ -385,7 +394,9 @@ export default function TutorialPlayer() {
               </Text>
             ) : (
               <Text>
-                Attempt {attempt.attemptNumber} of {meta.attemptsAllowed}
+                {/* 0 is the unlimited default; "of 0" would read as none left. */}
+                Attempt {attempt.attemptNumber}
+                {meta.attemptsAllowed > 0 ? ` of ${meta.attemptsAllowed}` : ''}
               </Text>
             )}
             {tutorial.settings?.dueDate && <Text>Due {formatDateTime(tutorial.settings.dueDate)}</Text>}
@@ -432,14 +443,14 @@ export default function TutorialPlayer() {
           <StatTile
             label="Percent"
             value={`${attempt.percent}%`}
-            accent={attempt.passed ? 'green.500' : 'red.500'}
+            accent={passAccent}
           />
-          <StatTile
-            label="Outcome"
-            value={attempt.passed ? 'Passed' : 'Not passed'}
-            accent={attempt.passed ? 'green.500' : 'red.500'}
-          />
-          {!isLive && meta.attemptsUsed < meta.attemptsAllowed && (
+          {/* Only where there is a bar to clear. A tutorial with no pass mark
+              set says nothing about passing rather than saying "not passed". */}
+          {attempt.passed !== null && attempt.passed !== undefined && (
+            <StatTile label="Outcome" value={attempt.passed ? 'Passed' : 'Not passed'} accent={passAccent} />
+          )}
+          {!isLive && (meta.attemptsAllowed === 0 || meta.attemptsUsed < meta.attemptsAllowed) && (
             <Box>
               <Button
                 mt={2}
@@ -591,6 +602,13 @@ export default function TutorialPlayer() {
                   <Text fontSize="xs" color="lmFg.muted">
                     {answer.marks} mark{answer.marks === 1 ? '' : 's'}
                   </Text>
+                  {/* The precision the teacher asked for. Shown while the paper is
+                      still open — being told to round *after* submitting is no use. */}
+                  {decimalPlacesHint(answer.decimals) && (
+                    <Text fontSize="xs" color="lmFg.muted" fontStyle="italic">
+                      give your answer {decimalPlacesHint(answer.decimals)}
+                    </Text>
+                  )}
                   {submitted && graded && (
                     <Badge colorScheme={graded.correct ? 'green' : 'red'}>
                       {graded.correct ? `+${graded.awarded}` : '0'}
@@ -602,7 +620,7 @@ export default function TutorialPlayer() {
                 </Flex>
                 {submitted && answer.expected !== undefined && (
                   <Text fontSize="xs" color="lmFg.subtle" mt={1} ml="122px">
-                    Correct answer: <b>{Math.round(answer.expected * 1e6) / 1e6}</b> {answer.unit}
+                    Correct answer: <b>{formatAnswerValue(answer.expected, answer.decimals)}</b> {answer.unit}
                   </Text>
                 )}
               </Box>
