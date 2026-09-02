@@ -269,17 +269,43 @@ describe('student timetable page', () => {
     ).toBeTruthy();
   });
 
-  it('allows a teacher to view semester timetables and switch to their faculty schedule', async () => {
+  it('lets a teacher toggle between their own schedule and the student one', async () => {
     me = { roles: ['FACULTY'], email: 't@nitj.ac.in' };
     timetableOptions.mockResolvedValue(mockOptions());
 
     renderWithProviders(<Timetable />);
 
-    // Shows faculty mode buttons
-    expect(await screen.findByText('My Faculty Schedule')).toBeTruthy();
+    const mine = await screen.findByRole('button', { name: 'My Schedule' });
+    const student = screen.getByRole('button', { name: 'Student Schedule' });
 
-    // Click to switch to faculty widget
-    fireEvent.click(screen.getByText('My Faculty Schedule'));
+    // A teacher lands on their own schedule, and the control says so.
     expect(await screen.findByText('faculty widget')).toBeTruthy();
+    expect(mine.getAttribute('aria-pressed')).toBe('true');
+    expect(student.getAttribute('aria-pressed')).toBe('false');
+
+    // Across to the student semester timetable.
+    fireEvent.click(student);
+    expect(await screen.findByText('Department')).toBeTruthy();
+    expect(screen.queryByText('faculty widget')).toBeNull();
+    expect(student.getAttribute('aria-pressed')).toBe('true');
+    expect(mine.getAttribute('aria-pressed')).toBe('false');
+
+    // ...and back again. The half of the control that was selected used to be a
+    // dead button that set the state it was already in, so this leg is the one
+    // that regressed silently.
+    fireEvent.click(mine);
+    expect(await screen.findByText('faculty widget')).toBeTruthy();
+    expect(mine.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('gives a student the semester timetable and no schedule toggle', async () => {
+    me = { roles: ['STUDENT'], email: 's@nitj.ac.in' };
+    timetableOptions.mockResolvedValue(mockOptions());
+
+    renderWithProviders(<Timetable />);
+
+    expect(await screen.findByText('Department')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'My Schedule' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Student Schedule' })).toBeNull();
   });
 });

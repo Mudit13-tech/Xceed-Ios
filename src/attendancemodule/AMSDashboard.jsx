@@ -13,7 +13,6 @@ import ILeed, { ILEED_FULL_FORM } from './BrandName';
 import PendingActionsCard from './PendingActionsCard';
 import DeptOverridesChart from './DeptOverridesChart';
 import { MLDataFolder } from './MLDataFolder';
-import { usePeriods } from './usePeriods';
 import { createPortal } from "react-dom";
 import { useRef } from "react";
 
@@ -110,93 +109,6 @@ function StatCard({ label, value, color, loading, delay = 0, suffix = '' }) {
         textTransform: 'uppercase', letterSpacing: '.07em', fontWeight: 700,
       }}>
         {label}
-      </div>
-    </div>
-  );
-}
-
-/* ── live report panel ── */
-function LivePanel({ rooms, loading, open, acquisitionActive, slot, date, lastUpdated, onRefresh, onViewFull }) {
-  const { slotLabel } = usePeriods();
-  return (
-    <div style={{
-      overflow: 'hidden',
-      maxHeight: open ? 600 : 0,
-      opacity: open ? 1 : 0,
-      transition: 'max-height .28s ease, opacity .2s ease',
-      marginTop: open ? 8 : 0,
-    }}>
-      <div style={{
-        background: T.surface, border: `1px solid ${T.border}`,
-        borderRadius: 12, overflow: 'hidden',
-        boxShadow: '0 4px 20px rgba(26,31,60,0.10)',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: `1px solid ${T.border}`, background: T.surfaceAlt, flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
-            {slot && date ? `${slotLabel(slot)} — ${date}` : <span style={{ color: T.textMuted }}>No active period</span>}
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: T.textMuted }}>Updated: {lastUpdated || '—'}</span>
-            <button onClick={onRefresh} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, background: T.indigoDim, color: T.indigo, border: `1px solid ${T.indigo}30`, cursor: 'pointer', fontFamily: T.fontBody, fontWeight: 700 }}>↻</button>
-            <button onClick={onViewFull} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, background: T.emeraldDim, color: T.emerald, border: `1px solid ${T.emerald}30`, cursor: 'pointer', fontFamily: T.fontBody, fontWeight: 700 }}>Full Report →</button>
-          </div>
-        </div>
-
-        {!acquisitionActive && (
-          <div style={{ padding: '8px 16px', fontSize: 12, color: T.red, background: 'rgba(239,68,68,0.06)', borderBottom: `1px solid ${T.border}` }}>
-            ⚠ Global Acquisition is OFF — no new ML runs will execute.
-          </div>
-        )}
-
-        <div style={{ maxHeight: 340, overflowY: 'auto', padding: 14 }}>
-          {loading ? (
-            <div style={{ padding: 18, fontSize: 12, color: T.textMuted, textAlign: 'center' }}>Loading…</div>
-          ) : rooms.length === 0 ? (
-            <div style={{ padding: 18, fontSize: 12, color: T.textMuted, textAlign: 'center' }}>
-              {slot ? 'No classrooms found for this period.' : 'No active lecture period at this time.'}
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10 }}>
-              {rooms.map((r, i) => {
-                const isSkipped  = r.status === 'skipped';
-                const hasCtx     = !!r.ctx;
-                const isComplete = hasCtx && r.runsCompleted >= r.targetRuns;
-                const isDone     = r.status === 'finalized' || isComplete;
-                const color      = isSkipped ? T.textMuted : isDone ? T.emerald : T.indigo;
-                const pct        = r.lastRecord ? r.lastRecord.attendancePct : 0;
-                return (
-                  <div key={i} style={{ border: `1px solid ${color}28`, borderTop: `2px solid ${color}`, borderRadius: 10, padding: '12px 14px', background: T.surface }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: T.text }}>{r.room}</div>
-                      <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, fontWeight: 700, background: `${color}18`, color, textTransform: 'uppercase', flexShrink: 0 }}>
-                        {isSkipped ? 'Skip' : isDone ? 'Done' : 'Live'}
-                      </span>
-                    </div>
-                    {isSkipped ? (
-                      <div style={{ fontSize: 11, color: T.red }}>{r.reason || 'No Class Scheduled'}</div>
-                    ) : hasCtx ? (
-                      <>
-                        <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.ctx.subject}</div>
-                        {r.lastRecord && (
-                          <div style={{ fontSize: 11, display: 'flex', gap: 8, marginBottom: 6 }}>
-                            <span style={{ color: T.emerald }}>P: {r.lastRecord.present}</span>
-                            <span style={{ color: T.red }}>A: {r.lastRecord.absent}</span>
-                            <span style={{ fontWeight: 700, color: T.text }}>{pct}%</span>
-                          </div>
-                        )}
-                        <div style={{ width: '100%', height: 3, background: T.border, borderRadius: 2, overflow: 'hidden' }}>
-                          <div style={{ width: `${Math.min(100, (r.runsCompleted / (r.targetRuns || 1)) * 100)}%`, height: '100%', background: color, transition: 'width .3s' }} />
-                        </div>
-                      </>
-                    ) : (
-                      <div style={{ fontSize: 11, color: T.textMuted }}>Initializing…</div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
