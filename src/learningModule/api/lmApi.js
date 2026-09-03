@@ -235,9 +235,12 @@ const lmApi = {
   /* The one-time name — plus a roll number, from a student — an account gives
      before the module opens. `myIdentity` is fetched only by that form; `me()`
      already carries the `needsIdentity` flag that decides whether to show it.
-     The name is refused a second time, so there is no edit path beside this. */
+     `saveIdentity` refuses a second, different name; `correctIdentity` is the
+     one exception — a single self-service edit of both fields, offered in the
+     account menu while `me().canCorrectIdentity` holds and spent by using it. */
   myIdentity: () => request('/me/identity'),
   saveIdentity: (body) => request('/me/identity', { method: 'POST', body }),
+  correctIdentity: (body) => request('/me/identity/correct', { method: 'POST', body }),
 
   notifications: (params) => request(`/notifications${qs(params)}`),
   markNotificationsRead: async (ids, options = {}) => {

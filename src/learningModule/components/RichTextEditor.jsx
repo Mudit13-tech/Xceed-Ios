@@ -109,7 +109,18 @@ function RichTextEditor({
         ref={quillRef}
         theme="snow"
         value={value || ''}
-        onChange={onChange}
+        /* Only the user's own edits are reported up.
+         *
+         * Quill also fires this when it normalises the `value` it was handed —
+         * reflowing whitespace, closing a tag — and that arrives before anyone
+         * has typed anything. Passing it on marked a freshly loaded form as
+         * having unsaved changes, which in the tutorial editor disabled the
+         * question preview until you pressed Save on edits you never made.
+         * Programmatic insertions still report: insertAtCursor writes with the
+         * 'user' source, and hands the caller the resulting HTML directly. */
+        onChange={(html, delta, source) => {
+          if (source === 'user') onChange(html);
+        }}
         modules={modules}
         placeholder={placeholder}
       />

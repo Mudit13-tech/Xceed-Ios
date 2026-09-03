@@ -8,13 +8,16 @@ import {
   HStack,
   Heading,
   Input,
+  Select,
   Slider,
   SliderFilledTrack,
   SliderThumb,
   SliderTrack,
+  Switch,
   Table,
   Tbody,
   Td,
+  Spinner,
   Text,
   Th,
   Thead,
@@ -23,7 +26,7 @@ import {
   VStack,
 } from '@chakra-ui/react';
 import { symbolFor } from './symbols';
-import { deviceSummary, eng, phase } from './format';
+import { deviceSummary, eng, phase, QUANTITY_COLOR } from './format';
 
 /**
  * The panels around the canvas: what you can place, what the thing you selected is
@@ -315,6 +318,52 @@ export function PartInspector({ component, part, onChange, onDelete, onRotate, r
           );
         }
 
+        /* A state, not a quantity — a switch being closed, a button being a
+           button. Rendered as a toggle rather than a 0/1 box because that is
+           what it is, and because the switch is the one part a student changes
+           *while* experimenting rather than while building. */
+        if (field.type === 'boolean') {
+          return (
+            <Flex key={field.key} justify="space-between" align="center">
+              <Text fontSize="xs" color="lmFg.subtle">
+                {field.label}
+              </Text>
+              <Switch
+                size="sm"
+                colorScheme="teal"
+                isChecked={Boolean(value)}
+                isDisabled={readOnly}
+                onChange={(event) => setValue(field.key, event.target.checked)}
+              />
+            </Flex>
+          );
+        }
+
+        /* A fixed choice — an LED's colour. Not a number, and not free text
+           either: the bench can only draw the colours it has. */
+        if (Array.isArray(field.options)) {
+          return (
+            <Flex key={field.key} justify="space-between" align="center" gap={2}>
+              <Text fontSize="xs" color="lmFg.subtle">
+                {field.label}
+              </Text>
+              <Select
+                size="xs"
+                maxW="110px"
+                value={String(value ?? field.options[0])}
+                isDisabled={readOnly}
+                onChange={(event) => setValue(field.key, event.target.value)}
+              >
+                {field.options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
+            </Flex>
+          );
+        }
+
         return (
           <NumberField
             // Keyed by the component as well as the field: selecting a different
@@ -348,6 +397,90 @@ export function PartInspector({ component, part, onChange, onDelete, onRotate, r
  * is the point of the instrument: a student who has only met P = VI meets real,
  * reactive and apparent power here, and seeing them side by side is the lesson.
  */
+/**
+ * A one-line verdict on the last run, under the bench controls.
+ *
+ * The bench had no such line, and the absence was the reason a working solver
+ * read as a broken one: pressing Run on an unchanged circuit, or on one whose
+ * only meter happens to read zero, updates nothing a student can see. Three
+ * states, three colours, always in the same place:
+ *
+ *   grey   — never run. Says what to press rather than reporting a non-event.
+ *   green  — solved, with the analysis it solved and how long it took. The
+ *            timestamp is the part that matters: it changes on every run, so a
+ *            second press is visibly a second run even when the numbers repeat.
+ *   red    — refused, carrying the solver's own message. A circuit that will not
+ *            solve is the normal way to learn that a node is floating, so this
+ *            is a teaching surface and not merely an error.
+ */
+export function RunStatus({ lastRun, running, result }) {
+  if (running) {
+    return (
+      <Flex align="center" gap={2} mb={2} px={2} py={1} borderRadius="md" bg="lmHue.blue50">
+        <Spinner size="xs" color="lmHue.blue700" />
+        <Text fontSize="xs" color="lmHue.blue700" fontWeight="600">
+          Solving…
+        </Text>
+      </Flex>
+    );
+  }
+
+  if (!lastRun) {
+    return (
+      <Text fontSize="xs" color="lmFg.muted" mb={2}>
+        Not run yet — wire the circuit up and press <b>Run</b>.
+      </Text>
+    );
+  }
+
+  const at = lastRun.at instanceof Date ? lastRun.at : new Date(lastRun.at);
+  const clock = at.toLocaleTimeString(undefined, { hour12: false });
+  const label =
+    lastRun.analysis === 'dc' ? 'DC operating point'
+      : lastRun.analysis === 'ac' ? 'AC steady state'
+        : 'Transient';
+
+  // `result.ok` is the truth about what is on screen; `lastRun.ok` is the truth
+  // about the request. They differ for a run the server refused outright, where
+  // there is no result at all — hence both.
+  const solved = lastRun.ok && result?.ok;
+
+  return (
+    <Flex
+      align="center"
+      gap={2}
+      mb={2}
+      px={2}
+      py={1}
+      borderRadius="md"
+      borderWidth="1px"
+      bg={solved ? 'lmHue.green50' : 'lmHue.red50'}
+      borderColor={solved ? 'lmHue.green200' : 'lmHue.red200'}
+      wrap="wrap"
+    >
+      <Text fontSize="xs" fontWeight="700" color={solved ? 'lmHue.green700' : 'lmHue.red700'}>
+        {solved ? '✓ Solved' : '✕ Did not solve'}
+      </Text>
+      <Text fontSize="xs" color={solved ? 'lmHue.green700' : 'lmHue.red700'}>
+        {label} · {clock}
+        {solved && lastRun.ms !== undefined ? ` · ${lastRun.ms} ms` : ''}
+      </Text>
+      {!solved && (lastRun.error || result?.message) && (
+        <Text fontSize="xs" color="lmHue.red700" flex="1 1 100%">
+          {lastRun.error || result?.message}
+        </Text>
+      )}
+    </Flex>
+  );
+}
+
+/** Which quantity each meter reads, and therefore which hue its face takes. */
+const METER_COLOR = {
+  voltmeter: QUANTITY_COLOR.voltage,
+  ammeter: QUANTITY_COLOR.current,
+  wattmeter: QUANTITY_COLOR.power,
+};
+
 export function InstrumentReadings({ result }) {
   if (!result) {
     return (
@@ -407,7 +540,12 @@ export function InstrumentReadings({ result }) {
                   </Text>
                 </Td>
                 <Td px={1} isNumeric>
-                  <Text fontSize="sm" fontWeight="700">
+                  {/* The meter face takes the hue of what it measures, so an
+                      ammeter reads in the same orange as the I column and a
+                      voltmeter in the same blue as V — the panel and the table
+                      are two views of one run, and matching them is what makes
+                      that obvious without a legend. */}
+                  <Text fontSize="sm" fontWeight="700" color={METER_COLOR[meter.type] || 'lmFg.body'}>
                     {eng(meter.magnitude, meter.unit)}
                   </Text>
                   {meter.type !== 'wattmeter' && result.analysis === 'ac' && (
@@ -491,9 +629,11 @@ export function DeviceReadings({ result }) {
         <Thead>
           <Tr>
             <Th px={1}>Part</Th>
-            <Th px={1} isNumeric>V</Th>
-            <Th px={1} isNumeric>I</Th>
-            <Th px={1} isNumeric>P</Th>
+            {/* The headers carry the same hues, so the table needs no separate
+                legend — V is blue here and blue everywhere. */}
+            <Th px={1} isNumeric color={QUANTITY_COLOR.voltage}>V</Th>
+            <Th px={1} isNumeric color={QUANTITY_COLOR.current}>I</Th>
+            <Th px={1} isNumeric color={QUANTITY_COLOR.power}>P</Th>
           </Tr>
         </Thead>
         <Tbody>
@@ -523,21 +663,46 @@ export function DeviceReadings({ result }) {
                       </Text>
                     )}
                   </Td>
-                  <Td px={1} isNumeric fontSize="xs">
+                  {/* One hue per quantity, the same three used on the canvas
+                      labels and the meters — see QUANTITY_COLOR. A dash is left
+                      grey on purpose: it is the absence of a reading, and
+                      colouring it would give "no number" the same weight as a
+                      number. */}
+                  <Td px={1} isNumeric fontSize="xs" color={QUANTITY_COLOR.voltage} fontWeight="600">
                     {shown.voltage}
                   </Td>
-                  <Td px={1} isNumeric fontSize="xs">
+                  <Td
+                    px={1}
+                    isNumeric
+                    fontSize="xs"
+                    color={shown.current === '—' ? 'lmFg.muted' : QUANTITY_COLOR.current}
+                    fontWeight={shown.current === '—' ? '400' : '600'}
+                  >
                     {shown.current}
                   </Td>
                   <Td px={1} isNumeric fontSize="xs">
-                    <Text as="span" color={shown.delivering ? 'purple.600' : undefined}>
+                    {/* Green, not the power hue, when the part is driving the
+                        circuit: "this is a source" is a different fact from "this
+                        is a power", and the table is the one place both are said
+                        about the same number. */}
+                    <Text
+                      as="span"
+                      fontWeight={shown.power === '—' ? '400' : '600'}
+                      color={
+                        shown.power === '—'
+                          ? 'lmFg.muted'
+                          : shown.delivering
+                            ? 'lmHue.green700'
+                            : QUANTITY_COLOR.power
+                      }
+                    >
                       {shown.power}
                     </Text>
                     {shown.delivering && (
                       // Said in words rather than shown as a minus sign, because a
                       // student meeting "−50 mW" on a battery learns the passive
                       // sign convention backwards and by accident.
-                      <Text fontSize="9px" color="purple.600">
+                      <Text fontSize="9px" color="lmHue.green700">
                         supplied
                       </Text>
                     )}

@@ -7,6 +7,9 @@ import {
   Flex,
   HStack,
   Heading,
+  Code,
+  Collapse,
+  Divider,
   Switch,
   Table,
   Tbody,
@@ -21,6 +24,7 @@ import lmApi from '../api/lmApi';
 import useShortStream from '../hooks/useShortStream';
 import { ErrorState, Loading, SectionCard } from '../components/common';
 import RichText from '../components/RichText';
+import { decimalPlacesHint } from '../format';
 
 /**
  * The teacher's live board for a teacher-paced tutorial.
@@ -41,6 +45,80 @@ const previewText = (html, max = 90) => {
     .trim();
   return text.length > max ? `${text.slice(0, max)}…` : text;
 };
+
+/**
+ * The question in full, with its answer key, for the teacher at the front.
+ *
+ * Values are not filled in and cannot be: every student in the room has their
+ * own draw, so there is no single number to put on the board. What is common to
+ * the class — the wording, the placeholders, the formula behind each answer and
+ * the marks it carries — is exactly what a teacher talking the room through a
+ * question needs, and it is what this shows.
+ */
+function QuestionDetail({ question }) {
+  return (
+    <Box mt={2} p={3} bg="lmBg.sunken" borderRadius="md">
+      <RichText fontSize="sm">{question.prompt}</RichText>
+
+      {(question.parts || []).map((part, partIndex) => (
+        <Box key={partIndex} mt={3} pl={3} borderLeftWidth="2px" borderColor="lmHue.purple200">
+          {part.label && (
+            <Text fontSize="sm" fontWeight="700" color="lmHue.purple700">
+              {part.label}
+            </Text>
+          )}
+          <RichText fontSize="sm">{part.prompt}</RichText>
+        </Box>
+      ))}
+
+      {(question.variables || []).length > 0 && (
+        <HStack fontSize="xs" color="lmFg.muted" mt={3} wrap="wrap">
+          <Text fontWeight="600">Each student draws:</Text>
+          {question.variables.map((variable) => (
+            <Code key={variable.name} fontSize="xs">
+              {variable.name}
+              {variable.type === 'set'
+                ? ` ∈ {${(variable.values || []).join(', ')}}`
+                : ` = ${variable.min}…${variable.max}`}
+              {variable.unit ? ` ${variable.unit}` : ''}
+            </Code>
+          ))}
+        </HStack>
+      )}
+
+      <Divider my={3} />
+      <Text fontSize="xs" fontWeight="700" color="lmFg.body" mb={1}>
+        Answer key
+      </Text>
+      {(question.answers || []).map((answer) => (
+        <Flex key={answer.key} fontSize="sm" gap={2} align="baseline" wrap="wrap" mb={1}>
+          {answer.partLabel && (
+            <Text fontWeight="700" color="lmHue.purple700">
+              {answer.partLabel}
+            </Text>
+          )}
+          <Text fontWeight="600" minW="90px">
+            {answer.label}
+          </Text>
+          <Code fontSize="sm">
+            {answer.formula}
+            {answer.unit ? ` ${answer.unit}` : ''}
+          </Code>
+          <Text fontSize="xs" color="lmFg.muted">
+            {answer.marks} mark{answer.marks === 1 ? '' : 's'}
+            {decimalPlacesHint(answer.decimals) ? ` · ${decimalPlacesHint(answer.decimals)}` : ''}
+          </Text>
+        </Flex>
+      ))}
+
+      {question.hint && (
+        <Text fontSize="xs" color="blue.600" mt={2}>
+          💡 Hint (shown only when you switch it on): {question.hint.replace(/<[^>]*>/g, ' ').trim()}
+        </Text>
+      )}
+    </Box>
+  );
+}
 
 function ProgressCell({ cell }) {
   if (!cell) return <Td textAlign="center" color="lmFg.faint">·</Td>;
@@ -68,6 +146,9 @@ export default function TutorialPresent() {
   const [starting, setStarting] = useState(true);
   const [startError, setStartError] = useState(null);
   const [busy, setBusy] = useState(false);
+  // Which questions the teacher has expanded. Local, not on the session: it is
+  // what *this* teacher is reading, not something the room should follow.
+  const [shown, setShown] = useState({});
 
   // Presenting creates (or resumes) the live session, then we stream its board.
   const start = useCallback(async () => {
@@ -174,15 +255,13 @@ export default function TutorialPresent() {
         {(state.questions || []).map((question, index) => {
           const open = index < openedCount;
           return (
-            <Flex
+            <Box
               key={question.index}
-              align="center"
-              gap={3}
               py={2}
               borderTopWidth={index === 0 ? 0 : '1px'}
               borderColor="lmBorder.subtle"
-              opacity={open ? 1 : 0.5}
             >
+              <Flex align="center" gap={3} opacity={open ? 1 : 0.5}>
               <Badge colorScheme={open ? 'green' : 'gray'} minW="34px" textAlign="center">
                 Q{index + 1}
               </Badge>
@@ -196,6 +275,13 @@ export default function TutorialPresent() {
                 </Text>
               </Box>
               <HStack>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => setShown((open) => ({ ...open, [index]: !open[index] }))}
+                >
+                  {shown[index] ? 'Hide question' : 'Show question'}
+                </Button>
                 <Text fontSize="xs" color="lmFg.muted">
                   Hint
                 </Text>
@@ -207,7 +293,13 @@ export default function TutorialPresent() {
                   onChange={(e) => control('setHint', { index, on: e.target.checked })}
                 />
               </HStack>
-            </Flex>
+              </Flex>
+              {/* Outside the row, so the full prompt gets the card's width
+                  rather than the sliver left beside the controls. */}
+              <Collapse in={Boolean(shown[index])} animateOpacity>
+                <QuestionDetail question={question} />
+              </Collapse>
+            </Box>
           );
         })}
         {!ended && openedCount < questionCount && (
@@ -216,6 +308,24 @@ export default function TutorialPresent() {
           </Text>
         )}
       </SectionCard>
+
+      {/* Who is not in the room. Attendance, not a gate — anyone missing here
+          can still sit the tutorial afterwards; they simply were not present. */}
+      {(state.notJoined || []).length > 0 && (
+        <SectionCard
+          title={`Not joined (${state.notJoined.length})`}
+          subtitle="On the roster but not in this session. They can still open the tutorial later."
+          mb={4}
+        >
+          <HStack wrap="wrap" spacing={2}>
+            {state.notJoined.map((student) => (
+              <Badge key={student.studentId} colorScheme="orange" variant="subtle">
+                {student.name || student.email}
+              </Badge>
+            ))}
+          </HStack>
+        </SectionCard>
+      )}
 
       {/* Per-student progress across the opened questions — the live "answer now"
           board. Each cell is correct/total answer slots, green when complete. */}

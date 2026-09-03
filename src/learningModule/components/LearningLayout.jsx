@@ -40,6 +40,10 @@ import { buttonTextStyles } from './common';
 // ever does, so it has no business in the bundle that loads on every page.
 const CompleteProfile = lazy(() => import('../pages/CompleteProfile'));
 
+// Same reasoning: the one-time correction is opened by a handful of accounts,
+// once each, and never again — it has no business in the shell's bundle.
+const EditIdentityModal = lazy(() => import('./EditIdentityModal'));
+
 // Shared look for the header's square action buttons (theme toggle, logout) so
 // they read as one pair. Mirrors the attendance shell's SQUARE_BTN.
 const SQUARE_BTN = {
@@ -413,6 +417,10 @@ export default function LearningLayout() {
     load();
   }, [load]);
 
+  // Kept apart from the drawer's `isOpen`: the account menu's one-time edit and
+  // the mobile nav open on different things and must not share a switch.
+  const identityEdit = useDisclosure();
+
   const handleLogout = useCallback(async () => {
     try {
       await fetch(`${getEnvironment()}/user/getuser/logout`, {
@@ -554,9 +562,25 @@ export default function LearningLayout() {
                     </Text>
                   </Box>
                   <MenuDivider />
-                  {/* No "edit your name" here on purpose — see the gate above.
-                      An account only ever reaches this menu with a real name on
-                      it, and changing it afterwards is an administrator's job. */}
+                  {/* One correction, and then it is an administrator's job.
+                      The gate above takes the name and roll number in a hurry,
+                      on a first sign-in, and locks them because result sheets
+                      are read by them — but a student who mistyped their own
+                      roll number should not need to find an administrator for
+                      it. The item disappears the moment the edit is spent
+                      (`canCorrectIdentity`, decided server-side), and says on
+                      its face that it is the only one. */}
+                  {me.canCorrectIdentity && (
+                    <MenuItem color={menuTextColor} onClick={identityEdit.onOpen}>
+                      <HStack spacing={2} w="100%">
+                        <Text fontSize="sm">Edit name & roll number</Text>
+                        <Box flex="1" />
+                        <Badge colorScheme="orange" borderRadius="full" px={2} fontSize="0.65rem">
+                          One-time
+                        </Badge>
+                      </HStack>
+                    </MenuItem>
+                  )}
                   <MenuItem color={menuTextColor} onClick={handleLogout}>
                     Log out
                   </MenuItem>
@@ -612,6 +636,20 @@ export default function LearningLayout() {
           </DrawerBody>
         </DrawerContent>
       </Drawer>
+
+      {/* Mounted only once opened: the lazy chunk should not be fetched by every
+          account that merely has the menu item. */}
+      {identityEdit.isOpen && (
+        <Suspense fallback={null}>
+          <EditIdentityModal
+            isOpen={identityEdit.isOpen}
+            onClose={identityEdit.onClose}
+            // `load` re-reads the profile, which is what removes the menu item
+            // and puts the corrected name in the header.
+            onSaved={load}
+          />
+        </Suspense>
+      )}
     </Box>
   );
 }

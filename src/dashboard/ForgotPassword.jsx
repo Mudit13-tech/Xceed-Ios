@@ -14,6 +14,7 @@ import {
   Input,
   InputGroup,
   InputLeftElement,
+  Link,
   PinInput,
   PinInputField,
   Text,
@@ -348,6 +349,42 @@ const ForgotPassword = () => {
             <Button colorScheme="cyan" onClick={() => navigate('/login')}>
               Go to Login
             </Button>
+          )}
+
+          {/* Why an OTP may never arrive, said here rather than left to be
+              guessed at.
+
+              Accounts are not self-registered: one is created when a teacher
+              invites the address to a classroom. So a student who has not been
+              invited yet has no account to reset, and this form can only tell
+              them "no account found" — which reads as a fault in the form, and
+              sends them round it again with the same address. The support
+              address is the last resort for anyone the explanation does not
+              fit. Hidden once the password is actually reset: at that point it
+              is answering a question nobody has. */}
+          {step !== 'done' && (
+            <Box borderTopWidth="1px" borderColor={border} pt={4}>
+              <Text fontSize="xs" color={subColor} lineHeight="1.6">
+                <Text as="span" fontWeight="600">
+                  Not receiving an OTP?
+                </Text>{' '}
+                Your account is created only once a faculty member invites you to a
+                classroom — until then there is nothing to reset. Ask your faculty to
+                create the classroom and invite you; you will then receive the link to
+                set your password.
+              </Text>
+              <Text fontSize="xs" color={subColor} mt={2}>
+                For support, write to{' '}
+                <Link
+                  href="mailto:xceedsupport@nitj.ac.in"
+                  color={iconColor}
+                  fontWeight="600"
+                  isExternal
+                >
+                  xceedsupport@nitj.ac.in
+                </Link>
+              </Text>
+            </Box>
           )}
         </VStack>
       </Box>
