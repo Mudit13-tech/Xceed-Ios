@@ -37,6 +37,8 @@ import { looksLikeEmail, EMAIL_AS_NAME_MESSAGE } from '../displayName';
  * a name that rosters, gradebooks and result sheets are read by should not be
  * re-typed at will, so it is given once here and afterwards only an
  * administrator changes it. `saveMyIdentity` refuses a second, different one.
+ * The account menu's one-time correction (`EditIdentityModal`) is the single
+ * exception: one edit, on a separate endpoint, and then gone.
  *
  * It is a whole page rather than a dismissable dialog on purpose: it is
  * mandatory, and a dialog with no way to close it is a worse version of a page.
