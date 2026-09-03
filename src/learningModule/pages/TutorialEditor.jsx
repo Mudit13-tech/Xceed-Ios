@@ -1165,6 +1165,54 @@ export default function TutorialEditor() {
   const tutorialRef = useRef(tutorial);
   tutorialRef.current = tutorial;
 
+  /**
+   * Pushes a corrected question through to every paper already issued.
+   *
+   * Saves first: re-evaluation runs server-side against the stored tutorial, so
+   * running it on unsaved edits would re-work the papers against the very
+   * formula being fixed.
+   */
+  const [reevaluating, setReevaluating] = useState(false);
+  const reevaluate = async () => {
+    if (
+      // eslint-disable-next-line no-alert
+      !window.confirm(
+        'Re-work every paper already issued against the current questions?\n\n' +
+          'Each student keeps their own numbers. Answers are recalculated from the formulas as they now stand, ' +
+          'and papers already submitted are marked again — scores can go up or down.',
+      )
+    ) {
+      return;
+    }
+    if (!(await save())) return;
+
+    setReevaluating(true);
+    try {
+      const result = await lmApi.reevaluateTutorial(classId, tutorialId);
+      toast({
+        status: result.warnings?.length ? 'warning' : 'success',
+        title: `${result.updated} paper${result.updated === 1 ? '' : 's'} re-worked`,
+        description:
+          [
+            result.remarked ? `${result.remarked} re-marked` : null,
+            result.scoreChanged ? `${result.scoreChanged} score${result.scoreChanged === 1 ? '' : 's'} changed` : null,
+            result.orphanQuestions
+              ? `${result.orphanQuestions} answered question${result.orphanQuestions === 1 ? '' : 's'} no longer on the tutorial, left as they were`
+              : null,
+            ...(result.warnings || []),
+          ]
+            .filter(Boolean)
+            .join(' · ') || 'Nothing needed changing.',
+        duration: 10000,
+        isClosable: true,
+      });
+    } catch (err) {
+      toast({ status: 'error', title: err.message, duration: 10000 });
+    } finally {
+      setReevaluating(false);
+    }
+  };
+
   const addQuestion = () => {
     update({ questions: [...tutorial.questions, JSON.parse(JSON.stringify(BLANK_QUESTION))] });
     // Straight onto the new tab. Adding a question and being left looking at
@@ -1253,6 +1301,17 @@ export default function TutorialEditor() {
             }}
           >
             📥 Import questions
+          </Button>
+          {/* Sits beside Save because that is the workflow: fix the formula,
+              save it, push the fix through to the papers already sat. */}
+          <Button
+            size="sm"
+            variant="outline"
+            colorScheme="purple"
+            isLoading={reevaluating}
+            onClick={reevaluate}
+          >
+            ♻ Re-evaluate
           </Button>
           <Button size="sm" variant="outline" onClick={save} isLoading={saving}>
             Save
@@ -1347,13 +1406,14 @@ export default function TutorialEditor() {
           isChecked={Boolean(tutorial.settings.instantFeedback)}
           onChange={(e) => setSetting('instantFeedback', e.target.checked)}
         >
-          Tick each answer as the student types it
+          Let students check an answer before submitting
         </Checkbox>
         <Text fontSize="xs" color="lmFg.subtle" mt={1}>
-          Students see a ✓ beside an answer as soon as it is right, before submitting. Useful for
-          practice, but a numeric answer can be guessed at until it goes green — leave this off for
-          a tutorial that counts. The number of tries each answer took is recorded either way, so
-          you can see who worked and who searched.
+          Puts a Check button beside each answer, which tells the student whether it is right
+          before they submit. Useful for practice, but a numeric answer can be guessed at until it
+          goes green — leave this off for a tutorial that counts. Each answer allows only a few
+          checks, and the number used is recorded either way, so you can see who worked and who
+          searched.
         </Text>
         {tutorial.settings.instantFeedback && (
           <FormControl mt={2} maxW="240px">

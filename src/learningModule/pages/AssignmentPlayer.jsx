@@ -509,7 +509,6 @@ export default function AssignmentPlayer() {
                           });
                         }
                       }}
-                      onBlur={() => checkOne(question, answer)}
                     />
                     {answer.unit && <InputRightAddon>{answer.unit}</InputRightAddon>}
                   </InputGroup>
@@ -517,7 +516,29 @@ export default function AssignmentPlayer() {
                   {/* The tick. Only ever present when the teacher switched instant
                       feedback on for this assignment. */}
                   {!submitted && attempt.instantFeedback && (
-                    <LiveVerdict verdict={verdicts[id]} busy={checking === id} />
+                    <>
+                      {/* Checking is deliberate, not incidental.
+                       *
+                       * This used to fire on blur, so tabbing out of a field —
+                       * or clicking anywhere else — silently spent one of a
+                       * small number of tries on a half-typed number. A button
+                       * spends a try only when the student meant to. */}
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        colorScheme="blue"
+                        isLoading={checking === id}
+                        isDisabled={
+                          !String(inputs[id] ?? '').trim() ||
+                          Boolean(verdicts[id]?.correct) ||
+                          verdicts[id]?.checkable === false
+                        }
+                        onClick={() => checkOne(question, answer)}
+                      >
+                        Check
+                      </Button>
+                      <LiveVerdict verdict={verdicts[id]} busy={checking === id} />
+                    </>
                   )}
                   <Text fontSize="xs" color="lmFg.muted">
                     {answer.marks} mark{answer.marks === 1 ? '' : 's'}

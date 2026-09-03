@@ -671,6 +671,10 @@ const lmApi = {
     request(`/classes/${classId}/tutorials/${tutorialId}/publish`, { method: 'POST', body: body || {} }),
   tutorialResults: (classId, tutorialId) =>
     request(`/classes/${classId}/tutorials/${tutorialId}/results`),
+  // Re-works every issued paper against the corrected questions, keeping each
+  // student's drawn values.
+  reevaluateTutorial: (classId, tutorialId) =>
+    request(`/classes/${classId}/tutorials/${tutorialId}/reevaluate`, { method: 'POST' }),
   // One question worked out for values the teacher typed, rather than drawn ones.
   evaluateTutorialQuestion: (classId, tutorialId, questionIndex, values) =>
     request(`/classes/${classId}/tutorials/${tutorialId}/questions/${questionIndex}/evaluate`, {
@@ -754,6 +758,10 @@ const lmApi = {
     request(`/classes/${classId}/assignments/${assignmentId}/results`),
   // Its own formula endpoints, so a future divergence in either does not silently
   // change validation for the other.
+  // Re-works every issued paper against the corrected questions, keeping each
+  // student's drawn values.
+  reevaluateAssignment: (classId, assignmentId) =>
+    request(`/classes/${classId}/assignments/${assignmentId}/reevaluate`, { method: 'POST' }),
   // One question worked out for values the teacher typed, rather than drawn ones.
   evaluateAssignmentQuestion: (classId, assignmentId, questionIndex, values) =>
     request(`/classes/${classId}/assignments/${assignmentId}/questions/${questionIndex}/evaluate`, {
@@ -969,10 +977,12 @@ const lmApi = {
   /* lm-admin / HOD — platform-wide per-class activity breakdown, ranked by score.
      Accepts optional { semester, session } filters. */
   adminGetHodDashboard: (params = {}) => request(`/admin/hod-dashboard${qs(params)}`),
-  /* Bulk import from a CSV of email addresses, parsed client-side — the server
-     only ever sees the plain address list. `preview` classifies each address
-     without creating anything; `import` is the button. Both take `emails`,
-     `import` also takes the `dept` the whole batch is filed under. */
+  /* Bulk import from an ERP roster export (.xlsx: name, roll no, branch,
+     email), parsed client-side — the server only ever sees plain rows of
+     `{ name, rollNumber, dept, email }`. `preview` classifies each row
+     without writing anything; `import` is the button. Both take `rows`.
+     An address that already has an account is updated (name/roll/dept
+     corrected to match the roster) rather than skipped. */
   adminPreviewStudentImport: (body) => request('/admin/students/import/preview', { method: 'POST', body }),
   adminImportStudents: (body) => request('/admin/students/import', { method: 'POST', body }),
   /* Editing a student's name/email/dept from the directory. */

@@ -51,6 +51,10 @@ const ACCESS_DENIED = {
   ROLE_REQUIRED: { icon: '🔒', title: 'You do not have the necessary role for these pages' },
   NOT_ENROLLED: { icon: '📕', title: 'You do not have access to this subject' },
   JOIN_PENDING: { icon: '⏳', title: 'Waiting for your teacher to approve you' },
+  // A teacher-paced tutorial is entered in the room. Missing the session is not
+  // something the student can retry their way out of, so it reads as a closed
+  // door rather than a failure.
+  NOT_JOINED: { icon: '🙋', title: 'This tutorial opens during the live session' },
 };
 
 export const accessDeniedOf = (error) =>
