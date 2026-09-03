@@ -31,6 +31,14 @@ import {
   ListIcon,
   Tag,
   TagLabel,
+  Tooltip,
+  Spinner,
+  Wrap,
+  Alert,
+  AlertIcon,
+  AlertTitle,
+  AlertDescription,
+  CloseButton,
 } from '@chakra-ui/react';
 import {
   FiList,
@@ -45,7 +53,12 @@ import {
   FiMapPin,
   FiChevronDown,
   FiChevronUp,
+  FiSend,
+  FiCheckCircle,
+  FiAlertCircle,
+  FiSlash,
 } from 'react-icons/fi';
+import { useSearchParams } from 'react-router-dom';
 import getEnvironment from '../getenvironment.js';
 
 const SLOT_TIME_MAP = {
@@ -214,14 +227,342 @@ const TimetableLockLog = ({ facultyChanges }) => {
   );
 };
 
+/** Absolute local time, to the minute — the timestamp a coordinator quotes. */
+const formatTimestamp = (iso) =>
+  iso
+    ? new Date(iso).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '—';
+
+/**
+ * Counts per delivery status.
+ *
+ * The server sends these as `mailSummary`, but a resend replies with the
+ * updated notifications only, so the same arithmetic has to exist here to
+ * refresh the badge without refetching the page.
+ */
+const summariseNotifications = (notifications = []) => {
+  const summary = {
+    total: notifications.length,
+    sent: 0,
+    failed: 0,
+    pending: 0,
+    skipped: 0,
+    lastSentAt: null,
+  };
+
+  notifications.forEach((n) => {
+    if (summary[n.status] === undefined) summary[n.status] = 0;
+    summary[n.status] += 1;
+    if (
+      n.sentAt &&
+      (!summary.lastSentAt ||
+        new Date(n.sentAt) > new Date(summary.lastSentAt))
+    ) {
+      summary.lastSentAt = n.sentAt;
+    }
+  });
+
+  return summary;
+};
+
+const STATUS_STYLE = {
+  sent: { colorScheme: 'green', icon: FiCheckCircle, label: 'Delivered' },
+  failed: { colorScheme: 'red', icon: FiAlertCircle, label: 'Failed' },
+  pending: { colorScheme: 'yellow', icon: FiClock, label: 'Not sent yet' },
+  // Not a failure: mail is turned off for this person on their faculty record.
+  skipped: { colorScheme: 'gray', icon: FiSlash, label: 'Mail off' },
+};
+
+/**
+ * Whether each teacher actually got the mail about this change, and a way to
+ * send it again when they did not.
+ *
+ * Worth being explicit about what "Delivered" claims here, because a delivery
+ * report that overstates itself is what this whole panel exists to replace: it
+ * means the mail server accepted the message for that address at the timestamp
+ * shown. It cannot mean the teacher read it, and it cannot see a message that
+ * the receiving end later filed as spam. What it does rule out — and what used
+ * to be reported as success regardless — is a refused login, a blocked port, a
+ * rejected recipient, and a name that matched no faculty record at all.
+ */
+const MailDelivery = ({ log, apiUrl, onNotificationsUpdated, defaultOpen }) => {
+  const { isOpen, onToggle, onOpen } = useDisclosure({ defaultIsOpen: defaultOpen });
+  const toast = useToast();
+  const [busy, setBusy] = useState(null);
+
+  // The row arrives after the first render (the logs are fetched), so the
+  // deep-linked panel has to be opened once the flag turns true rather than
+  // only at mount.
+  useEffect(() => {
+    if (defaultOpen) onOpen();
+  }, [defaultOpen, onOpen]);
+
+  const notifications = log.notifications || [];
+  const summary = log.mailSummary || summariseNotifications(notifications);
+  const unsent = notifications.filter(
+    (n) => n.status !== 'sent' && n.status !== 'skipped'
+  );
+  const optedOut = notifications.filter((n) => n.status === 'skipped');
+
+  const resend = async (notificationId) => {
+    setBusy(notificationId || 'all');
+    try {
+      const res = await fetch(
+        `${apiUrl}/timetablemodule/logs/${log._id}/resend`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(notificationId ? { notificationId } : {}),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Resend failed');
+
+      onNotificationsUpdated(log._id, data.notifications || []);
+      toast({
+        title: data.failed ? 'Some mails still failed' : 'Mail resent',
+        description: data.message,
+        status: data.failed ? 'warning' : 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+    } catch (e) {
+      toast({
+        title: 'Could not resend',
+        description: e.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!notifications.length) {
+    return (
+      <Tooltip
+        label="Either the teachers were not informed for this change, or it predates delivery tracking."
+        hasArrow
+      >
+        <Tag size="sm" colorScheme="gray" variant="subtle">
+          <TagLabel>No mail record</TagLabel>
+        </Tag>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <Box>
+      <Wrap spacing={2} shouldWrapChildren>
+        {summary.sent > 0 && (
+          <Tag size="sm" colorScheme="green" variant="subtle">
+            <ListIcon as={FiCheckCircle} mr={1} mb={0} />
+            <TagLabel>{summary.sent} delivered</TagLabel>
+          </Tag>
+        )}
+        {summary.failed > 0 && (
+          <Tag size="sm" colorScheme="red" variant="subtle">
+            <ListIcon as={FiAlertCircle} mr={1} mb={0} />
+            <TagLabel>{summary.failed} failed</TagLabel>
+          </Tag>
+        )}
+        {summary.pending > 0 && (
+          <Tag size="sm" colorScheme="yellow" variant="subtle">
+            <TagLabel>{summary.pending} not sent</TagLabel>
+          </Tag>
+        )}
+        {summary.skipped > 0 && (
+          <Tooltip
+            label="Email notifications are turned off for these faculty members on the Add Faculty page."
+            hasArrow
+          >
+            <Tag size="sm" colorScheme="gray" variant="subtle">
+              <ListIcon as={FiSlash} mr={1} mb={0} />
+              <TagLabel>{summary.skipped} mail off</TagLabel>
+            </Tag>
+          </Tooltip>
+        )}
+
+        <Button
+          size="xs"
+          variant="ghost"
+          colorScheme="purple"
+          onClick={onToggle}
+          rightIcon={isOpen ? <FiChevronUp /> : <FiChevronDown />}
+        >
+          {isOpen ? 'Hide' : 'Mail status'}
+        </Button>
+      </Wrap>
+
+      {summary.lastSentAt && !isOpen && (
+        <Text fontSize="2xs" color="gray.500" mt={1}>
+          Last delivered {formatTimestamp(summary.lastSentAt)}
+        </Text>
+      )}
+
+      <Collapse in={isOpen} animateOpacity>
+        <VStack
+          align="stretch"
+          spacing={3}
+          mt={3}
+          p={3}
+          bg="gray.50"
+          borderRadius="md"
+          border="1px"
+          borderColor="gray.100"
+        >
+          {unsent.length > 0 && (
+            <Button
+              size="xs"
+              colorScheme="purple"
+              alignSelf="flex-start"
+              leftIcon={<FiSend />}
+              isLoading={busy === 'all'}
+              isDisabled={Boolean(busy)}
+              onClick={() => resend()}
+            >
+              Resend all {unsent.length} unsent
+            </Button>
+          )}
+
+          {unsent.length === 0 && optedOut.length > 0 && (
+            <Text fontSize="xs" color="gray.500">
+              Nothing to resend. {optedOut.length}{' '}
+              {optedOut.length === 1 ? 'recipient has' : 'recipients have'} email
+              notifications turned off.
+            </Text>
+          )}
+
+          {notifications.map((n) => {
+            const style = STATUS_STYLE[n.status] || STATUS_STYLE.pending;
+            return (
+              <Box
+                key={n._id}
+                borderBottom="1px solid"
+                borderColor="gray.200"
+                pb={2}
+                _last={{ borderBottom: 'none', pb: 0 }}
+              >
+                <HStack justify="space-between" align="start" spacing={2}>
+                  <Box minW={0}>
+                    <Text fontSize="xs" fontWeight="bold" color="gray.700">
+                      {n.facultyName}
+                    </Text>
+                    <Text fontSize="xs" color="gray.600" wordBreak="break-all">
+                      {n.email || 'no address on record'}
+                    </Text>
+
+                    <HStack spacing={2} mt={1} wrap="wrap">
+                      <Tag size="sm" colorScheme={style.colorScheme} variant="subtle">
+                        <ListIcon as={style.icon} mr={1} mb={0} />
+                        <TagLabel>{style.label}</TagLabel>
+                      </Tag>
+                      {n.status === 'sent' ? (
+                        <Text fontSize="2xs" color="gray.500">
+                          <Icon as={FiClock} mr={1} />
+                          {formatTimestamp(n.sentAt)}
+                        </Text>
+                      ) : (
+                        n.lastAttemptAt && (
+                          <Text fontSize="2xs" color="gray.500">
+                            last tried {formatTimestamp(n.lastAttemptAt)}
+                          </Text>
+                        )
+                      )}
+                      {n.resendCount > 0 && (
+                        <Tooltip
+                          label={`Resent by ${n.lastResendBy || 'unknown'}`}
+                          hasArrow
+                        >
+                          <Text fontSize="2xs" color="purple.500">
+                            resent ×{n.resendCount}
+                          </Text>
+                        </Tooltip>
+                      )}
+                    </HStack>
+
+                    {n.status !== 'sent' && n.error && (
+                      <Text fontSize="2xs" color="red.500" mt={1}>
+                        {n.error}
+                      </Text>
+                    )}
+                    {n.status === 'sent' && n.messageId && (
+                      <Text
+                        fontSize="2xs"
+                        color="gray.400"
+                        mt={1}
+                        wordBreak="break-all"
+                      >
+                        {n.messageId}
+                      </Text>
+                    )}
+                  </Box>
+
+                  <Tooltip
+                    label={
+                      n.status === 'skipped'
+                        ? 'Email notifications are turned off for this faculty member. Turn them back on from the Add Faculty page.'
+                        : n.email
+                        ? n.status === 'sent'
+                          ? 'Send this notification again'
+                          : 'Try this notification again'
+                        : 'Add an email address to this faculty record first'
+                    }
+                    hasArrow
+                  >
+                    <IconButton
+                      size="xs"
+                      variant="ghost"
+                      colorScheme="purple"
+                      aria-label={`Resend to ${n.facultyName}`}
+                      icon={busy === n._id ? <Spinner size="xs" /> : <FiSend />}
+                      isDisabled={
+                        Boolean(busy) || !n.email || n.status === 'skipped'
+                      }
+                      onClick={() => resend(n._id)}
+                    />
+                  </Tooltip>
+                </HStack>
+              </Box>
+            );
+          })}
+        </VStack>
+      </Collapse>
+    </Box>
+  );
+};
+
 const Logs = () => {
   const apiUrl = getEnvironment();
   const toast = useToast();
 
+  // `/tt/logs?log=<id>` is where the timetable page sends a coordinator whose
+  // notification mails did not all go out. The row is opened and outlined so
+  // they land on the failures rather than having to find the change again.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusLogId = searchParams.get('log');
+  // `/tt/logs?dept=CSE` is the department view, linked from a department's own
+  // timetable page. It is a starting filter, not a permission: the server
+  // decides what this account may actually read and says so in `scope`.
+  const deptParam = searchParams.get('dept') || '';
+
+  // What the server will let this account see. `allDepts: false` means a
+  // department coordinator, so the department filter is theirs already and
+  // showing a picker would only offer choices it would refuse.
+  const [scope, setScope] = useState({ allDepts: true, depts: [] });
+
   const [logs, setLogs] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [allDepts, setAllDepts] = useState([]);
-  const [deptFilter, setDeptFilter] = useState('');
+  const [deptFilter, setDeptFilter] = useState(deptParam);
   const [sessionFilter, setSessionFilter] = useState('');
   const [sessionToDelete, setSessionToDelete] = useState('');
   const [limit, setLimit] = useState(10);
@@ -234,15 +575,6 @@ const Logs = () => {
   );
   const cardBg = useColorModeValue('rgba(255, 255, 255, 0.95)', 'gray.800');
   const borderColor = useColorModeValue('gray.300', 'gray.700');
-
-  const formatTime = (iso) =>
-    new Date(iso).toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
 
   const fetchSessions = useCallback(async () => {
     try {
@@ -259,43 +591,59 @@ const Logs = () => {
 
   const fetchTotal = useCallback(async () => {
     try {
-      const res = await fetch(`${apiUrl}/timetablemodule/logs/total`, {
-        credentials: 'include',
-      });
+      // Same department filter as the listing: a header reading "412 total
+      // logs" over a table of eleven CSE rows is just wrong.
+      const params = new URLSearchParams();
+      if (deptFilter) params.set('dept', deptFilter);
+      const res = await fetch(
+        `${apiUrl}/timetablemodule/logs/total?${params.toString()}`,
+        { credentials: 'include' }
+      );
       if (!res.ok) return;
       const data = await res.json();
       setTotalLogs(data.totalLogs || 0);
     } catch (e) {
       console.error(e);
     }
-  }, [apiUrl]);
+  }, [apiUrl, deptFilter]);
 
   const fetchLogs = useCallback(async () => {
     try {
-      let url = `${apiUrl}/timetablemodule/logs/get?page=${currentPage}&limit=${limit}`;
-      if (deptFilter && sessionFilter)
-        url = `${apiUrl}/timetablemodule/logs/dept/${encodeURIComponent(
-          deptFilter
-        )}?session=${encodeURIComponent(
-          sessionFilter
-        )}&page=${currentPage}&limit=${limit}`;
-      else if (deptFilter)
-        url = `${apiUrl}/timetablemodule/logs/dept/${encodeURIComponent(
-          deptFilter
-        )}?page=${currentPage}&limit=${limit}`;
-      else if (sessionFilter)
-        url = `${apiUrl}/timetablemodule/logs/session/${encodeURIComponent(
-          sessionFilter
-        )}?page=${currentPage}&limit=${limit}`;
+      // One endpoint for every combination now: `/logs/get` takes both filters
+      // as query parameters, so the three near-identical URLs this used to
+      // build (and the two that could not express dept+session together) are
+      // gone. The department-scoped routes are kept on the server for callers
+      // that still use them.
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        limit: String(limit),
+      });
+      if (deptFilter) params.set('dept', deptFilter);
+      if (sessionFilter) params.set('session', sessionFilter);
 
-      const res = await fetch(url, { credentials: 'include' });
+      const res = await fetch(
+        `${apiUrl}/timetablemodule/logs/get?${params.toString()}`,
+        { credentials: 'include' }
+      );
       if (!res.ok) {
+        // 403 is its own case: the account may not read these logs at all, or
+        // asked for a department that is not theirs. Saying "error fetching
+        // logs" would send a coordinator hunting for a fault that is not one.
+        let detail = '';
+        try {
+          detail = (await res.json())?.error || '';
+        } catch (parseError) {
+          detail = '';
+        }
         toast({
-          title: 'Error fetching logs',
-          status: 'error',
-          duration: 3000,
+          title: res.status === 403 ? 'Not available' : 'Error fetching logs',
+          description: detail || undefined,
+          status: res.status === 403 ? 'warning' : 'error',
+          duration: 6000,
           isClosable: true,
         });
+        setLogs([]);
+        setTotalLogs(0);
         return;
       }
       const data = await res.json();
@@ -306,6 +654,7 @@ const Logs = () => {
         : data.totalLogs || 0;
       setLogs(receivedLogs);
       setTotalLogs(receivedTotal);
+      if (data.scope) setScope(data.scope);
       if (!deptFilter)
         setAllDepts([
           ...new Set(receivedLogs.map((l) => l.dept).filter(Boolean)),
@@ -330,6 +679,37 @@ const Logs = () => {
     setCurrentPage(1);
     fetchLogs();
   }, [deptFilter, sessionFilter, limit, fetchLogs]);
+
+  /**
+   * Fold a resend's result back into the row it came from.
+   *
+   * Patching in place rather than refetching keeps whichever detail panels the
+   * coordinator has expanded open — a refetch would collapse the row they are
+   * working through, which is the row they still have failures in.
+   */
+  const applyNotifications = useCallback((logId, notifications) => {
+    setLogs((prev) =>
+      prev.map((log) =>
+        log._id === logId
+          ? {
+              ...log,
+              notifications,
+              mailSummary: {
+                ...summariseNotifications(notifications),
+                requested: log.mailSummary?.requested ?? true,
+              },
+            }
+          : log
+      )
+    );
+  }, []);
+
+  const focusRow = focusLogId
+    ? logs.find((log) => log._id === focusLogId)
+    : null;
+  const focusUnsent = focusRow
+    ? (focusRow.notifications || []).filter((n) => n.status !== 'sent').length
+    : 0;
 
   const deleteSessionLogs = async (session) => {
     if (!session)
@@ -412,7 +792,13 @@ const Logs = () => {
               Timetable Change Logs
             </Heading>
             <Text color="whiteAlpha.900" fontSize={{ base: "sm", md: "lg" }} maxW="2xl">
-              View all changes made to the timetable system.
+              {scope.allDepts
+                ? deptFilter
+                  ? `Changes made to the ${deptFilter} timetable.`
+                  : 'View all changes made to the timetable system.'
+                : `Changes made to the ${
+                    scope.depts.join(', ') || 'your department'
+                  } timetable.`}
             </Text>
           </VStack>
         </Container>
@@ -458,28 +844,37 @@ const Logs = () => {
                   />
                   <MenuList p={3} bg={cardBg} borderColor={borderColor}>
                     <VStack align="stretch" spacing={3}>
-                      <Select
-                        size="sm"
-                        value={deptFilter}
-                        onChange={(e) => setDeptFilter(e.target.value)}
-                        variant="unstyled"
-                        focusBorderColor="transparent"
-                        border="none"
-                      >
-                        <option value="">All Depts</option>
-                        {(allDepts.length
-                          ? allDepts
-                          : [
-                              ...new Set(
-                                logs.map((l) => l.dept).filter(Boolean)
-                              ),
-                            ]
-                        ).map((d) => (
-                          <option key={d} value={d}>
-                            {d}
-                          </option>
-                        ))}
-                      </Select>
+                      {scope.allDepts ? (
+                        <Select
+                          size="sm"
+                          value={deptFilter}
+                          onChange={(e) => setDeptFilter(e.target.value)}
+                          variant="unstyled"
+                          focusBorderColor="transparent"
+                          border="none"
+                        >
+                          <option value="">All Depts</option>
+                          {(allDepts.length
+                            ? allDepts
+                            : [
+                                ...new Set(
+                                  logs.map((l) => l.dept).filter(Boolean)
+                                ),
+                              ]
+                          ).map((d) => (
+                            <option key={d} value={d}>
+                              {d}
+                            </option>
+                          ))}
+                        </Select>
+                      ) : (
+                        /* The server confines this account to its own
+                           department, so a picker here would only ever offer
+                           choices it would refuse. */
+                        <Text fontSize="xs" color="gray.500" px={1}>
+                          Showing {scope.depts.join(', ')} only
+                        </Text>
+                      )}
 
                       <Select
                         size="sm"
@@ -545,6 +940,42 @@ const Logs = () => {
             </HStack>
           </Box>
 
+          {focusRow && focusUnsent > 0 && (
+            <Alert
+              status="warning"
+              alignItems="flex-start"
+              flexDirection={{ base: 'column', md: 'row' }}
+              gap={2}
+            >
+              <AlertIcon />
+              <Box flex="1">
+                <AlertTitle fontSize={{ base: 'sm', md: 'md' }}>
+                  {focusUnsent} faculty {focusUnsent === 1 ? 'was' : 'were'} not
+                  notified
+                </AlertTitle>
+                <AlertDescription
+                  display="block"
+                  fontSize={{ base: 'xs', md: 'sm' }}
+                >
+                  The timetable for {focusRow.dept} was locked, but the change
+                  mail did not reach {focusUnsent} of{' '}
+                  {focusRow.mailSummary?.total ?? focusUnsent}{' '}
+                  {focusUnsent === 1 ? 'recipient' : 'recipients'}. The reason
+                  for each is on the highlighted row below, where you can send
+                  it again.
+                </AlertDescription>
+              </Box>
+              <CloseButton
+                alignSelf="flex-start"
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.delete('log');
+                  setSearchParams(next, { replace: true });
+                }}
+              />
+            </Alert>
+          )}
+
           <Box overflowX="auto" w="100%" maxW="100%">
             <Table variant="simple" size={{ base: "sm", md: "md" }}>
               <Thead bg="gray.50">
@@ -553,21 +984,31 @@ const Logs = () => {
                   <Th fontSize={{ base: "2xs", md: "xs" }}>User</Th>
                   <Th fontSize={{ base: "2xs", md: "xs" }}>Department & Session</Th>
                   <Th fontSize={{ base: "2xs", md: "xs" }}>Changes</Th>
+                  <Th fontSize={{ base: "2xs", md: "xs" }}>Faculty Mail</Th>
                 </Tr>
               </Thead>
               <Tbody>
                 {logs.length === 0 ? (
                   <Tr>
-                    <Td colSpan={4} textAlign="center" py={8}>
+                    <Td colSpan={5} textAlign="center" py={8}>
                       <Text color="gray.500">No logs found.</Text>
                     </Td>
                   </Tr>
                 ) : (
                   logs.map((log, i) => (
-                    <Tr key={i} _hover={{ bg: 'gray.50' }}>
+                    <Tr
+                      key={log._id || i}
+                      _hover={{ bg: 'gray.50' }}
+                      bg={log._id === focusLogId ? 'purple.50' : undefined}
+                      boxShadow={
+                        log._id === focusLogId
+                          ? 'inset 3px 0 0 var(--chakra-colors-purple-500)'
+                          : undefined
+                      }
+                    >
                       <Td py={{ base: 3, md: 5 }}>
                         <Text fontSize={{ base: "xs", md: "sm" }} color="gray.600">
-                          {formatTime(log.time)}
+                          {formatTimestamp(log.time)}
                         </Text>
                       </Td>
                       <Td py={{ base: 3, md: 5 }}>
@@ -589,6 +1030,14 @@ const Logs = () => {
                               return [];
                             }
                           })()}
+                        />
+                      </Td>
+                      <Td py={{ base: 3, md: 5 }} minW={{ base: "220px", md: "260px" }}>
+                        <MailDelivery
+                          log={log}
+                          apiUrl={apiUrl}
+                          onNotificationsUpdated={applyNotifications}
+                          defaultOpen={log._id === focusLogId}
                         />
                       </Td>
                     </Tr>

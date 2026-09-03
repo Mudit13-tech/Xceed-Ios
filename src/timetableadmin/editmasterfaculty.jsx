@@ -18,6 +18,7 @@ import {
   VStack,
   HStack,
   Badge,
+  Switch,
   IconButton,
   Flex,
   Card,
@@ -64,6 +65,8 @@ function Faculty() {
     extension: '',
     type: '',
     order: '',
+    // Opt-out, so a new faculty member is notified unless told otherwise.
+    notifyByEmail: true,
   });
 
   const apiUrl = getEnvironment();
@@ -157,7 +160,8 @@ function Faculty() {
       email: '', 
       extension: '', 
       type: '', 
-      order: '' 
+      order: '',
+      notifyByEmail: true
     });
   };
 
@@ -180,7 +184,8 @@ function Faculty() {
         email: '', 
         extension: '', 
         type: '', 
-        order: '' 
+        order: '',
+        notifyByEmail: true
       });
       toast({
         title: 'Faculty Updated',
@@ -238,7 +243,8 @@ function Faculty() {
       email: '', 
       extension: '', 
       type: '', 
-      order: '' 
+      order: '',
+      notifyByEmail: true
     });
     onOpen();
   };
@@ -253,7 +259,8 @@ function Faculty() {
       email: '', 
       extension: '', 
       type: '', 
-      order: '' 
+      order: '',
+      notifyByEmail: true
     });
   };
 
@@ -298,7 +305,8 @@ function Faculty() {
         email: '', 
         extension: '', 
         type: '', 
-        order: '' 
+        order: '',
+        notifyByEmail: true
       });
       toast({
         title: 'Faculty Added',
@@ -541,6 +549,32 @@ function Faculty() {
                         _focus={{ borderColor: 'purple.500', boxShadow: '0 0 0 1px #805AD5' }}
                       />
                     </Box>
+
+                    {/* `!== false` rather than truthiness: records predating
+                        this field hold no value and must read as Yes. */}
+                    <Box>
+                      <FormLabel fontWeight="semibold" color="gray.700">
+                        Send timetable emails
+                      </FormLabel>
+                      <HStack spacing={3} h="40px">
+                        <Switch
+                          colorScheme="green"
+                          isChecked={formData.notifyByEmail !== false}
+                          onChange={e =>
+                            setFormData({ ...formData, notifyByEmail: e.target.checked })
+                          }
+                        />
+                        <Badge
+                          colorScheme={formData.notifyByEmail !== false ? 'green' : 'gray'}
+                          variant="subtle"
+                        >
+                          {formData.notifyByEmail !== false ? 'Yes' : 'No'}
+                        </Badge>
+                        <Text fontSize="xs" color="gray.500">
+                          No = left out of timetable notifications
+                        </Text>
+                      </HStack>
+                    </Box>
                   </SimpleGrid>
                 </FormControl>
               </ModalBody>
@@ -622,6 +656,9 @@ function Faculty() {
                         <Th color="teal.700" fontSize="xs" borderBottom="2px" borderColor="teal.200">
                           Order
                         </Th>
+                        <Th color="teal.700" fontSize="xs" borderBottom="2px" borderColor="teal.200">
+                          Mail
+                        </Th>
                         <Th color="teal.700" fontSize="xs" borderBottom="2px" borderColor="teal.200" textAlign="center">
                           Actions
                         </Th>
@@ -647,6 +684,28 @@ function Faculty() {
                               )}
                             </Td>
                           ))}
+                          <Td fontSize="sm">
+                            {editRowId === row._id ? (
+                              <Switch
+                                size="sm"
+                                colorScheme="green"
+                                isChecked={formData.notifyByEmail !== false}
+                                onChange={e =>
+                                  setFormData({
+                                    ...formData,
+                                    notifyByEmail: e.target.checked,
+                                  })
+                                }
+                              />
+                            ) : (
+                              <Badge
+                                colorScheme={row.notifyByEmail === false ? 'gray' : 'green'}
+                                variant="subtle"
+                              >
+                                {row.notifyByEmail === false ? 'No' : 'Yes'}
+                              </Badge>
+                            )}
+                          </Td>
                           <Td>
                             <HStack spacing={1} justify="center">
                               {editRowId === row._id ? (

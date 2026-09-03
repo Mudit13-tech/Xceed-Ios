@@ -39,6 +39,8 @@ import {
   AlertTitle,
   FormControl,
   FormLabel,
+  FormHelperText,
+  Switch,
   Divider,
   Spinner,
 } from '@chakra-ui/react';
@@ -72,6 +74,8 @@ function Subject() {
     email: '',
     extension: '',
     type: '',
+    // Opt-out, so a new faculty member is notified unless told otherwise.
+    notifyByEmail: true,
   });
 
   const apiUrl = getEnvironment();
@@ -212,6 +216,7 @@ function Subject() {
               email: '',
               extension: '',
               type: '',
+              notifyByEmail: true,
             });
             toast({
               title: 'Update Successful',
@@ -301,6 +306,7 @@ function Subject() {
       email: '',
       extension: '',
       type: '',
+      notifyByEmail: true,
     });
   };
 
@@ -313,6 +319,7 @@ function Subject() {
       email: '',
       extension: '',
       type: '',
+      notifyByEmail: true,
     });
     setIsAddFacultyFormVisible(true);
   };
@@ -390,12 +397,23 @@ function Subject() {
       { label: 'Type', key: 'type' },
       { label: 'Email', key: 'email' },
       { label: 'Extension', key: 'extension' },
+      { label: 'Send Timetable Email', key: 'notifyByEmail' },
     ];
 
     const csvData = tableData.map((item) => {
       const filteredItem = {};
-      for (let x in visibleColumns)
-        filteredItem[visibleColumns[x].label] = item[visibleColumns[x].key];
+      for (let x in visibleColumns) {
+        const { label, key } = visibleColumns[x];
+        // Written as Yes/No: a bare true/false - or a blank, which is what
+        // records predating the field hold - is not what a coordinator opening
+        // this in Excel is looking for.
+        filteredItem[label] =
+          key === 'notifyByEmail'
+            ? item[key] === false
+              ? 'No'
+              : 'Yes'
+            : item[key];
+      }
       return filteredItem;
     });
 
@@ -668,6 +686,40 @@ function Subject() {
                     />
                   </FormControl>
 
+                  {/* Read `!== false` rather than truthiness so the several
+                      thousand records that predate this field default to Yes
+                      instead of showing as opted out. */}
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.700">
+                      Send timetable emails
+                    </FormLabel>
+                    <HStack spacing={3}>
+                      <Switch
+                        colorScheme="green"
+                        size="md"
+                        isChecked={editedData.notifyByEmail !== false}
+                        onChange={(e) =>
+                          setEditedData({
+                            ...editedData,
+                            notifyByEmail: e.target.checked,
+                          })
+                        }
+                      />
+                      <Badge
+                        colorScheme={
+                          editedData.notifyByEmail !== false ? 'green' : 'gray'
+                        }
+                        variant="subtle"
+                      >
+                        {editedData.notifyByEmail !== false ? 'Yes' : 'No'}
+                      </Badge>
+                    </HStack>
+                    <FormHelperText>
+                      Set to No and this faculty member is left out of timetable
+                      change and publish notifications.
+                    </FormHelperText>
+                  </FormControl>
+
                   <HStack spacing={3} justify="flex-end" pt={2}>
                     <Button variant="ghost" onClick={handleCancelAddFaculty}>
                       Cancel
@@ -742,6 +794,7 @@ function Subject() {
                         <Th textAlign="center" color="white">Type</Th>
                         <Th textAlign="center" color="white">Email</Th>
                         <Th textAlign="center" color="white">Extension</Th>
+                        <Th textAlign="center" color="white">Mail</Th>
                         <Th textAlign="center" color="white">Actions</Th>
                       </Tr>
                     </Thead>
@@ -842,6 +895,30 @@ function Subject() {
                               />
                             ) : (
                               row.extension
+                            )}
+                          </Td>
+                          <Td textAlign="center">
+                            {editRowId === row._id ? (
+                              <Switch
+                                colorScheme="green"
+                                size="sm"
+                                isChecked={editedData.notifyByEmail !== false}
+                                onChange={(e) =>
+                                  setEditedData({
+                                    ...editedData,
+                                    notifyByEmail: e.target.checked,
+                                  })
+                                }
+                              />
+                            ) : (
+                              <Badge
+                                colorScheme={
+                                  row.notifyByEmail === false ? 'gray' : 'green'
+                                }
+                                variant="subtle"
+                              >
+                                {row.notifyByEmail === false ? 'No' : 'Yes'}
+                              </Badge>
                             )}
                           </Td>
                           <Td textAlign="center">

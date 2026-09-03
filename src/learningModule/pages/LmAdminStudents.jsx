@@ -36,11 +36,10 @@ import {
 } from '@chakra-ui/react';
 import { EditIcon } from '@chakra-ui/icons';
 import { Link as RouterLink } from 'react-router-dom';
-import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
-import FileDownloadButton from '../../filedownload/filedownload';
 
 /**
  * Student accounts and department-wise roster, for an lm-admin.
@@ -177,49 +176,76 @@ function CreateStudentCard({ onCreated }) {
   );
 }
 
+/** Lower-cases and strips punctuation/spacing from a header cell, so "Roll
+ *  No.", "Roll No", and "ROLL_NO" all resolve to the same lookup key. */
+const normalizeHeaderKey = (key) => String(key || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/** Every header spelling this screen accepts for each ERP column, normalized. */
+const ROSTER_FIELD_CANDIDATES = {
+  name: ['name', 'studentname', 'fullname'],
+  rollNumber: ['rollno', 'rollnumber', 'rollnum'],
+  dept: ['branchname', 'branch', 'department', 'dept'],
+  email: ['officialemailid', 'officialemail', 'email', 'emailid', 'emailaddress'],
+};
+
+const pickRosterField = (normalizedRow, candidates) => {
+  for (const candidate of candidates) {
+    if (normalizedRow[candidate] !== undefined) return String(normalizedRow[candidate]).trim();
+  }
+  return '';
+};
+
 /**
- * Reads a CSV of student emails, tolerating both a header row ("email") and a
- * bare list of one address per line — whichever an admin happens to export.
- * The only column read is the first one; a name/roll-number column beside it,
- * if someone pastes one in, is ignored rather than rejected.
+ * Reads an ERP roster export (.xlsx) into `{ name, rollNumber, dept, email }`
+ * rows. Column headers are matched loosely (see `ROSTER_FIELD_CANDIDATES`)
+ * rather than by exact position, because the export's header text ("Roll
+ * No.", "Official Email ID", ...) is ERP's to spell however it likes and
+ * cannot be pinned down in code. The "Sr. No." column is simply never looked
+ * up. Every sheet in the workbook is read, in case the export splits classes
+ * across sheets; a row with no email at all is dropped rather than reported,
+ * since a genuinely blank spreadsheet row is not a roster entry.
  */
-function parseCsvEmails(file) {
-  return new Promise((resolve, reject) => {
-    Papa.parse(file, {
-      skipEmptyLines: true,
-      complete: (results) => {
-        const values = (results.data || [])
-          .map((row) => (Array.isArray(row) ? row[0] : ''))
-          .map((value) => String(value || '').trim())
-          .filter(Boolean);
-        // Drop a leading header cell ("email", "Email Address", ...) — the one
-        // row here that isn't itself shaped like an address.
-        if (values.length && !values[0].includes('@')) values.shift();
-        resolve(values);
-      },
-      error: reject,
-    });
-  });
+async function parseRosterFile(file) {
+  const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+  const rawRows = workbook.SheetNames.flatMap((sheetName) =>
+    XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' }),
+  );
+
+  return rawRows
+    .map((raw) => {
+      const normalized = {};
+      Object.entries(raw).forEach(([key, value]) => {
+        normalized[normalizeHeaderKey(key)] = value;
+      });
+      return {
+        name: pickRosterField(normalized, ROSTER_FIELD_CANDIDATES.name),
+        rollNumber: pickRosterField(normalized, ROSTER_FIELD_CANDIDATES.rollNumber),
+        dept: pickRosterField(normalized, ROSTER_FIELD_CANDIDATES.dept),
+        email: pickRosterField(normalized, ROSTER_FIELD_CANDIDATES.email).toLowerCase(),
+      };
+    })
+    .filter((row) => row.name || row.rollNumber || row.dept || row.email);
 }
 
+const OUTCOME_BADGE = {
+  new: { label: 'New', color: 'green' },
+  update: { label: 'Will update existing account', color: 'blue' },
+  invalid: { label: 'Invalid email', color: 'red' },
+  duplicate: { label: 'Duplicate in file', color: 'orange' },
+};
+
 function BulkImportStudentsCard({ onImported }) {
-  const [branches, setBranches] = useState([]);
-  const [dept, setDept] = useState('');
   const [fileName, setFileName] = useState('');
-  const [emails, setEmails] = useState([]);
+  const [rows, setRows] = useState([]);
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const toast = useToast();
 
-  useEffect(() => {
-    lmApi.ttBranches().then(setBranches).catch(() => setBranches([]));
-  }, []);
-
   const reset = () => {
     setFileName('');
-    setEmails([]);
+    setRows([]);
     setPreview(null);
     setResult(null);
     setError('');
@@ -232,14 +258,14 @@ function BulkImportStudentsCard({ onImported }) {
     reset();
     setFileName(file.name);
     try {
-      const parsed = await parseCsvEmails(file);
+      const parsed = await parseRosterFile(file);
       if (!parsed.length) {
-        setError('No email addresses found in that file.');
+        setError('No student rows found in that file.');
         return;
       }
-      setEmails(parsed);
+      setRows(parsed);
     } catch {
-      setError('Could not read that file as a CSV.');
+      setError('Could not read that file as an Excel workbook.');
     }
   };
 
@@ -247,7 +273,7 @@ function BulkImportStudentsCard({ onImported }) {
     setError('');
     setBusy(true);
     try {
-      setPreview(await lmApi.adminPreviewStudentImport({ emails }));
+      setPreview(await lmApi.adminPreviewStudentImport({ rows }));
     } catch (err) {
       setError(err.message || 'Could not preview the import.');
     } finally {
@@ -259,21 +285,18 @@ function BulkImportStudentsCard({ onImported }) {
     setError('');
     setBusy(true);
     try {
-      const data = await lmApi.adminImportStudents({ dept, emails });
+      const data = await lmApi.adminImportStudents({ rows });
       setResult(data);
       setPreview(null);
       toast({
         status: 'success',
-        title: `${data.imported} student account${data.imported === 1 ? '' : 's'} created`,
-        description: data.skippedExisting
-          ? `${data.skippedExisting} address${data.skippedExisting === 1 ? '' : 'es'} already had an account and were skipped.`
-          : undefined,
+        title: `${data.created} account${data.created === 1 ? '' : 's'} created, ${data.updated} updated`,
         duration: 8000,
         isClosable: true,
       });
       onImported();
     } catch (err) {
-      setError(err.message || 'Could not import the CSV.');
+      setError(err.message || 'Could not import the roster.');
     } finally {
       setBusy(false);
     }
@@ -283,8 +306,8 @@ function BulkImportStudentsCard({ onImported }) {
 
   return (
     <SectionCard
-      title="Bulk import via CSV"
-      subtitle="Select a department, then upload a CSV of student email addresses. Name defaults to the email and can be corrected afterwards in the directory below."
+      title="Bulk import from ERP roster"
+      subtitle="Upload the ERP export (.xlsx) — Name, Roll No., Branch Name, Official Email ID. A row whose email already has an account updates that account's name, roll number and department; a new email gets a new account and a welcome email."
     >
       <VStack align="stretch" spacing={4}>
         {error && (
@@ -294,41 +317,23 @@ function BulkImportStudentsCard({ onImported }) {
           </Alert>
         )}
 
-        <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
-          <FormControl isRequired>
-            <FormLabel fontSize="sm">Department</FormLabel>
-            <Select
-              value={dept}
-              onChange={(event) => {
-                setDept(event.target.value);
-                reset();
-              }}
-              placeholder={branches.length ? 'Select department' : 'No timetable branches'}
-              isDisabled={!branches.length}
-            >
-              {branches.map((branch) => (
-                <option key={branch.code} value={branch.dept}>
-                  {branch.dept}
-                </option>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl isRequired>
-            <FormLabel fontSize="sm">CSV file (one email per row)</FormLabel>
-            <Input type="file" accept=".csv,text/csv" onChange={handleFile} isDisabled={!dept} p={1} />
-          </FormControl>
-          <Flex align="flex-end">
-            <FileDownloadButton fileUrl="/student_email_template.csv" fileName="student_email_template.csv" />
-          </Flex>
-        </SimpleGrid>
+        <FormControl isRequired maxW="420px">
+          <FormLabel fontSize="sm">ERP roster file (.xlsx)</FormLabel>
+          <Input
+            type="file"
+            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={handleFile}
+            p={1}
+          />
+        </FormControl>
 
         {fileName && !result && (
           <Text fontSize="sm" color="lmFg.muted">
-            {fileName} — {emails.length} email{emails.length === 1 ? '' : 's'} found.
+            {fileName} — {rows.length} row{rows.length === 1 ? '' : 's'} found.
           </Text>
         )}
 
-        {!preview && !result && emails.length > 0 && (
+        {!preview && !result && rows.length > 0 && (
           <Flex justify="flex-end">
             <Button colorScheme="blue" onClick={runPreview} isLoading={busy}>
               Preview import
@@ -340,34 +345,48 @@ function BulkImportStudentsCard({ onImported }) {
           <Box borderWidth="1px" borderColor="lmBorder.default" borderRadius="md" p={4}>
             <Wrap spacing={2} mb={3}>
               <WrapItem>
-                <Badge colorScheme="green" px={2} py={1}>New: {preview.counts.new}</Badge>
+                <Badge colorScheme={OUTCOME_BADGE.new.color} px={2} py={1}>
+                  {OUTCOME_BADGE.new.label}: {preview.counts.new}
+                </Badge>
               </WrapItem>
               <WrapItem>
-                <Badge colorScheme="gray" px={2} py={1}>Already exist (skip): {preview.counts.existing}</Badge>
+                <Badge colorScheme={OUTCOME_BADGE.update.color} px={2} py={1}>
+                  {OUTCOME_BADGE.update.label}: {preview.counts.update}
+                </Badge>
               </WrapItem>
               <WrapItem>
-                <Badge colorScheme="orange" px={2} py={1}>Duplicate in file: {preview.counts.duplicate}</Badge>
+                <Badge colorScheme={OUTCOME_BADGE.duplicate.color} px={2} py={1}>
+                  {OUTCOME_BADGE.duplicate.label}: {preview.counts.duplicate}
+                </Badge>
               </WrapItem>
               <WrapItem>
-                <Badge colorScheme="red" px={2} py={1}>Invalid: {preview.counts.invalid}</Badge>
+                <Badge colorScheme={OUTCOME_BADGE.invalid.color} px={2} py={1}>
+                  {OUTCOME_BADGE.invalid.label}: {preview.counts.invalid}
+                </Badge>
               </WrapItem>
             </Wrap>
             {invalidSample.length > 0 && (
               <Text fontSize="xs" color="lmFg.muted" mb={3}>
-                e.g. invalid: {invalidSample.map((row) => row.email).join(', ')}
+                e.g. invalid: {invalidSample.map((row) => row.email || '(blank)').join(', ')}
                 {preview.counts.invalid > invalidSample.length ? ', …' : ''}
               </Text>
             )}
             <Flex justify="space-between" align="center" gap={3} wrap="wrap">
               <Text fontSize="xs" color="lmFg.muted" maxW="480px">
-                {preview.counts.new} account{preview.counts.new === 1 ? '' : 's'} will be created under{' '}
-                <strong>{dept}</strong> and emailed a link to set a password.
+                {preview.counts.new} new account{preview.counts.new === 1 ? '' : 's'} will be created and emailed a
+                link to set a password; {preview.counts.update} existing account
+                {preview.counts.update === 1 ? '' : 's'} will be corrected to match this roster.
               </Text>
               <HStack>
                 <Button variant="ghost" onClick={reset} isDisabled={busy}>
                   Start over
                 </Button>
-                <Button colorScheme="blue" onClick={confirmImport} isLoading={busy} isDisabled={!preview.counts.new}>
+                <Button
+                  colorScheme="blue"
+                  onClick={confirmImport}
+                  isLoading={busy}
+                  isDisabled={!preview.counts.new && !preview.counts.update}
+                >
                   Confirm import
                 </Button>
               </HStack>
@@ -380,12 +399,11 @@ function BulkImportStudentsCard({ onImported }) {
             <HStack mb={1}>
               <AlertIcon />
               <Text fontWeight="600">
-                {result.imported} account{result.imported === 1 ? '' : 's'} created
+                {result.created} account{result.created === 1 ? '' : 's'} created, {result.updated} updated
               </Text>
             </HStack>
             <Text>
-              Skipped — already existed: {result.skippedExisting}, invalid: {result.skippedInvalid}, duplicate in
-              file: {result.skippedDuplicate}
+              Skipped — invalid: {result.skippedInvalid}, duplicate in file: {result.skippedDuplicate}
               {result.failed ? `, failed: ${result.failed}` : ''}.
             </Text>
             <Button size="sm" mt={3} onClick={reset}>

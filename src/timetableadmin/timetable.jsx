@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ViewTimetable from './viewtt';
 import getEnvironment from '../getenvironment';
+import MailProgressModal from './mailProgressModal';
 import TimetableSummary from './ttsummary';
 import ReactToPrint from 'react-to-print';
 import { Container } from '@chakra-ui/react';
@@ -57,6 +58,7 @@ import {
 } from '@chakra-ui/icons';
 import { PersonStanding, PersonStandingIcon } from 'lucide-react';
 import { FaTasks, FaUser, FaUserAlt, FaUserAltSlash, FaUserTimes, FaBook } from 'react-icons/fa';
+import { FiFileText } from 'react-icons/fi';
 
 const Timetable = () => {
   // All state declarations
@@ -90,6 +92,10 @@ const Timetable = () => {
   // a second click while the first request is running duplicates every email.
   const [isPublishing, setIsPublishing] = useState(false);
   const [isLocking, setIsLocking] = useState(false);
+  // Notification-mail report: null when closed, otherwise
+  // { phase, results, logId, heading, note }. Both mail paths in this page
+  // (locking with "inform the teachers", and publishing) feed the same modal.
+  const [mailReport, setMailReport] = useState(null);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -453,6 +459,9 @@ const Timetable = () => {
   if (!confirm) return;
 
   setIsPublishing(true);
+  // Publishing mails every faculty member on the timetable before the request
+  // answers, so the same progress modal goes up here.
+  setMailReport({ phase: 'sending', heading: 'Publishing and notifying faculty' });
   try {
     const response = await fetch(
       `${apiUrl}/timetablemodule/timetable/publish/${timetableId}`,
@@ -469,16 +478,37 @@ const Timetable = () => {
     await fetchTime(); // refresh timestamps
     await fetchTTData(currentCode); // refresh publish status so the button locks
 
+    // No `logId` for a publish: the change log and its resend belong to the
+    // lock flow, so this modal reports the outcome without offering a resend
+    // it cannot perform. A publish is also idempotent server-side, so the
+    // remedy for a failed one is to publish again.
+    setMailReport({
+      phase: "done",
+      results: data.results || [],
+      heading: data.alreadyPublished
+        ? "Already published"
+        : "Timetable published",
+      note: data.alreadyPublished
+        ? "This timetable was already published, so no mails were re-sent."
+        : undefined,
+    });
+
     toast({
       title: data.alreadyPublished
         ? "Already published — no mails re-sent"
-        : `Timetable Published & Mail sent to ${data.mailsSent ?? "all"} faculty member(s)`,
+        : "Timetable Published",
       status: "success",
       duration: 3000,
       isClosable: true,
       position: "bottom",
     });
   } catch (err) {
+    setMailReport({
+      phase: "done",
+      results: [],
+      heading: "Publish failed",
+      note: "The timetable was not published, so nothing was emailed.",
+    });
     toast({
       title: "Publish failed",
       status: "error",
@@ -551,6 +581,19 @@ const Timetable = () => {
   const url = `${currentPathname}/generatepdf/loadallocation`;
   window.open(url, "_blank", "noopener,noreferrer");
 };
+  /**
+   * Open the change log for this timetable's department.
+   *
+   * Passing `dept` makes the page open already filtered, which is what a
+   * department coordinator wants; an institute coordinator arriving the same
+   * way can still clear the filter. `TTData` may not have loaded, in which
+   * case the page opens unfiltered rather than on `dept=undefined`.
+   */
+  const handleViewLogs = () => {
+    const dept = TTData?.dept;
+    navigate(dept ? `/tt/logs?dept=${encodeURIComponent(dept)}` : '/tt/logs');
+  };
+
   const handleDownloadClick = () => {
     const pdfUrl = `${currentPathname}/generatepdf`;
   window.open(pdfUrl, "_blank", "noopener,noreferrer");
@@ -650,6 +693,10 @@ const handleLockTT = async () => {
       setMessage('Data is being saved....');
       setMessage('Data saved. Commencing lock');
       setMessage('Data is being locked');
+      // The server mails every affected teacher before it answers, so the
+      // progress state goes up before the request rather than after it —
+      // otherwise the slowest part of the lock happens with nothing on screen.
+      if (toInform) setMailReport({ phase: 'sending' });
       const Url = `${apiUrl}/timetablemodule/lock/locktt`;
       const code = currentCode;
       try {
@@ -664,20 +711,20 @@ const handleLockTT = async () => {
           const data = await response.json();
           const { results } = data;
           if (toInform) {
-            let successMsg = '✔ Successful Emails:\n';
-            let failedMsg = '✘ Failed Emails:\n';
-
-            results.forEach((item) => {
-              if (item.success) {
-                successMsg += `• ${item.email}\n`;
-              } else {
-                failedMsg += `• ${item.faculty} (${item.email || 'No Email'
-                  }) → ${item.error}\n`;
-              }
+            // Reported in the modal rather than a toast. A toast names a
+            // count and then vanishes; what a coordinator needs is which
+            // teacher does not know their timetable moved, and the link that
+            // can send it again. `logId` is what makes that resend possible.
+            setMailReport({
+              phase: 'done',
+              results: results || [],
+              logId: data.logId,
+              note:
+                'Delivery times are recorded against this change on the ' +
+                'Change Logs page.',
             });
-
-            if (results.some((r) => r.success)) alert(successMsg);
-            if (results.some((r) => !r.success)) alert(failedMsg);
+          } else {
+            setMailReport(null);
           }
           setMessage('');
           toast({
@@ -692,9 +739,29 @@ const handleLockTT = async () => {
             'Failed to send data to the backend. HTTP status:',
             response.status
           );
+          // Never leave the modal spinning on a request that came back bad.
+          if (toInform) {
+            setMailReport({
+              phase: 'done',
+              results: [],
+              heading: 'Lock failed — no notifications sent',
+              note: `The server refused the lock (HTTP ${response.status}), so nothing was emailed.`,
+            });
+          }
         }
       } catch (error) {
         console.error('Error sending data to the backend:', error);
+        // Same reason as the bad-status branch: the modal must not spin on.
+        if (toInform) {
+          setMailReport({
+            phase: 'done',
+            results: [],
+            heading: 'Lock request failed',
+            note:
+              'The request did not reach the server, so it is not known ' +
+              'whether any notifications were sent. Check the Change Logs page.',
+          });
+        }
       } finally {
         setIsLocking(false);
       }
@@ -1135,6 +1202,28 @@ const handleLockTT = async () => {
                     boxShadow="sm"
                   />
                 </Tooltip>
+                {/* Department change logs. The dept comes from the timetable
+                    being viewed, so it is already the right filter; the server
+                    still decides what this account may read, and confines a
+                    department coordinator to their own regardless of what is
+                    passed here. */}
+                <Tooltip
+                  label="Change Logs & Mail Status"
+                  placement="bottom"
+                  hasArrow
+                  bg="purple.600"
+                  fontSize="xs"
+                >
+                  <IconButton
+                    aria-label="Change logs and faculty mail status"
+                    icon={<FiFileText color="white" />}
+                    onClick={handleViewLogs}
+                    colorScheme="purple"
+                    size="sm"
+                    borderRadius="lg"
+                    boxShadow="sm"
+                  />
+                </Tooltip>
               </HStack>
             </Flex>
 
@@ -1468,6 +1557,16 @@ const handleLockTT = async () => {
       </Container>
 
       {/* Message Toast */}
+      <MailProgressModal
+        isOpen={Boolean(mailReport)}
+        onClose={() => setMailReport(null)}
+        phase={mailReport?.phase}
+        results={mailReport?.results}
+        logId={mailReport?.logId}
+        heading={mailReport?.heading}
+        note={mailReport?.note}
+      />
+
       <Portal>
         <Box
           bg={showMessage && message ? 'orange.500' : 'transparent'}

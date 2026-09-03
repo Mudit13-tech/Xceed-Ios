@@ -309,12 +309,13 @@ export default function TutorialPresent() {
         )}
       </SectionCard>
 
-      {/* Who is not in the room. Attendance, not a gate — anyone missing here
-          can still sit the tutorial afterwards; they simply were not present. */}
+      {/* Who is not in the room. Worth chasing before you end the session: the
+          tutorial is entered here, so anyone still listed will not be able to
+          start it afterwards. */}
       {(state.notJoined || []).length > 0 && (
         <SectionCard
           title={`Not joined (${state.notJoined.length})`}
-          subtitle="On the roster but not in this session. They can still open the tutorial later."
+          subtitle="On the roster but not in this session. They can only start the tutorial while you are presenting — anyone still here when you end it will need you to present again."
           mb={4}
         >
           <HStack wrap="wrap" spacing={2}>

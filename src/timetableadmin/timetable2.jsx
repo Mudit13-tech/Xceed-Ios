@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ViewTimetable from './viewtt';
 import getEnvironment from '../getenvironment';
+import MailProgressModal from './mailProgressModal';
 import './Timetable.css';
 import TimetableSummary from './ttsummary';
 import ReactToPrint from 'react-to-print';
@@ -591,6 +592,10 @@ const Timetable = () => {
       setMessage('Data is being saved....');
       setMessage('Data saved. Commencing lock');
       setMessage('Data is being locked');
+      // The server mails every affected teacher before it answers, so the
+      // progress state goes up before the request rather than after it —
+      // otherwise the slowest part of the lock happens with nothing on screen.
+      if (toInform) setMailReport({ phase: 'sending' });
       const Url = `${apiUrl}/timetablemodule/lock/locktt`;
       const code = currentCode;
       try {
@@ -605,21 +610,20 @@ const Timetable = () => {
           const data = await response.json();
           const { results } = data;
           if (toInform) {
-            let successMsg = '✔ Successful Emails:\n';
-            let failedMsg = '✘ Failed Emails:\n';
-
-            results.forEach((item) => {
-              if (item.success) {
-                successMsg += `• ${item.email}\n`;
-              } else {
-                failedMsg += `• ${item.faculty} (${item.email || 'No Email'
-                  }) → ${item.error}\n`;
-              }
+            // Reported in the modal rather than a toast. A toast names a
+            // count and then vanishes; what a coordinator needs is which
+            // teacher does not know their timetable moved, and the link that
+            // can send it again. `logId` is what makes that resend possible.
+            setMailReport({
+              phase: 'done',
+              results: results || [],
+              logId: data.logId,
+              note:
+                'Delivery times are recorded against this change on the ' +
+                'Change Logs page.',
             });
-
-            // Show alerts
-            if (results.some((r) => r.success)) alert(successMsg);
-            if (results.some((r) => !r.success)) alert(failedMsg);
+          } else {
+            setMailReport(null);
           }
           setMessage('');
           toast({
@@ -634,9 +638,29 @@ const Timetable = () => {
             'Failed to send data to the backend. HTTP status:',
             response.status
           );
+          // Never leave the modal spinning on a request that came back bad.
+          if (toInform) {
+            setMailReport({
+              phase: 'done',
+              results: [],
+              heading: 'Lock failed — no notifications sent',
+              note: `The server refused the lock (HTTP ${response.status}), so nothing was emailed.`,
+            });
+          }
         }
       } catch (error) {
         console.error('Error sending data to the backend:', error);
+        // Same reason as the bad-status branch: the modal must not spin on.
+        if (toInform) {
+          setMailReport({
+            phase: 'done',
+            results: [],
+            heading: 'Lock request failed',
+            note:
+              'The request did not reach the server, so it is not known ' +
+              'whether any notifications were sent. Check the Change Logs page.',
+          });
+        }
       } finally {
         setIsLocking(false);
       }
@@ -657,6 +681,10 @@ const Timetable = () => {
   // Locking mails faculty server-side, so a second click while the first
   // request is running duplicates every notification.
   const [isLocking, setIsLocking] = useState(false);
+  // Notification-mail report: null when closed, otherwise
+  // { phase, results, logId, heading, note }. Both mail paths in this page
+  // (locking with "inform the teachers", and publishing) feed the same modal.
+  const [mailReport, setMailReport] = useState(null);
 
   useEffect(() => {
     window.addEventListener('scroll', handleScroll);
@@ -875,6 +903,16 @@ const Timetable = () => {
           Last locked on: {lockedTime ? lockedTime : 'Not Locked yet'}
         </Text>
       </Box>
+
+      <MailProgressModal
+        isOpen={Boolean(mailReport)}
+        onClose={() => setMailReport(null)}
+        phase={mailReport?.phase}
+        results={mailReport?.results}
+        logId={mailReport?.logId}
+        heading={mailReport?.heading}
+        note={mailReport?.note}
+      />
 
       <Portal>
         <Box

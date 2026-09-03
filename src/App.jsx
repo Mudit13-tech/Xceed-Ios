@@ -87,6 +87,7 @@ const InstituteMergedDownload = lazyWithPreload(() => import('./timetableadmin/i
 
 const Home = lazyWithPreload(() => import('./pages/Home'));
 const GuidePage = lazyWithPreload(() => import('./pages/GuidePage'));
+const HelpdeskPage = lazyWithPreload(() => import('./pages/HelpdeskPage'));
 const PrivacyPolicy = lazyWithPreload(() => import('./pages/PrivacyPolicy'));
 const ErrorPage = lazyWithPreload(() => import('./pages/ErrorPage.jsx'));
 const NotFound = lazyWithPreload(() => import('./pages/NotFound.jsx'));
@@ -263,6 +264,12 @@ const APP_ROUTES = (
           {/* Landing Page */}
           <Route path="/" element={<Home />} />
           <Route path="/guide" element={<GuidePage />} />
+          {/* The help desk. Public by necessity: the people it serves are the
+              ones who cannot sign in, so a guard here would exclude its whole
+              audience. It carries a gate of its own instead — an OTP mailed to
+              the address being asked about — and every answer is scoped to that
+              address. See modules/helpdeskModule on the server. */}
+          <Route path="/help" element={<HelpdeskPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/nirf" element={<NirfRanking />} />
 

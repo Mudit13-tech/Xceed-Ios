@@ -135,6 +135,19 @@ export default function PaperPreviewModal({ isOpen, onClose, classId, kind = 'tu
                         ))}
                     </HStack>
 
+                    {/* The worked solution, with this sample's numbers already in
+                        it — the same text the student sees after submitting, so
+                        a preview shows whether it actually reads correctly at
+                        these values rather than only at the ones you had in mind. */}
+                    {question.solution && (
+                      <Box mt={2} p={2} bg="lmHue.green50" borderRadius="md">
+                        <Text fontSize="xs" fontWeight="700" color="lmHue.green800" mb={1}>
+                          Worked solution
+                        </Text>
+                        <RichText fontSize="sm">{question.solution}</RichText>
+                      </Box>
+                    )}
+
                     {(question.parts || []).map((part, partIndex) => (
                       <Box key={partIndex} mt={2} pl={3} borderLeftWidth="2px" borderColor="lmHue.purple200">
                         {part.label && (
