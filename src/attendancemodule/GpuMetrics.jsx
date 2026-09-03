@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { theme } from './config';
 import ServiceConsole from './ServiceConsole';
+import getEnvironment from '../getenvironment';
 
 const HISTORY_LIMIT = 5000;
 const HISTORY_MAX_POINTS = 2000;
@@ -20,9 +21,15 @@ const POLL_MS = 3000;
 // but that let anyone bypass Node's admin-only gate on this endpoint (GPU
 // metrics are restricted to admin/iams-admin — see mlRoutes.js) by just
 // hitting the Python service's port directly.
-const METRICS_URL = '/api/v1/ml/gpu-metrics';
-const METRICS_HISTORY_URL = '/api/v1/ml/gpu-metrics/history';
-const LOGS_URL = '/api/v1/ml/logs';
+// Absolute, via getEnvironment() — not a bare '/api/...' path. On the web the
+// two are equivalent because the app and the API share an origin, but inside
+// the Capacitor shell the page is served from the local asset origin
+// (xceed.learning.app), so a relative path never leaves the device: it returns
+// the SPA's index.html and every card sits at "--" forever.
+const apiUrl = getEnvironment();
+const METRICS_URL = `${apiUrl}/api/v1/ml/gpu-metrics`;
+const METRICS_HISTORY_URL = `${apiUrl}/api/v1/ml/gpu-metrics/history`;
+const LOGS_URL = `${apiUrl}/api/v1/ml/logs`;
 const RANGE_OPTIONS = [
   { id: 'live', label: 'Live' },
   { id: 'custom', label: 'Custom' },

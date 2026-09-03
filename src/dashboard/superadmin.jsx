@@ -26,6 +26,7 @@ import {
   FiUploadCloud,
   FiDatabase,
 } from 'react-icons/fi';
+import getEnvironment from '../getenvironment';
 
 const MODULES = [
   {
@@ -184,7 +185,13 @@ const SuperAdminPage = () => {
     setIsBackingUp(true);
     try {
       const token = localStorage.getItem("token"); // or appropriate auth
-      const response = await fetch("/api/v1/attendancemodule/mldatafoldertree/backup-db", {
+      // Absolute, via getEnvironment(). A relative path is wrong twice over: in
+      // the Capacitor shell it resolves to the local asset origin and never
+      // reaches the server, and even on the web the fetch wrapper in main.jsx
+      // only recognises a URL that starts with the API origin, so a relative
+      // one gets no X-App-Name header — which the server's csrfGuard requires
+      // of any state-changing request.
+      const response = await fetch(`${getEnvironment()}/api/v1/attendancemodule/mldatafoldertree/backup-db`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`
