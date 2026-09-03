@@ -50,7 +50,22 @@ const zigzag = (width = 32, height = 8, peaks = 6) => {
 
 const stroke = { stroke: 'currentColor', strokeWidth: STROKE, fill: 'none', strokeLinecap: 'round' };
 
-export const SYMBOLS = {
+export /**
+ * What each LED colour actually looks like when it is on.
+ *
+ * Fixed hexes rather than theme tokens: this is the colour of a physical part,
+ * not a role in the interface, and a red LED is the same red on a dark bench as
+ * on a light one.
+ */
+const LED_COLORS = {
+  red: '#ef4444',
+  green: '#22c55e',
+  blue: '#3b82f6',
+  yellow: '#eab308',
+  white: '#f8fafc',
+};
+
+const SYMBOLS = {
   resistor: {
     pins: [[-30, 0], [30, 0]],
     box: [64, 24],
@@ -258,6 +273,81 @@ export const SYMBOLS = {
         {lead(9, 0, 26, 0)}
       </>
     ),
+  },
+
+  /**
+   * An LED: the diode symbol with the two arrows that mean "emitting", and a
+   * body that fills with its own colour when it is conducting.
+   *
+   * `values.color` is carried by the part purely for this — the solver never
+   * reads it. `values.lit` is set by the bench after a run from the current the
+   * solver found, so an unlit LED and an LED on a bench that has not been run
+   * look the same, which is correct: neither is lit.
+   */
+  led: {
+    pins: [[-26, 0], [26, 0]],
+    box: [56, 34],
+    draw: ({ values = {} } = {}) => {
+      const glow = values.lit ? (LED_COLORS[values.color] || LED_COLORS.red) : null;
+      return (
+        <>
+          {lead(-26, 0, -9, 0)}
+          <path
+            d="M -9 -10 L -9 10 L 9 0 Z"
+            stroke="currentColor"
+            strokeWidth={STROKE}
+            fill={glow || 'currentColor'}
+          />
+          {lead(9, -10, 9, 10)}
+          {lead(9, 0, 26, 0)}
+          {/* The two arrows away from the junction — the thing that makes it an
+              LED and not a diode on every schematic ever drawn. */}
+          <path d="M -2 -13 L 6 -20 M 6 -20 L 2 -19 M 6 -20 L 5 -16"
+                stroke={glow || 'currentColor'} strokeWidth={STROKE} fill="none" />
+          <path d="M 3 -13 L 11 -20 M 11 -20 L 7 -19 M 11 -20 L 10 -16"
+                stroke={glow || 'currentColor'} strokeWidth={STROKE} fill="none" />
+          {/* A halo, only when lit. Drawn under nothing and over nothing that
+              matters, so it reads as light rather than as another component. */}
+          {glow && <circle cx={0} cy={0} r={15} fill={glow} opacity={0.28} />}
+        </>
+      );
+    },
+  },
+
+  /**
+   * A switch, drawn open or closed from `values.closed`, and with a button cap
+   * instead of a lever when it is `momentary`.
+   *
+   * The blade actually moves. A switch whose picture never changes is one a
+   * student has to check in the inspector to read, and the whole reason to put
+   * it on a bench rather than editing a resistance is that the state is visible.
+   */
+  switch: {
+    pins: [[-26, 0], [26, 0]],
+    box: [56, 30],
+    draw: ({ values = {} } = {}) => {
+      const closed = Boolean(values.closed);
+      return (
+        <>
+          {lead(-26, 0, -12, 0)}
+          {lead(12, 0, 26, 0)}
+          <circle cx={-12} cy={0} r={2.5} fill="currentColor" />
+          <circle cx={12} cy={0} r={2.5} fill="currentColor" />
+          {/* Closed lies flat across the contacts; open lifts at the far end. */}
+          <path
+            d={closed ? 'M -12 0 L 12 0' : 'M -12 0 L 10 -12'}
+            stroke="currentColor"
+            strokeWidth={STROKE + 0.4}
+            fill="none"
+            strokeLinecap="round"
+          />
+          {values.momentary && (
+            // A push button's cap, so the two kinds are told apart at a glance.
+            <path d="M -5 -15 L 5 -15" stroke="currentColor" strokeWidth={STROKE + 0.6} strokeLinecap="round" />
+          )}
+        </>
+      );
+    },
   },
 
   npn: transistor(false),

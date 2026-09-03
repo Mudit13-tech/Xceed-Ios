@@ -29,6 +29,7 @@ import {
   InstrumentReadings,
   Palette,
   PartInspector,
+  RunStatus,
 } from '../components/lab/BenchPanels';
 import ScopeView from '../components/lab/ScopeView';
 import { benchReadings } from '../components/lab/format';
@@ -79,6 +80,13 @@ export default function LabBench() {
   const [frequency, setFrequency] = useState(50);
   const [result, setResult] = useState(null);
   const [running, setRunning] = useState(false);
+  /* When the last run finished, and how long it took.
+   *
+   * Without it a Run that changes nothing visible — the same circuit solved
+   * twice, or a circuit whose only meter reads zero — is indistinguishable from
+   * a button that did nothing, which is the single most common reason a student
+   * reports the bench as broken when it is working perfectly. */
+  const [lastRun, setLastRun] = useState(null);
   // Whether every component's V/I/P is drawn on the bench as well as listed in
   // the panel. On by default — the numbers are the reason to press Run — but a
   // dense circuit is easier to *wire* with them off, so it is a switch.
@@ -170,6 +178,23 @@ export default function LabBench() {
     [],
   );
 
+  /**
+   * Which LEDs the last run found conducting.
+   *
+   * A milliamp is the threshold because that is roughly where an indicator LED
+   * becomes visible in a lit room — below it the solver is right that current is
+   * flowing and a student is right that nothing is glowing, and the bench should
+   * agree with the student.
+   */
+  const litIds = useMemo(() => {
+    if (!result?.ok) return null;
+    const on = new Set();
+    (result.devices || []).forEach((device) => {
+      if (device.type === 'led' && Math.abs(device.current || 0) >= 1e-3) on.add(device.id);
+    });
+    return on;
+  }, [result]);
+
   const changeCircuit = (next) => {
     setCircuit(next);
     queueSave({ circuit: next });
@@ -179,9 +204,11 @@ export default function LabBench() {
 
   const run = async () => {
     setRunning(true);
+    const startedAt = Date.now();
     try {
       const solved = await lmApi.runLab(classId, labId, { circuit, analysis, frequency });
       setResult(solved);
+      setLastRun({ at: new Date(), ms: Date.now() - startedAt, ok: Boolean(solved.ok), analysis });
       if (!solved.ok) {
         toast({ status: 'warning', title: 'The circuit did not solve', description: solved.message, duration: 8000 });
       }
@@ -189,6 +216,8 @@ export default function LabBench() {
       // A 400 here is the server refusing the circuit — a part from another bench,
       // a wire to a terminal that is not there. Worth showing loudly, because it
       // means the bench and the server disagree about what was drawn.
+      setResult(null);
+      setLastRun({ at: new Date(), ms: Date.now() - startedAt, ok: false, analysis, error: err.message });
       toast({ status: 'error', title: err.message, duration: 9000 });
     } finally {
       setRunning(false);
@@ -378,11 +407,35 @@ export default function LabBench() {
                     {showOnBench ? 'Hide readings' : 'Show readings'}
                   </Button>
                 )}
+                {/* Clearing the last run is a real action, not tidying: the
+                    numbers on the bench belong to the circuit as it was when Run
+                    was pressed, and after an edit they are stale. Being able to
+                    take them down is how a student says "start again" without
+                    having to wonder whether what they are reading is current. */}
+                {result && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { setResult(null); setLastRun(null); }}
+                  >
+                    Clear
+                  </Button>
+                )}
                 <Button size="md" colorScheme="teal" onClick={run} isLoading={running} loadingText="Solving">
                   ▶ Run
                 </Button>
               </HStack>
             </Flex>
+
+            {/* Did it run, and what happened?
+                ─────────────────────────────
+                The table below changes when a run succeeds, but a run that
+                produces the same numbers as last time, or a circuit whose only
+                meter reads zero, changes nothing on screen — and a button that
+                appears to do nothing is the usual reason a working bench gets
+                reported as broken. This says so explicitly, every time, in the
+                same place. */}
+            <RunStatus lastRun={lastRun} running={running} result={result} />
 
             {/* A frequency of zero is a real setting — a DC supply stepped at
                 t = 0 — and the solver treats it as one, so it is worth saying
@@ -402,6 +455,7 @@ export default function LabBench() {
               onSelect={setSelectedId}
               onDelete={deleteComponent}
               readings={canvasReadings}
+              litIds={litIds}
             />
 
             <Text fontSize="xs" color="lmFg.muted" mt={2}>
