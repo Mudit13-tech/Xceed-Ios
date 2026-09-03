@@ -542,9 +542,14 @@ export default function TutorialPlayer() {
             <Box key={group.key} mb={group.prompt ? 4 : 0}>
               {group.prompt ? (
                 <Flex gap={2} mb={2} align="baseline">
-                  <Text fontSize="sm" fontWeight="700" color="purple.600" minW="30px">
-                    {group.label}
-                  </Text>
+                  {/* Only when the teacher named the part. Parts are no longer
+                      auto-lettered, and an empty label would otherwise indent
+                      every unlabelled sub-question behind a blank gutter. */}
+                  {group.label && (
+                    <Text fontSize="sm" fontWeight="700" color="purple.600" minW="30px">
+                      {group.label}
+                    </Text>
+                  )}
                   <Box flex="1">
                     <RichText fontSize="sm">{group.prompt}</RichText>
                   </Box>

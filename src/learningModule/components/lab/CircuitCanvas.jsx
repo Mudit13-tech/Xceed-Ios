@@ -64,6 +64,13 @@ export default function CircuitCanvas({
    * student from having to match a table of ids against a diagram.
    */
   readings = {},
+  /* Ids of the LEDs the last run found conducting.
+   *
+   * Passed in rather than read off the component, because "lit" is a property of
+   * the *run*, not of the part: the same LED on the same bench is lit or not
+   * depending on a switch somewhere else. Merged in at draw time so the stored
+   * circuit never gains a field that only means something after a solve. */
+  litIds = null,
   height = 460,
 }) {
   const svgRef = useRef(null);
@@ -349,7 +356,11 @@ export default function CircuitCanvas({
                     strokeDasharray="4 3"
                   />
                 )}
-                {symbol.draw(component)}
+                {symbol.draw(
+                  litIds?.has(component.id)
+                    ? { ...component, values: { ...component.values, lit: true } }
+                    : component,
+                )}
               </g>
 
               <text

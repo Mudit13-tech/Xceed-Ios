@@ -57,6 +57,38 @@ export const phase = (degrees) =>
     : `∠${Number(degrees).toFixed(1)}°`;
 
 /**
+ * One colour per measured quantity, used everywhere a run's numbers are shown.
+ *
+ * A bench prints three numbers for every part, and in one grey column they read
+ * as a wall — a student checking whether the current through R2 is what they
+ * predicted has to find the right column first, on every row. Giving each
+ * quantity its own hue means the eye goes to "all the currents" directly, and
+ * the same hue is used on the canvas labels, the table and the meters, so the
+ * association is learned once.
+ *
+ * These are `lmHue` tokens rather than raw Chakra colours because they carry a
+ * dark-mode counterpart: a `blue.700` that is right on white is unreadable on
+ * the dark bench, and the bench is the screen most likely to be used in a dim
+ * lab.
+ *
+ * Deliberately not red or green: red is reserved for a circuit that did not
+ * solve, and green for a source that is delivering rather than absorbing. A
+ * quantity that shared either would be saying two things at once.
+ */
+export const QUANTITY_COLOR = {
+  voltage: 'lmHue.blue700',
+  current: 'lmHue.orange700',
+  power: 'lmHue.purple700',
+};
+
+/** The tint behind a quantity, for a column header or a meter face. */
+export const QUANTITY_TINT = {
+  voltage: 'lmHue.blue50',
+  current: 'lmHue.orange50',
+  power: 'lmHue.purple50',
+};
+
+/**
  * What a run says about one component, as three strings.
  *
  * Shared by the canvas labels and the readings table so the number a student
