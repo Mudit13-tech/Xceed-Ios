@@ -1437,6 +1437,7 @@ export default function QuizResults() {
   const [keyOpen, setKeyOpen] = useState(false);
   const [regrading, setRegrading] = useState(false);
   const [tab, setTab] = useState(0);
+  const defaultTabAppliedRef = useRef(false);
   const [auto, setAuto] = useState(true);
   const [releasing, setReleasing] = useState(false);
   // The attempt whose answer sheet is open, if any.
@@ -1480,6 +1481,40 @@ export default function QuizResults() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // A new :quizId reuses this component instance, so the "pick a default tab
+  // once" latch has to be re-armed whenever the route we're viewing changes.
+  useEffect(() => {
+    defaultTabAppliedRef.current = false;
+  }, [classId, quizId]);
+
+  useEffect(() => {
+    if (!data || defaultTabAppliedRef.current) return;
+
+    const quizData = data.quiz || {};
+    const summaryData = data.summary || {};
+    const quizWindow = quizData.window || {};
+    const now = data.serverTime ? new Date(data.serverTime) : new Date(Date.now() - skewRef.current);
+
+    const hasLiveAttempts = Number(summaryData.inProgress || 0) > 0;
+    const hasCompletedAttempts = Number(summaryData.submitted || 0) > 0 && Number(summaryData.inProgress || 0) === 0;
+    const hasClosedWindow = Boolean(quizWindow.closed) || Boolean(quizWindow.resultsPublished);
+    const hasAnnouncedResults = Boolean(
+      quizData.resultsAnnouncedAt && new Date(quizData.resultsAnnouncedAt) <= now,
+    );
+    const hasResultReleaseAtPassed = Boolean(
+      quizData.settings?.resultReleaseAt && new Date(quizData.settings.resultReleaseAt) <= now,
+    );
+
+    const isQuizLive =
+      hasLiveAttempts ||
+      Boolean(quizWindow.open) ||
+      Boolean(quizWindow.live) ||
+      (Boolean(quizData.published) && !hasClosedWindow && !hasCompletedAttempts && !hasAnnouncedResults && !hasResultReleaseAtPassed);
+
+    setTab(isQuizLive ? 0 : 1);
+    defaultTabAppliedRef.current = true;
+  }, [data, classId, quizId]);
 
   // Poll only while the monitor is the tab on screen. The analytics tabs read a
   // finished cohort and gain nothing from re-fetching, and a poll running behind

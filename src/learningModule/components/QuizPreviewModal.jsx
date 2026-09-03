@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   AlertIcon,
@@ -6,6 +6,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Container,
   Divider,
   Flex,
   FormControl,
@@ -36,8 +37,8 @@ const TYPE_LABEL = {
 
 /**
  * QuizPreviewModal
- * Provides a faculty preview of quiz questions as rendered for students.
- * Purely visual — no answer tracking, timer enforcement, proctoring, or SEB rules.
+ * Faculty preview of quiz questions as rendered for students.
+ * Defaults to a standard modal preview with an option to expand into a full-screen view.
  */
 export default function QuizPreviewModal({ isOpen, onClose, quiz }) {
   const [deliveryMode, setDeliveryMode] = useState(
@@ -46,6 +47,42 @@ export default function QuizPreviewModal({ isOpen, onClose, quiz }) {
   const [showAnswers, setShowAnswers] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userAnswers, setUserAnswers] = useState({});
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsFullScreen(false);
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+  }, [isOpen]);
+
+  const toggleFullScreen = async () => {
+    if (!isFullScreen) {
+      setIsFullScreen(true);
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch (err) {}
+    } else {
+      setIsFullScreen(false);
+      try {
+        if (document.fullscreenElement && document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+      } catch (err) {}
+    }
+  };
+
+  const handleClose = () => {
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+    setIsFullScreen(false);
+    onClose();
+  };
 
   if (!quiz) return null;
 
@@ -172,7 +209,7 @@ export default function QuizPreviewModal({ isOpen, onClose, quiz }) {
     return (
       <Box
         key={question._id || index}
-        p={4}
+        p={isFullScreen ? 5 : 4}
         mb={4}
         borderWidth="1px"
         borderColor="lmBorder.base"
@@ -235,163 +272,208 @@ export default function QuizPreviewModal({ isOpen, onClose, quiz }) {
     );
   };
 
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} size="5xl" scrollBehavior="inside">
-      <ModalOverlay backdropFilter="blur(3px)" />
-      <ModalContent borderRadius="xl">
-        <ModalHeader borderBottomWidth="1px">
-          <Flex justify="space-between" align="center" wrap="wrap" gap={2} pr={8}>
-            <Box>
-              <HStack spacing={2}>
-                <Text fontSize="lg" fontWeight="700">
-                  👁️ Student Preview: {quiz.title}
-                </Text>
-              </HStack>
-              <Text fontSize="xs" color="lmFg.muted" fontWeight="normal">
-                {questions.length} question{questions.length === 1 ? '' : 's'} · {totalMarks} total mark
-                {totalMarks === 1 ? '' : 's'}
-              </Text>
-            </Box>
-          </Flex>
-        </ModalHeader>
+  const previewContent = (
+    <Box>
+      <Alert status="info" borderRadius="md" mb={4} fontSize="xs">
+        <AlertIcon />
+        <Box>
+          <Text fontWeight="600">Student View Preview</Text>
+          Visual inspection mode for faculty to check question formatting, image sizing, and layout.
+          No proctoring, locks, timer expiry, or Safe Exam Browser required. Answers clicked here are local
+          and not saved.
+        </Box>
+      </Alert>
 
-        <ModalCloseButton />
-
-        <ModalBody py={4}>
-          <Alert status="info" borderRadius="md" mb={4} fontSize="xs">
-            <AlertIcon />
-            <Box>
-              <Text fontWeight="600">Student View Preview</Text>
-              Visual inspection mode for faculty to check question formatting, image sizing, and layout.
-              No proctoring, locks, timer expiry, or Safe Exam Browser required. Answers clicked here are local
-              and not saved.
-            </Box>
-          </Alert>
-
-          {/* Controls Bar */}
-          <Flex
-            p={3}
-            mb={4}
-            bg="lmBg.subtle"
-            borderRadius="md"
-            justify="space-between"
-            align="center"
-            wrap="wrap"
-            gap={3}
+      {/* Controls Bar */}
+      <Flex
+        p={3}
+        mb={4}
+        bg="lmBg.subtle"
+        borderRadius="md"
+        justify="space-between"
+        align="center"
+        wrap="wrap"
+        gap={3}
+      >
+        <HStack spacing={3}>
+          <Text fontSize="xs" fontWeight="600">
+            Delivery mode:
+          </Text>
+          <Button
+            size="xs"
+            variant={deliveryMode === 'all_at_once' ? 'solid' : 'outline'}
+            colorScheme={deliveryMode === 'all_at_once' ? 'purple' : 'gray'}
+            onClick={() => setDeliveryMode('all_at_once')}
           >
-            <HStack spacing={3}>
-              <Text fontSize="xs" fontWeight="600">
-                Delivery mode:
-              </Text>
+            📋 All on one page
+          </Button>
+          <Button
+            size="xs"
+            variant={deliveryMode === 'one_at_a_time' ? 'solid' : 'outline'}
+            colorScheme={deliveryMode === 'one_at_a_time' ? 'purple' : 'gray'}
+            onClick={() => {
+              setDeliveryMode('one_at_a_time');
+              setCurrentIdx(0);
+            }}
+          >
+            1️⃣ One at a time
+          </Button>
+        </HStack>
+
+        <FormControl display="flex" alignItems="center" w="auto">
+          <FormLabel htmlFor="show-answers" mb="0" fontSize="xs" fontWeight="600" cursor="pointer">
+            Show answer key &amp; explanations
+          </FormLabel>
+          <Switch
+            id="show-answers"
+            size="sm"
+            colorScheme="green"
+            isChecked={showAnswers}
+            onChange={(e) => setShowAnswers(e.target.checked)}
+          />
+        </FormControl>
+      </Flex>
+
+      {/* Question Index Quick-Bar */}
+      {questions.length > 0 && (
+        <Box mb={4}>
+          <Text fontSize="xs" color="lmFg.muted" mb={2} fontWeight="600">
+            Question Quick Navigation:
+          </Text>
+          <Flex gap={2} wrap="wrap">
+            {questions.map((q, idx) => (
               <Button
+                key={q._id || idx}
                 size="xs"
-                variant={deliveryMode === 'all_at_once' ? 'solid' : 'outline'}
-                colorScheme={deliveryMode === 'all_at_once' ? 'purple' : 'gray'}
-                onClick={() => setDeliveryMode('all_at_once')}
-              >
-                📋 All on one page
-              </Button>
-              <Button
-                size="xs"
-                variant={deliveryMode === 'one_at_a_time' ? 'solid' : 'outline'}
-                colorScheme={deliveryMode === 'one_at_a_time' ? 'purple' : 'gray'}
+                variant={deliveryMode === 'one_at_a_time' && currentIdx === idx ? 'solid' : 'outline'}
+                colorScheme={
+                  deliveryMode === 'one_at_a_time' && currentIdx === idx
+                    ? 'purple'
+                    : userAnswers[q._id || q.id]
+                    ? 'green'
+                    : 'gray'
+                }
                 onClick={() => {
-                  setDeliveryMode('one_at_a_time');
-                  setCurrentIdx(0);
+                  if (deliveryMode === 'one_at_a_time') {
+                    setCurrentIdx(idx);
+                  }
                 }}
               >
-                1️⃣ One at a time
+                {idx + 1}
               </Button>
-            </HStack>
-
-            <FormControl display="flex" alignItems="center" w="auto">
-              <FormLabel htmlFor="show-answers" mb="0" fontSize="xs" fontWeight="600" cursor="pointer">
-                Show answer key &amp; explanations
-              </FormLabel>
-              <Switch
-                id="show-answers"
-                size="sm"
-                colorScheme="green"
-                isChecked={showAnswers}
-                onChange={(e) => setShowAnswers(e.target.checked)}
-              />
-            </FormControl>
+            ))}
           </Flex>
+        </Box>
+      )}
 
-          {/* Question Index Quick-Bar */}
-          {questions.length > 0 && (
-            <Box mb={4}>
-              <Text fontSize="xs" color="lmFg.muted" mb={2} fontWeight="600">
-                Question Quick Navigation:
-              </Text>
-              <Flex gap={2} wrap="wrap">
-                {questions.map((q, idx) => (
-                  <Button
-                    key={q._id || idx}
-                    size="xs"
-                    variant={deliveryMode === 'one_at_a_time' && currentIdx === idx ? 'solid' : 'outline'}
-                    colorScheme={
-                      deliveryMode === 'one_at_a_time' && currentIdx === idx
-                        ? 'purple'
-                        : userAnswers[q._id || q.id]
-                        ? 'green'
-                        : 'gray'
-                    }
-                    onClick={() => {
-                      if (deliveryMode === 'one_at_a_time') {
-                        setCurrentIdx(idx);
-                      }
-                    }}
-                  >
-                    {idx + 1}
-                  </Button>
-                ))}
-              </Flex>
-            </Box>
-          )}
+      <Divider mb={4} />
 
-          <Divider mb={4} />
+      {/* Question Content */}
+      {questions.length === 0 ? (
+        <Text fontSize="sm" color="lmFg.muted" py={6} textAlign="center">
+          No questions added to this quiz yet.
+        </Text>
+      ) : deliveryMode === 'all_at_once' ? (
+        questions.map((q, idx) => renderQuestionCard(q, idx))
+      ) : (
+        <Box maxW={isFullScreen ? 'container.lg' : undefined} mx={isFullScreen ? 'auto' : undefined}>
+          {renderQuestionCard(questions[currentIdx], currentIdx)}
+          <Flex justify="space-between" align="center" mt={4}>
+            <Button
+              size="sm"
+              variant="outline"
+              isDisabled={currentIdx === 0}
+              onClick={() => setCurrentIdx((prev) => Math.max(0, prev - 1))}
+            >
+              ← Previous
+            </Button>
 
-          {/* Question Content */}
-          {questions.length === 0 ? (
-            <Text fontSize="sm" color="lmFg.muted" py={6} textAlign="center">
-              No questions added to this quiz yet.
+            <Text fontSize="xs" color="lmFg.muted" fontWeight="600">
+              Question {currentIdx + 1} of {questions.length}
             </Text>
-          ) : deliveryMode === 'all_at_once' ? (
-            questions.map((q, idx) => renderQuestionCard(q, idx))
-          ) : (
-            <Box>
-              {renderQuestionCard(questions[currentIdx], currentIdx)}
-              <Flex justify="space-between" align="center" mt={4}>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  isDisabled={currentIdx === 0}
-                  onClick={() => setCurrentIdx((prev) => Math.max(0, prev - 1))}
-                >
-                  ← Previous
-                </Button>
 
-                <Text fontSize="xs" color="lmFg.muted" fontWeight="600">
-                  Question {currentIdx + 1} of {questions.length}
-                </Text>
+            <Button
+              size="sm"
+              colorScheme="purple"
+              isDisabled={currentIdx >= questions.length - 1}
+              onClick={() => setCurrentIdx((prev) => Math.min(questions.length - 1, prev + 1))}
+            >
+              Next →
+            </Button>
+          </Flex>
+        </Box>
+      )}
+    </Box>
+  );
 
-                <Button
-                  size="sm"
-                  colorScheme="purple"
-                  isDisabled={currentIdx >= questions.length - 1}
-                  onClick={() => setCurrentIdx((prev) => Math.min(questions.length - 1, prev + 1))}
-                >
-                  Next →
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      size={isFullScreen ? 'full' : '5xl'}
+      scrollBehavior="inside"
+    >
+      <ModalOverlay backdropFilter="blur(3px)" />
+      <ModalContent
+        borderRadius={isFullScreen ? '0' : 'xl'}
+        bg={isFullScreen ? 'lmBg.subtle' : undefined}
+        minH={isFullScreen ? '100vh' : undefined}
+      >
+        <ModalHeader borderBottomWidth="1px" py={isFullScreen ? 4 : 3}>
+          {isFullScreen ? (
+            <Container maxW="container.xl" px={0}>
+              <Flex justify="space-between" align="center" wrap="wrap" gap={2}>
+                <Box>
+                  <Text fontSize="lg" fontWeight="700">
+                    👁️ Full Screen Student Preview: {quiz.title}
+                  </Text>
+                  <Text fontSize="xs" color="lmFg.muted" fontWeight="normal">
+                    {questions.length} question{questions.length === 1 ? '' : 's'} · {totalMarks} total mark
+                    {totalMarks === 1 ? '' : 's'}
+                  </Text>
+                </Box>
+
+                <Button size="sm" colorScheme="purple" variant="outline" onClick={toggleFullScreen}>
+                  📉 Exit Full Screen
                 </Button>
               </Flex>
-            </Box>
+            </Container>
+          ) : (
+            <Flex justify="space-between" align="center" wrap="wrap" gap={2} pr={8}>
+              <Box>
+                <HStack spacing={2}>
+                  <Text fontSize="lg" fontWeight="700">
+                    👁️ Student Preview: {quiz.title}
+                  </Text>
+                </HStack>
+                <Text fontSize="xs" color="lmFg.muted" fontWeight="normal">
+                  {questions.length} question{questions.length === 1 ? '' : 's'} · {totalMarks} total mark
+                  {totalMarks === 1 ? '' : 's'}
+                </Text>
+              </Box>
+
+              <Button size="xs" colorScheme="purple" variant="outline" onClick={toggleFullScreen}>
+                🖥️ Full Screen
+              </Button>
+            </Flex>
+          )}
+        </ModalHeader>
+
+        {!isFullScreen && <ModalCloseButton />}
+
+        <ModalBody py={4}>
+          {isFullScreen ? (
+            <Container maxW="container.xl" px={0}>
+              {previewContent}
+            </Container>
+          ) : (
+            previewContent
           )}
         </ModalBody>
 
         <ModalFooter borderTopWidth="1px">
-          <Button colorScheme="gray" onClick={onClose}>
-            Close Preview
+          <Button colorScheme="gray" onClick={handleClose}>
+            {isFullScreen ? 'Exit Full Screen Preview' : 'Close Preview'}
           </Button>
         </ModalFooter>
       </ModalContent>

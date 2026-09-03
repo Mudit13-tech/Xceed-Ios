@@ -83,6 +83,11 @@ function normalizeSample(sample) {
     memPercent: asNumber(sample.memPercent),
     memUsedMiB: asNumber(sample.memUsedMiB),
     memTotalMiB: asNumber(sample.memTotalMiB),
+    // memUsedMiB is the whole card, every process on it included. These name
+    // our own share and everyone else's — see the "This service" card below.
+    procMemUsedMiB: asNumber(sample.procMemUsedMiB),
+    otherProcMemUsedMiB: asNumber(sample.otherProcMemUsedMiB),
+    otherProcCount: asNumber(sample.otherProcCount),
     tempC: asNumber(sample.tempC),
     powerW: asNumber(sample.powerW),
     gpuIndex: asNumber(sample.gpuIndex),
@@ -243,6 +248,32 @@ export default function GpuMetrics() {
     return `${Math.round(latest.memUsedMiB)} / ${Math.round(latest.memTotalMiB)} MiB`;
   }, [latest]);
 
+  // Every figure from --query-gpu is device-wide, so on a shared card the
+  // utilization line and the memory total describe this service PLUS whoever
+  // else is resident. Say so explicitly rather than letting the page imply
+  // that all of it is ours.
+  const coTenancy = useMemo(() => {
+    const others = asNumber(latest?.otherProcMemUsedMiB);
+    const count = asNumber(latest?.otherProcCount);
+    if (others === null || count === null || count < 1) return null;
+    return {
+      count,
+      text: `${count} other process${count === 1 ? '' : 'es'} on this GPU `
+        + `holding ${Math.round(others)} MiB — the card-wide figures below `
+        + `include them.`,
+    };
+  }, [latest]);
+
+  // Three distinct states, and "we did not measure it" must never render as
+  // "nothing else is here" — an ML service predating the per-process split
+  // sends null, and claiming sole occupancy on the strength of a missing
+  // field is exactly the kind of false reassurance this panel is meant to end.
+  const procDetail = useMemo(() => {
+    if (asNumber(latest?.procMemUsedMiB) === null) return 'per-process split unavailable';
+    if (coTenancy) return `card total ${formatWhole(latest?.memUsedMiB, ' MiB')}`;
+    return 'sole process on this GPU';
+  }, [latest, coTenancy]);
+
   useEffect(() => {
     if (range !== 'live' || !chartScrollerRef.current) return;
 
@@ -301,12 +332,24 @@ export default function GpuMetrics() {
           title={latest?.utilUnavailableReason || undefined}
           accent="#0891b2"
         />
-        <MetricCard label="VRAM" value={formatValue(latest?.memPercent, '%')} detail={vramText} accent="#7c3aed" />
+        {/* This service's OWN VRAM, from nvidia-smi's per-process list. The
+            card-wide figures beside it cover every tenant, so this is the only
+            number on the page that is unambiguously ours. */}
+        <MetricCard
+          label="This service"
+          value={formatWhole(latest?.procMemUsedMiB, ' MiB')}
+          detail={procDetail}
+          title="VRAM held by this ML service alone"
+          accent="#0d9488"
+        />
+        <MetricCard label="VRAM (card)" value={formatValue(latest?.memPercent, '%')} detail={vramText} accent="#7c3aed" />
         <MetricCard label="Temperature" value={formatValue(latest?.tempC, ' deg C')} accent="#ea580c" />
         <MetricCard label="Power draw" value={formatValue(latest?.powerW, ' W')} accent="#16a34a" />
-        <MetricCard label="Memory used" value={formatWhole(latest?.memUsedMiB, ' MiB')} accent="#2563eb" />
+        <MetricCard label="Memory used (card)" value={formatWhole(latest?.memUsedMiB, ' MiB')} accent="#2563eb" />
         <MetricCard label="Memory total" value={formatWhole(latest?.memTotalMiB, ' MiB')} accent="#475569" />
       </section>
+
+      {coTenancy && <p style={styles.coTenancy}>{coTenancy.text}</p>}
 
       <section style={styles.controls}>
         <div style={styles.rangeButtons}>
@@ -499,6 +542,17 @@ const styles = {
   subtitle: {
     margin: '6px 0 0',
     color: T.textMuted,
+    fontSize: 13,
+  },
+  // Shown only when another tenant holds memory on the same card, so it reads
+  // as an advisory rather than permanent chrome.
+  coTenancy: {
+    margin: '12px 0 0',
+    padding: '9px 12px',
+    borderRadius: 8,
+    border: '1px solid #fde68a',
+    background: '#fffbeb',
+    color: '#92400e',
     fontSize: 13,
   },
   status: {

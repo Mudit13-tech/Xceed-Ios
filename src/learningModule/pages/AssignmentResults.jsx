@@ -31,7 +31,7 @@ import {
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile, buttonTextStyles } from '../components/common';
 import { richTextToPlain } from '../richTextUtils';
-import { formatDateTime } from '../format';
+import { decimalPlacesHint, formatAnswerValue, formatDateTime } from '../format';
 
 /**
  * Teacher's review of a parameterised assignment.
@@ -199,7 +199,19 @@ export default function AssignmentResults() {
                           <Text fontSize="sm" fontWeight="600">
                             {attempt.score}/{attempt.maxScore}
                           </Text>
-                          <Badge colorScheme={attempt.passed ? 'green' : 'red'}>{attempt.percent}%</Badge>
+                          {/* Neutral where the assignment sets no pass mark: a red badge
+                              would be a verdict against no standard. */}
+                          <Badge
+                            colorScheme={
+                              attempt.passed === null || attempt.passed === undefined
+                                ? 'gray'
+                                : attempt.passed
+                                  ? 'green'
+                                  : 'red'
+                            }
+                          >
+                            {attempt.percent}%
+                          </Badge>
                         </>
                       )}
                       {attempt.late && <Badge colorScheme="red">Late</Badge>}
@@ -278,9 +290,15 @@ export default function AssignmentResults() {
                                 <Tr key={expected.key}>
                                   <Td>{expected.label}</Td>
                                   <Td>
-                                    {expected.value === null
-                                      ? '—'
-                                      : `${Math.round(expected.value * 1e6) / 1e6} ${expected.unit}`}
+                                    {`${formatAnswerValue(expected.value, expected.decimals)} ${expected.unit}`}
+                                    {/* The precision the student was told to give,
+                                        so a near-miss can be read as rounding
+                                        rather than a wrong method. */}
+                                    {decimalPlacesHint(expected.decimals) && (
+                                      <Text as="span" fontSize="xs" color="lmFg.muted" ml={1}>
+                                        ({decimalPlacesHint(expected.decimals)})
+                                      </Text>
+                                    )}
                                   </Td>
                                   <Td color={response?.correct ? 'green.600' : 'red.600'}>
                                     {response?.raw || '—'}

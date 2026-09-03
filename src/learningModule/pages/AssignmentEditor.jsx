@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -20,7 +20,12 @@ import {
   ListItem,
   Select,
   SimpleGrid,
+  Tab,
+  TabList,
+  TabPanel,
+  TabPanels,
   Table,
+  Tabs,
   Tbody,
   Td,
   Text,
@@ -35,16 +40,22 @@ import lmApi from '../api/lmApi';
 import { ErrorState, Loading, SectionCard } from '../components/common';
 import RichText from '../components/RichText';
 import RichTextEditor from '../components/RichTextEditor';
+import Equation from '../components/Equation';
+import TableBuilderModal from '../components/TableBuilderModal';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
-import { toDateTimeInput } from '../format';
+import { formatAnswerValue, toDateTimeInput } from '../format';
 
-const BLANK_VARIABLE = { name: '', type: 'range', min: 1, max: 10, step: 0, decimals: 2, values: [], unit: '' };
-const BLANK_ANSWER = { key: '', label: '', formula: '', unit: '', tolerancePercent: 1, toleranceAbs: 0, marks: 1 };
+// Integer by default: a question asking for "a 7 Ω resistor" is the common
+// case, and a teacher who wants decimals says so, rather than having to turn
+// 4.5137 back into a whole number on every variable they add.
+const BLANK_VARIABLE = { name: '', type: 'integer', min: 1, max: 10, step: 1, decimals: 2, values: [], unit: '' };
+const BLANK_ANSWER = { key: '', label: '', formula: '', unit: '', tolerancePercent: 1, toleranceAbs: 0, decimals: 2, marks: 1 };
 const BLANK_QUESTION = {
   prompt: '',
   variables: [{ ...BLANK_VARIABLE, name: 'x' }],
   answers: [{ ...BLANK_ANSWER, label: 'Answer', formula: 'x' }],
-  constraint: '',
+  constraints: [],
+  tables: [],
   hint: '',
   solutionSteps: '',
   difficulty: 'medium',
@@ -52,12 +63,12 @@ const BLANK_QUESTION = {
 
 /** Live formula check, debounced, so errors show while the teacher types. */
 function useFormulaCheck(classId, formula, variableNames) {
-  const [state, setState] = useState({ ok: true, error: null });
+  const [state, setState] = useState({ ok: true, error: null, latex: null });
   const key = `${formula}|${variableNames.join(',')}`;
 
   useEffect(() => {
     if (!formula?.trim()) {
-      setState({ ok: false, error: null });
+      setState({ ok: false, error: null, latex: null });
       return undefined;
     }
     let cancelled = false;
@@ -66,7 +77,10 @@ function useFormulaCheck(classId, formula, variableNames) {
         const result = await lmApi.validateAssignmentFormula(classId, formula, variableNames);
         if (!cancelled) setState(result);
       } catch {
-        if (!cancelled) setState({ ok: true, error: null });
+        // The formula is unchecked, not wrong — say nothing rather than
+        // flagging a network blip as a bad formula. The equation preview drops
+        // out for the same reason: better blank than stale.
+        if (!cancelled) setState({ ok: true, error: null, latex: null });
       }
     }, 350);
     return () => {
@@ -178,6 +192,22 @@ function VariableRow({ variable, onChange, onRemove }) {
   );
 }
 
+/**
+ * "Power = I^{2} \cdot R \mathrm{W}" — the formula the server rendered, with
+ * the answer's own label and unit around it, so the teacher proofreads the
+ * whole equation rather than a bare right-hand side.
+ */
+function equationLatex(answer, formulaLatex) {
+  const label = String(answer.label || '').trim();
+  const unit = String(answer.unit || '').trim();
+  const lhs = label ? `\\mathrm{${latexEscape(label)}} = ` : '';
+  const rhs = unit ? `${formulaLatex}\\ \\mathrm{${latexEscape(unit)}}` : formulaLatex;
+  return `${lhs}${rhs}`;
+}
+
+/** Labels and units are free text; keep a stray brace or backslash out of KaTeX. */
+const latexEscape = (text) => text.replace(/[\\{}$&#^_~%]/g, ' ');
+
 function AnswerRow({ classId, answer, variableNames, onChange, onRemove }) {
   const set = (field, value) => onChange({ ...answer, [field]: value });
   const check = useFormulaCheck(classId, answer.formula, variableNames);
@@ -209,6 +239,25 @@ function AnswerRow({ classId, answer, variableNames, onChange, onRemove }) {
             Unit
           </FormLabel>
           <Input size="sm" value={answer.unit} placeholder="W" onChange={(e) => set('unit', e.target.value)} />
+        </FormControl>
+        <FormControl maxW="100px">
+          <Tooltip label="How many decimal places the student should give. Shown on their paper, and the answer key is stated to the same precision. Leave blank for the exact, unrounded value.">
+            <FormLabel fontSize="xs" mb={1}>
+              Decimals
+            </FormLabel>
+          </Tooltip>
+          <Select
+            size="sm"
+            value={answer.decimals ?? ''}
+            onChange={(e) => set('decimals', e.target.value === '' ? null : Number(e.target.value))}
+          >
+            <option value="">Exact</option>
+            {[0, 1, 2, 3, 4, 5, 6].map((places) => (
+              <option key={places} value={places}>
+                {places} dp
+              </option>
+            ))}
+          </Select>
         </FormControl>
         <FormControl maxW="90px">
           <Tooltip label="An answer within this percentage of the exact value is marked correct">
@@ -251,27 +300,416 @@ function AnswerRow({ classId, answer, variableNames, onChange, onRemove }) {
           {check.error}
         </Text>
       )}
+      {/* The formula as it will actually be read. Typed text is easy to mistype
+          and hard to proofread; a fraction or a root is obvious at a glance.
+          Given the full width of the card rather than sharing a line with the
+          label, so an ordinary equation never needs a scrollbar. */}
+      {check.latex && (
+        <Box mt={3} px={3} py={2} bg="lmHue.blue50" borderRadius="md">
+          <Text fontSize="xs" color="lmFg.muted" mb={1}>
+            Reads as:
+          </Text>
+          <Equation latex={equationLatex(answer, check.latex)} fontSize="xl" w="100%" />
+        </Box>
+      )}
     </Box>
   );
 }
 
-function QuestionCard({ classId, question, index, onChange, onRemove }) {
-  const set = (field, value) => onChange({ ...question, [field]: value });
+const PLACEHOLDER = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;
+
+/** True when the question's text actually places this table somewhere. */
+function usesTable(question, key) {
+  const pattern = tableTokenPattern(key);
+  return [
+    question.prompt,
+    question.hint,
+    question.solutionSteps,
+    ...(question.parts || []).map((part) => part?.prompt),
+  ].some((text) => {
+    pattern.lastIndex = 0;
+    return pattern.test(String(text || ''));
+  });
+}
+
+/** Matches one table's token, for pulling it back out of the text. */
+const tableTokenPattern = (key) => new RegExp(`\\{\\{\\s*table:${key}\\s*\\}\\}`, 'g');
+
+/** The distinct {{name}} placeholders across a set of authored fields. */
+function placeholderNames(texts) {
+  const found = new Set();
+  texts.forEach((text) => {
+    String(text || '').replace(PLACEHOLDER, (match, name) => {
+      found.add(name);
+      return match;
+    });
+  });
+  return [...found];
+}
+
+/**
+ * Adds the named variables to the list, reusing a row the teacher has already
+ * opened but not named yet — otherwise clicking "+ Add variable" and then
+ * typing the placeholder would leave a blank row behind.
+ */
+function withDeclared(existing, names) {
+  const rows = [...(existing || [])];
+  names.forEach((name) => {
+    if (rows.some((row) => row.name === name)) return;
+    const blank = rows.findIndex((row) => !String(row.name || '').trim());
+    if (blank >= 0) rows[blank] = { ...rows[blank], name };
+    else rows.push({ ...BLANK_VARIABLE, name });
+  });
+  return rows;
+}
+
+/**
+ * One constraint cell. Each is parsed and reported on its own, which is the
+ * point of splitting them: with "b != c && R > 0" as a single string, one typo
+ * invalidates the lot and the message cannot say which half is wrong.
+ */
+function ConstraintRow({ classId, constraint, variableNames, index, onChange, onRemove }) {
+  const check = useFormulaCheck(classId, constraint, variableNames);
+
+  return (
+    <Box mb={2}>
+      <Flex gap={2} align="center">
+        <Text fontSize="xs" color="lmFg.muted" minW="18px">
+          {index + 1}.
+        </Text>
+        <Input
+          size="sm"
+          fontFamily="mono"
+          value={constraint}
+          placeholder="R > 0"
+          isInvalid={Boolean(check.error)}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <Button size="sm" variant="ghost" colorScheme="red" onClick={onRemove}>
+          ✕
+        </Button>
+      </Flex>
+      {check.error && (
+        <Text fontSize="xs" color="red.600" mt={1} ml="26px">
+          {check.error}
+        </Text>
+      )}
+      {check.latex && !check.error && (
+        <Box ml="26px" mt={1} mr={10}>
+          <Equation latex={check.latex} fontSize="sm" w="100%" />
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * Sample rolls for one question, shown under that question.
+ *
+ * The whole-assignment preview at the bottom of the page answers "is this paper
+ * sane"; this answers "is *this* question right", which is the question a
+ * teacher actually has while editing one. It reads the same endpoint and picks
+ * out this question's slice, so there is no second generation path that could
+ * disagree with what students are handed.
+ *
+ * Sub-questions are shown nested under the stem, each with its own answers,
+ * because a part's answer means nothing without the part that asked for it.
+ */
+function QuestionPreview({ classId, assignmentId, index, dirty, variables }) {
+  const [samples, setSamples] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [fixed, setFixed] = useState({});
+  const [fixedResult, setFixedResult] = useState(null);
+  const [fixedBusy, setFixedBusy] = useState(false);
+  const toast = useToast();
+
+  const named = (variables || []).filter((variable) => String(variable.name || '').trim());
+
+  const runFixed = async () => {
+    setFixedBusy(true);
+    try {
+      setFixedResult(await lmApi.evaluateAssignmentQuestion(classId, assignmentId, index, fixed));
+    } catch (error) {
+      toast({ status: 'error', title: error.message });
+    } finally {
+      setFixedBusy(false);
+    }
+  };
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      const result = await lmApi.previewAssignment(classId, assignmentId, 2);
+      setSamples((result.samples || []).map((sample) => ({
+        label: sample.label,
+        question: sample.questions?.[index] || null,
+      })));
+    } catch (error) {
+      toast({ status: 'error', title: error.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // A roll describes the saved question, so an edited one must not keep
+  // showing numbers from before the edit.
+  useEffect(() => {
+    if (dirty) {
+      setSamples(null);
+      setFixedResult(null);
+    }
+  }, [dirty]);
+
+  const answerBadges = (expected, partIndex) =>
+    (expected || [])
+      .filter((slot) => (slot.partIndex ?? null) === partIndex)
+      .map((slot) => (
+        <Badge key={slot.key} colorScheme={slot.error ? 'red' : 'green'}>
+          {slot.label}:{' '}
+          {slot.error ? 'failed' : `${formatAnswerValue(slot.value, slot.decimals)} ${slot.unit || ''}`}
+        </Badge>
+      ));
+
+  return (
+    <Box mt={4} pt={3} borderTopWidth="1px" borderColor="lmBorder.base">
+      <Flex justify="space-between" align="center" gap={3} wrap="wrap" mb={2}>
+        <Box>
+          <Heading size="xs" color="lmFg.body">
+            Preview this question
+          </Heading>
+          <Text fontSize="xs" color="lmFg.muted">
+            {dirty
+              ? 'Save the question first — the roll runs against the saved version.'
+              : 'The actual numbers two students would be given.'}
+          </Text>
+        </Box>
+        <Button size="sm" variant="outline" colorScheme="teal" onClick={run} isLoading={busy} isDisabled={dirty}>
+          Roll samples
+        </Button>
+      </Flex>
+
+      {samples?.map(({ label, question: sample }) => (
+        <Box key={label} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" p={3} mb={2}>
+          <Badge mb={2}>{label}</Badge>
+          {!sample ? (
+            <Text fontSize="sm" color="lmFg.muted">
+              This question is not in the saved assignment yet.
+            </Text>
+          ) : (
+            <>
+              <RichText fontSize="sm">{sample.prompt}</RichText>
+              <HStack fontSize="xs" color="lmFg.muted" mt={1} wrap="wrap">
+                {Object.entries(sample.values || {}).map(([name, value]) => (
+                  <Code key={name} fontSize="xs">
+                    {name} = {String(value)}
+                  </Code>
+                ))}
+              </HStack>
+              <HStack fontSize="xs" mt={2} wrap="wrap">
+                {answerBadges(sample.expected, null)}
+              </HStack>
+
+              {(sample.parts || []).map((part, partIndex) => (
+                <Box key={partIndex} mt={3} pl={3} borderLeftWidth="2px" borderColor="lmHue.purple200">
+                  {part.label && (
+                    <Text fontSize="sm" fontWeight="700" color="lmHue.purple700">
+                      {part.label}
+                    </Text>
+                  )}
+                  <RichText fontSize="sm">{part.prompt}</RichText>
+                  <HStack fontSize="xs" mt={1} wrap="wrap">
+                    {answerBadges(sample.expected, partIndex)}
+                  </HStack>
+                </Box>
+              ))}
+            </>
+          )}
+        </Box>
+      ))}
+
+      {/* Check against a result you already know. Rolling until R happens to
+          come up as 7 is not a way to verify a formula. */}
+      {named.length > 0 && (
+        <Box mt={3} p={3} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" bg="lmHue.teal50">
+          <Text fontSize="xs" fontWeight="600" color="lmFg.body" mb={2}>
+            Or work it out for values you choose
+          </Text>
+          <Flex gap={2} align="flex-end" wrap="wrap">
+            {named.map((variable) => (
+              <FormControl key={variable.name} maxW="110px">
+                <FormLabel fontSize="xs" mb={1}>
+                  {variable.name}
+                  {variable.unit ? ` (${variable.unit})` : ''}
+                </FormLabel>
+                <Input
+                  size="sm"
+                  bg="lmBg.card"
+                  value={fixed[variable.name] ?? ''}
+                  onChange={(event) => setFixed({ ...fixed, [variable.name]: event.target.value })}
+                />
+              </FormControl>
+            ))}
+            <Button size="sm" colorScheme="teal" onClick={runFixed} isLoading={fixedBusy} isDisabled={dirty}>
+              Work it out
+            </Button>
+          </Flex>
+
+          {fixedResult && (
+            <Box mt={3} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" p={3} bg="lmBg.card">
+              <RichText fontSize="sm">{fixedResult.prompt}</RichText>
+              <HStack fontSize="xs" mt={2} wrap="wrap">
+                {answerBadges(fixedResult.expected, null)}
+              </HStack>
+              {(fixedResult.parts || []).map((part, partIndex) => (
+                <Box key={partIndex} mt={3} pl={3} borderLeftWidth="2px" borderColor="lmHue.purple200">
+                  {part.label && (
+                    <Text fontSize="sm" fontWeight="700" color="lmHue.purple700">
+                      {part.label}
+                    </Text>
+                  )}
+                  <RichText fontSize="sm">{part.prompt}</RichText>
+                  <HStack fontSize="xs" mt={1} wrap="wrap">
+                    {answerBadges(fixedResult.expected, partIndex)}
+                  </HStack>
+                </Box>
+              ))}
+              {!fixedResult.constraintsSatisfied && (
+                <Text fontSize="xs" color="orange.600" mt={2}>
+                  These values break a constraint, so no student would be given them — the answers
+                  above are still worked out from them.
+                </Text>
+              )}
+            </Box>
+          )}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+function QuestionCard({ classId, assignmentId, question, index, onChange, onRemove, onSave, saving, dirty }) {
+  /**
+   * Every edit is applied as a function of the *current* question, never of the
+   * one captured when this render ran.
+   *
+   * That is load-bearing, not tidiness. Inserting a table token makes Quill emit
+   * its own onChange in the same tick; with plain object spreads the second
+   * update rebuilt the question from a closure that predated the first and
+   * silently dropped the table that had just been added.
+   */
+  const set = (field, value) => onChange((current) => ({ ...current, [field]: value }));
   const variableNames = useMemo(
     () => (question.variables || []).map((variable) => variable.name).filter(Boolean),
     [question.variables],
   );
-  const constraintCheck = useFormulaCheck(classId, question.constraint, variableNames);
+  // The list, with the single legacy `constraint` field folded in as its first
+  // entry — that is how a assignment saved before multi-constraint support opens
+  // with its guard intact and editable.
+  const constraints = useMemo(() => {
+    const legacy = String(question.constraint || '').trim();
+    return [...(legacy ? [legacy] : []), ...(question.constraints || [])];
+  }, [question.constraint, question.constraints]);
 
-  const usedInPrompt = useMemo(() => {
-    const found = new Set();
-    String(question.prompt || '').replace(/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g, (m, name) => {
-      found.add(name);
-      return m;
-    });
-    return [...found];
-  }, [question.prompt]);
-  const missingInPrompt = usedInPrompt.filter((name) => !variableNames.includes(name));
+  const setConstraints = (next) =>
+    onChange((current) => ({ ...current, constraint: '', constraints: next }));
+
+  // Every {{name}} the teacher has typed anywhere in the question. The stem is
+  // not the only surface that can introduce one — a sub-question prompt, a hint
+  // or a worked solution can too, and a variable declared from any of them is
+  // the same variable.
+  const placeholders = useMemo(
+    () =>
+      placeholderNames([
+        question.prompt,
+        question.hint,
+        question.solutionSteps,
+        ...(question.parts || []).map((part) => part.prompt),
+      ]),
+    [question.prompt, question.hint, question.solutionSteps, question.parts],
+  );
+  const undeclared = placeholders.filter((name) => !variableNames.includes(name));
+
+  const declare = (names) =>
+    set('variables', withDeclared(question.variables, names));
+
+  // The prompt editor, so the table builder can drop its token where the
+  // cursor actually is rather than at the end.
+  const promptRef = useRef(null);
+  // null when closed; { key } when editing an existing table, {} when new.
+  const [tableEdit, setTableEdit] = useState(null);
+  const tables = question.tables || [];
+
+  // Bumped whenever a table changes. The save runs from an effect rather than
+  // inline so it happens *after* the edit is committed — saving in the same
+  // tick would write the question as it was a moment ago, which is the whole
+  // class of bug this file just had.
+  const [autoSave, setAutoSave] = useState(0);
+  useEffect(() => {
+    if (autoSave) onSave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSave]);
+
+  const saveTable = (built) => {
+    if (tableEdit?.key) {
+      onChange((current) => ({
+        ...current,
+        tables: (current.tables || []).map((table) =>
+          table.key === tableEdit.key ? { ...table, ...built } : table,
+        ),
+      }));
+      setAutoSave((n) => n + 1);
+      return;
+    }
+
+    // A key rather than a position: the text's token points at this table, and
+    // must keep pointing at it when another one is deleted.
+    const key = `t${Math.random().toString(36).slice(2, 8)}`;
+    // The insert hands back the prompt HTML it produced, so the token and the
+    // table land in one update rather than racing Quill's own onChange.
+    const prompt = promptRef.current?.insertAtCursor(`{{table:${key}}}`);
+    onChange((current) => ({
+      ...current,
+      tables: [...(current.tables || []), { key, ...built }],
+      ...(typeof prompt === 'string' ? { prompt } : {}),
+    }));
+    setAutoSave((n) => n + 1);
+  };
+
+  const removeTable = (key) => {
+    // The token goes with it, otherwise saving fails on a dangling reference.
+    const strip = (text) => String(text || '').replace(tableTokenPattern(key), '');
+    onChange((current) => ({
+      ...current,
+      tables: (current.tables || []).filter((table) => table.key !== key),
+      prompt: strip(current.prompt),
+      hint: strip(current.hint),
+      solutionSteps: strip(current.solutionSteps),
+      parts: (current.parts || []).map((part) => ({ ...part, prompt: strip(part.prompt) })),
+    }));
+    setAutoSave((n) => n + 1);
+  };
+
+  // Typing declares. A newly typed {{R}} becomes a variable row on its own, so
+  // the answer formulas and the placeholder bar can see it immediately instead
+  // of the teacher having to add the same name a second time by hand.
+  //
+  // `handled` remembers every name already acted on, which does two things:
+  // deleting a variable row whose placeholder is still in the text keeps it
+  // deleted rather than resurrecting it on the next keystroke, and seeding it
+  // from what the question already contains means merely *opening* an old
+  // question never edits it. Those pre-existing gaps get the button below.
+  const handled = useRef(null);
+  if (handled.current === null) handled.current = new Set([...variableNames, ...placeholders]);
+
+  useEffect(() => {
+    const fresh = placeholders.filter((name) => !handled.current.has(name));
+    if (!fresh.length) return;
+    fresh.forEach((name) => handled.current.add(name));
+    declare(fresh);
+    // `declare` closes over this render's question, which is the one the new
+    // placeholder was just typed into — re-running on it would only loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeholders]);
 
   return (
     <SectionCard mb={4}>
@@ -291,9 +729,11 @@ function QuestionCard({ classId, question, index, onChange, onRemove }) {
 
       <FormControl mb={1}>
         <FormLabel fontSize="sm">
-          Prompt — use the buttons below to drop a <Code fontSize="xs">{'{{variable}}'}</Code> at the cursor
+          Prompt — type <Code fontSize="xs">{'{{R}}'}</Code> and the variable is declared for you, or
+          use the buttons below to drop an existing one at the cursor
         </FormLabel>
         <RichTextEditor
+          ref={promptRef}
           value={question.prompt}
           onChange={(html) => set('prompt', html)}
           placeholder="A resistor of {{R}} Ω carries {{I}} A. Find the power dissipated."
@@ -301,12 +741,114 @@ function QuestionCard({ classId, question, index, onChange, onRemove }) {
           minH="110px"
         />
       </FormControl>
-      {missingInPrompt.length > 0 && (
-        <Text fontSize="xs" color="red.600" mb={3}>
-          The prompt uses {missingInPrompt.map((name) => `{{${name}}}`).join(', ')} but{' '}
-          {missingInPrompt.length === 1 ? 'that variable is' : 'those variables are'} not declared below.
-        </Text>
+      {undeclared.length > 0 && (
+        <HStack fontSize="xs" color="red.600" mb={3} spacing={2} wrap="wrap">
+          <Text>
+            {undeclared.map((name) => `{{${name}}}`).join(', ')}{' '}
+            {undeclared.length === 1 ? 'is' : 'are'} used here but not declared below, so{' '}
+            {undeclared.length === 1 ? 'it stays' : 'they stay'} literal on the student&apos;s paper.
+          </Text>
+          <Button size="xs" colorScheme="red" variant="outline" onClick={() => declare(undeclared)}>
+            {undeclared.length === 1 ? 'Declare it' : 'Declare them'}
+          </Button>
+        </HStack>
       )}
+
+      {/* Tables live on the question and are referenced from the text by a
+          token, so they survive editing the prompt around them. */}
+      <Flex align="center" gap={2} mt={2} wrap="wrap">
+        <Button size="xs" variant="outline" onClick={() => setTableEdit({})}>
+          ⊞ Insert table
+        </Button>
+        <Text fontSize="xs" color="lmFg.muted">
+          Dropped in at the cursor, and its cells can use the variables too.
+        </Text>
+      </Flex>
+
+      {/* Shown as the table it is, not as a line of metadata. The prompt above
+          can only ever carry the token, so this is the teacher's one view of
+          what the students will actually be given. */}
+      {tables.map((table, tableIndex) => (
+        <Box
+          key={table.key}
+          mt={2}
+          borderWidth="1px"
+          borderColor="lmBorder.base"
+          borderRadius="md"
+          p={3}
+          bg="lmBg.sunken"
+        >
+          <Flex align="center" gap={2} wrap="wrap" mb={2}>
+            <Text fontSize="sm" fontWeight="700">
+              {table.caption?.trim() || `Table ${tableIndex + 1}`}
+            </Text>
+            <Code fontSize="xs">{`{{table:${table.key}}}`}</Code>
+            {!usesTable(question, table.key) && (
+              <Badge colorScheme="orange">not placed — delete it, or insert a new one</Badge>
+            )}
+            <Box flex="1" />
+            <Button size="xs" variant="outline" onClick={() => setTableEdit({ key: table.key })}>
+              Edit table
+            </Button>
+            <Button size="xs" variant="ghost" colorScheme="red" onClick={() => removeTable(table.key)}>
+              Delete
+            </Button>
+          </Flex>
+
+          <Box bg="lmBg.card" borderRadius="md">
+            <Table
+              size="sm"
+              // Ruled on every side and column-width shared, so the preview here
+              // matches what the student's paper will look like rather than
+              // Chakra's default underline-only styling.
+              sx={{
+                tableLayout: 'fixed',
+                width: '100%',
+                borderCollapse: 'collapse',
+                'th, td': {
+                  borderWidth: '1px',
+                  borderColor: 'lmBorder.base',
+                  whiteSpace: 'normal',
+                  wordBreak: 'break-word',
+                  verticalAlign: 'top',
+                },
+                th: { bg: 'lmBg.sunken' },
+              }}
+            >
+              {(table.header || []).some(Boolean) && (
+                <Thead>
+                  <Tr>
+                    {table.header.map((cell, cellIndex) => (
+                      <Th key={cellIndex}>{cell}</Th>
+                    ))}
+                  </Tr>
+                </Thead>
+              )}
+              <Tbody>
+                {(table.rows || []).map((row, rowIndex) => (
+                  <Tr key={rowIndex}>
+                    {row.map((cell, cellIndex) => (
+                      <Td key={cellIndex} fontSize="xs">
+                        {/* Placeholders are left as written — this is the
+                            question, not one student's copy of it. */}
+                        {cell}
+                      </Td>
+                    ))}
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          </Box>
+        </Box>
+      ))}
+
+      <TableBuilderModal
+        isOpen={Boolean(tableEdit)}
+        onClose={() => setTableEdit(null)}
+        onSave={saveTable}
+        variables={variableNames}
+        initial={tableEdit?.key ? tables.find((table) => table.key === tableEdit.key) : null}
+      />
 
       <Divider my={4} />
       <Heading size="xs" mb={2} color="lmFg.body">
@@ -381,7 +923,7 @@ function QuestionCard({ classId, question, index, onChange, onRemove }) {
           <Flex justify="space-between" align="center" gap={2} mb={2}>
             <HStack spacing={2}>
               <Text fontSize="sm" fontWeight="700" color="lmHue.purple700">
-                {part.label?.trim() || `(${String.fromCharCode(97 + partIndex)})`}
+                {part.label?.trim() || 'Sub-question'}
               </Text>
               <Input
                 size="xs"
@@ -411,7 +953,7 @@ function QuestionCard({ classId, question, index, onChange, onRemove }) {
           <FormControl mb={2}>
             <FormLabel fontSize="xs">Prompt for this part</FormLabel>
             <RichTextEditor
-              value={part.prompt || ''}
+                  value={part.prompt || ''}
               onChange={(value) =>
                 set(
                   'parts',
@@ -486,22 +1028,41 @@ function QuestionCard({ classId, question, index, onChange, onRemove }) {
       <Divider my={4} />
       <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
         <FormControl>
-          <Tooltip label="Values are re-drawn until this is true — use it to avoid divide-by-zero">
-            <FormLabel fontSize="sm">Constraint (optional)</FormLabel>
+          <Tooltip label="Every constraint must be true, or the values are drawn again — this is what keeps a student's numbers away from a divide-by-zero or the root of a negative">
+            <FormLabel fontSize="sm">Constraints (optional)</FormLabel>
           </Tooltip>
-          <Input
-            size="sm"
-            fontFamily="mono"
-            value={question.constraint}
-            placeholder="b != c && R > 0"
-            isInvalid={Boolean(constraintCheck.error)}
-            onChange={(e) => set('constraint', e.target.value)}
-          />
-          {constraintCheck.error && (
-            <Text fontSize="xs" color="red.600" mt={1}>
-              {constraintCheck.error}
+          {constraints.length === 0 && (
+            <Text fontSize="xs" color="lmFg.muted" mb={2}>
+              None — any drawn values are accepted.
             </Text>
           )}
+          {constraints.map((constraint, constraintIndex) => (
+            <ConstraintRow
+              key={constraintIndex}
+              classId={classId}
+              constraint={constraint}
+              variableNames={variableNames}
+              index={constraintIndex}
+              onChange={(value) =>
+                setConstraints(constraints.map((c, i) => (i === constraintIndex ? value : c)))
+              }
+              onRemove={() => setConstraints(constraints.filter((_, i) => i !== constraintIndex))}
+            />
+          ))}
+          <Button size="xs" variant="link" onClick={() => setConstraints([...constraints, ''])}>
+            + Add constraint
+          </Button>
+          <FormHelperText fontSize="xs">
+            One condition per cell — they must all hold together, so
+            <Code fontSize="xs" mx={1}>
+              R &gt; 0
+            </Code>
+            and
+            <Code fontSize="xs" mx={1}>
+              b != c
+            </Code>
+            go in separate cells rather than joined with &amp;&amp;.
+          </FormHelperText>
         </FormControl>
         <FormControl>
           <FormLabel fontSize="sm">Hint (optional)</FormLabel>
@@ -525,91 +1086,26 @@ function QuestionCard({ classId, question, index, onChange, onRemove }) {
           minH="110px"
         />
       </FormControl>
-    </SectionCard>
-  );
-}
 
-function PreviewPanel({ classId, assignmentId, dirty }) {
-  const [samples, setSamples] = useState(null);
-  const [warnings, setWarnings] = useState([]);
-  const [busy, setBusy] = useState(false);
-  const toast = useToast();
-
-  const run = async () => {
-    setBusy(true);
-    try {
-      const result = await lmApi.previewAssignment(classId, assignmentId, 3);
-      setSamples(result.samples);
-      setWarnings(result.warnings);
-    } catch (error) {
-      toast({ status: 'error', title: error.message });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <SectionCard
-      title="Preview"
-      subtitle="Roll sample papers to see the actual numbers students will get."
-      action={
-        <Button size="sm" colorScheme="teal" variant="outline" onClick={run} isLoading={busy}>
-          Roll samples
-        </Button>
-      }
-    >
-      {dirty && (
-        <Alert status="info" borderRadius="md" mb={3} fontSize="sm">
-          <AlertIcon />
-          Save your changes first — the preview runs against the saved version.
-        </Alert>
-      )}
-
-      {warnings.length > 0 && (
-        <Alert status="warning" borderRadius="md" mb={3} fontSize="sm" alignItems="flex-start">
-          <AlertIcon />
-          <Box>
-            <Text fontWeight="600">Some draws produce an unanswerable question:</Text>
-            <List fontSize="xs" mt={1}>
-              {warnings.map((warning) => (
-                <ListItem key={warning}>• {warning}</ListItem>
-              ))}
-            </List>
-          </Box>
-        </Alert>
-      )}
-
-      {!samples ? (
-        <Text fontSize="sm" color="lmFg.muted">
-          No samples rolled yet.
+      {/* Saving from inside the question, rather than scrolling to the bottom of
+          a long assignment — and it is what unlocks the preview, which can only
+          roll samples against the saved version. */}
+      <Flex justify="flex-end" align="center" gap={3} mt={4} pt={3} borderTopWidth="1px" borderColor="lmBorder.base">
+        <Text fontSize="xs" color="lmFg.muted">
+          {dirty ? 'Unsaved changes' : 'Saved — the preview can roll samples'}
         </Text>
-      ) : (
-        samples.map((sample) => (
-          <Box key={sample.label} mb={4} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" p={3}>
-            <Badge mb={2}>{sample.label}</Badge>
-            {sample.questions.map((question, index) => (
-              <Box key={index} mb={3}>
-                <RichText>{question.prompt}</RichText>
-                <HStack fontSize="xs" color="lmFg.muted" mt={1} wrap="wrap">
-                  {Object.entries(question.values).map(([name, value]) => (
-                    <Code key={name} fontSize="xs">
-                      {name} = {String(value)}
-                    </Code>
-                  ))}
-                </HStack>
-                <HStack fontSize="xs" mt={1} wrap="wrap">
-                  {question.expected.map((expected) => (
-                    <Badge key={expected.key} colorScheme={expected.error ? 'red' : 'green'}>
-                      {expected.label}:{' '}
-                      {expected.error ? 'failed' : `${Math.round(expected.value * 1e6) / 1e6} ${expected.unit}`}
-                    </Badge>
-                  ))}
-                </HStack>
-              </Box>
-            ))}
-          </Box>
-        ))
-      )}
+        <Button size="sm" colorScheme="blue" onClick={onSave} isLoading={saving} isDisabled={!dirty}>
+          Save
+        </Button>
+      </Flex>
+
+      <QuestionPreview
+        classId={classId}
+        assignmentId={assignmentId}
+        index={index}
+        dirty={dirty}
+        variables={question.variables}
+      />
     </SectionCard>
   );
 }
@@ -627,6 +1123,9 @@ export default function AssignmentEditor() {
   const [dirty, setDirty] = useState(false);
   const [reference, setReference] = useState(null);
   const [importing, setImporting] = useState(false);
+  // Which question tab is open. Clamped at render, so deleting the last
+  // question or reloading a shorter assignment cannot leave it out of range.
+  const [openQuestion, setOpenQuestion] = useState(0);
 
   const load = useCallback(async () => {
     setError(null);
@@ -654,15 +1153,36 @@ export default function AssignmentEditor() {
     setDirty(true);
   };
 
+  /** Question edits, applied to whatever the questions array is right now. */
+  const updateQuestions = (updater) => {
+    setAssignment((prev) => ({ ...prev, questions: updater(prev.questions || []) }));
+    setDirty(true);
+  };
+
+  // `save` can be called from a child effect, after a state update it must
+  // include. Reading the ref rather than the render-time `assignment` is what
+  // makes that safe.
+  const assignmentRef = useRef(assignment);
+  assignmentRef.current = assignment;
+
+  const addQuestion = () => {
+    update({ questions: [...assignment.questions, JSON.parse(JSON.stringify(BLANK_QUESTION))] });
+    // Straight onto the new tab. Adding a question and being left looking at
+    // the old one is the thing the tab strip is meant to fix.
+    setOpenQuestion(assignment.questions.length);
+  };
+
   const save = async () => {
+    const current = assignmentRef.current;
+    if (!current) return false;
     setSaving(true);
     try {
       await lmApi.updateAssignment(classId, assignmentId, {
-        title: assignment.title,
-        description: assignment.description,
-        topicId: assignment.topicId,
-        questions: assignment.questions,
-        settings: assignment.settings,
+        title: current.title,
+        description: current.description,
+        topicId: current.topicId,
+        questions: current.questions,
+        settings: current.settings,
       });
       toast({ status: 'success', title: 'Assignment saved' });
       await load();
@@ -721,6 +1241,19 @@ export default function AssignmentEditor() {
           </Text>
         </Box>
         <HStack>
+          {/* Save first: the import appends to the stored assignment and this page
+              reloads it afterwards, so unsaved edits would go with the reload. */}
+          <Button
+            size="sm"
+            variant="outline"
+            isLoading={saving}
+            onClick={async () => {
+              if (!(await save())) return;
+              setImporting(true);
+            }}
+          >
+            📥 Import questions
+          </Button>
           <Button size="sm" variant="outline" onClick={save} isLoading={saving}>
             Save
           </Button>
@@ -740,26 +1273,21 @@ export default function AssignmentEditor() {
           <Textarea rows={2} value={assignment.description} onChange={(e) => update({ description: e.target.value })} />
         </FormControl>
 
-        <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4}>
-          <FormControl>
-            <FormLabel fontSize="xs">Topic</FormLabel>
-            <Select size="sm" value={assignment.topicId || ''} onChange={(e) => update({ topicId: e.target.value || null })}>
-              <option value="">No topic</option>
-              {(klass.topics || []).map((topic) => (
-                <option key={topic._id} value={topic._id}>
-                  {topic.name}
-                </option>
-              ))}
-            </Select>
-          </FormControl>
+        {/* Both optional: an assignment can stand on its score alone, and a
+            deadline is the teacher's to set or leave off. */}
+        <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
           <FormControl>
             <FormLabel fontSize="xs">Pass mark (%)</FormLabel>
             <Input
               size="sm"
               type="number"
-              value={assignment.settings.passPercent}
-              onChange={(e) => setSetting('passPercent', Number(e.target.value) || 0)}
+              min={0}
+              max={100}
+              placeholder="No pass mark"
+              value={assignment.settings.passPercent ?? ''}
+              onChange={(e) => setSetting('passPercent', e.target.value === '' ? null : Number(e.target.value))}
             />
+            <FormHelperText fontSize="xs">Blank means no pass or fail is shown.</FormHelperText>
           </FormControl>
           <FormControl>
             <FormLabel fontSize="xs">Due date</FormLabel>
@@ -769,6 +1297,7 @@ export default function AssignmentEditor() {
               value={toDateTimeInput(assignment.settings?.dueDate)}
               onChange={(e) => setSetting('dueDate', e.target.value ? new Date(e.target.value).toISOString() : null)}
             />
+            <FormHelperText fontSize="xs">Blank means no deadline.</FormHelperText>
           </FormControl>
         </SimpleGrid>
 
@@ -852,39 +1381,93 @@ export default function AssignmentEditor() {
         </SectionCard>
       )}
 
-      {assignment.questions.map((question, index) => (
-        <QuestionCard
-          key={question._id || index}
-          classId={classId}
-          question={question}
-          index={index}
-          onChange={(updated) =>
-            update({ questions: assignment.questions.map((q, i) => (i === index ? updated : q)) })
-          }
-          onRemove={() => update({ questions: assignment.questions.filter((_, i) => i !== index) })}
-        />
-      ))}
+      {/* One question at a time, on its own tab. A assignment with a dozen
+          parameterised questions is thousands of pixels of form otherwise, and
+          the teacher loses their place every time they add one. Only the open
+          tab is mounted, which also means only its formulas are being checked
+          against the server on each keystroke. */}
+      {assignment.questions.length > 0 && (
+        <Tabs
+          index={Math.min(openQuestion, assignment.questions.length - 1)}
+          onChange={setOpenQuestion}
+          variant="unstyled"
+          isLazy
+          mb={5}
+        >
+          <Flex align="center" gap={2} mb={2}>
+            <TabList overflowX="auto" overflowY="hidden" py={1} gap={2} flex="1">
+              {assignment.questions.map((question, index) => (
+                <Tab
+                  key={question._id || index}
+                  whiteSpace="nowrap"
+                  fontSize="sm"
+                  fontWeight="600"
+                  borderRadius="full"
+                  px={4}
+                  py={1.5}
+                  // Explicit on both states: the default enclosed tabs read as
+                  // plain text on this page's background, so which question is
+                  // open was not actually visible.
+                  bg="lmHue.purple50"
+                  color="lmHue.purple700"
+                  _hover={{ bg: 'lmHue.purple100' }}
+                  _selected={{ bg: 'purple.500', color: 'white', boxShadow: 'md' }}
+                >
+                  Question {index + 1}
+                </Tab>
+              ))}
+            </TabList>
+            {/* In the tab strip, where a new tab appears — not at the bottom of
+                a question the teacher would have to scroll past first. */}
+            <Button
+              size="sm"
+              colorScheme="purple"
+              variant="outline"
+              borderRadius="full"
+              flexShrink={0}
+              onClick={addQuestion}
+            >
+              + Add question
+            </Button>
+          </Flex>
+          <TabPanels>
+            {assignment.questions.map((question, index) => (
+              <TabPanel key={question._id || index} px={0}>
+                <QuestionCard
+                  classId={classId}
+                  assignmentId={assignmentId}
+                  question={question}
+                  index={index}
+                  // Takes an updater, applied against the newest questions array
+                  // rather than the one this render closed over.
+                  onChange={(updater) =>
+                    updateQuestions((questions) =>
+                      questions.map((q, i) => (i === index ? (typeof updater === 'function' ? updater(q) : updater) : q)),
+                    )
+                  }
+                  onRemove={() => {
+                    update({ questions: assignment.questions.filter((_, i) => i !== index) });
+                    // Land on the neighbour rather than on whatever slid into
+                    // this index, which would look like the wrong one opened.
+                    setOpenQuestion(Math.max(0, index - 1));
+                  }}
+                  onSave={save}
+                  saving={saving}
+                  dirty={dirty}
+                />
+              </TabPanel>
+            ))}
+          </TabPanels>
+        </Tabs>
+      )}
 
-      <Flex gap={2} mb={5} wrap="wrap">
-        <Button
-          variant="outline"
-          onClick={() => update({ questions: [...assignment.questions, JSON.parse(JSON.stringify(BLANK_QUESTION))] })}
-        >
-          + Add question
-        </Button>
-        {/* Save first: the import appends to the stored assignment and this page
-            reloads it afterwards, so unsaved edits would go with the reload. */}
-        <Button
-          variant="outline"
-          isLoading={saving}
-          onClick={async () => {
-            if (!(await save())) return;
-            setImporting(true);
-          }}
-        >
-          📥 Import questions
-        </Button>
-      </Flex>
+      {assignment.questions.length === 0 && (
+        <Flex gap={2} mb={5} wrap="wrap">
+          <Button variant="outline" colorScheme="purple" onClick={addQuestion}>
+            + Add question
+          </Button>
+        </Flex>
+      )}
 
       <ImportQuestionsModal
         isOpen={importing}
@@ -896,7 +1479,6 @@ export default function AssignmentEditor() {
         onImported={load}
       />
 
-      <PreviewPanel classId={classId} assignmentId={assignmentId} dirty={dirty} />
     </Box>
   );
 }

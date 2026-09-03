@@ -34,6 +34,7 @@ const Quizzes = lazyWithPreload(() => import('./pages/Quizzes'));
 const QuizBrief = lazyWithPreload(() => import('./pages/QuizBrief'));
 const QuizAttempt = lazyWithPreload(() => import('./pages/QuizAttempt'));
 const QuizEditor = lazyWithPreload(() => import('./pages/QuizEditor'));
+const QuizPreviewPage = lazyWithPreload(() => import('./pages/QuizPreviewPage'));
 const QuizResults = lazyWithPreload(() => import('./pages/QuizResults'));
 const Notebooks = lazyWithPreload(() => import('./pages/Notebooks'));
 const NotebookEditor = lazyWithPreload(() => import('./pages/NotebookEditor'));
@@ -78,6 +79,8 @@ const DevTeam = lazyWithPreload(() => import('./pages/DevTeam'));
 const LmAdmin = lazyWithPreload(() => import('./pages/LmAdmin'));
 const LmAdminFaculty = lazyWithPreload(() => import('./pages/LmAdminFaculty'));
 const LmAdminStudents = lazyWithPreload(() => import('./pages/LmAdminStudents'));
+const LmAdminFacultyClasses = lazyWithPreload(() => import('./pages/LmAdminFacultyClasses'));
+const LmAdminHodDashboard = lazyWithPreload(() => import('./pages/LmAdminHodDashboard'));
 const QuizManual = lazyWithPreload(() => import('./pages/QuizManual'));
 const ShortsManual = lazyWithPreload(() => import('./pages/ShortsManual'));
 const AssignmentManual = lazyWithPreload(() => import('./pages/AssignmentManual'));
@@ -163,7 +166,9 @@ const LEARNING_ROUTES = (
         <Route element={<RequireLmAdmin />}>
           <Route path="lm-admin" element={<LmAdmin />} />
           <Route path="lm-admin/faculty" element={<LmAdminFaculty />} />
+          <Route path="lm-admin/faculty/:facultyId/classes" element={<LmAdminFacultyClasses />} />
           <Route path="lm-admin/students" element={<LmAdminStudents />} />
+          <Route path="lm-admin/hod-dashboard" element={<LmAdminHodDashboard />} />
         </Route>
 
         <Route path="class/:classId" element={<ClassLayout />}>
@@ -213,6 +218,8 @@ const LEARNING_ROUTES = (
             <Route path="insights" element={<Insights />} />
             <Route path="settings" element={<ClassSettings />} />
             <Route path="quiz/:quizId/edit" element={<QuizEditor />} />
+            {/* Full screen student preview mode for faculty/teachers */}
+            <Route path="quiz/:quizId/preview" element={<QuizPreviewPage />} />
             {/* The same editor in its settings half — delivery, marking,
                 proctoring, instructions and access, off the questions page's
                 gear rather than crowding its tab bar. */}

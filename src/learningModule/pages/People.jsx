@@ -29,6 +29,7 @@ import {
   ModalOverlay,
   Progress,
   Select,
+  Spinner,
   Text,
   Textarea,
   useDisclosure,
@@ -39,6 +40,35 @@ import { FiMail } from 'react-icons/fi';
 import { EmptyState, ErrorState, Loading, SectionCard, buttonTextStyles } from '../components/common';
 import { formatDate, initials, relativeTime } from '../format';
 
+/**
+ * One line of the invite modal's two-step progress: what is happening now,
+ * what has already finished, and what is still waiting on it.
+ */
+function InviteStep({ label, state, detail, ...rest }) {
+  return (
+    <Flex align="center" gap={2} {...rest}>
+      {state === 'running' ? (
+        <Spinner size="xs" color="blue.400" speed="0.8s" />
+      ) : (
+        <Box
+          w="10px"
+          h="10px"
+          borderRadius="full"
+          bg={state === 'done' ? 'green.400' : 'transparent'}
+          borderWidth={state === 'done' ? 0 : '2px'}
+          borderColor="lmBorder.base"
+        />
+      )}
+      <Text fontSize="xs" fontWeight="600" color={state === 'waiting' ? 'lmFg.subtle' : undefined}>
+        {label}
+      </Text>
+      <Text fontSize="xs" color="lmFg.subtle" ml="auto" textAlign="right">
+        {detail}
+      </Text>
+    </Flex>
+  );
+}
+
 function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student', availableRoles = ['student', 'co-teacher'] }) {
   const [emails, setEmails] = useState('');
   const [role, setRole] = useState(defaultRole);
@@ -46,6 +76,10 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
   useEffect(() => {
     if (isOpen) {
       setRole(defaultRole);
+      // A reopened modal must not show the last run's steps still ticking.
+      setPhase(null);
+      setMailProgress(null);
+      setCreatedCount(0);
     }
   }, [isOpen, defaultRole]);
   const [busy, setBusy] = useState(false);
@@ -55,6 +89,12 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
   // tracks that batch so the modal can show "sending N of M" instead of
   // sitting on a spinner for as long as the slowest SMTP attempt takes.
   const [mailProgress, setMailProgress] = useState(null);
+  // Which of the invite's two steps is running. Creating the accounts happens
+  // inside the POST and mailing happens after it, and the two take visibly
+  // different amounts of time — naming the current one is the difference
+  // between "this is working" and "this is stuck".
+  const [phase, setPhase] = useState(null); // 'creating' | 'sending' | null
+  const [createdCount, setCreatedCount] = useState(0);
   const pollRef = useRef(null);
   const toast = useToast();
 
@@ -127,6 +167,7 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
 
       if (status.done) {
         setMailProgress(null);
+        setPhase(null);
         onDone();
         finish(merged);
         return;
@@ -145,21 +186,31 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
     setBusy(true);
     setReport(null);
     setMailProgress(null);
+    setCreatedCount(0);
+    // The server creates every account before it queues a single mail, so this
+    // is what the whole request is doing until it comes back.
+    setPhase('creating');
     stopPolling();
     try {
       const result = await lmApi.inviteMembers(classId, list, role);
       setReport(result.results);
+      setCreatedCount(result.results.filter((entry) => entry.status === 'account_created').length);
       // Membership rows are already written — the roster and counts are
       // correct now, regardless of how long the mail queue below takes.
       onDone();
 
       if (result.batchId) {
+        setPhase('sending');
         setMailProgress({ completed: 0, total: result.mailPending });
         pollMailStatus(result.batchId);
       } else {
+        // Nothing to mail — every address failed to provision, or everyone was
+        // already in the class.
+        setPhase(null);
         finish(result.results);
       }
     } catch (error) {
+      setPhase(null);
       toast({ status: 'error', title: 'Could not invite', description: error.message });
     } finally {
       setBusy(false);
@@ -204,24 +255,47 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
               the account cannot be signed into until they do. People who already have an account are
               given the <Badge colorScheme="cyan">{platformRole}</Badge> role if they do not have it yet.
             </Text>
+            <Text fontSize="xs" color="lmFg.subtle" mt={2}>
+              Accounts are created first and the emails go out only afterwards, so nobody is mailed
+              about an account that could not be created.
+            </Text>
           </Box>
 
-          {mailProgress && (
-            <Box mt={4}>
-              <Flex justify="space-between" mb={1}>
-                <Text fontSize="xs" color="lmFg.subtle">
-                  Sending invite emails…
-                </Text>
-                <Text fontSize="xs" color="lmFg.subtle">
-                  {mailProgress.completed} of {mailProgress.total}
-                </Text>
-              </Flex>
+          {phase && (
+            <Box mt={4} p={3} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md">
+              {/* The two steps in the order the server runs them: nothing is
+                  mailed until every account exists, so showing them as one
+                  spinner hides which half is slow. */}
+              <InviteStep
+                label="Creating accounts"
+                state={phase === 'creating' ? 'running' : 'done'}
+                detail={
+                  phase === 'creating'
+                    ? 'Adding people to the database…'
+                    : `${createdCount} new account${createdCount === 1 ? '' : 's'} created`
+                }
+              />
+              <InviteStep
+                mt={3}
+                label="Sending emails"
+                state={phase === 'sending' ? 'running' : 'waiting'}
+                detail={
+                  phase === 'sending'
+                    ? `${mailProgress?.completed ?? 0} of ${mailProgress?.total ?? 0} sent`
+                    : 'Starts once every account exists'
+                }
+              />
               <Progress
-                value={mailProgress.total ? (mailProgress.completed / mailProgress.total) * 100 : 0}
+                mt={3}
+                value={
+                  phase === 'sending' && mailProgress?.total
+                    ? (mailProgress.completed / mailProgress.total) * 100
+                    : 0
+                }
                 size="xs"
                 colorScheme="blue"
                 borderRadius="full"
-                isIndeterminate={mailProgress.total === 0}
+                isIndeterminate={phase === 'creating' || !mailProgress?.total}
               />
             </Box>
           )}
@@ -264,7 +338,13 @@ function InviteModal({ isOpen, onClose, classId, onDone, defaultRole = 'student'
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button colorScheme="blue" onClick={submit} isLoading={busy} isDisabled={!emails.trim()}>
+          <Button
+            colorScheme="blue"
+            onClick={submit}
+            isLoading={busy || phase === 'sending'}
+            loadingText={phase === 'sending' ? 'Sending emails…' : 'Creating accounts…'}
+            isDisabled={!emails.trim()}
+          >
             Send invites
           </Button>
         </ModalFooter>

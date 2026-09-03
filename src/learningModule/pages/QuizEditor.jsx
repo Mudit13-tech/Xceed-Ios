@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import {
   Alert,
   AlertIcon,
@@ -16,6 +16,10 @@ import {
   Heading,
   IconButton,
   Input,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
   Radio,
   RadioGroup,
   Select,
@@ -1637,6 +1641,7 @@ export default function QuizEditor({ mode = 'questions' }) {
         isOpen={previewDialog.isOpen}
         onClose={previewDialog.onClose}
         quiz={quiz}
+        classId={classId}
       />
     </Box>
   );
