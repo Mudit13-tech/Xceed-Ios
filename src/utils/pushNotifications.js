@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
-import { Preferences } from '@capacitor/preferences';
+import { isInAppRoute, savePendingRoute } from './deepLink';
 import axios from 'axios';
 import getEnvironment from '../getenvironment';
 
@@ -94,9 +94,12 @@ export const initializePushNotifications = async (navigate) => {
            }
         }
         
-        if (navigate && route) {
+        // `savePendingRoute` keeps a file URL out of the resume slot — see
+        // src/utils/deepLink.js — so a notification that links to an
+        // attachment cannot strand the next sign-in on the local asset server.
+        if (navigate && isInAppRoute(route)) {
           console.log(`Navigating to push link: ${route}`);
-          await Preferences.set({ key: 'pendingRoute', value: route });
+          await savePendingRoute(route);
           navigate(route);
         }
       }

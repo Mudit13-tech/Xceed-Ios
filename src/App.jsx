@@ -25,7 +25,7 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import { App as CapacitorApp } from '@capacitor/app';
-import { Preferences } from '@capacitor/preferences';
+import { isInAppRoute, savePendingRoute } from './utils/deepLink';
 import {
   lazyWithPreload,
   registerRouteTree,
@@ -282,8 +282,26 @@ const HardwareBackButton = () => {
           const url = new URL(event.url);
           if (url.hostname === 'xceed.nitj.ac.in' || url.hostname === 'xceed.learning.app') {
             const path = url.pathname + url.search + url.hash;
+
+            // Not every URL on our hosts is a screen. The app-links filter in
+            // AndroidManifest.xml claims all of them, so a file the API serves
+            // — `/api/v1/learningmodule/file/....pdf` — is handed to us here
+            // exactly like a class link is. Routing to it used to send the
+            // WebView to the local asset server for a PDF it has never had:
+            // net::ERR_INVALID_RESPONSE, with the file never fetched. Android
+            // has given us the intent either way, so save the download rather
+            // than drop it. See src/utils/deepLink.js.
+            if (path && path !== '/' && !isInAppRoute(path)) {
+              // Imported here rather than at the top: this is the boot bundle,
+              // and the native helpers pull in the camera, share and picker
+              // plugins that nothing on the first screen needs.
+              const { downloadFileNative } = await import('./utils/nativeCapabilities');
+              downloadFileNative(url.href, url.pathname.split('/').pop()).catch(() => {});
+              return;
+            }
+
             if (path && path !== '/') {
-              await Preferences.set({ key: 'pendingRoute', value: path });
+              await savePendingRoute(path);
               if (isAppColdStart) {
                 // Cold start: enforce PIN screen
                 navigateRef.current('/login');

@@ -1,5 +1,5 @@
-import { Preferences } from '@capacitor/preferences';
 import { queryPersister } from './queryPersister';
+import { takePendingRoute } from './deepLink';
 
 /**
  * Makes a saved account the active one, and lands on the page it should open.
@@ -60,16 +60,9 @@ export async function activateAccount({
 
   // A route saved before the session lapsed wins over the default landing page,
   // so a notification tap that hit the login wall resumes where it was headed.
-  let target = fallbackTarget;
-  try {
-    const { value: pending } = await Preferences.get({ key: 'pendingRoute' });
-    if (pending) {
-      await Preferences.remove({ key: 'pendingRoute' });
-      target = pending;
-    }
-  } catch (e) {
-    console.error('Could not read the pending route', e);
-  }
+  // `takePendingRoute` also drops a saved value that is not a route at all —
+  // see src/utils/deepLink.js for the file URLs that used to end up in there.
+  const target = (await takePendingRoute()) || fallbackTarget;
 
   // A full load rather than a client-side navigation: the platform navbar reads
   // the session once on mount, so a router push would land on the target with

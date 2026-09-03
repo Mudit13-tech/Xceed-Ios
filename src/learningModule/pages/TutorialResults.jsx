@@ -29,6 +29,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
+import { serverFileLinkProps } from '../../utils/nativeCapabilities';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile, buttonTextStyles } from '../components/common';
 import { richTextToPlain } from '../richTextUtils';
 import { decimalPlacesHint, formatAnswerValue, formatDateTime } from '../format';
@@ -246,8 +247,7 @@ export default function TutorialResults() {
                           {attempt.uploads.map((file) => (
                             <Link
                               key={file.url}
-                              href={lmApi.fileUrl(file.url)}
-                              isExternal
+                              {...serverFileLinkProps(lmApi.fileUrl(file.url), file.name)}
                               fontSize="xs"
                               color="lmHue.blue700"
                             >

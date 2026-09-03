@@ -12,6 +12,8 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
+import getEnvironment from '../../getenvironment';
+import { serverFileLinkProps } from '../../utils/nativeCapabilities';
 
 const ICONS = { file: '📎', link: '🔗', video: '🎬', audio: '🎧', note: '📝' };
 
@@ -35,8 +37,13 @@ export function AttachmentList({ attachments = [], compact = false }) {
       {attachments.map((attachment, index) => (
         <Link
           key={attachment._id || `${attachment.url}-${index}`}
-          href={attachment.kind === 'link' ? attachment.url : lmApi.fileUrl(attachment.url)}
-          isExternal
+          // A pasted link is a web page and belongs in a browser. A file is
+          // ours, and in the app must not be reached by an anchor at all —
+          // `serverFileLinkProps` explains why, and sends it to the native
+          // downloader instead.
+          {...(attachment.kind === 'link'
+            ? { href: attachment.url, isExternal: true }
+            : serverFileLinkProps(lmApi.fileUrl(attachment.url), attachment.name))}
           _hover={{ textDecoration: 'none', borderColor: 'blue.400' }}
         >
           <Flex
@@ -101,7 +108,13 @@ export function AttachmentPicker({ attachments = [], onChange, disabled, classId
     Array.from(files).forEach((file) => form.append('files', file));
 
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/api/v1/learningmodule/classes/${targetClassId}/uploads`);
+    // Absolute, not relative. This is the one call in the module that does not
+    // go through lmApi — it needs XHR for upload progress — and a relative path
+    // resolves against wherever the page is served from. In the app that is
+    // xceed.learning.app, Capacitor's local asset server, which has no API to
+    // POST to: every attachment upload from a phone failed on it.
+    xhr.open('POST', `${getEnvironment()}/api/v1/learningmodule/classes/${targetClassId}/uploads`);
+    xhr.withCredentials = true;
 
     // Copy auth token from existing requests
     const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';

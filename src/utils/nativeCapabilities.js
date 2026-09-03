@@ -4,6 +4,7 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { Browser } from '@capacitor/browser';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import getEnvironment from '../getenvironment';
 
 const Downloads = registerPlugin('Downloads');
 
@@ -55,11 +56,20 @@ export const downloadFileNative = async (url, fileName) => {
       .map(([name, value]) => `${name}=${value}`)
       .join('; ');
 
-    return await Downloads.download({
-      url: downloadUrl,
-      fileName,
-      headers: cookieHeader ? { Cookie: cookieHeader } : {},
-    });
+    const headers = cookieHeader ? { Cookie: cookieHeader } : {};
+
+    // The cookie alone is not the whole session. In the app the WebView is
+    // served from a different origin than the API, so the API's cookie is a
+    // cross-site one and may not be in the jar at all; the bearer token in
+    // localStorage is what every lmApi call actually authenticates with. Sent
+    // only to our own API origin — a download URL pointing anywhere else must
+    // not be handed the user's token.
+    const token = localStorage.getItem('token');
+    if (token && new URL(downloadUrl).origin === new URL(getEnvironment()).origin) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    return await Downloads.download({ url: downloadUrl, fileName, headers });
   } catch (error) {
     console.error('Native download failed', error);
     alert('Could not start the download. Please try again.');
@@ -168,4 +178,51 @@ export const takePhotoNative = async () => {
     console.error('Error taking photo', error);
     return null;
   }
+};
+
+/**
+ * `name` with the URL's extension appended when it has none of its own.
+ *
+ * An attachment's display name is whatever the uploader typed — "Lecture 3
+ * notes" as often as "notes.pdf" — and DownloadManager writes the name it is
+ * given verbatim. A file saved without its extension is one Android cannot
+ * hand to a viewer, so the tap succeeds and the student still cannot read it.
+ */
+const withExtension = (name, url) => {
+  if (!name) return undefined;
+  if (/\.[a-z0-9]{2,5}$/i.test(name)) return name;
+  const ext = new URL(url, window.location.href).pathname.match(/\.([a-z0-9]{2,5})$/i)?.[1];
+  return ext ? `${name}.${ext}` : name;
+};
+
+/**
+ * Props for a link to a file the API serves — an attachment, a submission, a
+ * generated report.
+ *
+ * On the web an ordinary anchor is exactly right, and this returns one.
+ *
+ * In the app it must not be one. The WebView is served from
+ * xceed.learning.app (capacitor.config.json) while files come from the API
+ * host, so an anchor is an off-origin navigation: Capacitor hands it to Android
+ * as an ACTION_VIEW intent, the app-links filter in AndroidManifest.xml claims
+ * every URL on the API host — `/api/...` included — and Android routes the file
+ * back into this app instead of opening it. See src/utils/deepLink.js for the
+ * rest of that loop and the net::ERR_INVALID_RESPONSE it ended in.
+ *
+ * So on native the tap goes to Android's DownloadManager instead, with the
+ * session forwarded, which streams the file to Downloads and posts the
+ * notification that opens it.
+ */
+export const serverFileLinkProps = (url, fileName) => {
+  if (!url) return { href: url };
+  if (!isNativeApp()) return { href: url, isExternal: true };
+  return {
+    href: url,
+    onClick: (event) => {
+      event.preventDefault();
+      // downloadFileNative already tells the user when it cannot start; this
+      // only keeps the failure from surfacing as an unhandled rejection.
+      downloadFileNative(url, withExtension(fileName, url)).catch(() => {});
+    },
+  };
 };
