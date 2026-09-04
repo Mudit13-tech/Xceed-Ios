@@ -16,7 +16,12 @@ import {
   RadioGroup,
   Select,
   Stack,
+  Tab,
+  TabList,
+  TabPanel,
+  TabPanels,
   Table,
+  Tabs,
   Tbody,
   Td,
   Text,
@@ -32,6 +37,7 @@ import {
 import getEnvironment from '../../getenvironment';
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import MyGroundTruthPhotos from '../components/MyGroundTruthPhotos';
 import StudentAttendanceMap from '../components/StudentAttendanceMap';
 import { relativeTime } from '../format';
 
@@ -47,6 +53,11 @@ import { relativeTime } from '../format';
  *
  * Lives in the learning module because that is where students already sign in;
  * the data comes from the attendance module's own API, which owns it.
+ *
+ * The second tab is the other half of the same question. Disputing a marking
+ * argues about one period after the fact; choosing which photos the cameras
+ * match you against is how a student stops the next one going wrong. Both are
+ * "my attendance", so both live here rather than as a nav entry of their own.
  */
 
 const DISPUTES_API = `${getEnvironment()}/attendancemodule/disputes`;
@@ -211,7 +222,15 @@ export default function MyAttendance() {
   };
 
   return (
-    <VStack align="stretch" spacing={5}>
+    <Tabs colorScheme="blue" variant="enclosed" isLazy>
+      <TabList>
+        <Tab fontSize="sm">Markings &amp; disputes</Tab>
+        <Tab fontSize="sm">My photos</Tab>
+      </TabList>
+
+      <TabPanels>
+        <TabPanel px={0}>
+          <VStack align="stretch" spacing={5}>
       {/* ── Student GitHub-Style Attendance Contribution Map (Issue #1928) ── */}
       <StudentAttendanceMap
         history={profile?.attendanceHistory || []}
@@ -333,6 +352,15 @@ export default function MyAttendance() {
         onClose={onClose}
         onRaised={load}
       />
-    </VStack>
+          </VStack>
+        </TabPanel>
+
+        {/* isLazy above: the photo tab fetches a blob per image, and a student
+            who only came to check a marking should never pay for that. */}
+        <TabPanel px={0}>
+          <MyGroundTruthPhotos />
+        </TabPanel>
+      </TabPanels>
+    </Tabs>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from '@tanstack/react-query';
 import FormHeader from './FormHeader'
 import { isSafeExamBrowser } from '../../learningModule/sebDiagnosis'
@@ -274,9 +274,29 @@ const LoginForm = () => {
               </Box>
             </FormControl>
           )}
-          <Text textAlign="center" color="blue.500" cursor="pointer" onClick={handleForgotPassword}>
-        Forgot Password ?
-      </Text>
+          {/* Two ways out of a sign-in that is not working, side by side. The
+              help desk belongs here rather than three pages away: "forgot my
+              password" is only one of the reasons somebody is stuck on this
+              screen, and the others — no account yet, an invitation that never
+              arrived, a role that opens nothing — are exactly what it answers,
+              without needing a sign-in to reach it. */}
+          <Flex justify="center" align="center" gap={3} wrap="wrap">
+            <Text color="blue.500" cursor="pointer" onClick={handleForgotPassword}>
+              Forgot Password ?
+            </Text>
+            <Text color="gray.400" aria-hidden="true">
+              ·
+            </Text>
+            <Text
+              as={RouterLink}
+              to="/help"
+              color="blue.500"
+              fontWeight="600"
+              _hover={{ textDecoration: 'underline' }}
+            >
+              Need help?
+            </Text>
+          </Flex>
           <Button
             isLoading={isLoading}
             type='submit'

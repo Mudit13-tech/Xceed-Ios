@@ -147,6 +147,13 @@ export default function Navbar() {
     // agree — listing it here while the API refuses anonymous readers would
     // render the page as a load error instead of a login redirect.
     '/guide',
+    // The help desk. Public by necessity: the people it serves are the ones who
+    // cannot sign in, so a redirect to /login here would bounce its whole
+    // audience away from the page that exists to explain why they are stuck.
+    // The page carries a gate of its own — an OTP mailed to the address being
+    // asked about (a visitor who *is* signed in skips it), and every answer is
+    // scoped to that address. See modules/helpdeskModule on the server.
+    '/help',
     '/privacy',
     '/forgot-password',
     '/nirf',
@@ -305,6 +312,18 @@ export default function Navbar() {
               >
                 Team
               </a>
+            </li>
+            {/* Before the Login button, and shown whether or not anybody is
+                signed in: the people who need it most are the ones who cannot
+                get past that button, and this is the only link on the bar they
+                can follow while locked out. */}
+            <li>
+              <Link
+                to="/help"
+                className="tw-block tw-py-2 tw-px-3 tw-text-white tw-rounded hover:tw-text-cyan-300 md:hover:tw-bg-transparent md:tw-border-0 md:hover:tw-text-cyan-600 md:tw-p-0 dark:tw-text-white md:dark:hover:tw-text-cyan-600 dark:hover:tw-bg-gray-700 md:dark:hover:tw-bg-transparent"
+              >
+                Need help?
+              </Link>
             </li>
             <li>
               {!isAuthenticated && !isInitialLoad ? (
