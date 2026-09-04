@@ -1,5 +1,25 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * The roles landing page, fetched through react-query rather than useEffect.
+ *
+ * This is the first screen after sign-in, and on a phone it is regularly the
+ * first screen with no network behind it — opened on the walk between
+ * buildings, or on campus wifi that has associated but not authenticated. The
+ * AMS original fetches in an effect into local state, which has no cache: with
+ * no answer from the server it shows an empty page and the user cannot get to
+ * anything. Going through react-query puts both requests behind the persisted
+ * cache (see queryPersister.mobile.js), so the roles from the last successful
+ * load are on screen immediately and the refresh happens behind them.
+ *
+ * That makes it a rewrite of the whole data layer, not an addition to it,
+ * which is why it is an override rather than an edit: merging a rewrite
+ * against upstream edits to the same effect is what produces conflicts nobody
+ * can resolve without knowing both intentions. The AMS copy beside this one is
+ * untouched and merges cleanly; run npm run drift to see what has changed in
+ * it. See build/mobileOverrides.js.
+ */
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Button,
@@ -191,10 +211,6 @@ const RoleItem = ({ role, index, onOpen, descriptionOverride }) => {
 
 const AllocatedRolesPage = () => {
   const navigate = useNavigate();
-  const [allocatedRoles, setAllocatedRoles] = useState([]);
-  const [learningCards, setLearningCards] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState(null);
   const [isPublishing, setIsPublishing] = useState(false);
 
   const handlePublishOTA = async () => {
@@ -230,69 +246,63 @@ const AllocatedRolesPage = () => {
   const labelColor = useColorModeValue('gray.400', 'gray.500');
   const emptyIconBg = useColorModeValue('gray.100', 'gray.700');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const response = await fetch(`${apiUrl}/user/getuser`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
-        if (!response.ok) throw new Error('Failed to fetch allocated roles');
-        const userdetails = await response.json();
-        // The paper-review and diabetics modules are gone, but the roles they
-        // issued still sit on existing user records — hide them rather than
-        // offering a card that leads to a route that no longer exists.
-        // Matched case-insensitively: 'editor' was stored with either casing.
-        const platformRoles = (userdetails.user.role || []).filter(
-          (role) => !EXCLUDED_ROLES.includes(String(role).toLowerCase()),
-        );
-        setAllocatedRoles(platformRoles);
-        setUser(userdetails.user);
+  // Query 1: User Details
+  const { data: userDetails, isLoading: isUserLoading } = useQuery({
+    queryKey: ['user', 'details'],
+    queryFn: async () => {
+      const response = await fetch(`${apiUrl}/user/getuser`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch allocated roles');
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
-        // Learning-module standing is per-class, not a platform role, so it has
-        // to be asked for separately. Kept out of `allocatedRoles` so the
-        // single-role auto-redirect below behaves exactly as before.
-        try {
-          const lmResponse = await fetch(`${apiUrl}/api/v1/learningmodule/overview`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-          });
-          if (lmResponse.ok) {
-            const overview = await lmResponse.json();
-            const cards = [];
-            if (overview.teachingCount > 0) {
-              cards.push({
-                role: 'learning-teacher',
-                description: `${overview.teachingCount} class${overview.teachingCount === 1 ? '' : 'es'} you teach${
-                  overview.awaitingReview ? ` · ${overview.awaitingReview} to review` : ''
-                }`,
-              });
-            }
-            // A student who already has the STUDENT platform role has a card
-            // for it, so only add this when their enrolment would otherwise be
-            // invisible (e.g. a faculty member sitting in a colleague's class).
-            if (overview.enrolledCount > 0 && !platformRoles.includes('STUDENT')) {
-              cards.push({
-                role: 'learning-student',
-                description: `${overview.enrolledCount} class${overview.enrolledCount === 1 ? '' : 'es'} you are enrolled in${
-                  overview.pendingWork ? ` · ${overview.pendingWork} pending` : ''
-                }`,
-              });
-            }
-            setLearningCards(cards);
-          }
-        } catch {
-          // The learning module being unreachable must not blank the roles page.
-        }
-      } catch (error) {
-        console.error('Error fetching allocated roles:', error.message);
-      } finally {
-        setIsLoading(false);
-      }
-    })();
-  }, []);
+  // Query 2: Learning Module Overview
+  const { data: lmOverview, isLoading: isLmLoading } = useQuery({
+    queryKey: ['learning', 'overview'],
+    queryFn: async () => {
+      const response = await fetch(`${apiUrl}/api/v1/learningmodule/overview`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch overview');
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  const isLoading = isUserLoading || isLmLoading;
+  const user = userDetails?.user;
+
+  const allocatedRoles = useMemo(() => (user?.role || []).filter(
+    (role) => !EXCLUDED_ROLES.includes(String(role).toLowerCase())
+  ), [user?.role]);
+
+  const learningCards = [];
+  if (lmOverview) {
+    if (lmOverview.teachingCount > 0) {
+      learningCards.push({
+        role: 'learning-teacher',
+        description: `${lmOverview.teachingCount} class${lmOverview.teachingCount === 1 ? '' : 'es'} you teach${
+          lmOverview.awaitingReview ? ` · ${lmOverview.awaitingReview} to review` : ''
+        }`,
+      });
+    }
+    if (lmOverview.enrolledCount > 0 && !allocatedRoles.includes('STUDENT')) {
+      learningCards.push({
+        role: 'learning-student',
+        description: `${lmOverview.enrolledCount} class${lmOverview.enrolledCount === 1 ? '' : 'es'} you are enrolled in${
+          lmOverview.pendingWork ? ` · ${lmOverview.pendingWork} pending` : ''
+        }`,
+      });
+    }
+  }
 
   // Single-role users skip the picker and land on their dashboard directly.
   //

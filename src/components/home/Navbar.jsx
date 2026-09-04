@@ -6,7 +6,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import getEnvironment from '../../getenvironment';
 import { Text, Button, Flex, IconButton, useColorMode, } from '@chakra-ui/react';
 import { loginPathFor } from '../../authRedirect';
-import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
+import { clearNativeSession } from '../../mobile/session';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import lmApi from '../../learningModule/api/lmApi';
 
@@ -135,12 +135,7 @@ export default function Navbar() {
         throw new Error('Failed to logout');
       }
       localStorage.removeItem('token');
-      try {
-        await SecureStoragePlugin.remove({ key: 'user_pin' });
-        await SecureStoragePlugin.remove({ key: 'auth_token' });
-      } catch (e) {
-        console.error('Error removing secure storage on logout', e);
-      }
+      await clearNativeSession();
       navigate('/login');
     } catch (error) {
       console.error('Error during logout:', error.message);

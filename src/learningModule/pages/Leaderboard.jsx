@@ -28,7 +28,7 @@ import {
 } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard, buttonTextStyles } from '../components/common';
+import { buttonTextStyles, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import { formatDate } from '../format';
 
 /**
@@ -71,6 +71,7 @@ function Row({ row, highlight, onOpen }) {
             textAlign: 'left',
             cursor: 'pointer',
             _hover: { bg: highlight ? bg : hoverBg },
+            ...buttonTextStyles,
           }
         : {})}
     >

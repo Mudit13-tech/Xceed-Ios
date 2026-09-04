@@ -236,7 +236,6 @@ const DeptMenuConfig = lazyWithPreload(() => import('./attendancemodule/DeptMenu
 const LearningRoutes = lazyWithPreload(() => import('./learningModule/LearningRoutes.jsx'));
 
 //confifence monitor
-
 const ConfidenceMonitor = lazyWithPreload(() => import('./attendancemodule/confidenceMonitor'));
 const MLDataFolder = lazyWithPreload(() => import('./attendancemodule/MLDataFolder.jsx').then((m) => ({ default: m.MLDataFolder })));
 const MLFineTuning = lazyWithPreload(() => import('./attendancemodule/MLFineTuning'));

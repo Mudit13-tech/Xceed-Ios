@@ -4,7 +4,7 @@ import './navbar.css';
 import { loginPathFor } from '../../../authRedirect';
 // import jwt from 'jsonwebtoken';
 import aim2CrackLogo from '../../assets/images/navbar/Aim2Crack-logo.png';
-import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
+import { clearNativeSession } from '../../../mobile/session';
 
 function Navbar() {
   const code = window.location.pathname.split('/')[2];
@@ -49,12 +49,7 @@ useEffect(() => {
     // Implement the logout logic here
     // Clear the token from localStorage and update the user state if needed
     localStorage.removeItem('token');
-    try {
-      await SecureStoragePlugin.remove({ key: 'user_pin' });
-      await SecureStoragePlugin.remove({ key: 'auth_token' });
-    } catch (e) {
-      console.error('Error removing secure storage on logout', e);
-    }
+    await clearNativeSession();
     // setUser(null); // If you are using the `user` state, reset it to null upon logout
     setTokenState(false); // Update tokenState to false to indicate the user is logged out
     navigate('/login') // Redirect the user to the login page after logout

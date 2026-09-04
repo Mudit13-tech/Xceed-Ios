@@ -36,7 +36,7 @@ import useStableNavigate from '../hooks/useStableNavigate';
 import { canCreateClass, isStudentOnly } from '../roles';
 import NotificationBell from './NotificationBell';
 import { buttonTextStyles } from './common';
-import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
+import { clearNativeSession } from '../../mobile/session';
 
 // Split out of the shell: every student sees it exactly once, and nobody else
 // ever does, so it has no business in the bundle that loads on every page.
@@ -333,6 +333,7 @@ function NavItems({ onNavigate, studentOnly = false, isAdmin = false }) {
   const navHoverBg = useColorModeValue('gray.100', 'gray.700');
   const activeBg = useColorModeValue('blue.50', 'blue.900');
   const activeColor = useColorModeValue('blue.700', 'blue.100');
+
   return (
     <>
       {NAV_ITEMS.filter((item) => (!item.studentOnly || studentOnly) && (!item.adminOnly || isAdmin)).map((item) => (
@@ -440,12 +441,7 @@ export default function LearningLayout() {
       console.error('Error during logout:', error.message);
     }
     localStorage.removeItem('token');
-    try {
-      await SecureStoragePlugin.remove({ key: 'user_pin' });
-      await SecureStoragePlugin.remove({ key: 'auth_token' });
-    } catch (e) {
-      console.error('Error removing secure storage on logout', e);
-    }
+    await clearNativeSession();
     navigate('/login', { replace: true });
   }, [navigate]);
 
