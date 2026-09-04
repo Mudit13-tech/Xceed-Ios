@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+import { mobileOverrides } from './build/mobileOverrides.js'
+
 // Buffers Vite's own console output (startup/HMR/build-error messages) and
 // serves it at /__console-logs on the dev server's own origin, so the React
 // Console page can show it the same way the Python ML service exposes its
@@ -40,7 +42,7 @@ function consoleBufferPlugin() {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), consoleBufferPlugin()],
+  plugins: [mobileOverrides({ verbose: true }), react(), consoleBufferPlugin()],
   build: {
     // Writes dist/.vite/manifest.json: every chunk with the chunks it pulls in.
     // Kept on so the cost of a route can be measured rather than guessed at —

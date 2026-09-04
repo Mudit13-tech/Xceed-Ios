@@ -1,16 +1,18 @@
+// envUtils.js
+// The old `nitjtt` branch pointed at https://nitjtt.onrender.com, which is no
+// longer a live deployment. It was not merely dead — it was actively harmful:
+// every AMS page builds its API base from this one function, so any URL
+// carrying "nitjtt" sent attendance runs to the Render box. That box has its
+// own empty disk, and the embedding .pkl is read from the serving process's
+// local ml-data/embeddings (see server embeddingPathResolver.js), so live
+// attendance failed there with "embeddingFile not found on disk".
 function getEnvironment() {
   const currentURL = window.location.href;
   const development = 'http://localhost:8010';
-  const production = 'https://nitjtt.onrender.com';
   const nitjServer = 'https://xceed.nitj.ac.in';
-  const androidEmulator = 'http://10.0.2.2:8010';
-
-  if (window.Capacitor && window.Capacitor.isNativePlatform()) {
-    return nitjServer;
-  } else if (currentURL.includes('localhost') || currentURL.includes('127.0.0.1')) {
+  if (currentURL.includes('localhost') || currentURL.includes('127.0.0.1')) {
     return development;
-  }else {
-    // Default to a specific environment or handle other cases
+  } else {
     return nitjServer;
   }
 }
