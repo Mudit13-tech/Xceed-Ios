@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import { useBiometricAuth } from '../../utils/useBiometricAuth';
 import { useQueryClient } from '@tanstack/react-query';
 import FormHeader from './FormHeader'
@@ -411,9 +411,29 @@ const LoginForm = () => {
                 </FormControl>
               )}
               
-              <Text textAlign="center" color="blue.500" cursor="pointer" onClick={handleForgotPassword}>
-                Forgot Password ?
-              </Text>
+              {/* Two ways out of a sign-in that is not working, side by side. The
+                  help desk belongs here rather than three pages away: "forgot my
+                  password" is only one of the reasons somebody is stuck on this
+                  screen, and the others — no account yet, an invitation that never
+                  arrived, a role that opens nothing — are exactly what it answers,
+                  without needing a sign-in to reach it. */}
+              <Flex justify="center" align="center" gap={3} wrap="wrap">
+                <Text color="blue.500" cursor="pointer" onClick={handleForgotPassword}>
+                  Forgot Password ?
+                </Text>
+                <Text color="gray.400" aria-hidden="true">
+                  ·
+                </Text>
+                <Text
+                  as={RouterLink}
+                  to="/help"
+                  color="blue.500"
+                  fontWeight="600"
+                  _hover={{ textDecoration: 'underline' }}
+                >
+                  Need help?
+                </Text>
+              </Flex>
               
               <Button
                 isLoading={isLoading}
@@ -434,6 +454,17 @@ const LoginForm = () => {
 
           {message && <Text mt={4}>{message}</Text>}
 
+          {/* Only inside Safe Exam Browser, and only there because of where SEB
+              lands. Verifying a Config Key means making a request from a real SEB,
+              and SEB opens on the learning module, which bounces anyone not signed
+              in to this page — with no address bar to type a different one into. So
+              this is the only screen from which an invigilator can reach the check
+              without first signing in to a kiosk that has a restricted keyboard and
+              no password manager.
+
+              Hidden from every ordinary visitor: the user-agent test is not a
+              security boundary and is not asked to be one — the check's verdict
+              rests on the request hash, not on this. */}
           {isSafeExamBrowser() && (
             <Text mt={6} fontSize="xs" textAlign="center">
               <Link href="/learning/seb-check" color="blue.500">

@@ -24,6 +24,13 @@ import getEnvironment from '../getenvironment';
  * forty-five minutes, and a page refresh costing a fresh code is a far better
  * trade than a pass left behind on a shared lab machine.
  *
+ * A visitor who is already signed in skips all of that: the server hands out a
+ * pass against the platform session, scoped to the address on that account (see
+ * `sessionFromLogin` on the server). A password is strictly more proof than a
+ * mailed code, so asking for the code as well would be a delay that buys
+ * nothing. The page is still built around the anonymous path, because the
+ * people it exists for are the ones who cannot sign in.
+ *
  * ## Rendering
  *
  * The server sends answers as typed blocks rather than as HTML, so this file
@@ -38,38 +45,73 @@ const API = `${apiUrl}/api/v1/helpdesk`;
 /* ── styling ──────────────────────────────────────────────────────────────
    Plain CSS in one string, the same approach as GuidePage: this is a public
    page reachable while signed out, and it should not depend on a theme
-   provider or pull a component library into the route's chunk. */
+   provider or pull a component library into the route's chunk.
+
+   ## Colour carries the module
+
+   Every answer here belongs to one module, and the modules are what a visitor
+   is actually navigating. So each has an accent — set once, as `--accent` and
+   `--accent-bg` on a wrapper — and everything inside inherits it: the card, the
+   heading of the answer it produced, the chips of its questions. It is not
+   decoration; it is how a reader tells "this is about certificates" from "this
+   is about the timetable" while scrolling past.
+
+   ## Sizes
+
+   Nothing here is in fixed pixels where a phone would care. The page is read on
+   a handset by somebody standing in a corridor at least as often as on a
+   laptop, which is why the type scales with the viewport, the cards collapse to
+   one column, every button reaches full width when a row would otherwise wrap
+   to two, and inputs are 16px on small screens — anything less and iOS zooms
+   the page on focus, which strands the form off screen. */
 
 const CSS = `
 .hd { --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f8fafc;
       --brand:#4f46e5; --brand-dark:#4338ca; --brand-bg:#eef2ff;
+      --accent:#4f46e5; --accent-dark:#4338ca; --accent-bg:#eef2ff;
       --ok:#059669; --ok-bg:#ecfdf5; --warn:#b45309; --warn-bg:#fffbeb;
       --bad:#dc2626; --bad-bg:#fef2f2; --info:#0369a1; --info-bg:#f0f9ff;
       font-family:'Inter','Segoe UI',system-ui,sans-serif; color:var(--ink);
       background:var(--bg); min-height:100vh; }
 .hd *{box-sizing:border-box;}
-.hd-wrap{max-width:820px;margin:0 auto;padding:24px 16px 96px;}
+.hd-wrap{max-width:860px;margin:0 auto;padding:clamp(12px,3vw,24px) clamp(12px,4vw,20px) 96px;}
 
 /* ── header ── */
-.hd-head{display:flex;gap:14px;align-items:center;padding:20px 0 24px;}
-.hd-avatar{width:46px;height:46px;border-radius:14px;flex:0 0 auto;
-  background:linear-gradient(135deg,var(--brand),#7c3aed);color:#fff;
-  display:flex;align-items:center;justify-content:center;font-size:22px;}
-.hd-head h1{margin:0;font-size:1.35rem;font-weight:800;letter-spacing:-.02em;}
-.hd-head p{margin:2px 0 0;color:var(--muted);font-size:.86rem;}
+.hd-head{display:flex;gap:14px;align-items:center;padding:16px 0 22px;}
+.hd-avatar{width:clamp(38px,10vw,46px);height:clamp(38px,10vw,46px);border-radius:14px;
+  flex:0 0 auto;background:linear-gradient(135deg,var(--brand),#7c3aed);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:clamp(18px,5vw,22px);}
+.hd-head h1{margin:0;font-size:clamp(1.1rem,4.4vw,1.35rem);font-weight:800;letter-spacing:-.02em;}
+.hd-head p{margin:3px 0 0;color:var(--muted);font-size:clamp(.79rem,2.9vw,.86rem);line-height:1.5;}
+.hd-back{background:none;border:none;padding:0;margin:0 0 4px;font:inherit;
+  font-size:.8rem;font-weight:600;color:var(--brand-dark);cursor:pointer;}
+.hd-back:hover{text-decoration:underline;}
 
 /* ── chat ── */
+/* The newest reply is scrolled to the top of the viewport (see the effect in
+   HelpdeskPage), and the scroll margin is what keeps its heading clear when it
+   gets there. Generous, because the platform's own navigation bar is sticky and
+   sits over the top ~60px of the page: a smaller margin puts the heading behind
+   it, which looks exactly like scrolling to the wrong place. */
+.hd-turn,.hd-msg,.hd-head{scroll-margin-top:76px;}
 .hd-msg{display:flex;gap:10px;margin-bottom:18px;align-items:flex-start;}
 .hd-msg.me{flex-direction:row-reverse;}
 .hd-dot{width:28px;height:28px;border-radius:9px;flex:0 0 auto;margin-top:2px;
   display:flex;align-items:center;justify-content:center;font-size:14px;
-  background:var(--brand-bg);color:var(--brand-dark);}
+  background:var(--accent-bg);color:var(--accent-dark);}
 .hd-msg.me .hd-dot{background:#e2e8f0;color:#475569;}
+/* min-width:0 is what lets a wide table inside a bubble scroll in its own box
+   instead of pushing the whole page sideways on a phone. */
 .hd-bubble{background:#fff;border:1px solid var(--line);border-radius:14px;
-  padding:14px 16px;max-width:calc(100% - 44px);box-shadow:0 1px 2px rgba(15,23,42,.04);}
+  padding:clamp(11px,3.4vw,14px) clamp(12px,3.8vw,16px);min-width:0;
+  max-width:calc(100% - 44px);box-shadow:0 1px 2px rgba(15,23,42,.04);
+  overflow-wrap:anywhere;}
 .hd-msg.me .hd-bubble{background:var(--brand);border-color:var(--brand);color:#fff;}
-.hd-bubble h2{margin:0 0 10px;font-size:1rem;font-weight:750;letter-spacing:-.01em;}
-.hd-bubble p{margin:0 0 10px;line-height:1.62;font-size:.9rem;}
+/* The answer wears its module's colour, so a reply is placed at a glance. */
+.hd-bubble h2{margin:0 0 10px;font-size:clamp(.95rem,3.6vw,1.02rem);font-weight:750;
+  letter-spacing:-.01em;color:var(--accent-dark);
+  border-left:3px solid var(--accent);padding-left:9px;}
+.hd-bubble p{margin:0 0 10px;line-height:1.62;font-size:clamp(.85rem,3.3vw,.9rem);}
 .hd-bubble p:last-child{margin-bottom:0;}
 
 /* ── blocks ── */
@@ -89,18 +131,20 @@ const CSS = `
 
 .hd-steps{margin:0 0 12px;padding-left:20px;font-size:.88rem;line-height:1.65;}
 .hd-steps li{margin-bottom:6px;}
+.hd-steps li::marker{color:var(--accent);font-weight:700;}
 .hd-note{background:var(--warn-bg);border-left:3px solid var(--warn);border-radius:0 8px 8px 0;
   padding:10px 13px;margin:0 0 12px;font-size:.85rem;line-height:1.6;color:#78350f;}
 
 .hd-links{display:flex;flex-direction:column;gap:8px;margin:0 0 12px;}
-.hd-link{display:block;border:1px solid #c7d2fe;background:var(--brand-bg);
+.hd-link{display:block;border:1px solid var(--line);background:var(--accent-bg);
   border-radius:10px;padding:11px 13px;text-decoration:none;transition:all .12s;}
-.hd-link:hover{border-color:var(--brand);background:#e0e7ff;}
-.hd-link-label{display:block;font-weight:700;font-size:.88rem;color:var(--brand-dark);}
+.hd-link:hover{border-color:var(--accent);}
+.hd-link-label{display:block;font-weight:700;font-size:.88rem;color:var(--accent-dark);}
 .hd-link-label::after{content:' →';}
 .hd-link-desc{display:block;font-size:.8rem;color:#475569;line-height:1.55;margin-top:3px;}
 
-.hd-tablewrap{overflow-x:auto;margin:0 0 12px;border:1px solid var(--line);border-radius:10px;}
+.hd-tablewrap{overflow-x:auto;margin:0 0 12px;border:1px solid var(--line);border-radius:10px;
+  -webkit-overflow-scrolling:touch;}
 .hd-table{border-collapse:collapse;width:100%;font-size:.83rem;min-width:340px;}
 .hd-table th{background:#f1f5f9;text-align:left;padding:8px 11px;font-weight:700;
   border-bottom:1px solid var(--line);white-space:nowrap;}
@@ -108,38 +152,46 @@ const CSS = `
 .hd-table tr:last-child td{border-bottom:none;}
 
 /* ── choices ── */
-.hd-group{margin:0 0 16px;}
+.hd-group{margin:0 0 18px;}
 .hd-group-title{font-size:.68rem;font-weight:800;text-transform:uppercase;
-  letter-spacing:.09em;color:var(--muted);margin:0 0 8px 38px;}
-.hd-chips{display:flex;flex-wrap:wrap;gap:8px;margin-left:38px;}
+  letter-spacing:.09em;color:var(--accent-dark);margin:0 0 8px;
+  display:flex;align-items:center;gap:7px;}
+.hd-group-title::before{content:'';width:14px;height:3px;border-radius:2px;background:var(--accent);}
+.hd-chips{display:flex;flex-wrap:wrap;gap:8px;}
 .hd-chip{background:#fff;border:1px solid #cbd5e1;border-radius:999px;
-  padding:8px 15px;font-size:.85rem;font-weight:600;color:#334155;cursor:pointer;
-  font-family:inherit;transition:all .12s;text-align:left;}
-.hd-chip:hover:not(:disabled){border-color:var(--brand);color:var(--brand-dark);
-  background:var(--brand-bg);}
+  padding:9px 15px;font-size:.85rem;font-weight:600;color:#334155;cursor:pointer;
+  font-family:inherit;transition:all .12s;text-align:left;max-width:100%;}
+.hd-chip:hover:not(:disabled){border-color:var(--accent);color:var(--accent-dark);
+  background:var(--accent-bg);}
 .hd-chip:disabled{opacity:.5;cursor:not-allowed;}
 
 /* ── action cards ── */
 .hd-action{border:1px solid var(--line);border-radius:12px;background:#fff;
   padding:14px;margin:0 0 10px;}
-.hd-action.primary{border-color:#c7d2fe;background:linear-gradient(180deg,#fff,var(--brand-bg));}
-.hd-action h3{margin:0 0 8px;font-size:.92rem;font-weight:750;}
+.hd-action.primary{border-color:var(--accent);background:linear-gradient(180deg,#fff,var(--accent-bg));}
+.hd-action h3{margin:0 0 8px;font-size:.92rem;font-weight:750;color:var(--accent-dark);}
 .hd-notice{background:var(--info-bg);border:1px solid #bae6fd;border-radius:8px;
   padding:10px 12px;margin:0 0 12px;font-size:.82rem;line-height:1.6;color:#075985;
   display:flex;gap:8px;}
-.hd-notice span{flex:0 0 auto;}
+/* Only the mark is fixed-width. The rule used to select every span in the
+   notice, which caught the text as well and made it refuse to wrap — a
+   two-line notice then ran off the right of a phone screen and took the whole
+   document's width with it, so the entire page scrolled sideways. */
+.hd-notice span:first-child{flex:0 0 auto;}
+.hd-notice span+span{flex:1 1 auto;min-width:0;}
 .hd-field{margin:0 0 10px;}
 .hd-field label{display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:#334155;}
 .hd-field .hd-help{display:block;font-weight:400;color:var(--muted);margin-top:2px;font-size:.75rem;}
-.hd-input{width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:9px 11px;
+.hd-input{width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px 11px;
   font-size:.88rem;font-family:inherit;color:var(--ink);background:#fff;}
-.hd-input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(79,70,229,.13);}
-.hd-btn{background:var(--brand);color:#fff;border:none;border-radius:9px;
-  padding:10px 18px;font-size:.87rem;font-weight:700;cursor:pointer;font-family:inherit;}
-.hd-btn:hover:not(:disabled){background:var(--brand-dark);}
+textarea.hd-input{min-height:120px;resize:vertical;line-height:1.6;}
+.hd-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.13);}
+.hd-btn{background:var(--accent);color:#fff;border:none;border-radius:9px;
+  padding:11px 18px;font-size:.87rem;font-weight:700;cursor:pointer;font-family:inherit;}
+.hd-btn:hover:not(:disabled){filter:brightness(.93);}
 .hd-btn:disabled{opacity:.55;cursor:not-allowed;}
 .hd-btn.ghost{background:#fff;color:#334155;border:1px solid #cbd5e1;}
-.hd-btn.ghost:hover:not(:disabled){background:#f1f5f9;}
+.hd-btn.ghost:hover:not(:disabled){background:#f1f5f9;filter:none;}
 .hd-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
 
 .hd-error{background:var(--bad-bg);border:1px solid #fecaca;color:#991b1b;
@@ -147,15 +199,17 @@ const CSS = `
 
 /* ── gate ── */
 .hd-gate{background:#fff;border:1px solid var(--line);border-radius:16px;
-  padding:22px;box-shadow:0 1px 3px rgba(15,23,42,.05);}
-.hd-gate h2{margin:0 0 6px;font-size:1.05rem;font-weight:780;}
-.hd-gate p{margin:0 0 14px;color:var(--muted);font-size:.86rem;line-height:1.6;}
-.hd-otp{letter-spacing:.42em;font-size:1.18rem;font-weight:700;text-align:center;
-  font-variant-numeric:tabular-nums;}
+  padding:clamp(16px,4.5vw,22px);box-shadow:0 1px 3px rgba(15,23,42,.05);}
+.hd-gate h2{margin:0 0 6px;font-size:clamp(1rem,3.8vw,1.05rem);font-weight:780;}
+.hd-gate p{margin:0 0 14px;color:var(--muted);font-size:clamp(.82rem,3.1vw,.86rem);line-height:1.6;}
+.hd-otp{letter-spacing:clamp(.18em,4vw,.42em);font-size:clamp(1.05rem,5vw,1.18rem);
+  font-weight:700;text-align:center;font-variant-numeric:tabular-nums;}
 .hd-preview{margin-top:22px;}
 .hd-preview h3{font-size:.7rem;font-weight:800;text-transform:uppercase;
   letter-spacing:.09em;color:var(--muted);margin:0 0 10px;}
-.hd-preview ul{margin:0 0 12px;padding-left:18px;font-size:.83rem;color:#475569;line-height:1.7;}
+.hd-preview-list{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(min(200px,100%),1fr));}
+.hd-preview-item{border:1px solid var(--line);border-left:4px solid var(--accent);
+  border-radius:10px;padding:9px 11px;font-size:.82rem;font-weight:650;color:var(--accent-dark);}
 
 .hd-typing{display:inline-flex;gap:4px;padding:4px 0;}
 .hd-typing i{width:6px;height:6px;border-radius:50%;background:#94a3b8;
@@ -166,16 +220,110 @@ const CSS = `
 
 .hd-foot{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);
   font-size:.78rem;color:var(--muted);line-height:1.6;display:flex;
-  justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  justify-content:space-between;gap:12px;flex-wrap:wrap;overflow-wrap:anywhere;}
 .hd-foot a{color:var(--brand-dark);}
 .hd-foot button{background:none;border:none;color:var(--brand-dark);cursor:pointer;
   font:inherit;text-decoration:underline;padding:0;}
 
-@media (max-width:520px){
-  .hd-group-title,.hd-chips{margin-left:0;}
+@media (max-width:640px){
   .hd-bubble{max-width:100%;}
+  /* 16px or iOS zooms the page the moment a field takes focus, which leaves
+     the form half off screen and the visitor pinching to get back. */
+  .hd-input{font-size:16px;}
+  /* A row of buttons that would wrap to two lines reads better as two
+     full-width buttons than as one and a half. */
+  .hd-row .hd-btn{flex:1 1 auto;}
+  .hd-msg{gap:8px;}
+}
+@media (prefers-reduced-motion:reduce){
+  .hd-typing i{animation:none;opacity:.55;}
 }
 `;
+
+/* ── the modules ──────────────────────────────────────────────────────────
+   The categories come from the server, which owns what the page can answer.
+   What belongs here is only how each one *looks*: one colour, which the card,
+   its chips and the answers they produce all inherit. The map is keyed by the
+   category's name for exactly one reason — a module added on the server has to
+   appear on this page whether or not anybody remembers to come back here — so
+   an unknown name falls back to the house indigo rather than disappearing. */
+
+const MODULE_STYLE = {
+  'Account and registration': { accent: '#4f46e5', dark: '#4338ca', bg: '#eef2ff' },
+  'Learning module': { accent: '#059669', dark: '#047857', bg: '#ecfdf5' },
+  Timetable: { accent: '#d97706', dark: '#b45309', bg: '#fffbeb' },
+  Attendance: { accent: '#0284c7', dark: '#0369a1', bg: '#f0f9ff' },
+  Certificates: { accent: '#7c3aed', dark: '#6d28d9', bg: '#f5f3ff' },
+  Conferences: { accent: '#e11d48', dark: '#be123c', bg: '#fff1f2' },
+  'XCEED team': { accent: '#0d9488', dark: '#0f766e', bg: '#f0fdfa' },
+};
+
+const DEFAULT_STYLE = { accent: '#4f46e5', dark: '#4338ca', bg: '#eef2ff' };
+
+const styleFor = (category) => MODULE_STYLE[category] || DEFAULT_STYLE;
+
+/** The three custom properties every accented thing reads. Set on a wrapper and
+ *  inherited, so one object colours a card, its chips and the answer they
+ *  produce without a single extra class name. */
+const accentVars = (category) => {
+  const style = styleFor(category);
+  return { '--accent': style.accent, '--accent-dark': style.dark, '--accent-bg': style.bg };
+};
+
+/**
+ * Every question, grouped by module — and once one has been asked, the rest of
+ * that module.
+ *
+ * Both halves are deliberate. Cards alone, with the questions hidden until a
+ * card was opened, meant a visitor had to guess which module their problem
+ * belonged to before they could see a single question, and guessing wrong cost
+ * two clicks to find out. The questions are short and there are not that many
+ * of them: showing them all, under the module they belong to, lets somebody
+ * recognise their own problem rather than classify it.
+ *
+ * After an answer, the list narrows to the module just asked about — because
+ * the second question is nearly always next door to the first, and forty
+ * questions under an answer buries it. One button widens it back out again.
+ */
+function QuestionMenu({ menu, open, onOpen, onAsk, busy, asked }) {
+  const chip = (topic) => (
+    <button className="hd-chip" key={topic.id} type="button" disabled={busy} onClick={() => onAsk(topic)}>
+      {topic.question}
+    </button>
+  );
+
+  const group = open ? menu.find((entry) => entry.category === open) : null;
+  /* The question just answered is not offered again: it is on screen directly
+     above, and a chip that re-asks it reads as a broken one. */
+  const rest = group ? group.topics.filter((topic) => topic.id !== asked) : [];
+
+  /* A module with nothing left in it — Conferences has one question — falls
+     back to everything rather than to an empty heading. */
+  if (!group || !rest.length) {
+    return (
+      <div>
+        {menu.map((entry) => (
+          <div className="hd-group" key={entry.category} style={accentVars(entry.category)}>
+            <p className="hd-group-title">{entry.category}</p>
+            <div className="hd-chips">{entry.topics.map(chip)}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="hd-group" style={accentVars(open)}>
+      <p className="hd-group-title">More about {open.toLowerCase()}</p>
+      <div className="hd-chips">{rest.map(chip)}</div>
+      <div className="hd-row" style={{ marginTop: 12 }}>
+        <button className="hd-btn ghost" type="button" onClick={() => onOpen('')}>
+          Show every question
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /* ── block renderers ────────────────────────────────────────────────────── */
 
@@ -318,11 +466,27 @@ function ActionCard({ action, busy, onRun }) {
                 </option>
               ))}
             </select>
+          ) : field.type === 'textarea' ? (
+            <textarea
+              id={`${action.id}-${field.name}`}
+              className="hd-input"
+              rows={6}
+              placeholder={field.placeholder || ''}
+              value={values[field.name]}
+              onChange={(event) => setValues((v) => ({ ...v, [field.name]: event.target.value }))}
+            />
           ) : (
             <input
               id={`${action.id}-${field.name}`}
               className="hd-input"
-              type="text"
+              /* `password` for the two fields that set one, so a new password
+                 is not read over a shoulder in a computer lab — which is where
+                 a good half of this page's traffic is. Anything else is a
+                 single-line text box; `autoComplete` is off throughout, because
+                 every field here is a one-time value and a browser offering to
+                 remember a six-digit code helps nobody. */
+              type={field.type === 'password' ? 'password' : 'text'}
+              autoComplete={field.type === 'password' ? 'new-password' : 'off'}
               placeholder={field.placeholder || ''}
               value={values[field.name]}
               onChange={(event) => setValues((v) => ({ ...v, [field.name]: event.target.value }))}
@@ -338,11 +502,24 @@ function ActionCard({ action, busy, onRun }) {
   );
 }
 
+/** The questions asked so far, as one line, to travel with a message to a
+ *  person. Capped: this is context for a human reader, not a transcript. */
+const askedSoFar = (thread) =>
+  thread
+    .filter((message) => message.side === 'me')
+    .map((message) => message.text)
+    .join(' · ')
+    .slice(0, 600);
+
 /* ── the page ───────────────────────────────────────────────────────────── */
 
 export default function HelpdeskPage() {
   const [menu, setMenu] = useState([]);
-  const [stage, setStage] = useState('email'); // email → code → chat
+  /* `checking` is the very first stage: a visitor who is already signed in gets
+     a pass without an email round trip (see the probe below), and rendering the
+     address form for the moment that takes would ask a signed-in user for the
+     address the server already knows. */
+  const [stage, setStage] = useState('checking'); // checking → email → code → chat
   const [email, setEmail] = useState('');
   /* In memory only, never localStorage — see the note at the top of the file. */
   const [pass, setPass] = useState('');
@@ -351,7 +528,25 @@ export default function HelpdeskPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [thread, setThread] = useState([]);
-  const endRef = useRef(null);
+  /* Whether the pass came from a platform session rather than an emailed code.
+     Only the wording differs — "signed in as" reads oddly for someone who typed
+     a code, and "verified" reads oddly for someone who never saw one. */
+  const [fromLogin, setFromLogin] = useState(false);
+  /* Which module's questions are showing, and which module the conversation is
+     currently in — the second is what colours the replies, and it outlives the
+     first because a reader may close the card list while reading the answer. */
+  const [openModule, setOpenModule] = useState('');
+  const [category, setCategory] = useState('');
+  /* The question just answered, so the list of what to ask next does not offer
+     it back. */
+  const [lastAsked, setLastAsked] = useState('');
+  /* The newest turn in the thread, so it can be brought to the top of the
+     screen. Attached where the message is rendered rather than looked up by
+     index afterwards: the node is in place by the time the effect below runs,
+     which is the render that added the message. */
+  const latestRef = useRef(null);
+  /* The page header, which is where the gate screens start. */
+  const headRef = useRef(null);
 
   useEffect(() => {
     fetch(`${API}/menu`)
@@ -360,8 +555,66 @@ export default function HelpdeskPage() {
       .catch(() => setMenu([]));
   }, []);
 
+  /**
+   * The signed-in shortcut.
+   *
+   * A visitor who is already signed in has proved rather more than a mailbox,
+   * so mailing them a code to prove it again is a delay and an extra step for
+   * no gain. The server issues a pass straight off the platform session (see
+   * `sessionFromLogin`), scoped to the address on that account and nothing
+   * else. Anonymous visitors — the page's main audience — get a 401 here and
+   * the ordinary gate, which is the path this page was built around.
+   */
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    let cancelled = false;
+    fetch(`${API}/session`, { method: 'POST' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('not signed in');
+        return response.json();
+      })
+      .then((data) => {
+        if (cancelled || !data?.pass) throw new Error('not signed in');
+        setPass(data.pass);
+        setEmail(data.email || '');
+        setFromLogin(true);
+        setStage('chat');
+        setThread([
+          {
+            side: 'bot',
+            title: `You are signed in as ${data.email}`,
+            blocks: [
+              {
+                type: 'text',
+                text: 'No code needed — everything I tell you from here is about that address and only that address. Pick the question that fits best.',
+              },
+            ],
+            actions: [],
+            followUps: [],
+          },
+        ]);
+      })
+      .catch(() => {
+        if (!cancelled) setStage('email');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /**
+   * Where the page sits after each reply.
+   *
+   * The newest answer is brought to the *top* of the screen, not the bottom.
+   * Answers here run long — a checklist, a table, an action card — so scrolling
+   * to the end of the thread landed the reader on the last line of something
+   * they had not read a word of, with its heading somewhere above the viewport.
+   * A reply starts at its beginning. The chip list underneath is where a reader
+   * goes next, and it is a scroll away by design rather than by accident.
+   */
+  useEffect(() => {
+    /* The gate is one short card, so its own top is the top of the page. */
+    const target = stage === 'chat' ? latestRef.current : headRef.current;
+    target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }, [thread, stage]);
 
   /** Every authenticated call. The pass rides its own header; `main.jsx` adds
@@ -415,6 +668,7 @@ export default function HelpdeskPage() {
         body: JSON.stringify({ email: email.trim(), otp: otp.trim() }),
       });
       setPass(data.pass);
+      setFromLogin(false);
       setStage('chat');
       setThread([
         {
@@ -447,6 +701,9 @@ export default function HelpdeskPage() {
   const handleExpiry = () => {
     setPass('');
     setOtp('');
+    setFromLogin(false);
+    setOpenModule('');
+    setLastAsked('');
     setStage('email');
     setGateNote('');
     setError('Your help-desk session has expired. Verify your address again to carry on.');
@@ -454,15 +711,32 @@ export default function HelpdeskPage() {
 
   const askTopic = async (topic) => {
     setBusy(true);
-    setThread((previous) => [...previous, { side: 'me', text: topic.question }]);
+    /* The module a question belongs to, looked up rather than passed in: a
+       follow-up chip under an answer carries only an id, and it may well point
+       into a different module from the one being read. */
+    const asked = categoryOf(topic.id) || category;
+    setCategory(asked);
+    /* Narrow the list to the module just asked about. The next question is
+       nearly always next door to this one, and every question on the page piled
+       under an answer buries the answer. */
+    setOpenModule(asked);
+    setLastAsked(topic.id);
+    setThread((previous) => [...previous, { side: 'me', text: topic.question, category: asked }]);
     try {
       const data = await call(`${API}/topic/${topic.id}`);
-      setThread((previous) => [...previous, { side: 'bot', ...data.answer }]);
+      setThread((previous) => [...previous, { side: 'bot', category: asked, ...data.answer }]);
     } catch (failure) {
       if (failure.status === 401) return handleExpiry();
       setThread((previous) => [
         ...previous,
-        { side: 'bot', title: 'That did not work', blocks: [{ type: 'text', text: failure.message }], actions: [], followUps: [] },
+        {
+          side: 'bot',
+          category: asked,
+          title: 'That did not work',
+          blocks: [{ type: 'text', text: failure.message }],
+          actions: [],
+          followUps: [],
+        },
       ]);
     } finally {
       setBusy(false);
@@ -471,19 +745,26 @@ export default function HelpdeskPage() {
 
   const runAction = async (action, values) => {
     setBusy(true);
-    setThread((previous) => [...previous, { side: 'me', text: action.label }]);
+    setThread((previous) => [...previous, { side: 'me', text: action.label, category }]);
     try {
       const data = await call(`${API}/action/${action.id}`, {
         method: 'POST',
-        body: JSON.stringify(values),
+        /* The questions already asked ride along with a message to a human, and
+           with nothing else. Somebody who writes "it still does not work" after
+           four answers is describing the fifth thing, and without the four the
+           reply is a request for them. */
+        body: JSON.stringify(
+          action.id === 'ask-question' ? { ...values, context: askedSoFar(thread) } : values,
+        ),
       });
-      setThread((previous) => [...previous, { side: 'bot', ...data.answer }]);
+      setThread((previous) => [...previous, { side: 'bot', category, ...data.answer }]);
     } catch (failure) {
       if (failure.status === 401) return handleExpiry();
       setThread((previous) => [
         ...previous,
         {
           side: 'bot',
+          category,
           title: 'That did not work',
           blocks: [{ type: 'text', text: failure.message }],
           actions: [],
@@ -499,24 +780,46 @@ export default function HelpdeskPage() {
     setPass('');
     setOtp('');
     setEmail('');
+    setFromLogin(false);
+    setOpenModule('');
+    setLastAsked('');
+    setCategory('');
     setThread([]);
     setGateNote('');
     setError('');
     setStage('email');
   };
 
-  const allTopics = menu.flatMap((group) => group.topics);
+  /** Which module a topic id belongs to, from the menu the server sent. */
+  const categoryOf = (topicId) =>
+    menu.find((group) => group.topics.some((topic) => topic.id === topicId))?.category || '';
+
+  const goBack = () => {
+    if (window.history.length > 1) window.history.back();
+    else window.location.assign('/');
+  };
+
   const last = thread[thread.length - 1];
 
   return (
     <div className="hd">
       <style>{CSS}</style>
       <div className="hd-wrap">
-        <header className="hd-head">
+        <header className="hd-head" ref={headRef}>
           <div className="hd-avatar" aria-hidden="true">
             ☎
           </div>
           <div>
+            {/* This page is linked from inside the learning module's rail as
+                well as from the login and reset screens, and it is a full-page
+                takeover with no rail of its own. History back rather than a
+                fixed destination: "back" from the learning module means the
+                learning module, and from the reset form it means the reset
+                form. `/` only when the page was opened cold, with nothing to
+                go back to. */}
+            <button className="hd-back" type="button" onClick={goBack}>
+              ← Back
+            </button>
             <h1>XCEED help desk</h1>
             <p>
               Registration, joining classes, and the learning module — answered against your
@@ -525,7 +828,15 @@ export default function HelpdeskPage() {
           </div>
         </header>
 
-        {stage !== 'chat' ? (
+        {stage === 'checking' ? (
+          /* One request long, and only ever this: a signed-in visitor is sent
+             straight through, so the address form must not flash up in front
+             of somebody who will never be asked for an address. */
+          <div className="hd-gate" role="status" aria-live="polite">
+            <h2>One moment</h2>
+            <p style={{ marginBottom: 0 }}>Checking whether you are already signed in…</p>
+          </div>
+        ) : stage !== 'chat' ? (
           <div className="hd-gate">
             {stage === 'email' ? (
               <form onSubmit={requestCode}>
@@ -554,18 +865,25 @@ export default function HelpdeskPage() {
                   {busy ? 'Sending…' : 'Send me a code'}
                 </button>
 
-                {allTopics.length ? (
+                {/* What is behind the gate, as the modules themselves rather
+                    than as forty question titles. Enough to recognise your own
+                    problem in the list — which is the only decision being asked
+                    for at this point — without turning the sign-in screen into
+                    a document. */}
+                {menu.length ? (
                   <div className="hd-preview">
                     <h3>What this page can answer</h3>
-                    {menu.map((group) => (
-                      <div key={group.category}>
-                        <ul>
-                          {group.topics.map((topic) => (
-                            <li key={topic.id}>{topic.question}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
+                    <div className="hd-preview-list">
+                      {menu.map((group) => (
+                        <div
+                          className="hd-preview-item"
+                          key={group.category}
+                          style={accentVars(group.category)}
+                        >
+                          {group.category}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
               </form>
@@ -608,7 +926,12 @@ export default function HelpdeskPage() {
           <>
             {thread.map((message, index) =>
               message.side === 'me' ? (
-                <div className="hd-msg me" key={index}>
+                <div
+                  className="hd-msg me"
+                  key={index}
+                  style={accentVars(message.category)}
+                  ref={message === last ? latestRef : null}
+                >
                   <div className="hd-dot" aria-hidden="true">
                     ●
                   </div>
@@ -617,7 +940,12 @@ export default function HelpdeskPage() {
                   </div>
                 </div>
               ) : (
-                <div key={index}>
+                <div
+                  className="hd-turn"
+                  key={index}
+                  style={accentVars(message.category)}
+                  ref={message === last ? latestRef : null}
+                >
                   <div className="hd-msg">
                     <div className="hd-dot" aria-hidden="true">
                       ☎
@@ -673,48 +1001,52 @@ export default function HelpdeskPage() {
               </div>
             ) : null}
 
-            {menu.map((group) => (
-              <div className="hd-group" key={group.category}>
-                <p className="hd-group-title">{group.category}</p>
-                <div className="hd-chips">
-                  {group.topics.map((topic) => (
-                    <button
-                      className="hd-chip"
-                      key={topic.id}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => askTopic(topic)}
-                    >
-                      {topic.question}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
+            <QuestionMenu
+              menu={menu}
+              open={openModule}
+              onOpen={setOpenModule}
+              onAsk={askTopic}
+              busy={busy}
+              asked={lastAsked}
+            />
 
             <div className="hd-foot">
               <span>
-                Signed in to the help desk as <strong>{email.trim().toLowerCase()}</strong>. This
-                session lasts 45 minutes and is not a sign-in to XCEED.
+                {fromLogin ? (
+                  <>
+                    Signed in as <strong>{email.trim().toLowerCase()}</strong>, so no code was
+                    needed. Every answer here is about that address.
+                  </>
+                ) : (
+                  <>
+                    Signed in to the help desk as <strong>{email.trim().toLowerCase()}</strong>.
+                    This session lasts 45 minutes and is not a sign-in to XCEED.
+                  </>
+                )}
               </span>
               <button type="button" onClick={startOver}>
-                Start again with a different address
+                {fromLogin ? 'Ask about a different address' : 'Start again with a different address'}
               </button>
+            </div>
+
+            {/* No support address anywhere on this page — not even down here.
+
+                An address printed on a page collects the questions the page
+                answers in seconds along with the ones it cannot, and each of
+                those is a person reading a mailbox to run a lookup that had
+                already been run. The XCEED team card sends the same message to
+                the same people, with the module already chosen and the account
+                state attached, and nothing to copy out by hand. */}
+            <div className="hd-foot">
+              <span>
+                Nothing above fits? Ask <strong>“My question is not answered here”</strong> under
+                XCEED team — it reaches the team with your account details already attached. Roles
+                and staff accounts are changed by your department administrator; this page cannot
+                do either.
+              </span>
             </div>
           </>
         )}
-
-        <div ref={endRef} />
-
-        {stage !== 'chat' ? (
-          <div className="hd-foot">
-            <span>
-              Still stuck after trying this page? Ask your department administrator — this page
-              cannot change roles or create staff accounts.
-            </span>
-            <a href="/guide">Read the full guide</a>
-          </div>
-        ) : null}
       </div>
     </div>
   );

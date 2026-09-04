@@ -131,6 +131,12 @@ const NAV_ITEMS = [
   // something better — is not navigation: it is what you do *instead* of what
   // you came here for, and it has to be reachable from wherever the thing broke.
   { to: '/learning/bugs', label: 'Bug / Suggestion', icon: '🛠️', foot: true },
+  // The help desk, which lives outside this module (/help) because most of the
+  // people it serves cannot get as far as this rail. Reachable from in here
+  // too: "why can I not see my class?" is asked far more often from a signed-in
+  // screen than from the login page, and a signed-in visitor skips its email
+  // verification entirely — the server issues its pass off the session.
+  { to: '/help', label: 'Help desk', icon: '☎️', foot: true },
   // Platform-wide stats and queues at a glance. Only an lm-admin (or other
   // platform-admin) account can open it — the server 403s everyone else — so
   // the link itself is hidden rather than left to dead-end.

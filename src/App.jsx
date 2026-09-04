@@ -203,6 +203,7 @@ const AttendanceDisputes = lazyWithPreload(() => import('./attendancemodule/Atte
 const ErpOverrideAnalysis = lazyWithPreload(() => import('./attendancemodule/ErpOverrideAnalysis'));
 const StudentPhotoUpdate = lazyWithPreload(() => import('./attendancemodule/StudentPhotoUpdate'));
 const PhotoSwapBatchSendPage = lazyWithPreload(() => import('./platform/PhotoSwapBatchSendPage'));
+const ErpStudentListPage = lazyWithPreload(() => import('./platform/ErpStudentListPage'));
 
 const AMSDashboard = lazyWithPreload(() => import('./attendancemodule/AMSDashboard'));
 const AMSLayout = lazyWithPreload(() => import('./attendancemodule/AMSLayout'));
@@ -667,6 +668,7 @@ const APP_ROUTES = (
             <Route path="record-stream" element={<RecordStream />} />
             <Route path="embeddings" element={<EmbeddingGeneration />} />
             <Route path="photo-swap-batch-send" element={<PhotoSwapBatchSendPage />} />
+            <Route path="erp-student-list" element={<ErpStudentListPage />} />
             <Route path="erp-sync" element={<ERPSync />} />
             <Route path="report" element={<Attendancedoc />} />
             <Route path="model" element={<ModelPerformance />} />
