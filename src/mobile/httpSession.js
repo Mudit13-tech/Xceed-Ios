@@ -40,6 +40,21 @@ export function credentialsFor(target, apiOrigin) {
 }
 
 /**
+ * The screens an anonymous visitor is *meant* to be on.
+ *
+ * On these, a 401 is not a session ending — it is the ordinary answer to "is
+ * anyone signed in?", which the platform navbar asks on every route by fetching
+ * /user/getuser. It renders on these pages like any other, so a first-time user
+ * who has never had a token gets a 401 seconds after the page appears.
+ *
+ * Only /login used to be listed, and the redirect below is a full document
+ * load, so opening "Forgot Password" from the login screen showed the form and
+ * then threw it away mid-read — the one page whose entire audience is people
+ * who cannot sign in. /register and /help had it for the same reason.
+ */
+const ANONYMOUS_PATHS = ['/login', '/forgot-password', '/register', '/help'];
+
+/**
  * What to do when the server stops recognising us.
  *
  * A 401 here is not a request that failed, it is a session that ended — expired
@@ -51,9 +66,10 @@ export function credentialsFor(target, apiOrigin) {
 export async function handleUnauthorized() {
   await clearNativeSession();
 
-  // Guarded, or a 401 raised by something on the login screen itself would
-  // reload it, fire again, and keep reloading.
-  if (window.location.pathname !== '/login') {
+  // Read after the await, not before: clearing the session takes a few
+  // keystore round-trips, and the user can have moved on in that time. It is
+  // where they are *now* that decides whether sending them to /login is right.
+  if (!ANONYMOUS_PATHS.includes(window.location.pathname)) {
     window.location.href = '/login';
   }
 }
