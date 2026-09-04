@@ -1,33 +1,97 @@
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 
+const SAVED_ACCOUNTS = 'saved_accounts';
+const LAST_ACTIVE_EMAIL = 'last_active_email';
+
+// The keystore rejects a key it does not hold, and on the web there is no
+// plugin behind these at all. Neither is an error worth propagating out of a
+// sign-out: the goal is for the value to be gone, and it is.
+const readKey = async (key) => {
+  try {
+    const { value } = await SecureStoragePlugin.get({ key });
+    return value || null;
+  } catch {
+    return null;
+  }
+};
+
+const removeKey = async (key) => {
+  try {
+    await SecureStoragePlugin.remove({ key });
+  } catch {
+    /* not there */
+  }
+};
+
 /**
- * Forgets the signed-in session on this device.
+ * Signs the current account out of this device.
  *
- * Signing out of the app is not the same as signing out of the web client. The
- * web client's session is a cookie the server drops; here the session is also a
- * bearer token and a PIN held in the device keystore, and those outlive the
- * request that ended the session. Left behind, the next launch finds a PIN with
- * a token behind it and lets the previous user back in without a password.
+ * Sign-out here has to do more than the web's does, and for a while it did
+ * less. The server's logout clears its cookie and keeps no blocklist, so the
+ * bearer token it issued stays valid until it expires — which means a token
+ * left on the device is a live session, whatever the server was told. Ending
+ * the session is therefore something only this function can do, by destroying
+ * the credential.
  *
- * This used to be six lines copied into all four places that sign a user out —
- * two navbars, the learning shell and the 401 handler — every one of them in a
- * file that comes from AMS. Four copies of the same block are four conflicts
- * waiting for the sync that reformats a logout handler, and they had already
- * drifted apart in how they swallowed the error.
+ * It was destroying the wrong one. `user_pin` and `auth_token` are the single
+ * account the app stored before the switcher existed; every account saved since
+ * lives in `saved_accounts` as {email, token, pin}, and that is what PinEntry
+ * unlocks and what activateAccount puts back into localStorage. Removing the
+ * two legacy keys therefore removed nothing anyone still had: sign out, arrive
+ * at the login screen, and the account was still listed, still holding a valid
+ * token and its PIN, and four digits put you straight back into the session you
+ * had just left. Every sign-out route in the app did this, from before the
+ * switcher was introduced.
  *
- * Saved accounts deliberately survive. `saved_accounts` and
- * `last_active_email` are the account switcher's list, not the session — the
- * point of signing out of one account is to pick another, and clearing them
- * would empty the list the user came back to.
+ * So the signed-out account is dropped from `saved_accounts` outright, the way
+ * the switcher's own "remove account" does it. Signing back in needs the
+ * password again, which is the only thing that makes the token gone rather than
+ * merely unused. Any *other* saved account is untouched — signing out of one is
+ * a normal way to reach another, and taking the list with it would be its own
+ * kind of broken.
+ *
+ * Note this is deliberately not what switching accounts does: activateAccount
+ * leaves the account it moves away from signed in, so switching back needs no
+ * password. Sign-out is the explicit act; switching is not.
  */
 export async function clearNativeSession() {
+  // Read before removing — it is how the account being signed out is identified.
+  const token = localStorage.getItem('token');
   localStorage.removeItem('token');
+
+  await removeKey('user_pin');
+  await removeKey('auth_token');
+
+  const raw = await readKey(SAVED_ACCOUNTS);
+  if (!raw) return;
+
+  let accounts;
   try {
-    await SecureStoragePlugin.remove({ key: 'user_pin' });
-    await SecureStoragePlugin.remove({ key: 'auth_token' });
+    accounts = JSON.parse(raw);
   } catch {
-    // Not a failure. On the web the plugin is not there at all, and after a
-    // sign-out that already ran there is nothing left to remove.
+    // Unreadable is as good as absent; leave it for loadStorage to replace.
+    return;
+  }
+  if (!Array.isArray(accounts) || accounts.length === 0) return;
+
+  const lastActiveEmail = await readKey(LAST_ACTIVE_EMAIL);
+  // The token is the better identifier of the two: it says which account this
+  // session actually belongs to, where `last_active_email` only says which one
+  // was chosen last and can be left behind by a switch that failed part way.
+  const signedOut =
+    (token && accounts.find((account) => account.token === token)) ||
+    accounts.find((account) => account.email === lastActiveEmail);
+  if (!signedOut) return;
+
+  const remaining = accounts.filter((account) => account !== signedOut);
+  await SecureStoragePlugin.set({ key: SAVED_ACCOUNTS, value: JSON.stringify(remaining) });
+
+  if (lastActiveEmail === signedOut.email) {
+    if (remaining.length > 0) {
+      await SecureStoragePlugin.set({ key: LAST_ACTIVE_EMAIL, value: remaining[0].email });
+    } else {
+      await removeKey(LAST_ACTIVE_EMAIL);
+    }
   }
 }
 
