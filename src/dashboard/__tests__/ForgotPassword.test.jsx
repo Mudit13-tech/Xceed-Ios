@@ -57,7 +57,7 @@ describe('ForgotPassword captcha', () => {
 
     await requestOtp(user);
 
-    await screen.findByText(/An OTP has been sent/);
+    await screen.findByText(/If an account with this email exists/);
     expect(screen.queryByAltText('Characters to type')).not.toBeInTheDocument();
   });
 
