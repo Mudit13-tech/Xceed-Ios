@@ -241,10 +241,18 @@ There are three ways to add something, in order of preference.
 
 **2. A one-line seam into a new file.** When something genuinely has to run from
 inside an AMS file, put the logic in a new file and leave a single call behind.
-`App.jsx` is the example: a hundred lines of back-button, deep-link, push and
-OTA wiring used to sit in the middle of one of the files upstream edits most.
-They now live in `src/mobile/MobileShell.jsx`, and `App.jsx` contains one
-`<MobileShell />`. Its footprint on the AMS file went from +110/−3 to +5/−1.
+This is what `src/mobile/` is for, and most of it started life inline:
+
+| Lives in | Was | Called from |
+|---|---|---|
+| `MobileShell.jsx` | 110 lines in `App.jsx` | one `<MobileShell />` |
+| `session.js` | the same 6 lines in 4 files | `await clearNativeSession()` |
+| `useTerminationAlerts.jsx` | 67 lines in `QuizResults.jsx` | 2 lines |
+| `httpSession.js` | 50 lines in `main.jsx` | the import, and one call |
+
+Note the name is about ownership, not about phones: `src/mobile/` means *this
+repo owns it*. Some of what lives there — the terminated-exam alert — is not
+device-specific at all. It is there because it is ours, and AMS's files are not.
 
 **3. An override, for a file that is genuinely a fork.** Some files are not
 patched but rewritten — `LoginForm.jsx` is the login *flow*, with saved
