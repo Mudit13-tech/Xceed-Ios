@@ -12,7 +12,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "deploy:ota": "node scripts/deploy-ota.cjs"
+    "deploy:ota": "node scripts/deploy-ota.cjs",
+    "drift": "node build/amsDrift.mjs",
+    "setup:git": "node build/gitMergeSetup.mjs",
+    "prepare": "node build/gitMergeSetup.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

@@ -1,0 +1,56 @@
+# Line endings are decided here, not by whoever happens to be cloning.
+#
+# The AMS sync runs from two places: safe-pull-from-ams.ps1 on a Windows
+# workstation, and the GitHub Action on ubuntu. With this left to each machine's
+# core.autocrlf, the same file can be committed with different endings from the
+# two, and git then sees every line of it as changed — a whole-file conflict in
+# a file nobody edited. Pinning eol=lf makes the merge see content only.
+* text=auto eol=lf
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.ttf  binary
+*.woff  binary
+*.woff2 binary
+*.jar  binary
+*.keystore binary
+*.lottie binary
+
+# ---------------------------------------------------------------------------
+# Merge policy for the AMS sync.
+#
+# `ams-update` is a vendor branch holding AMS's client tree and nothing else, so
+# a sync merge presents AMS's copy of these files as "theirs". For the files
+# below that copy is not an alternative worth considering — it describes the web
+# deployment, which is not what this repo builds — and taking it, or stopping to
+# ask about it, is pure noise. Drivers are registered by build/gitMergeSetup.mjs
+# (run from npm's `prepare`, so a plain `npm install` is enough) and by the sync
+# workflow.
+# ---------------------------------------------------------------------------
+
+# The native project. AMS carries an android/ folder because Capacitor was
+# scaffolded there once; ours is the one that ships, with the signing config,
+# the FCM keys, the deep-link intent filters and the launcher icons.
+android/**            merge=mobile
+
+# App id, asset-server hostname, updater and plugin config: all of it describes
+# this app, none of it has a meaningful web counterpart.
+capacitor.config.json merge=mobile
+
+# Ours documents the app and the sync; AMS's documents the web client.
+README.md             merge=mobile
+
+# Never merged line-by-line — a lockfile conflict is unresolvable by hand and
+# meaningless when it happens. Ours is kept and then regenerated from the merged
+# package.json, which is the only thing that actually decides its contents.
+package-lock.json     merge=mobile
+
+# Unioned rather than chosen. AMS adding a dependency has to reach the app —
+# that is the whole point of the sync — while our Capacitor dependencies, our
+# version (the OTA channel reads it) and our deploy:ota script have to survive
+# it. See build/mergePackageJson.mjs.
+package.json          merge=package-json
