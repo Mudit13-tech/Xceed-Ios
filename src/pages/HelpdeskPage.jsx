@@ -151,6 +151,25 @@ const CSS = `
 .hd-table td{padding:8px 11px;border-bottom:1px solid var(--line);line-height:1.5;vertical-align:top;}
 .hd-table tr:last-child td{border-bottom:none;}
 
+/* ── the manual shelf ── */
+/* One line of links, wrapped, above the conversation. Deliberately quiet: it is
+   a shelf to reach for, not the page's subject, so it reads as a row of labels
+   rather than as a row of buttons competing with the questions. */
+.hd-manuals{margin:0 0 18px;padding:12px 14px;border:1px solid var(--line);
+  border-left:4px solid var(--brand);border-radius:12px;background:#fff;}
+.hd-manuals p{margin:0 0 8px;font-size:.68rem;font-weight:800;text-transform:uppercase;
+  letter-spacing:.09em;color:var(--muted);}
+.hd-manuals-list{display:flex;flex-wrap:wrap;gap:6px 14px;}
+.hd-manuals a{font-size:.83rem;font-weight:600;color:var(--brand-dark);text-decoration:none;}
+.hd-manuals a:hover{text-decoration:underline;}
+
+/* ── the counters ── */
+.hd-stats{display:flex;flex-wrap:wrap;gap:10px 28px;margin-top:22px;padding-top:14px;
+  border-top:1px solid var(--line);}
+.hd-stat b{display:block;font-size:1.15rem;font-weight:800;color:var(--ink);
+  font-variant-numeric:tabular-nums;line-height:1.2;}
+.hd-stat span{font-size:.74rem;color:var(--muted);}
+
 /* ── choices ── */
 .hd-group{margin:0 0 18px;}
 .hd-group-title{font-size:.68rem;font-weight:800;text-transform:uppercase;
@@ -239,6 +258,35 @@ textarea.hd-input{min-height:120px;resize:vertical;line-height:1.6;}
   .hd-typing i{animation:none;opacity:.55;}
 }
 `;
+
+/**
+ * The manuals, for the people they are written for.
+ *
+ * Every one of these is a staff document: how to run a class, an event, a
+ * timetable, an attendance session. Shown at the top for a member of staff,
+ * because on this page they are frequently the whole answer — somebody asking
+ * how to issue certificates wants the certificate manual more than they want a
+ * lookup. Withheld from a student, for whom they are three screens of noise
+ * above the question they came to ask.
+ *
+ * Paths, not descriptions: each is a real route on this platform, all of them
+ * public (they are onboarding documents for people who may not have an account
+ * yet), so a link here needs no permission of its own.
+ */
+const MANUALS = [
+  { href: '/learning/manual', label: 'Learning module — getting started' },
+  { href: '/learning/setupmanual', label: 'Setting up a class' },
+  { href: '/learning/assignmentmanual', label: 'Assignments' },
+  { href: '/learning/quizmanual', label: 'Quizzes and tests' },
+  { href: '/learning/codingmanual', label: 'Coding questions' },
+  { href: '/learning/tutorialmanual', label: 'Tutorials' },
+  { href: '/learning/shortsmanual', label: 'Shorts' },
+  { href: '/learning/formsmanual', label: 'Forms' },
+  { href: '/tt-manual', label: 'Timetable' },
+  { href: '/ams-manual', label: 'Attendance (iLEED)' },
+  { href: '/certificate-manual', label: 'Certificates' },
+  { href: '/conference-manual', label: 'Conferences' },
+];
 
 /* ── the modules ──────────────────────────────────────────────────────────
    The categories come from the server, which owns what the page can answer.
@@ -540,6 +588,13 @@ export default function HelpdeskPage() {
   /* The question just answered, so the list of what to ask next does not offer
      it back. */
   const [lastAsked, setLastAsked] = useState('');
+  /* Whether this account is a member of staff, which decides one thing: whether
+     the manuals are offered at the top. Answered by the server on the way in,
+     so the page never guesses from an address. */
+  const [isStaff, setIsStaff] = useState(false);
+  /* People, sessions and answers — three integers about the page itself, shown
+     at the foot of it. */
+  const [stats, setStats] = useState(null);
   /* The newest turn in the thread, so it can be brought to the top of the
      screen. Attached where the message is rendered rather than looked up by
      index afterwards: the node is in place by the time the effect below runs,
@@ -547,6 +602,32 @@ export default function HelpdeskPage() {
   const latestRef = useRef(null);
   /* The page header, which is where the gate screens start. */
   const headRef = useRef(null);
+
+  /* Re-read after each exchange rather than only on arrival: the question just
+     asked is one of the answers being counted, and a number that visibly moves
+     is the difference between a statistic and a live one. Open, like the menu,
+     and cheap. */
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API}/stats`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        /* Normalised on arrival rather than trusted: a reply that is missing a
+           field — an older server, a proxy that swallowed it — must leave the
+           footer off, not take the page down on `undefined.toLocaleString()`. */
+        if (cancelled || !data) return;
+        const count = (value) => (Number.isFinite(Number(value)) ? Number(value) : null);
+        const people = count(data.people);
+        const sessions = count(data.sessions);
+        const answered = count(data.answered);
+        if (people === null || sessions === null || answered === null) return;
+        setStats({ people, sessions, answered });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [thread.length, stage]);
 
   useEffect(() => {
     fetch(`${API}/menu`)
@@ -576,6 +657,7 @@ export default function HelpdeskPage() {
         if (cancelled || !data?.pass) throw new Error('not signed in');
         setPass(data.pass);
         setEmail(data.email || '');
+        setIsStaff(Boolean(data.isStaff));
         setFromLogin(true);
         setStage('chat');
         setThread([
@@ -668,6 +750,7 @@ export default function HelpdeskPage() {
         body: JSON.stringify({ email: email.trim(), otp: otp.trim() }),
       });
       setPass(data.pass);
+      setIsStaff(Boolean(data.isStaff));
       setFromLogin(false);
       setStage('chat');
       setThread([
@@ -702,6 +785,7 @@ export default function HelpdeskPage() {
     setPass('');
     setOtp('');
     setFromLogin(false);
+    setIsStaff(false);
     setOpenModule('');
     setLastAsked('');
     setStage('email');
@@ -781,6 +865,7 @@ export default function HelpdeskPage() {
     setOtp('');
     setEmail('');
     setFromLogin(false);
+    setIsStaff(false);
     setOpenModule('');
     setLastAsked('');
     setCategory('');
@@ -789,6 +874,10 @@ export default function HelpdeskPage() {
     setError('');
     setStage('email');
   };
+
+  /** One topic from the menu by id, for a link that asks it directly. */
+  const menuTopic = (topicId) =>
+    menu.flatMap((group) => group.topics).find((topic) => topic.id === topicId) || null;
 
   /** Which module a topic id belongs to, from the menu the server sent. */
   const categoryOf = (topicId) =>
@@ -827,6 +916,23 @@ export default function HelpdeskPage() {
             </p>
           </div>
         </header>
+
+        {/* The staff shelf. Above the conversation because for a member of
+            staff it is often the whole answer — "how do I issue certificates"
+            is a manual, not a lookup — and hidden from everyone else, for whom
+            it is three screens between them and their question. */}
+        {isStaff && stage === 'chat' ? (
+          <nav className="hd-manuals" aria-label="Manuals">
+            <p>Manuals</p>
+            <div className="hd-manuals-list">
+              {MANUALS.map((manual) => (
+                <a href={manual.href} key={manual.href}>
+                  {manual.label}
+                </a>
+              ))}
+            </div>
+          </nav>
+        ) : null}
 
         {stage === 'checking' ? (
           /* One request long, and only ever this: a signed-in visitor is sent
@@ -1039,14 +1145,50 @@ export default function HelpdeskPage() {
                 state attached, and nothing to copy out by hand. */}
             <div className="hd-foot">
               <span>
-                Nothing above fits? Ask <strong>“My question is not answered here”</strong> under
-                XCEED team — it reaches the team with your account details already attached. Roles
-                and staff accounts are changed by your department administrator; this page cannot
-                do either.
+                Nothing above fits?{' '}
+                {askTopic && menuTopic('ask-a-human') ? (
+                  /* A link to the question rather than its name in bold. Naming
+                     it and leaving the reader to find it again in the list is
+                     the sort of small friction that ends in a support email
+                     instead. */
+                  <button type="button" onClick={() => askTopic(menuTopic('ask-a-human'))} disabled={busy}>
+                    Send your question to the XCEED team
+                  </button>
+                ) : (
+                  <strong>Open XCEED team and send us your question</strong>
+                )}{' '}
+                — it reaches them with your account details already attached. XCEED is run by a
+                student team alongside their own coursework, so a reply takes as long as somebody
+                being free; please look through the questions above first, since those answer in
+                seconds. Roles and staff accounts are changed by your department administrator;
+                this page cannot do either.
               </span>
             </div>
           </>
         )}
+
+        {/* What the page has done, at the foot of it. Three integers and
+            nothing about anybody: people are counted as one row per address
+            hashed one way, so a returning visitor is recognised without the
+            address ever being stored. Shown at every stage, including the gate
+            — somebody deciding whether this page is worth their time is
+            entitled to know whether it has been worth anybody else's. */}
+        {stats ? (
+          <div className="hd-stats">
+            <div className="hd-stat">
+              <b>{stats.people.toLocaleString()}</b>
+              <span>people verified here</span>
+            </div>
+            <div className="hd-stat">
+              <b>{stats.sessions.toLocaleString()}</b>
+              <span>help-desk sessions opened</span>
+            </div>
+            <div className="hd-stat">
+              <b>{stats.answered.toLocaleString()}</b>
+              <span>questions answered</span>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
