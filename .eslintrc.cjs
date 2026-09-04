@@ -1,6 +1,9 @@
 module.exports = {
   root: true,
   env: { browser: true, es2020: true },
+  // Injected at build time by the `define` in vite.config.js, so it exists in
+  // the bundle but nowhere eslint can infer it from.
+  globals: { __APP_VERSION__: 'readonly' },
   extends: [
     'eslint:recommended',
     'plugin:react/recommended',

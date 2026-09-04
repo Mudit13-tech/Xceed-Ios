@@ -1,10 +1,23 @@
+import { readFileSync } from 'node:fs'
+
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 import { mobileOverrides } from './build/mobileOverrides.js'
 
+// Mirrors the define in vite.config.js. Vitest does not read that file, so
+// without this every module referencing __APP_VERSION__ throws under test the
+// moment one gets imported - a failure that would show up as an unrelated
+// ReferenceError in whichever test happens to reach main.jsx first.
+const { version: appVersion } = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8')
+)
+
 export default defineConfig({
   plugins: [mobileOverrides(), react()],
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   test: {
     environment: 'jsdom',
     globals: true,

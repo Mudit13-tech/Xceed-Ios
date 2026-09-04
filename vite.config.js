@@ -1,7 +1,23 @@
+import { readFileSync } from 'node:fs'
+
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 import { mobileOverrides } from './build/mobileOverrides.js'
+
+// The app's own version, baked into the bundle so the persisted query cache can
+// be keyed to it - see the `buster` in src/main.jsx.
+//
+// Read out of package.json rather than passed in, so there is one source of
+// truth and no way for a build to disagree with the manifest the OTA deploy
+// reads. Note this is the version *at build time*, which is one behind the
+// version the bundle is published as: scripts/deploy-ota.cjs builds first and
+// only then computes and writes the bump. That is fine for a cache buster,
+// which only has to change between releases rather than match the release
+// number - but it is why this value looks off by one beside the OTA version.
+const { version: appVersion } = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8')
+)
 
 // Buffers Vite's own console output (startup/HMR/build-error messages) and
 // serves it at /__console-logs on the dev server's own origin, so the React
@@ -43,6 +59,9 @@ function consoleBufferPlugin() {
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [mobileOverrides({ verbose: true }), react(), consoleBufferPlugin()],
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   build: {
     // Writes dist/.vite/manifest.json: every chunk with the chunks it pulls in.
     // Kept on so the cost of a route can be measured rather than guessed at —

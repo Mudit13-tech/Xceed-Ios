@@ -27,6 +27,31 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * The two guardrails on the persisted cache. Both are defaults worth overriding.
+ *
+ * maxAge: the default is 24 hours, and it is all-or-nothing - one timestamp
+ * covers the whole cache, so a cache last written 25 hours ago is thrown away
+ * entirely rather than per query. On a phone that is precisely backwards: the
+ * stretch of days between opening the app is exactly when there is no network
+ * to fall back on, and expiring the cache then turns the one screen that could
+ * have worked offline into an empty one. Unbounded is safe here because
+ * staleTime is 0 - nothing restored is ever treated as fresh, it is shown while
+ * the refetch runs behind it.
+ *
+ * buster: keyed to the build's version, so an OTA update starts from an empty
+ * cache instead of rehydrating one written by the previous bundle into
+ * components that may no longer read that shape. __APP_VERSION__ is defined in
+ * vite.config.js (and mirrored in vitest.config.js); it is the version at build
+ * time, one behind the version the bundle publishes as, which does not matter
+ * to a buster that only has to change between releases.
+ */
+const persistOptions = {
+  persister: queryPersister,
+  maxAge: Infinity,
+  buster: __APP_VERSION__,
+};
+
 const helmetContext = {};
 
 const originalFetch = window.fetch;
@@ -93,7 +118,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <HelmetProvider context={helmetContext}>
       <ChakraProvider theme={appTheme}>
         <RecoilRoot>
-          <PersistQueryClientProvider client={queryClient} persistOptions={{ persister: queryPersister }}>
+          <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
             <App />
           </PersistQueryClientProvider>
         </RecoilRoot>
