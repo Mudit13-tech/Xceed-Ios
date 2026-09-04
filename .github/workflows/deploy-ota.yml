@@ -25,6 +25,11 @@ jobs:
           token: ${{ secrets.GH_PAT }}
           path: temp-ams-repo
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Safe Pull from AMS
         run: |
           set -euo pipefail
@@ -87,8 +92,24 @@ jobs:
           # so every local edit reads as a change AMS is reverting, and it is
           # discarded without a conflict.
           git checkout main
+
+          # 4b. Register the merge drivers .gitattributes asks for. They live in
+          # git config, which is per-clone and never committed, so on a fresh
+          # runner the attributes are inert until this runs — and inert silently:
+          # the merge just falls back to line-by-line and the conflicts this was
+          # meant to remove come back with nothing to explain them.
+          node build/gitMergeSetup.mjs
           if ! git merge --no-edit ams-update; then
-            echo "::error::Merge conflict detected! Aborting merge."
+            conflicts=$(git diff --name-only --diff-filter=U)
+            echo "::error::AMS sync conflicts in: $(echo $conflicts)"
+            for file in $conflicts; do
+              echo "::group::$file"
+              git diff -- "$file" | head -200
+              echo "::endgroup::"
+            done
+            echo "A file conflicting here means this repo edits lines AMS also edits."
+            echo "If the file is one we have effectively rewritten, it belongs beside"
+            echo "its AMS copy as <name>.mobile.<ext> instead — see build/mobileOverrides.js."
             git merge --abort
             exit 1
           fi
@@ -100,10 +121,19 @@ jobs:
             exit 1
           fi
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+          # 7. Rebuild the lockfile against the merged manifest. .gitattributes
+          # keeps our package-lock.json whole through the merge — a lockfile
+          # conflict cannot be resolved by hand and means nothing when it
+          # happens — which leaves it describing the dependencies from before
+          # the sync. npm ci refuses a lockfile that disagrees with its
+          # package.json, so without this a sync that pulled in a new web
+          # dependency fails at install with nothing pointing back here.
+          npm install --package-lock-only --no-audit --no-fund
+
+          # 8. Say what upstream changed in the files we override. These no
+          # longer conflict, which is the point, but it also means their changes
+          # now arrive silently — this is the only thing that reports them.
+          node build/amsDrift.mjs || true
 
       - name: Install dependencies
         run: npm ci || npm install

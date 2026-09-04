@@ -218,7 +218,83 @@ Open **PowerShell** (not CMD or Git Bash) in the `learning-module-app` folder an
 2. Switches to the `ams-update` branch
 3. Exports the latest client code from AMS and extracts it here
 4. Commits the imported changes on `ams-update`
-5. Merges `ams-update` back into `main`, preserving all your custom changes
+5. Registers the merge drivers, then merges `ams-update` back into `main`
+6. Rebuilds `package-lock.json` against the merged `package.json`
+7. Reports what upstream changed in the files this repo overrides
+
+### Why conflicts happen, and how to stop one coming back
+
+`src/` is not this repo's code. It is AMS's client tree, replaced wholesale on
+every sync, and the merge in step 5 is a real three-way merge: base is AMS as of
+the last sync, theirs is AMS now, ours is `main` with the app's work on top.
+
+That means **every line this repo changes in a file the web team also changes is
+a future conflict**. Not a possible one — a scheduled one, waiting for the sync
+that happens to touch it. So the goal is not to resolve conflicts well. It is to
+own as few of AMS's lines as possible.
+
+There are three ways to add something, in order of preference.
+
+**1. A new file.** Nothing to conflict with, ever. `src/utils/deepLink.js`,
+`src/utils/otaUpdater.js`, `src/mobile/MobileShell.jsx` and the rest of
+`src/mobile/` cost nothing at sync time and never have.
+
+**2. A one-line seam into a new file.** When something genuinely has to run from
+inside an AMS file, put the logic in a new file and leave a single call behind.
+`App.jsx` is the example: a hundred lines of back-button, deep-link, push and
+OTA wiring used to sit in the middle of one of the files upstream edits most.
+They now live in `src/mobile/MobileShell.jsx`, and `App.jsx` contains one
+`<MobileShell />`. Its footprint on the AMS file went from +110/−3 to +5/−1.
+
+**3. An override, for a file that is genuinely a fork.** Some files are not
+patched but rewritten — `LoginForm.jsx` is the login *flow*, with saved
+accounts, a PIN and biometrics, not the web form with additions. Merging a
+rewrite against an edit fails every time.
+
+For those, add `X.mobile.ext` beside `X.ext` and leave `X.ext` **byte-identical
+to AMS**. `build/mobileOverrides.js` teaches Vite and Vitest to load the
+`.mobile` file in place of the original. Because the original is untouched it
+always merges cleanly, and because `.mobile` is a name AMS will never create,
+the override never conflicts either. An override in the same directory keeps its
+relative imports working, so moving a fork onto this is a rename and nothing
+more.
+
+An override may also *wrap* what it replaces: `src/getenvironment.mobile.js`
+imports the AMS original and only adds the Capacitor case, so it keeps
+inheriting everything else. Prefer this when you are adding rather than
+replacing.
+
+### The cost of an override, and `npm run drift`
+
+An overridden file stops inheriting upstream changes, **silently**. This is not
+hypothetical: `getenvironment.js` was a fork for months and still named
+`nitjtt.onrender.com` long after AMS deleted that host, because a fork has no
+conflicts to report.
+
+```bash
+npm run drift          # what AMS has changed in each overridden file since
+npm run drift -- -v    # ...with the diffs
+```
+
+It runs at the end of every sync, local and CI. Treat its output as a to-do
+list: for each entry, read the upstream diff and decide whether to port it. That
+decision is the price of not having conflicts, and it is a much better price —
+it is paid with the diff in hand, rather than at 2am with a deploy stopped.
+
+### Files with a merge policy
+
+`.gitattributes` settles the ones that were never about code:
+
+| Path | Policy |
+|---|---|
+| `* text=auto eol=lf` | Line endings are fixed here, not by each machine's `core.autocrlf`. The sync runs from Windows *and* from ubuntu; without this the same file can be committed with different endings and every line reads as changed. |
+| `android/**`, `capacitor.config.json`, `README.md` | Ours. AMS has a copy, but it describes the web deployment. |
+| `package-lock.json` | Ours, then regenerated from the merged `package.json`. A lockfile conflict cannot be resolved by hand and means nothing when it happens. |
+| `package.json` | Unioned by `build/mergePackageJson.mjs`: a dependency the web client added is taken, our Capacitor deps, our `version` (the OTA channel reads it) and `deploy:ota` survive. |
+
+Merge drivers live in git config, which is per-clone and cannot be committed, so
+`.gitattributes` alone does nothing. `npm install` registers them via `prepare`.
+On a clone that predates this, run `npm run setup:git`.
 
 ---
 
@@ -234,6 +310,8 @@ Open **PowerShell** (not CMD or Git Bash) in the `learning-module-app` folder an
 | `npm run deploy:ota -- --dev` | Same but targets `localhost:8010` |
 | `npm run test` | Runs the test suite once |
 | `npm run lint` | Checks code for style issues |
+| `npm run drift` | Lists what AMS changed in the files this repo overrides (add `-- -v` for diffs) |
+| `npm run setup:git` | Registers the merge drivers from `.gitattributes` (also runs on `npm install`) |
 
 ---
 
