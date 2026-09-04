@@ -141,11 +141,13 @@ const ForgotPassword = () => {
       setStep('reset');
       setCaptcha(null);
       setCaptchaAnswer('');
-      setInfo(`An OTP has been sent to ${email.trim()}. It is valid for 10 minutes.`);
+      // Deliberately non-committal: the server no longer says whether the
+      // address has an account (see forgotpasswordroute.js), so this can't
+      // either — showing a per-address message here would just move the
+      // enumeration oracle from the API response into the UI.
+      setInfo('If an account with this email exists, an OTP has been sent to it. It is valid for 10 minutes.');
     } catch (err) {
-      setError(err.message === 'User not exists'
-        ? 'No account found with this email address.'
-        : err.message);
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
