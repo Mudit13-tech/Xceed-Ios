@@ -123,6 +123,38 @@ describe('the footer', () => {
     expect(document.querySelector('a[href^="mailto:"]')).toBeNull();
   });
 
+  /* Naming the question and leaving the reader to find it again in the list is
+     the friction that ends in a support email instead. */
+  it('links straight to the question that reaches a person', async () => {
+    routeFetch({
+      '/menu': { body: { menu: MENU } },
+      '/session': { body: { pass: 'pass-1', email: 'asha@nitj.ac.in' } },
+      '/topic/ask-a-human': {
+        body: { answer: { id: 'ask-a-human', title: 'Ask the XCEED team', blocks: [], actions: [], followUps: [] } },
+      },
+    });
+    const user = userEvent.setup();
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    await user.click(screen.getByRole('button', { name: /Send your question to the XCEED team/ }));
+
+    expect(await screen.findByText('Ask the XCEED team')).toBeInTheDocument();
+  });
+
+  // Nobody is on a rota: it is a student team, and the wait is real.
+  it('says who answers it and how long that takes', async () => {
+    routeFetch({
+      '/menu': { body: { menu: MENU } },
+      '/session': { body: { pass: 'pass-1', email: 'asha@nitj.ac.in' } },
+    });
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    expect(document.body.textContent).toMatch(/student team/i);
+    expect(document.body.textContent).toMatch(/questions above first/i);
+  });
+
   it('does not send the reader off to the full guide', async () => {
     routeFetch(GATE);
     render(<HelpdeskPage />);
@@ -270,6 +302,80 @@ describe('the question sent to a person', () => {
     // The questions already asked travel with it, so the reply does not have to
     // begin by asking what was tried.
     expect(body.context).toMatch(/My question is not answered here/);
+  });
+});
+
+describe('the manuals', () => {
+  const enter = async (extra) => {
+    routeFetch({
+      '/menu': { body: { menu: MENU } },
+      '/session': { body: { pass: 'pass-1', email: 'asha@nitj.ac.in', ...extra } },
+    });
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+  };
+
+  /* Staff documents: how to run a class, an event, a timetable. For somebody
+     running one they are frequently the whole answer, so they sit above the
+     conversation. */
+  it('offers the shelf to a member of staff', async () => {
+    await enter({ isStaff: true });
+
+    expect(screen.getByRole('navigation', { name: 'Manuals' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Certificates' })).toHaveAttribute('href', '/certificate-manual');
+    expect(screen.getByRole('link', { name: 'Quizzes and tests' })).toHaveAttribute('href', '/learning/quizmanual');
+  });
+
+  // For a student they are three screens between them and their question.
+  it('keeps it away from a student', async () => {
+    await enter({ isStaff: false });
+
+    expect(screen.queryByRole('navigation', { name: 'Manuals' })).not.toBeInTheDocument();
+  });
+});
+
+describe('the counters at the foot of the page', () => {
+  const STATS = { people: 1204, sessions: 1560, answered: 4820 };
+
+  it('shows people, sessions and answers', async () => {
+    routeFetch({ ...GATE, '/stats': { body: STATS } });
+    render(<HelpdeskPage />);
+
+    expect(await screen.findByText('1,204')).toBeInTheDocument();
+    expect(screen.getByText('people verified here')).toBeInTheDocument();
+    expect(screen.getByText('4,820')).toBeInTheDocument();
+  });
+
+  /* A reply missing a field — an older server, a proxy that dropped it — leaves
+     the footer off rather than taking the page down on a number that is not
+     there. */
+  it('stays off rather than crashing on a partial reply', async () => {
+    routeFetch({ ...GATE, '/stats': { body: { people: 12 } } });
+    render(<HelpdeskPage />);
+
+    await screen.findByLabelText('Email address');
+    expect(screen.queryByText('people verified here')).not.toBeInTheDocument();
+  });
+
+  it('re-reads them after each answer, so the count it shows includes it', async () => {
+    const fetchMock = routeFetch({
+      '/menu': { body: { menu: MENU } },
+      '/session': { body: { pass: 'pass-1', email: 'asha@nitj.ac.in' } },
+      '/stats': { body: STATS },
+      '/topic/no-account': {
+        body: { answer: { id: 'no-account', title: 'About your account', blocks: [], actions: [], followUps: [] } },
+      },
+    });
+    const user = userEvent.setup();
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+    const before = fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/stats')).length;
+
+    await user.click(screen.getByRole('button', { name: 'Am I registered?' }));
+    await screen.findByText('About your account');
+
+    const after = fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/stats')).length;
+    expect(after).toBeGreaterThan(before);
   });
 });
 
