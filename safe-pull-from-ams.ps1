@@ -41,10 +41,28 @@ git checkout main
 
 # 5a. Register the merge drivers .gitattributes names. They live in git config,
 # which is per-clone and never committed, so on a clone that has not run
-# `npm install` since these were added the attributes are inert — and inert
+# `npm install` since these were added the attributes are inert - and inert
 # silently: the merge falls back to line-by-line and the conflicts they exist to
 # remove come back with nothing to explain them.
+# $ErrorActionPreference does not apply to native commands - only to cmdlets -
+# so a node that dies here carries on to the merge unless its exit code is
+# checked. That is the worst possible outcome: the merge then runs with no
+# drivers registered, .gitattributes does nothing, and the conflicts all of this
+# exists to prevent come back with nothing to explain them.
+if (-not (Test-Path 'build/gitMergeSetup.mjs')) {
+    Write-Host ""
+    Write-Host "build/gitMergeSetup.mjs is missing on this branch." -ForegroundColor Red
+    Write-Host "The merge policy in .gitattributes needs it, and merging without it" -ForegroundColor Yellow
+    Write-Host "silently falls back to a line-by-line merge. Checking out a branch that" -ForegroundColor Yellow
+    Write-Host "has build/ (or merging it into main) is the fix. Stopping instead of" -ForegroundColor Yellow
+    Write-Host "merging without the drivers." -ForegroundColor Yellow
+    exit 1
+}
 node build/gitMergeSetup.mjs
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Could not register the merge drivers. Not merging." -ForegroundColor Red
+    exit 1
+}
 
 git merge --no-edit ams-update
 if ($LASTEXITCODE -ne 0) {
@@ -64,8 +82,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # 6. Rebuild the lockfile against the merged manifest. .gitattributes keeps our
-# package-lock.json whole through the merge — a lockfile conflict cannot be
-# resolved by hand and means nothing when it happens — which leaves it
+# package-lock.json whole through the merge - a lockfile conflict cannot be
+# resolved by hand and means nothing when it happens - which leaves it
 # describing the dependencies from before the sync. `npm ci` refuses a lockfile
 # that disagrees with its package.json, so skipping this breaks the next install
 # with nothing pointing back at the sync.
@@ -80,8 +98,12 @@ if (git status --porcelain package-lock.json) {
 Write-Host "Safe sync complete! Your custom changes are perfectly preserved." -ForegroundColor Green
 
 # 7. Say what upstream changed in the files this repo overrides. Those files no
-# longer conflict, which is the point of overriding them — but it also means
+# longer conflict, which is the point of overriding them - but it also means
 # their upstream changes now arrive silently, and this is the only thing that
 # reports them.
 Write-Host ""
-node build/amsDrift.mjs
+if (Test-Path 'build/amsDrift.mjs') {
+    node build/amsDrift.mjs
+} else {
+    Write-Host "(build/amsDrift.mjs not on this branch - skipping the drift report.)" -ForegroundColor DarkGray
+}
