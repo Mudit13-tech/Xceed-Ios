@@ -196,7 +196,6 @@ export default function CourseworkDetail() {
   const { data: me } = useQuery({
     queryKey: ['learning', 'me'],
     queryFn: () => lmApi.me(),
-    staleTime: 5 * 60 * 1000,
   });
 
   if (loading) return <Loading />;

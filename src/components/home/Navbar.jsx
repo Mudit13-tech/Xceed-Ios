@@ -80,7 +80,6 @@ export default function Navbar() {
       return response.json();
     },
     retry: false,
-    staleTime: 5 * 60 * 1000,
   });
 
   const isAuthenticated = !!userDetails;
@@ -96,12 +95,10 @@ export default function Navbar() {
       queryClient.prefetchQuery({
         queryKey: ['learning', 'classes', 'active'],
         queryFn: () => lmApi.listClasses(),
-        staleTime: 5 * 60 * 1000,
       });
       queryClient.prefetchQuery({
         queryKey: ['learning', 'classes', 'archived'],
         queryFn: () => lmApi.listClasses('archived'),
-        staleTime: 5 * 60 * 1000,
       });
     }
   }, [isAuthenticated, queryClient]);

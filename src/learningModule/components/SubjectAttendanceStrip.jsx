@@ -112,7 +112,6 @@ export default function SubjectAttendanceStrip({ klass }) {
   const { data: profile, isLoading } = useQuery({
     queryKey: ['learning', 'profile'],
     queryFn: () => lmApi.myProfile(),
-    staleTime: 60000,
   });
 
   const subjectRecords = useMemo(() => {

@@ -258,7 +258,6 @@ const AllocatedRolesPage = () => {
       if (!response.ok) throw new Error('Failed to fetch allocated roles');
       return response.json();
     },
-    staleTime: 5 * 60 * 1000,
   });
 
   // Query 2: Learning Module Overview
@@ -273,7 +272,6 @@ const AllocatedRolesPage = () => {
       if (!response.ok) throw new Error('Failed to fetch overview');
       return response.json();
     },
-    staleTime: 5 * 60 * 1000,
     retry: false,
   });
 
