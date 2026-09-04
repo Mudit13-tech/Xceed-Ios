@@ -95,7 +95,7 @@ if (git status --porcelain package-lock.json) {
     Write-Host "Lockfile updated." -ForegroundColor Green
 }
 
-Write-Host "Safe sync complete! Your custom changes are perfectly preserved." -ForegroundColor Green
+Write-Host "Local sync complete - your custom changes are preserved." -ForegroundColor Green
 
 # 7. Say what upstream changed in the files this repo overrides. Those files no
 # longer conflict, which is the point of overriding them - but it also means
@@ -107,3 +107,38 @@ if (Test-Path 'build/amsDrift.mjs') {
 } else {
     Write-Host "(build/amsDrift.mjs not on this branch - skipping the drift report.)" -ForegroundColor DarkGray
 }
+
+# 8. Publish both branches, the way the workflow's own final step does.
+#
+# The remote sync reads ams-update from origin, so origin/ams-update is the
+# merge base for every workflow run. Pushing main and leaving ams-update behind
+# makes the next one merge against an older AMS snapshot, which forks the vendor
+# branch into two lineages (the "Reconcile the vendor branch's two lineages"
+# commit is what that cost last time) and, far less visibly, hands
+# build/mergePackageJson.mjs a stale base. That driver decides "we changed this"
+# by comparing ours against base, so a dependency this merge just brought onto
+# main reads as a deliberate local pin, and AMS's later bumps to it are dropped
+# with no conflict raised.
+#
+# --atomic because the half-pushed state is the one worth avoiding: main landing
+# without ams-update is precisely the skew described above.
+#
+# Not gated on whether anything changed. A no-op push costs one line of output;
+# a skipped one leaves the sync commit in this clone only.
+Write-Host ""
+Write-Host "Pushing main and ams-update..." -ForegroundColor Yellow
+git push --atomic origin main ams-update
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "Push rejected - nothing was pushed, since --atomic means both refs or neither." -ForegroundColor Red
+    Write-Host "The usual cause is the OTA workflow having run since this clone last synced," -ForegroundColor Yellow
+    Write-Host "leaving origin ahead. Fetch and reconcile rather than forcing: a force here is" -ForegroundColor Yellow
+    Write-Host "what rewrites the vendor branch's history, and the merge base is the only thing" -ForegroundColor Yellow
+    Write-Host "protecting local work from the next sync." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  git fetch origin" -ForegroundColor Cyan
+    Write-Host "  git log --oneline --graph main origin/main ams-update origin/ams-update" -ForegroundColor Cyan
+    Write-Host ""
+    exit 1
+}
+Write-Host "main and ams-update are published." -ForegroundColor Green
