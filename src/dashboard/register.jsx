@@ -52,6 +52,15 @@ const ROLE_GROUPS = [
     ],
   },
   {
+    group: 'Department',
+    roles: [
+      // Reads its department from the account's primary department, so the
+      // form's Department field is required alongside it — the server refuses
+      // the role without one.
+      { value: 'HOD', label: 'Head of Department' },
+    ],
+  },
+  {
     group: 'Learning Module',
     roles: [
       { value: 'STUDENT', label: 'Student' },
@@ -150,6 +159,12 @@ const RegistrationForm = () => {
     }
     if (formData.roles.includes('iams-dept-admin') && !formData.dept) {
       setError('Department is required for an iLEED Department Admin.');
+      return;
+    }
+    // HOD is department-scoped everywhere it is read, so an HOD account without
+    // one opens an empty dashboard. The server refuses it too.
+    if (formData.roles.includes('HOD') && !formData.dept) {
+      setError('Department is required for a Head of Department.');
       return;
     }
 
@@ -275,7 +290,12 @@ const RegistrationForm = () => {
               </FormControl>
             </SimpleGrid>
 
-            <FormControl mb={6} isRequired={formData.roles.includes('iams-dept-admin')}>
+            <FormControl
+              mb={6}
+              isRequired={
+                formData.roles.includes('iams-dept-admin') || formData.roles.includes('HOD')
+              }
+            >
               <FormLabel>Department</FormLabel>
               <Select
                 value={formData.dept}

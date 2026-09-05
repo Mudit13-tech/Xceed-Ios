@@ -151,3 +151,58 @@ describe('ForgotPassword captcha', () => {
     expect(screen.queryByAltText('Characters to type')).not.toBeInTheDocument();
   });
 });
+
+describe('ForgotPassword help desk link', () => {
+  it('offers the help desk instead of a support mailbox', async () => {
+    queueFetch();
+    renderForm();
+
+    const link = screen.getByRole('link', { name: /open the help desk/i });
+    expect(link).toHaveAttribute('href', '/help');
+
+    // The support address it replaced must be gone, not merely demoted: two
+    // routes to the same question is how one of them goes stale.
+    expect(
+      document.querySelector('a[href^="mailto:"]'),
+    ).toBeNull();
+  });
+
+  it('hides the help desk once the password has been reset', async () => {
+    const user = userEvent.setup();
+    queueFetch(
+      { body: { message: 'sent' } },
+      { body: { message: 'Password updated' } },
+    );
+    renderForm();
+
+    await requestOtp(user);
+    await screen.findByText(/An OTP has been sent to/i);
+
+    // Still on offer while the visitor is mid-reset and might need it.
+    expect(
+      screen.getByRole('link', { name: /open the help desk/i }),
+    ).toBeInTheDocument();
+
+    await user.type(
+      screen.getByPlaceholderText('Enter new password'),
+      'Sup3rSecret!',
+    );
+    await user.type(
+      screen.getByPlaceholderText('Re-enter new password'),
+      'Sup3rSecret!',
+    );
+    // The OTP is six separate PinInput fields, so it is typed digit by digit.
+    const otpFields = screen.getAllByLabelText('Please enter your pin code');
+    for (const [i, field] of otpFields.entries()) {
+      // eslint-disable-next-line no-await-in-loop
+      await user.type(field, String(i + 1));
+    }
+    await user.click(screen.getByRole('button', { name: 'Reset Password' }));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('link', { name: /open the help desk/i }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+});

@@ -83,6 +83,7 @@ const Departmentloadallocation = lazyWithPreload(() => import('./timetableadmin/
 const FacultyHourLoad = lazyWithPreload(() => import('./timetableadmin/facultyhourload.jsx'));
 const FacultyLoadCOE = lazyWithPreload(() => import('./timetableadmin/facultyloadcoe.jsx'));
 const AdminClash = lazyWithPreload(() => import('./timetableadmin/AdminClashes.jsx'));
+const DeptCoordinators = lazyWithPreload(() => import('./timetableadmin/deptcoordinators.jsx'));
 const InstituteMergedDownload = lazyWithPreload(() => import('./timetableadmin/instituteMergedDownload.jsx'));
 
 const Home = lazyWithPreload(() => import('./pages/Home'));
@@ -395,6 +396,10 @@ const APP_ROUTES = (
           <Route path="/tt/masterdata" element={<MasterLoadDataTable />} />
 
           <Route path="/tt/admin/clashes" element={<AdminClash />} />
+          {/* Appointing department timetable coordinators. The page itself is
+              only usable by institute coordinators and admins — the API behind
+              it refuses everyone else and the page shows that refusal. */}
+          <Route path="/tt/admin/coordinators" element={<DeptCoordinators />} />
           <Route
             path="/tt/admin/mergeddownload"
             element={<InstituteMergedDownload />}

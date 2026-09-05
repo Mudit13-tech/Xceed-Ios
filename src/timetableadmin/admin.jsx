@@ -376,6 +376,16 @@ const AdminPage = () => {
       target: '_blank',
       isNew: true,
     },
+    // Appended rather than slotted in: the sections above are cut from this
+    // array by index, so anything but the end would silently move another tile
+    // into a different section.
+    {
+      path: '/tt/admin/coordinators',
+      label: 'Department Coordinators',
+      icon: FiUsers,
+      gradient: 'linear(to-br, teal.600, green.800)',
+      isNew: true,
+    },
   ];
 
   // Rendered in its own section below; kept out of navigationItems because that

@@ -20,6 +20,7 @@ import {
   FiShield,
   FiUser,
   FiUserCheck,
+  FiUsers,
 } from 'react-icons/fi';
 import getEnvironment from '../getenvironment';
 import {
@@ -83,6 +84,12 @@ const ROLE_META = {
     description: 'Your classes, coursework and tutorials',
     icon: FiBookOpen,
     accent: 'teal',
+  },
+  HOD: {
+    name: 'Head of Department',
+    description: "Your department's classrooms, faculty and student counts",
+    icon: FiUsers,
+    accent: 'blue',
   },
   'lm-admin': {
     name: 'Learning Module Admin',

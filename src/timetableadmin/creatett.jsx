@@ -32,6 +32,15 @@ import {
   ModalCloseButton,
   ModalFooter,
   useDisclosure,
+  useToast,
+  Tag,
+  TagLabel,
+  TagCloseButton,
+  Wrap,
+  WrapItem,
+  Spinner,
+  Divider,
+  Tooltip,
 } from '@chakra-ui/react';
 import {
   Table,
@@ -44,12 +53,20 @@ import {
 } from "@chakra-ui/react";
 import { Button } from "@chakra-ui/react";
 import { ArrowBackIcon, ExternalLinkIcon, AddIcon } from "@chakra-ui/icons";
-import { FaGlobe } from "react-icons/fa";
+import { FaGlobe, FaUserPlus } from "react-icons/fa";
 import Header from "../components/header";
 
 function CreateTimetable() {
   const navigate = useNavigate();
+  const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  // The "who else can work on this timetable" dialog. Separate disclosure from
+  // the create-timetable modal above so opening one never closes the other.
+  const {
+    isOpen: isShareOpen,
+    onOpen: onShareOpen,
+    onClose: onShareClose,
+  } = useDisclosure();
   const [formData, setFormData] = useState({
     name: "",
     dept: "",
@@ -66,6 +83,12 @@ function CreateTimetable() {
   const [messages, setMessages] = useState([]);
   const [currUser, setCurrUser] = useState(null);
   const [unReadCount, setUnreadCount] = useState(0);
+  // The timetable whose access is being edited, plus that dialog's own state.
+  const [shareTarget, setShareTarget] = useState(null);
+  const [shareData, setShareData] = useState(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareSaving, setShareSaving] = useState(false);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -211,6 +234,130 @@ function CreateTimetable() {
   useEffect(() => {
     fetchTimetables();
   }, [apiUrl]);
+
+  // --- Sharing a timetable with a second account -------------------------
+  //
+  // A timetable belongs to the account that created it — usually the head of
+  // department — and until now only that account could see it on this
+  // dashboard. The department's timetable coordinator had to borrow the head's
+  // login to do the work. These handlers let the owner name a second account,
+  // by the email it signs in with, after which the table appears on that
+  // person's own dashboard and they carry on from there.
+
+  const loadCoordinators = async (timetable) => {
+    setShareLoading(true);
+    setShareData(null);
+    try {
+      const response = await fetch(
+        `${apiUrl}/timetablemodule/timetable/${timetable._id}/coordinators`,
+        { method: "GET", credentials: "include" }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to load the access list");
+      }
+      setShareData(data);
+    } catch (error) {
+      toast({
+        title: "Could not load who this timetable is shared with",
+        description: error.message,
+        status: "error",
+        duration: 6000,
+        isClosable: true,
+      });
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const openShareModal = (timetable) => {
+    setShareTarget(timetable);
+    setShareEmail("");
+    onShareOpen();
+    loadCoordinators(timetable);
+  };
+
+  const handleAddCoordinator = async (e) => {
+    e.preventDefault();
+    const email = shareEmail.trim();
+    if (!email || !shareTarget) return;
+
+    setShareSaving(true);
+    try {
+      const response = await fetch(
+        `${apiUrl}/timetablemodule/timetable/${shareTarget._id}/coordinators`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+          credentials: "include",
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to share the timetable");
+      }
+
+      toast({
+        title: data.alreadyLinked
+          ? "That account already had access"
+          : "Timetable shared",
+        // The server warns when the account it just linked holds no timetable
+        // role, because such a person can open the table but cannot save it.
+        description:
+          data.warning ||
+          `${data.coordinator?.name || email} can now open this timetable from their own dashboard.`,
+        status: data.warning ? "warning" : "success",
+        duration: data.warning ? 9000 : 5000,
+        isClosable: true,
+      });
+
+      setShareEmail("");
+      await loadCoordinators(shareTarget);
+    } catch (error) {
+      toast({
+        title: "Could not share the timetable",
+        description: error.message,
+        status: "error",
+        duration: 6000,
+        isClosable: true,
+      });
+    } finally {
+      setShareSaving(false);
+    }
+  };
+
+  const handleRemoveCoordinator = async (userId) => {
+    if (!shareTarget) return;
+    setShareSaving(true);
+    try {
+      const response = await fetch(
+        `${apiUrl}/timetablemodule/timetable/${shareTarget._id}/coordinators/${userId}`,
+        { method: "DELETE", credentials: "include" }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to remove access");
+      }
+      toast({
+        title: "Access removed",
+        status: "success",
+        duration: 4000,
+        isClosable: true,
+      });
+      await loadCoordinators(shareTarget);
+    } catch (error) {
+      toast({
+        title: "Could not remove access",
+        description: error.message,
+        status: "error",
+        duration: 6000,
+        isClosable: true,
+      });
+    } finally {
+      setShareSaving(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -537,6 +684,129 @@ function CreateTimetable() {
           </ModalContent>
         </Modal>
 
+        {/* Manage Access Modal — who, besides the owner, may work on a timetable */}
+        <Modal isOpen={isShareOpen} onClose={onShareClose} size="lg" isCentered>
+          <ModalOverlay />
+          <ModalContent>
+            <ModalHeader bg="purple.600" color="white" borderTopRadius="md">
+              Timetable Access
+              {shareTarget && (
+                <Text fontSize="sm" fontWeight="normal" color="whiteAlpha.900">
+                  {shareTarget.dept} · {shareTarget.session}
+                </Text>
+              )}
+            </ModalHeader>
+            <ModalCloseButton color="white" />
+            <ModalBody p={6}>
+              {shareLoading ? (
+                <Flex justify="center" py={8}>
+                  <Spinner color="purple.500" />
+                </Flex>
+              ) : (
+                <VStack spacing={5} align="stretch">
+                  <Box>
+                    <Text fontSize="sm" fontWeight="bold" color="gray.600" mb={1}>
+                      Owner
+                    </Text>
+                    <Text>
+                      {shareData?.owner
+                        ? `${shareData.owner.name || "Unnamed account"} (${
+                            (shareData.owner.email || []).join(", ") || "no email on record"
+                          })`
+                        : "This timetable has no owner account on record."}
+                    </Text>
+                  </Box>
+
+                  <Divider />
+
+                  <Box>
+                    <Text fontSize="sm" fontWeight="bold" color="gray.600" mb={2}>
+                      Also has access
+                    </Text>
+                    {shareData?.coordinators?.length ? (
+                      <Wrap>
+                        {shareData.coordinators.map((person) => (
+                          <WrapItem key={person._id}>
+                            <Tag size="lg" colorScheme="purple" borderRadius="full">
+                              <TagLabel>
+                                {person.name || "Unnamed"} ·{" "}
+                                {(person.email || []).join(", ")}
+                              </TagLabel>
+                              {shareData?.canManage && (
+                                <TagCloseButton
+                                  isDisabled={shareSaving}
+                                  onClick={() => handleRemoveCoordinator(person._id)}
+                                />
+                              )}
+                            </Tag>
+                          </WrapItem>
+                        ))}
+                      </Wrap>
+                    ) : (
+                      <Text color="gray.500" fontSize="sm">
+                        Nobody else yet — only the owner can see this timetable on
+                        their dashboard.
+                      </Text>
+                    )}
+                  </Box>
+
+                  {shareData?.canManage ? (
+                    <>
+                      <Divider />
+                      <form onSubmit={handleAddCoordinator}>
+                        <FormControl>
+                          <FormLabel fontWeight="semibold" color="gray.700">
+                            Add a coordinator by login email
+                          </FormLabel>
+                          <Flex gap={2}>
+                            <Input
+                              type="email"
+                              value={shareEmail}
+                              onChange={(e) => setShareEmail(e.target.value)}
+                              placeholder="coordinator@nitj.ac.in"
+                              borderColor="purple.300"
+                              isDisabled={shareSaving}
+                            />
+                            <Button
+                              type="submit"
+                              colorScheme="purple"
+                              isLoading={shareSaving}
+                              isDisabled={!shareEmail.trim()}
+                            >
+                              Add
+                            </Button>
+                          </Flex>
+                        </FormControl>
+                      </form>
+                      <Alert status="info" borderRadius="md" fontSize="sm">
+                        <AlertIcon />
+                        <AlertDescription>
+                          The person signs in with their own account and finds this
+                          timetable on their dashboard. Saving changes still needs
+                          the department timetable role (DTTI) on their account.
+                        </AlertDescription>
+                      </Alert>
+                    </>
+                  ) : (
+                    <Alert status="info" borderRadius="md" fontSize="sm">
+                      <AlertIcon />
+                      <AlertDescription>
+                        Only the owner of this timetable, or an institute timetable
+                        coordinator, can change who it is shared with.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </VStack>
+              )}
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="ghost" onClick={onShareClose}>
+                Close
+              </Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+
         <VStack spacing={6} align="stretch">
           {/* Existing Timetables Table Card */}
           <Card
@@ -630,6 +900,15 @@ function CreateTimetable() {
                         >
                           Link
                         </Th>
+                        <Th
+                          color="teal.700"
+                          fontSize="sm"
+                          fontWeight="bold"
+                          borderBottom="2px"
+                          borderColor="teal.200"
+                        >
+                          Access
+                        </Th>
                       </Tr>
                     </Thead>
                     <Tbody>
@@ -639,7 +918,25 @@ function CreateTimetable() {
                           _hover={{ bg: "teal.50" }}
                           transition="background 0.2s"
                         >
-                          <Td fontWeight="medium">{timetable.name}</Td>
+                          <Td fontWeight="medium">
+                            <Flex align="center" gap={2} wrap="wrap">
+                              <Text>{timetable.name}</Text>
+                              {/* `isOwner` is false on a table somebody else
+                                  created and shared with this account. Older
+                                  responses omit the field entirely, in which
+                                  case nothing is shown — the same as before. */}
+                              {timetable.isOwner === false && (
+                                <Badge
+                                  colorScheme={timetable.viaDepartment ? "teal" : "green"}
+                                  fontSize="xs"
+                                >
+                                  {timetable.viaDepartment
+                                    ? `${timetable.dept} coordinator`
+                                    : "Shared with me"}
+                                </Badge>
+                              )}
+                            </Flex>
+                          </Td>
                           <Td>
                             <Badge colorScheme="purple" fontSize="sm" px={2} py={1}>
                               {timetable.session}
@@ -663,6 +960,22 @@ function CreateTimetable() {
                             >
                               {timetable.code}
                             </Button>
+                          </Td>
+                          <Td>
+                            <Tooltip
+                              label="Let a department coordinator open and edit this timetable from their own login"
+                              hasArrow
+                            >
+                              <Button
+                                size="sm"
+                                colorScheme="purple"
+                                variant="ghost"
+                                leftIcon={<FaUserPlus />}
+                                onClick={() => openShareModal(timetable)}
+                              >
+                                Manage
+                              </Button>
+                            </Tooltip>
                           </Td>
                         </Tr>
                       ))}
