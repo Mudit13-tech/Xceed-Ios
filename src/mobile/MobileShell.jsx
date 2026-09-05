@@ -1,6 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { App as CapacitorApp } from '@capacitor/app';
+import {
+  Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, ModalOverlay, Text,
+} from '@chakra-ui/react';
 
 import { isInAppRoute, savePendingRoute } from '../utils/deepLink';
 import { setupOtaUpdater } from '../utils/otaUpdater';
@@ -121,9 +124,76 @@ function NativeAppListeners() {
  * going back into App.jsx for a second line.
  */
 export default function MobileShell() {
+  // Either null, { kind: 'update', version } or { kind: 'failed' }. One piece
+  // of state for one dialog: the updater never raises both at once.
+  const [dialog, setDialog] = useState(null);
+  const [applying, setApplying] = useState(false);
+  // Held so the button press can let setupOtaUpdater carry on to the apply.
+  const confirmRef = useRef(null);
+
   useEffect(() => {
-    setupOtaUpdater();
+    setupOtaUpdater({
+      onUpdateDownloaded: (version) =>
+        new Promise((resolve) => {
+          confirmRef.current = resolve;
+          setDialog({ kind: 'update', version });
+        }),
+      onUpdateFailed: () => setDialog({ kind: 'failed' }),
+    });
   }, []);
 
-  return <NativeAppListeners />;
+  const applyUpdate = () => {
+    // The apply reloads the app out from under this dialog, so the button is
+    // left in its loading state rather than closing: there is no after.
+    setApplying(true);
+    if (confirmRef.current) confirmRef.current();
+  };
+
+  const isUpdate = dialog !== null && dialog.kind === 'update';
+
+  return (
+    <>
+      <NativeAppListeners />
+      {/* The update dialog cannot be dismissed: it is applied the moment it
+          resolves either way, so an exit that implied otherwise would be a
+          lie. The failure one dismisses freely — nothing depends on it. */}
+      <Modal
+        isOpen={dialog !== null}
+        onClose={() => { if (!isUpdate) setDialog(null); }}
+        isCentered
+        closeOnOverlayClick={!isUpdate}
+      >
+        <ModalOverlay />
+        <ModalContent mx={4} borderRadius="xl">
+          <ModalHeader pb={2}>
+            {isUpdate ? 'Update ready' : 'Couldn’t check for updates'}
+          </ModalHeader>
+          <ModalBody pt={0}>
+            <Text fontSize="sm" color="gray.600">
+              {isUpdate
+                ? `Version ${dialog.version} has been downloaded. The app will restart to finish installing it.`
+                : 'The app is working normally and will try again next time you open it. If this keeps happening, connect to NITJ WiFi.'}
+            </Text>
+          </ModalBody>
+          <ModalFooter>
+            {isUpdate ? (
+              <Button
+                colorScheme="blue"
+                width="100%"
+                onClick={applyUpdate}
+                isLoading={applying}
+                loadingText="Restarting"
+              >
+                Restart now
+              </Button>
+            ) : (
+              <Button variant="ghost" width="100%" onClick={() => setDialog(null)}>
+                Dismiss
+              </Button>
+            )}
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+    </>
+  );
 }

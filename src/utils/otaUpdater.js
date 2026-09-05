@@ -16,7 +16,17 @@ function compareVersions(v1, v2) {
   return 0;
 }
 
-export async function setupOtaUpdater() {
+/**
+ * @param onUpdateDownloaded optional. Called with the new version number once
+ *   the bundle is on disk, and awaited before the update is applied. The
+ *   plain `alert()` this replaces was synchronous, and the apply below relied
+ *   on that: it only ran once the box had been dismissed. A rendered dialog
+ *   does not block, so it returns a promise instead and resolves it when the
+ *   user presses the button, keeping the same order.
+ * @param onUpdateFailed optional. Called when the check or download did not
+ *   finish. Nothing is awaited on this one — it only reports.
+ */
+export async function setupOtaUpdater({ onUpdateDownloaded, onUpdateFailed } = {}) {
   // Only run in native context (iOS/Android)
   if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
     console.log('[OTA] Running in browser, skipping OTA update check.');
@@ -80,7 +90,9 @@ export async function setupOtaUpdater() {
 
       console.log(`[OTA] Download complete! Applying update immediately...`);
       
-      alert(`🎉 OTA Update ${latestVersion} Downloaded! Applying instantly...`);
+      if (onUpdateDownloaded) {
+        await onUpdateDownloaded(latestVersion);
+      }
       
       // Apply immediately so the app reloads and user sees the change right away
       await CapacitorUpdater.set({ id: versionData.id });
@@ -88,7 +100,9 @@ export async function setupOtaUpdater() {
       console.log(`[OTA] App is up to date (Running Version ${activeVersion}).`);
     }
   } catch (error) {
-    alert('OTA CRASHED: server is down. Use NITJ WIFI');
+    if (onUpdateFailed) {
+      onUpdateFailed();
+    }
     console.error('[OTA] Update check failed', error);
   }
 }
