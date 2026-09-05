@@ -149,7 +149,9 @@ describe('LmAdminFaculty import from master faculty', () => {
   it('imports every department when the main button is pressed', async () => {
     await load();
     await userEvent.click(await screen.findByRole('button', { name: /Import all 10 faculty/ }));
-    await waitFor(() => expect(adminImportFaculty).toHaveBeenCalledWith(''));
+    await waitFor(() =>
+      expect(adminImportFaculty).toHaveBeenCalledWith('', { sendMail: true }),
+    );
     // The directory and the preview both move — the accounts are new in one and
     // no longer pending in the other.
     await waitFor(() => expect(adminFacultyImportPreview).toHaveBeenCalledTimes(2));
@@ -161,7 +163,24 @@ describe('LmAdminFaculty import from master faculty', () => {
       await screen.findByRole('button', { name: /Computer Science and Engineering · 10 to invite/ }),
     );
     await waitFor(() =>
-      expect(adminImportFaculty).toHaveBeenCalledWith('Computer Science and Engineering'),
+      expect(adminImportFaculty).toHaveBeenCalledWith(
+        'Computer Science and Engineering',
+        { sendMail: true },
+      ),
+    );
+  });
+
+  it('opens the accounts without mailing anybody when the email box is unticked', async () => {
+    // The accounts exist either way — the mail only carries the link that lets
+    // somebody claim one — so a department seeded ahead of a term can be
+    // imported now and told later.
+    await load();
+    await userEvent.click(
+      await screen.findByRole('checkbox', { name: /Email each new faculty member/ }),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /Import all 10 faculty/ }));
+    await waitFor(() =>
+      expect(adminImportFaculty).toHaveBeenCalledWith('', { sendMail: false }),
     );
   });
 

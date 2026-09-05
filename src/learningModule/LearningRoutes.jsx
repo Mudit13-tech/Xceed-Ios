@@ -13,6 +13,7 @@ import RequireTeacher from './components/RequireTeacher';
 // Eager for the same reason as RequireTeacher: a route guard that arrives in a
 // later chunk would let the page it guards paint first.
 import RequireLmAdmin from './components/RequireLmAdmin';
+import RequireHod from './components/RequireHod';
 import ClassLayout from './pages/ClassLayout';
 const SebExit = lazyWithPreload(() => import('./pages/SebExit'));
 const Dashboard = lazyWithPreload(() => import('./pages/Dashboard'));
@@ -169,6 +170,15 @@ const LEARNING_ROUTES = (
           <Route path="lm-admin/faculty/:facultyId/classes" element={<LmAdminFacultyClasses />} />
           <Route path="lm-admin/students" element={<LmAdminStudents />} />
           <Route path="lm-admin/hod-dashboard" element={<LmAdminHodDashboard />} />
+        </Route>
+
+        {/* The same dashboard, for the people it is named after. An HOD is not
+            a platform admin and must not be sent through the admin gate, so the
+            screen has its own route and its own guard; the server scopes the
+            data to their department. The lm-admin path above stays where the
+            console links to it. */}
+        <Route element={<RequireHod />}>
+          <Route path="hod-dashboard" element={<LmAdminHodDashboard />} />
         </Route>
 
         <Route path="class/:classId" element={<ClassLayout />}>

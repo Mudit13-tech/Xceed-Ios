@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useOutletContext, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -19,10 +19,9 @@ import {
   Thead,
   Tr,
   VStack,
-  useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
-import jsPDF from 'jspdf';
+import { FiFastForward, FiPlay, FiRefreshCw, FiSquare } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
 import {
@@ -33,197 +32,13 @@ import {
   SectionCard,
   StatTile,
 } from '../components/common';
-import RichText from '../components/RichText';
+import NotebookCell from '../components/NotebookCell';
+import useNotebookKernel from '../hooks/useNotebookKernel';
 import { formatDateTime } from '../format';
 
-/**
- * Build a PDF for a single student's attempt: header (name, roll no,
- * submission time, grade), then each cell's code and its outputs.
- * Images already come in as base64 PNG, so they drop straight into
- * jsPDF's addImage without any conversion.
- */
-function buildAttemptPdf(attempt) {
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const marginX = 40;
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const maxWidth = pageWidth - marginX * 2;
-  let y = 50;
-
-  const ensureSpace = (needed) => {
-    if (y + needed > pageHeight - 40) {
-      doc.addPage();
-      y = 50;
-    }
-  };
-
-  // jsPDF's built-in fonts only cover WinAnsi/Latin-1. Anything outside
-  // that (emoji, arrows, icon-font glyphs like a run-button symbol) comes
-  // back with a wrong measured width, which throws off splitTextToSize
-  // and produces the stretched, cut-off lines. Normalize common "smart"
-  // punctuation to plain ASCII first, then drop whatever's left outside
-  // Latin-1.
-  const sanitizeForPdf = (text) =>
-    String(text ?? '')
-      .replace(/[’‘]/g, "'")
-      .replace(/[“”]/g, '"')
-      .replace(/[–—]/g, '-')
-      .replace(/[•▪●]/g, '*')
-      .replace(/[^\x00-\xFF\n]/g, '');
-
-  const stripInlineMarkdown = (text) =>
-    sanitizeForPdf(text)
-      .replace(/`([^`]*)`/g, '$1')
-      .replace(/\*\*([^*]*)\*\*/g, '$1')
-      .replace(/__([^_]*)__/g, '$1')
-      .replace(/\*([^*]*)\*/g, '$1')
-      .replace(/_([^_]*)_/g, '$1');
-
-  const addWrappedText = (text, { font = 'helvetica', style = 'normal', size = 10, color = '#000000', lineHeight = 14 } = {}) => {
-    doc.setFont(font, style);
-    doc.setFontSize(size);
-    doc.setTextColor(color);
-    const lines = doc.splitTextToSize(sanitizeForPdf(text), maxWidth);
-    lines.forEach((line) => {
-      ensureSpace(lineHeight);
-      doc.text(line, marginX, y);
-      y += lineHeight;
-    });
-  };
-
-  // Very small markdown renderer: headings get bold + a bigger size (no
-  // literal "#" shown), inline **bold**/*italic*/`code` markers are
-  // stripped rather than printed as-is, blank lines add a bit of breathing
-  // room.
-  const addMarkdownBlock = (source) => {
-    String(source ?? '')
-      .split('\n')
-      .forEach((rawLine) => {
-        const headingMatch = rawLine.match(/^(#{1,6})\s+(.*)$/);
-        if (headingMatch) {
-          const level = headingMatch[1].length;
-          const size = Math.max(11, 18 - level * 2);
-          y += 4;
-          addWrappedText(stripInlineMarkdown(headingMatch[2]), { style: 'bold', size, lineHeight: size + 4 });
-          y += 2;
-          return;
-        }
-        if (rawLine.trim() === '') {
-          y += 6;
-          return;
-        }
-        addWrappedText(stripInlineMarkdown(rawLine), { size: 11, lineHeight: 15 });
-      });
-  };
-
-  // Header
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.setTextColor('#000000');
-  doc.text(attempt.studentName || attempt.studentEmail || 'Student', marginX, y);
-  y += 20;
-
-  const metaBits = [
-    `Roll no: ${attempt.rollNumber || '—'}`,
-    attempt.submittedAt ? `Submitted: ${formatDateTime(attempt.submittedAt)}` : 'Not submitted',
-  ];
-  addWrappedText(metaBits.join('   '), { size: 10, color: '#555555', lineHeight: 14 });
-
-  if (attempt.grade !== null && attempt.grade !== undefined) {
-    addWrappedText(
-      `Grade: ${attempt.grade}${attempt.maxPoints ? `/${attempt.maxPoints}` : ''}`,
-      { size: 10, color: '#555555', lineHeight: 14 },
-    );
-  }
-  if (attempt.feedback) {
-    addWrappedText(`Feedback: ${attempt.feedback}`, { size: 10, color: '#555555', lineHeight: 14 });
-  }
-  y += 10;
-
-  // PDF-only reordering. This never touches attempt.cells itself, so the
-  // on-screen viewer is unaffected — it only decides what order cells are
-  // drawn in *here*. Markdown cells whose first heading matches one of
-  // these names are either dropped entirely (instructions the grader
-  // doesn't need on paper) or pulled to the front with that heading line
-  // removed (so the actual question reads first, without a "Your turn"
-  // label). Add more names to either list if other notebooks use
-  // different section titles.
-  const DROP_HEADINGS = ['getting started'];
-  const PROMOTE_HEADINGS = ['your turn'];
-
-  const firstHeadingOf = (cell) => {
-    if (cell.type !== 'markdown') return null;
-    const match = String(cell.source || '').match(/^#{1,6}\s+(.*)$/m);
-    return match ? match[1].trim().toLowerCase() : null;
-  };
-
-  const withoutFirstHeadingLine = (source) =>
-    String(source || '').replace(/^#{1,6}\s+.*(\n|$)/, '');
-
-  const promoted = [];
-  const rest = [];
-  (attempt.cells || []).forEach((cell) => {
-    const heading = firstHeadingOf(cell);
-    if (heading && DROP_HEADINGS.includes(heading)) return;
-    if (heading && PROMOTE_HEADINGS.includes(heading)) {
-      promoted.push({ ...cell, source: withoutFirstHeadingLine(cell.source) });
-      return;
-    }
-    rest.push(cell);
-  });
-  const pdfCells = [...promoted, ...rest];
-
-  pdfCells.forEach((cell, idx) => {
-    ensureSpace(24);
-
-    if (cell.type === 'markdown') {
-      addMarkdownBlock(cell.source);
-      y += 6;
-      return;
-    }
-
-    // Cell index label
-    ensureSpace(14);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor('#7c3aed');
-    doc.text(`[${idx + 1}]`, marginX, y);
-    y += 12;
-
-    // Code, monospace
-    addWrappedText(cell.source || '(empty)', { font: 'courier', size: 9, color: '#111111', lineHeight: 12 });
-    y += 4;
-
-    (cell.outputs || []).forEach((output) => {
-      if (output.type === 'image') {
-        try {
-          const dataUrl = `data:image/png;base64,${output.text}`;
-          const imgProps = doc.getImageProperties(dataUrl);
-          const imgWidth = Math.min(maxWidth, imgProps.width);
-          const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-          ensureSpace(imgHeight + 10);
-          doc.addImage(dataUrl, 'PNG', marginX, y, imgWidth, imgHeight);
-          y += imgHeight + 10;
-        } catch {
-          addWrappedText('[image could not be embedded]', { size: 9, color: '#999999', lineHeight: 12 });
-        }
-      } else {
-        const isErr = output.type === 'stderr' || output.type === 'error';
-        addWrappedText(output.text, {
-          font: 'courier',
-          size: 9,
-          color: isErr ? '#cc3333' : '#333333',
-          lineHeight: 12,
-        });
-      }
-    });
-
-    y += 10;
-  });
-
-  const fileName = `${(attempt.studentName || attempt.studentEmail || 'submission').replace(/\s+/g, '_')}_notebook.pdf`;
-  doc.save(fileName);
-}
+// A stable empty array — `open?.notebook?.x || []` would hand out a fresh
+// array every render, which trips the hook dependencies built on top of it.
+const EMPTY = [];
 
 export default function NotebookSubmissions() {
   const { classId } = useOutletContext();
@@ -237,7 +52,11 @@ export default function NotebookSubmissions() {
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(null);
   const [draft, setDraft] = useState({ grade: '', maxPoints: '', feedback: '' });
-  const [downloadingId, setDownloadingId] = useState(null);
+  // The cells actually on screen for the open attempt — starts as a copy of
+  // `open.attempt.cells` but diverges once the teacher runs one, since a
+  // re-run's output is this browser's own and must never overwrite what the
+  // student's browser recorded.
+  const [runCells, setRunCells] = useState([]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -265,6 +84,7 @@ export default function NotebookSubmissions() {
     try {
       const data = await lmApi.getNotebookAttempt(classId, row._id);
       setOpen(data);
+      setRunCells(data.attempt.cells || []);
       setDraft({
         grade: data.attempt.grade ?? '',
         maxPoints: data.attempt.maxPoints ?? '',
@@ -300,23 +120,105 @@ export default function NotebookSubmissions() {
     }
   };
 
-  // Downloads a PDF for a row without needing it expanded first — reuses
-  // the already-open attempt's full data if it's the one currently open,
-  // otherwise fetches it fresh.
-  const downloadPdf = async (row) => {
-    setDownloadingId(row._id);
-    try {
-      const data =
-        open?.attempt?._id === row._id ? open : await lmApi.getNotebookAttempt(classId, row._id);
-      buildAttemptPdf(data.attempt);
-    } catch (err) {
-      toast({ status: 'error', title: 'Could not build PDF', description: err.message });
-    } finally {
-      setDownloadingId(null);
-    }
-  };
+  // Same kernels the student's own notebook runs on (see NotebookPlayer) —
+  // reused here so a teacher can execute a submission's code themselves
+  // instead of trusting only what the student's browser recorded.
+  const language = open?.notebook?.language === 'c' ? 'c' : 'python';
+  const packages = open?.notebook?.packages || EMPTY;
+  const hiddenSetup = open?.notebook?.hiddenSetup || EMPTY;
+  const sources = useMemo(
+    () => [...hiddenSetup, ...runCells.map((cell) => cell.source)],
+    [hiddenSetup, runCells],
+  );
+  const { status, detail, busyCellId, label, start, restart, runCell, stop } = useNotebookKernel(
+    language,
+    packages,
+    sources,
+  );
 
-  const codeBg = useColorModeValue('gray.50', 'blackAlpha.400');
+  // Replays the teacher's hidden setup into a fresh kernel, once — same
+  // reasoning as NotebookPlayer's `ensureSetup`.
+  const setupRef = useRef(null);
+  const ensureSetup = useCallback(() => {
+    if (language === 'c' || !hiddenSetup.length) return Promise.resolve();
+    if (!setupRef.current) {
+      setupRef.current = (async () => {
+        for (const source of hiddenSetup) {
+          // eslint-disable-next-line no-await-in-loop
+          await runCell('__setup__', source, () => {});
+        }
+      })().catch((err) => {
+        setupRef.current = null;
+        throw err;
+      });
+    }
+    return setupRef.current;
+  }, [hiddenSetup, language, runCell]);
+
+  const patchRunCell = useCallback((id, patch) => {
+    setRunCells((current) =>
+      current.map((cell) =>
+        cell._id === id ? { ...cell, ...(typeof patch === 'function' ? patch(cell) : patch) } : cell,
+      ),
+    );
+  }, []);
+
+  const executeCell = useCallback(
+    async (cell) => {
+      if (status !== 'ready') {
+        toast({ status: 'info', title: `${label} is still starting.`, duration: 2000 });
+        return;
+      }
+
+      const collected = [];
+      patchRunCell(cell._id, { outputs: [] });
+      const push = (output) => {
+        collected.push(output);
+        patchRunCell(cell._id, { outputs: [...collected] });
+      };
+
+      try {
+        await ensureSetup();
+        const { result, error: runError } = await runCell(cell._id, cell.source, push, {
+          stdin: cell.stdin || '',
+          prelude: language === 'c' ? hiddenSetup : [],
+        });
+        if (runError) collected.push({ type: 'error', text: runError });
+        else if (result !== null && result !== undefined) collected.push({ type: 'result', text: result });
+
+        patchRunCell(cell._id, (current) => ({
+          outputs: [...collected],
+          executedAt: new Date().toISOString(),
+          runCount: (current.runCount || 0) + 1,
+        }));
+      } catch (err) {
+        patchRunCell(cell._id, { outputs: [{ type: 'error', text: err.message }] });
+      }
+    },
+    [ensureSetup, hiddenSetup, language, label, patchRunCell, runCell, status, toast],
+  );
+
+  const runAllCells = useCallback(async () => {
+    if (status !== 'ready') return;
+    for (const cell of runCells) {
+      if (cell.type !== 'code' || !cell.source?.trim()) continue;
+      // Sequential — cells share one kernel namespace, so order is the contract.
+      // eslint-disable-next-line no-await-in-loop
+      await executeCell(cell);
+    }
+  }, [executeCell, runCells, status]);
+
+  const restartKernel = useCallback(() => {
+    setupRef.current = null;
+    restart();
+    setRunCells((current) => current.map((cell) => ({ ...cell, runCount: 0 })));
+  }, [restart]);
+
+  const stopKernel = useCallback(() => {
+    setupRef.current = null;
+    stop();
+    setRunCells((current) => current.map((cell) => ({ ...cell, runCount: 0 })));
+  }, [stop]);
 
   if (loading) return <Loading label="Loading submissions…" />;
   if (error) return <ErrorState error={error} onRetry={load} />;
@@ -444,14 +346,6 @@ export default function NotebookSubmissions() {
                       <Button size="xs" variant="outline" onClick={() => openAttempt(row)}>
                         {open?.attempt?._id === row._id ? 'Close' : 'Read'}
                       </Button>
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        isLoading={downloadingId === row._id}
-                        onClick={() => downloadPdf(row)}
-                      >
-                        PDF
-                      </Button>
                       {row.submittedAt && (
                         <Button size="xs" variant="ghost" onClick={() => reopen(row)}>
                           Reopen
@@ -476,101 +370,52 @@ export default function NotebookSubmissions() {
           }
         >
           <VStack align="stretch" spacing={3}>
-            <Flex justify="flex-end">
-              <Button
-                size="xs"
-                variant="outline"
-                isLoading={downloadingId === open.attempt._id}
-                onClick={() => downloadPdf(open.attempt)}
-              >
-                Download PDF
-              </Button>
+            <Flex gap={2} wrap="wrap" align="center">
+              {status === 'idle' || status === 'failed' ? (
+                <Button size="xs" colorScheme="green" leftIcon={<FiPlay />} onClick={start}>
+                  Start {label}
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    size="xs"
+                    leftIcon={<FiFastForward />}
+                    onClick={runAllCells}
+                    isDisabled={status !== 'ready' || Boolean(busyCellId)}
+                  >
+                    Run all
+                  </Button>
+                  <Button size="xs" variant="outline" leftIcon={<FiRefreshCw />} onClick={restartKernel}>
+                    Restart
+                  </Button>
+                  {busyCellId && (
+                    <Button size="xs" colorScheme="red" leftIcon={<FiSquare />} onClick={stopKernel}>
+                      Stop
+                    </Button>
+                  )}
+                </>
+              )}
+              {detail && (
+                <Text fontSize="xs" opacity={0.7}>
+                  {detail}
+                </Text>
+              )}
             </Flex>
 
-            {(open.attempt.cells || []).map((cell) => (
-              <Box key={cell._id} borderWidth="1px" borderRadius="md" overflow="hidden">
-                {cell.type === 'markdown' ? (
-                  <Box px={4} py={3} fontSize="sm">
-                    <RichText>{cell.source}</RichText>
-                  </Box>
-                ) : (
-                  <>
-                    <Box
-                      as="pre"
-                      px={4}
-                      py={3}
-                      m={0}
-                      fontFamily="mono"
-                      fontSize="13px"
-                      whiteSpace="pre-wrap"
-                      wordBreak="break-word"
-                    >
-                      {cell.source || <Text as="span" opacity={0.5}>(empty)</Text>}
-                    </Box>
-                    {(cell.outputs || []).length > 0 && (
-                      <Box bg={codeBg} borderTopWidth="1px" px={4} py={2} maxH="260px" overflow="auto">
-                        {cell.outputs.map((output, index) =>
-                          output.type === 'image' ? (
-                            <Box
-                              key={index}
-                              as="img"
-                              src={`data:image/png;base64,${output.text}`}
-                              alt="Figure the student produced"
-                              maxW="100%"
-                            />
-                          ) : (
-                            <Box
-                              key={index}
-                              as="pre"
-                              m={0}
-                              fontFamily="mono"
-                              fontSize="12px"
-                              whiteSpace="pre-wrap"
-                              color={output.type === 'stderr' || output.type === 'error' ? 'red.400' : 'inherit'}
-                            >
-                              {output.text}
-                            </Box>
-                          ),
-                        )}
-                      </Box>
-                    )}
-                    {cell.testResults && cell.testResults.length > 0 && (
-                      <Box bg={useColorModeValue('purple.50', 'blackAlpha.300')} borderTopWidth="1px" px={4} py={2}>
-                        <Text fontSize="2xs" fontWeight="700" color="purple.600" textTransform="uppercase" mb={1.5}>
-                          Hidden Test Results ({cell.testResults.filter((r) => r.passed).length}/{cell.testResults.length} Passed)
-                        </Text>
-                        <VStack align="stretch" spacing={1.5}>
-                          {cell.testResults.map((tr, i) => (
-                            <Box
-                              key={i}
-                              p={2}
-                              borderRadius="sm"
-                              borderWidth="1px"
-                              borderColor={tr.passed ? 'green.200' : 'red.200'}
-                              bg={useColorModeValue('white', 'gray.800')}
-                              fontSize="xs"
-                            >
-                              <Flex justify="space-between" align="center">
-                                <Text fontWeight="600">Test #{i + 1}</Text>
-                                <Badge colorScheme={tr.passed ? 'green' : 'red'} fontSize="2xs">
-                                  {tr.passed ? 'Yes (Passed)' : 'No (Failed)'}
-                                </Badge>
-                              </Flex>
-                              {!tr.passed && (
-                                <Box mt={1} pt={1} borderTopWidth="1px" borderColor="red.100" fontSize="2xs" fontFamily="mono">
-                                  {tr.input && <Text opacity={0.8}>Input: {tr.input}</Text>}
-                                  <Text color="green.600">Expected: {tr.expectedOutput}</Text>
-                                  <Text color="red.500">Actual: {tr.actualOutput || tr.error || '(empty)'}</Text>
-                                </Box>
-                              )}
-                            </Box>
-                          ))}
-                        </VStack>
-                      </Box>
-                    )}
-                  </>
-                )}
-              </Box>
+            {runCells.map((cell, index) => (
+              <NotebookCell
+                key={cell._id}
+                cell={cell}
+                index={index}
+                total={runCells.length}
+                language={language}
+                readOnly
+                running={busyCellId === cell._id}
+                canRun={status === 'ready' && !busyCellId}
+                onChange={(patch) => patchRunCell(cell._id, patch)}
+                onRun={() => executeCell(cell)}
+                onStop={stopKernel}
+              />
             ))}
 
             <Flex gap={3} wrap="wrap" align="flex-end">

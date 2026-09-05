@@ -967,16 +967,25 @@ const lmApi = {
      is a read — what the button would do, department by department — and the
      import is the button. `dept` omitted imports every department. */
   adminFacultyImportPreview: () => request('/admin/faculty/import'),
-  adminImportFaculty: (dept) => request('/admin/faculty/import', { method: 'POST', body: { dept } }),
+  /* `sendMail: false` opens the accounts without telling anybody — for a
+     department seeded ahead of a term, where the welcome mail should go out
+     later (or not at all). Omitted, the import mails, as it always did. */
+  adminImportFaculty: (dept, { sendMail = true } = {}) =>
+    request('/admin/faculty/import', { method: 'POST', body: { dept, sendMail } }),
   /* lm-admin — student accounts. Same 403 for anyone who is not a platform admin. */
   adminListStudents: (params = {}) => request(`/admin/students${qs(params)}`),
   adminCreateStudent: (body) => request('/admin/students', { method: 'POST', body }),
   /* lm-admin — all classes owned by a specific faculty member.
      Powers the class-count click-through on the faculty directory page. */
   adminGetFacultyClasses: (facultyId) => request(`/admin/faculty/${facultyId}/classes`),
-  /* lm-admin / HOD — platform-wide per-class activity breakdown, ranked by score.
-     Accepts optional { semester, session } filters. */
-  adminGetHodDashboard: (params = {}) => request(`/admin/hod-dashboard${qs(params)}`),
+  /* HOD dashboard — per-class activity counts plus the faculty / student /
+     classroom totals for the departments in view. Accepts optional
+     { dept, semester, session } filters.
+
+     Not under /admin: the endpoint serves heads of department as well as
+     platform admins, and the server scopes an HOD to their own department
+     whatever `dept` asks for. */
+  getHodDashboard: (params = {}) => request(`/hod/dashboard${qs(params)}`),
   /* Bulk import from an ERP roster export (.xlsx: name, roll no, branch,
      email), parsed client-side — the server only ever sees plain rows of
      `{ name, rollNumber, dept, email }`. `preview` classifies each row
@@ -985,6 +994,9 @@ const lmApi = {
      corrected to match the roster) rather than skipped. */
   adminPreviewStudentImport: (body) => request('/admin/students/import/preview', { method: 'POST', body }),
   adminImportStudents: (body) => request('/admin/students/import', { method: 'POST', body }),
+  /* Polled while an import's welcome mail is still going out — see
+     adminController.studentImportStatus. */
+  adminStudentImportStatus: (batchId) => request(`/admin/students/import-status/${batchId}`),
   /* Editing a student's name/email/dept from the directory. */
   adminUpdateStudent: (studentId, body) => request(`/admin/students/${studentId}`, { method: 'PATCH', body }),
 

@@ -141,7 +141,9 @@ const NAV_ITEMS = [
   // platform-admin) account can open it — the server 403s everyone else — so
   // the link itself is hidden rather than left to dead-end.
   { to: '/learning/lm-admin', label: 'Admin', icon: '🛡️', foot: true, adminOnly: true },
-  { to: '/learning/lm-admin/hod-dashboard', label: 'HOD Dashboard', icon: '📊', foot: true, adminOnly: true },
+  // Shown to heads of department as well as admins — it is their screen, and
+  // the server scopes it to their department. See RequireHod.
+  { to: '/learning/hod-dashboard', label: 'HOD Dashboard', icon: '📊', foot: true, hodOrAdmin: true },
 ];
 
 /**
@@ -327,7 +329,7 @@ function ClassSwitcher({ classes, activeClassId, carriedTab, onNavigate }) {
   );
 }
 
-function NavItems({ onNavigate, studentOnly = false, isAdmin = false }) {
+function NavItems({ onNavigate, studentOnly = false, isAdmin = false, isHod = false }) {
   const navColor = useColorModeValue('gray.700', 'gray.200');
   const navBorderColor = useColorModeValue('gray.200', 'gray.700');
   const navHoverBg = useColorModeValue('gray.100', 'gray.700');
@@ -336,7 +338,12 @@ function NavItems({ onNavigate, studentOnly = false, isAdmin = false }) {
 
   return (
     <>
-      {NAV_ITEMS.filter((item) => (!item.studentOnly || studentOnly) && (!item.adminOnly || isAdmin)).map((item) => (
+      {NAV_ITEMS.filter(
+        (item) =>
+          (!item.studentOnly || studentOnly)
+          && (!item.adminOnly || isAdmin)
+          && (!item.hodOrAdmin || isAdmin || isHod),
+      ).map((item) => (
         <Box
           key={item.to}
           as={NavLink}
@@ -610,7 +617,11 @@ export default function LearningLayout() {
             position="sticky"
             top="88px"
           >
-            <NavItems studentOnly={studentOnly} isAdmin={Boolean(me?.isAdmin)} />
+            <NavItems
+              studentOnly={studentOnly}
+              isAdmin={Boolean(me?.isAdmin)}
+              isHod={Boolean(me?.isHod)}
+            />
             <ClassSwitcher
               classes={classes}
               activeClassId={activeClassId}
@@ -636,7 +647,12 @@ export default function LearningLayout() {
           </DrawerHeader>
           <DrawerBody>
 
-            <NavItems onNavigate={onClose} studentOnly={studentOnly} isAdmin={Boolean(me?.isAdmin)} />
+            <NavItems
+              onNavigate={onClose}
+              studentOnly={studentOnly}
+              isAdmin={Boolean(me?.isAdmin)}
+              isHod={Boolean(me?.isHod)}
+            />
             <ClassSwitcher
               classes={classes}
               activeClassId={activeClassId}

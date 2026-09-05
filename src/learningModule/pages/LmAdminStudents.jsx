@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   AlertIcon,
   Badge,
   Box,
   Button,
+  Checkbox,
   Flex,
   FormControl,
   FormLabel,
@@ -19,6 +20,7 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
+  Progress,
   Select,
   SimpleGrid,
   Table,
@@ -241,14 +243,45 @@ function BulkImportStudentsCard({ onImported }) {
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  /* Whether the new accounts are told they exist.
+   *
+   * The accounts are created either way — the mail only carries the link that
+   * lets somebody claim one. A roster loaded weeks before a term starts should
+   * not necessarily announce itself the moment it lands, and until this
+   * checkbox existed there was no way to say so. Defaults on, which is what the
+   * button did before. */
+  const [sendMail, setSendMail] = useState(true);
+  const [mailProgress, setMailProgress] = useState(null);
   const toast = useToast();
+  const pollRef = useRef(null);
+
+  useEffect(() => () => clearTimeout(pollRef.current), []);
 
   const reset = () => {
+    clearTimeout(pollRef.current);
     setFileName('');
     setRows([]);
     setPreview(null);
     setResult(null);
     setError('');
+    setMailProgress(null);
+  };
+
+  // Polls /admin/students/import-status/:batchId until every queued welcome
+  // mail has an outcome — same pattern as People.jsx's class-invite progress.
+  const pollMailStatus = (batchId) => {
+    pollRef.current = setTimeout(async () => {
+      let status;
+      try {
+        status = await lmApi.adminStudentImportStatus(batchId);
+      } catch {
+        pollMailStatus(batchId);
+        return;
+      }
+      setMailProgress({ completed: status.completed, total: status.total });
+      if (status.done) return;
+      pollMailStatus(batchId);
+    }, 1200);
   };
 
   const handleFile = async (event) => {
@@ -285,16 +318,23 @@ function BulkImportStudentsCard({ onImported }) {
     setError('');
     setBusy(true);
     try {
-      const data = await lmApi.adminImportStudents({ rows });
+      const data = await lmApi.adminImportStudents({ rows, sendMail });
       setResult(data);
       setPreview(null);
       toast({
         status: 'success',
         title: `${data.created} account${data.created === 1 ? '' : 's'} created, ${data.updated} updated`,
+        description: sendMail
+          ? undefined
+          : 'No emails sent — the students can be told later from the directory.',
         duration: 8000,
         isClosable: true,
       });
       onImported();
+      if (data.batchId) {
+        setMailProgress({ completed: 0, total: data.mailQueued });
+        pollMailStatus(data.batchId);
+      }
     } catch (err) {
       setError(err.message || 'Could not import the roster.');
     } finally {
@@ -307,7 +347,7 @@ function BulkImportStudentsCard({ onImported }) {
   return (
     <SectionCard
       title="Bulk import from ERP roster"
-      subtitle="Upload the ERP export (.xlsx) — Name, Roll No., Branch Name, Official Email ID. A row whose email already has an account updates that account's name, roll number and department; a new email gets a new account and a welcome email."
+      subtitle="Upload the ERP export (.xlsx) — Name, Roll No., Branch Name, Official Email ID. A row whose email already has an account updates that account's name, roll number and department; a new email gets a new account, and — if you leave the email option ticked — a link to set their password."
     >
       <VStack align="stretch" spacing={4}>
         {error && (
@@ -331,6 +371,22 @@ function BulkImportStudentsCard({ onImported }) {
           <Text fontSize="sm" color="lmFg.muted">
             {fileName} — {rows.length} row{rows.length === 1 ? '' : 's'} found.
           </Text>
+        )}
+
+        {!result && rows.length > 0 && (
+          <Checkbox
+            isChecked={sendMail}
+            onChange={(e) => setSendMail(e.target.checked)}
+            isDisabled={busy}
+          >
+            <Text fontSize="sm">
+              Email each new student that an account has been created for them
+              <Text as="span" color="lmFg.muted">
+                {' '}— the mail carries the link they use to set a password. Untick to create the
+                accounts quietly; they can still claim one from “Forgot password”.
+              </Text>
+            </Text>
+          </Checkbox>
         )}
 
         {!preview && !result && rows.length > 0 && (
@@ -373,8 +429,9 @@ function BulkImportStudentsCard({ onImported }) {
             )}
             <Flex justify="space-between" align="center" gap={3} wrap="wrap">
               <Text fontSize="xs" color="lmFg.muted" maxW="480px">
-                {preview.counts.new} new account{preview.counts.new === 1 ? '' : 's'} will be created and emailed a
-                link to set a password; {preview.counts.update} existing account
+                {preview.counts.new} new account{preview.counts.new === 1 ? '' : 's'} will be created
+                {sendMail ? ' and emailed a link to set a password' : ', with no email sent'};
+                {' '}{preview.counts.update} existing account
                 {preview.counts.update === 1 ? '' : 's'} will be corrected to match this roster.
               </Text>
               <HStack>
@@ -406,6 +463,27 @@ function BulkImportStudentsCard({ onImported }) {
               Skipped — invalid: {result.skippedInvalid}, duplicate in file: {result.skippedDuplicate}
               {result.failed ? `, failed: ${result.failed}` : ''}.
             </Text>
+            {/* Nothing to watch when the import was told not to mail, so the
+                progress bar is replaced by the one line that says so. */}
+            {!mailProgress && result.created > 0 && (
+              <Text>No welcome emails sent — the students can be told later.</Text>
+            )}
+            {mailProgress && (
+              <Box mt={3} w="100%">
+                <Text fontSize="xs" color="lmFg.muted" mb={1}>
+                  {mailProgress.completed >= mailProgress.total
+                    ? `Welcome emails sent (${mailProgress.total}).`
+                    : `Sending welcome emails: ${mailProgress.completed} of ${mailProgress.total}…`}
+                </Text>
+                <Progress
+                  value={mailProgress.total ? (mailProgress.completed / mailProgress.total) * 100 : 0}
+                  size="xs"
+                  colorScheme="blue"
+                  borderRadius="full"
+                  isIndeterminate={!mailProgress.total}
+                />
+              </Box>
+            )}
             <Button size="sm" mt={3} onClick={reset}>
               Import another file
             </Button>

@@ -61,6 +61,10 @@ const ROLE_OPTIONS = [
   { value: 'iams-admin', label: 'iLEED Admin' },
   { value: 'iams-dept-admin', label: 'iLEED Department Admin' },
   { value: 'lm-admin', label: 'LM Admin' },
+  /* Department-scoped: the server refuses HOD to an account with no primary
+     department, because every module that reads the role answers "which
+     department?" from that field. Set the department in the same row first. */
+  { value: 'HOD', label: 'Head of Department' },
 ];
 
 const userEmails = (user) =>

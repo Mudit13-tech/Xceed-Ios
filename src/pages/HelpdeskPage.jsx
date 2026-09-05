@@ -995,7 +995,7 @@ export default function HelpdeskPage() {
               </form>
             ) : (
               <form onSubmit={verifyCode}>
-                <h2>Enter the code</h2>
+                <h2>Verify your identity</h2>
                 <p>{gateNote}</p>
                 <div className="hd-field">
                   <label htmlFor="hd-otp">Six-digit code</label>

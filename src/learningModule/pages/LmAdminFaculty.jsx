@@ -5,6 +5,7 @@ import {
   Badge,
   Box,
   Button,
+  Checkbox,
   Flex,
   FormControl,
   FormLabel,
@@ -95,6 +96,11 @@ function ImportFromMasterCard({ onImported }) {
   // One at a time: the buttons write to the same collection, and two imports
   // racing would each report counts the other invalidated.
   const [busy, setBusy] = useState('');
+  /* Whether the imported faculty are mailed their account. Same option, and the
+   * same reason, as the student roster import: the accounts are opened either
+   * way, and an administrator seeding a department ahead of a term may want the
+   * announcement to go out later, or not at all. Defaults on. */
+  const [sendMail, setSendMail] = useState(true);
   const toast = useToast();
 
   const refresh = useCallback(async () => {
@@ -115,11 +121,13 @@ function ImportFromMasterCard({ onImported }) {
   const runImport = async (dept) => {
     setBusy(dept || '*');
     try {
-      const result = await lmApi.adminImportFaculty(dept);
+      const result = await lmApi.adminImportFaculty(dept, { sendMail });
       toast({
         status: result.imported || result.roleAdded ? 'success' : 'info',
         title: dept ? `${dept} imported` : 'Master faculty imported',
-        description: importSummary(result),
+        description: sendMail
+          ? importSummary(result)
+          : `${importSummary(result)} No emails sent.`,
         duration: 9000,
         isClosable: true,
       });
@@ -158,7 +166,7 @@ function ImportFromMasterCard({ onImported }) {
   return (
     <SectionCard
       title="Import from timetable master faculty"
-      subtitle="Opens a faculty account for everyone in the timetable module's master list and emails them a link to set their own password."
+      subtitle="Opens a faculty account for everyone in the timetable module's master list and — unless you untick the email option — sends them a link to set their own password."
       action={
         <Button
           size="sm"
@@ -178,6 +186,21 @@ function ImportFromMasterCard({ onImported }) {
         . {totals.alreadyInvited || 0} already have an account and are skipped, so running this
         again invites only whoever is new.
       </Text>
+
+      <Checkbox
+        isChecked={sendMail}
+        onChange={(e) => setSendMail(e.target.checked)}
+        isDisabled={Boolean(busy)}
+        mb={4}
+      >
+        <Text fontSize="sm">
+          Email each new faculty member that an account has been created for them
+          <Text as="span" color="lmFg.muted">
+            {' '}— untick to open the accounts quietly; they can still claim one from
+            “Forgot password”.
+          </Text>
+        </Text>
+      </Checkbox>
 
       {departments.length === 0 ? (
         <EmptyState
