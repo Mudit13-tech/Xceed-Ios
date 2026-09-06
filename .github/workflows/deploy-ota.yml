@@ -160,5 +160,11 @@ jobs:
           # Push unconditionally. Gating this on the version bump meant a run that
           # synced AMS without publishing a new version left its sync commit on the
           # runner and threw it away.
-          git push origin main
-          git push origin ams-update
+          #
+          # --atomic, the way safe-pull-from-ams.ps1 does it: both refs or neither.
+          # Pushed one at a time, a failure on the second call lands main while
+          # ams-update stays behind, and the next sync then merges against a base
+          # older than what main already carries. That skew does not error - it
+          # reads local edits as changes AMS is reverting and drops them with no
+          # conflict raised.
+          git push --atomic origin main ams-update
