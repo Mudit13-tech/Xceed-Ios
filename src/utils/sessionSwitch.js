@@ -26,6 +26,26 @@ import { takePendingRoute } from './deepLink';
  *     `removeClient()` deletes that snapshot outright, which is why both are
  *     here and in this order.
  *
+ * That teardown is right for a *switch* and wrong for a *resume*, which is the
+ * distinction `isSameAccount` below draws. On a device this function is not
+ * only reached by switching: the app always cold-starts at `/`, which redirects
+ * to /login (see App.jsx), and LoginForm.mobile then unlocks the last-used
+ * account by biometric or PIN and arrives here. Tearing the cache down
+ * unconditionally therefore ran on *every launch* — which is what made the
+ * persisted cache look broken. It worked perfectly while the app stayed open
+ * and was empty again after a restart, because the restart itself deleted it a
+ * moment before the first screen asked for it. Nothing was wrong with the
+ * persister; the unlock was wiping what it had just restored.
+ *
+ * The active token is the identity to compare against, the same one
+ * clearNativeSession uses to work out which saved account a session belongs to.
+ * When it matches the account being activated there is nothing to protect
+ * anyone from — it is the same user resuming their own session, and their cache
+ * is exactly what should survive. Anything else, including a token that is
+ * absent or has been rotated, falls through to the full teardown: the cost of
+ * clearing when we did not have to is one round of refetches, and the cost of
+ * not clearing when we should have is one account seeing another's data.
+ *
  * What it deliberately does NOT do is sign the previous account out. Its token
  * stays in secure storage and stays valid — the server's logout only clears the
  * cookie and keeps no blocklist — so it remains in the switcher and switching
@@ -41,21 +61,27 @@ export async function activateAccount({
     throw new Error('Token missing from saved account');
   }
 
+  // Read before the write below — afterwards there is nothing left to compare.
+  const previousToken = localStorage.getItem('token');
+  const isSameAccount = Boolean(previousToken) && previousToken === account.token;
+
   localStorage.setItem('token', account.token);
 
   if (updateLastActiveEmail && account.email) {
     await updateLastActiveEmail(account.email);
   }
 
-  if (queryClient) {
-    queryClient.clear();
-  }
-  try {
-    await queryPersister.removeClient();
-  } catch (e) {
-    // A persister that cannot be reached is not a reason to strand the user on
-    // the login screen; the worst case is a stale card until the first refetch.
-    console.error('Could not clear the persisted query cache on switch', e);
+  if (!isSameAccount) {
+    if (queryClient) {
+      queryClient.clear();
+    }
+    try {
+      await queryPersister.removeClient();
+    } catch (e) {
+      // A persister that cannot be reached is not a reason to strand the user on
+      // the login screen; the worst case is a stale card until the first refetch.
+      console.error('Could not clear the persisted query cache on switch', e);
+    }
   }
 
   // A route saved before the session lapsed wins over the default landing page,

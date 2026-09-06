@@ -190,3 +190,52 @@ describe('switching to another saved account', () => {
     expect(preferences.pendingRoute).toBeUndefined();
   });
 });
+
+/**
+ * Unlocking back into the session you are already in.
+ *
+ * This is not a switch, but it arrives through the same function, and on a
+ * device it is by far the more common of the two: the app cold-starts at `/`,
+ * which redirects to /login, so every launch unlocks the last-used account and
+ * calls activateAccount. Tearing the cache down there ran the switch's teardown
+ * on every restart — the persisted cache was written correctly, restored
+ * correctly, and then deleted by the unlock a moment before the first screen
+ * asked for it. It looked exactly like persistence not working at all.
+ */
+describe('resuming the account already signed in', () => {
+  it('keeps its cached data, in memory and on disk', async () => {
+    const navigation = captureNavigation();
+    const user = userEvent.setup();
+    renderForm();
+
+    // Restored from the persisted cache on this launch, before the unlock.
+    queryClient.setQueryData(['user', 'details'], { name: 'Asha' });
+
+    // Asha is who `token` in localStorage already names — the same account,
+    // not another one.
+    await user.click(await screen.findByText('Asha'));
+    await waitFor(() => expect(navigation.href).toBeTruthy());
+
+    expect(localStorage.getItem('token')).toBe('token-asha');
+    expect(queryClient.getQueryData(['user', 'details'])).toEqual({ name: 'Asha' });
+    expect(removeClient).not.toHaveBeenCalled();
+  });
+
+  it('still tears the cache down when there is no active token to match', async () => {
+    // A launch that lost localStorage — the WebView clears it under storage
+    // pressure, which is the whole reason the cache itself lives in Preferences.
+    // Whose cache the snapshot belongs to is then unknowable, so it goes.
+    localStorage.removeItem('token');
+    const navigation = captureNavigation();
+    const user = userEvent.setup();
+    renderForm();
+
+    queryClient.setQueryData(['user', 'details'], { name: 'Asha' });
+
+    await user.click(await screen.findByText('Asha'));
+    await waitFor(() => expect(navigation.href).toBeTruthy());
+
+    expect(queryClient.getQueryData(['user', 'details'])).toBeUndefined();
+    expect(removeClient).toHaveBeenCalled();
+  });
+});
