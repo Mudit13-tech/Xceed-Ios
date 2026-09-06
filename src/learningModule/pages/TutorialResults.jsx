@@ -32,6 +32,7 @@ import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile, buttonTextStyles } from '../components/common';
 import { richTextToPlain } from '../richTextUtils';
 import { decimalPlacesHint, formatAnswerValue, formatDateTime } from '../format';
+import { LmIcon } from '../components/Icon';
 
 /**
  * Teacher's review of a parameterised tutorial.
@@ -126,7 +127,7 @@ export default function TutorialResults() {
       )}
 
       {submitted.length === 0 ? (
-        <EmptyState icon="🧮" title="No submissions yet" description="Results appear as students submit." />
+        <EmptyState icon="tutorial" title="No submissions yet" description="Results appear as students submit." />
       ) : (
         <>
           <SectionCard
@@ -251,7 +252,8 @@ export default function TutorialResults() {
                               fontSize="xs"
                               color="lmHue.blue700"
                             >
-                              📎 {file.name || 'Attachment'}
+                              <LmIcon name="attachment" size={13} style={{ marginRight: 4 }} />
+                    {file.name || 'Attachment'}
                             </Link>
                           ))}
                         </HStack>

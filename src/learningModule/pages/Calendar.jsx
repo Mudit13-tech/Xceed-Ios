@@ -27,6 +27,7 @@ import { EmptyState, ErrorState, Loading, SectionCard } from '../components/comm
 import { useRive, Layout, Fit, Alignment } from '@rive-app/react-canvas';
 import '../../utils/riveWasm.js';
 import { courseworkLink, courseworkMeta, formatDate, formatDateTime } from '../format';
+import { LmIcon } from '../components/Icon';
 const pulseRing = keyframes`
   0% { transform: scale(0.95); opacity: 0.8; }
   50% { transform: scale(1.05); opacity: 1; }
@@ -133,7 +134,9 @@ function DayDetailModal({ date, items, holiday, onClose }) {
         <ModalBody pb={4}>
           {holiday && (
             <Flex align="center" gap={3} py={2.5} borderBottomWidth="1px" borderColor="lmBorder.subtle">
-              <Text>🏖️</Text>
+              <Box color="lmFg.subtle">
+                <LmIcon name="holiday" size={18} />
+              </Box>
               <Box flex="1" minW={0}>
                 <Text fontSize="sm" fontWeight="500">
                   {holiday.remark}
@@ -146,7 +149,7 @@ function DayDetailModal({ date, items, holiday, onClose }) {
             </Flex>
           )}
           {items.length === 0 && !holiday ? (
-            <EmptyState icon="📅" title="Nothing scheduled on this day" />
+            <EmptyState icon="calendar" title="Nothing scheduled on this day" />
           ) : (
             items.map((item) => (
               <Flex
@@ -159,7 +162,9 @@ function DayDetailModal({ date, items, holiday, onClose }) {
                 borderColor="lmBorder.subtle"
                 _hover={item.to ? { bg: 'gray.50', textDecoration: 'none' } : undefined}
               >
-                <Text>{item.icon}</Text>
+                <Box color="lmFg.subtle">
+                  <LmIcon name={item.icon} size={18} />
+                </Box>
                 <Box flex="1" minW={0}>
                   <Flex align="center" gap={2} minW={0}>
                     {item.subject && (
@@ -248,7 +253,7 @@ export default function Calendar() {
         title: item.title,
         kindLabel,
         className: item.class?.name || '',
-        label: `${meta.icon} ${item.title}`,
+        label: item.title,
         tooltip: `${item.class?.subject || item.class?.name || ''} — ${kindLabel}: ${item.title}`,
         to: courseworkLink(item),
         badge: item.mySubmissionState ? (
@@ -266,12 +271,12 @@ export default function Calendar() {
         at: quiz.conductedAt,
         showTime: true,
         bg: 'purple.500',
-        icon: '🧠',
+        icon: 'quiz',
         subject,
         title: quiz.title,
         kindLabel: quiz.timeLimitMinutes ? `Quiz · ${quiz.timeLimitMinutes} min` : 'Quiz',
         className: quiz.class?.name || '',
-        label: `🧠 ${quiz.title}`,
+        label: quiz.title,
         tooltip: `${quiz.class?.subject || quiz.class?.name || ''} — Quiz: ${quiz.title}`,
         to: `/learning/class/${quiz.classId}/quiz/${quiz._id}`,
         badge:
@@ -292,12 +297,12 @@ export default function Calendar() {
         at: short.startedAt,
         showTime: true,
         bg: 'teal.500',
-        icon: '⚡',
+        icon: 'short',
         subject,
         title: short.title,
         kindLabel: 'Short presented',
         className: short.class?.name || '',
-        label: `⚡ ${short.title}`,
+        label: short.title,
         tooltip: `${short.class?.subject || short.class?.name || ''} — Short: ${short.title}`,
         // Only a teacher has somewhere to go: a finished session's report.
         to: isTeacher(short.myRole)
@@ -498,7 +503,7 @@ export default function Calendar() {
 
           <SectionCard title="Coursework this month">
             {data.coursework.length === 0 ? (
-              <EmptyState icon="📅" title="No coursework this month" />
+              <EmptyState icon="calendar" title="No coursework this month" />
             ) : (
               data.coursework.map((item) => {
                 const meta = courseworkMeta(item);
@@ -514,7 +519,9 @@ export default function Calendar() {
                     borderColor="lmBorder.subtle"
                     _hover={{ bg: 'gray.50', textDecoration: 'none' }}
                   >
-                    <Text>{meta.icon}</Text>
+                    <Box color={`${meta.colorScheme}.600`}>
+                      <LmIcon name={meta.icon} size={18} />
+                    </Box>
                     <Box flex="1" minW={0}>
                       <Flex align="center" gap={2} minW={0}>
                         {subjectShort(item.class) && (
@@ -545,7 +552,7 @@ export default function Calendar() {
           <Box mt={5}>
             <SectionCard title="Quizzes this month">
               {data.quizzes.length === 0 ? (
-                <EmptyState icon="🧠" title="No quizzes this month" />
+                <EmptyState icon="quiz" title="No quizzes this month" />
               ) : (
                 data.quizzes.map((quiz) => (
                   <Flex
@@ -559,7 +566,9 @@ export default function Calendar() {
                     borderColor="lmBorder.subtle"
                     _hover={{ bg: 'gray.50', textDecoration: 'none' }}
                   >
-                    <Text>🧠</Text>
+                    <Box color="purple.500">
+                      <LmIcon name="quiz" size={18} />
+                    </Box>
                     <Box flex="1" minW={0}>
                       <Flex align="center" gap={2} minW={0}>
                         {subjectShort(quiz.class) && (
@@ -592,7 +601,7 @@ export default function Calendar() {
           <Box mt={5}>
             <SectionCard title="Shorts presented this month">
               {data.shorts.length === 0 ? (
-                <EmptyState icon="⚡" title="No Shorts were run this month" />
+                <EmptyState icon="short" title="No Shorts were run this month" />
               ) : (
                 data.shorts.map((short) => {
                   const reportPath = isTeacher(short.myRole)
@@ -609,7 +618,9 @@ export default function Calendar() {
                       borderColor="lmBorder.subtle"
                       _hover={reportPath ? { bg: 'gray.50', textDecoration: 'none' } : undefined}
                     >
-                      <Text>⚡</Text>
+                      <Box color="teal.500">
+                        <LmIcon name="short" size={18} />
+                      </Box>
                       <Box flex="1" minW={0}>
                         <Flex align="center" gap={2} minW={0}>
                           {subjectShort(short.class) && (
@@ -642,11 +653,13 @@ export default function Calendar() {
               subtitle="From the attendance module's academic session calendar."
             >
               {data.nonWorkingDays.length === 0 ? (
-                <EmptyState icon="🏖️" title="No holidays configured for this month" />
+                <EmptyState icon="holiday" title="No holidays configured for this month" />
               ) : (
                 data.nonWorkingDays.map((day) => (
                   <Flex key={day.date} align="center" gap={3} py={2.5} borderBottomWidth="1px" borderColor="lmBorder.subtle">
-                    <Text>🏖️</Text>
+                    <Box color="lmFg.subtle">
+                <LmIcon name="holiday" size={18} />
+              </Box>
                     <Box flex="1" minW={0}>
                       <Text fontSize="sm" fontWeight="500" noOfLines={1}>
                         {day.remark}

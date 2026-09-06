@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import getEnvironment from '../../getenvironment';
+import { LmIcon } from '../components/Icon';
 
 import shotList from '../manualAssets/tutorials/list.png';
 import shotEditor from '../manualAssets/tutorials/editor.png';
@@ -42,9 +43,9 @@ const cssReset = `
 function Note({ type = 'info', children }) {
     const cfg = {
         info:    { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8', icon: 'ℹ' },
-        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: '⚠' },
-        tip:     { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: '💡' },
-        key:     { bg: '#f0fdfa', border: '#99f6e4', color: '#115e59', icon: '🔑' },
+        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: 'warning' },
+        tip:     { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: 'tip' },
+        key:     { bg: '#f0fdfa', border: '#99f6e4', color: '#115e59', icon: 'key' },
     };
     const s = cfg[type] || cfg.info;
     return (
@@ -53,7 +54,7 @@ function Note({ type = 'info', children }) {
             padding: '10px 14px', marginBottom: 16,
             display: 'flex', gap: 10, alignItems: 'flex-start',
         }}>
-            <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{s.icon}</span>
+            <span style={{ flexShrink: 0, marginTop: 2, color: s.color }}><LmIcon name={s.icon} size={15} /></span>
             <div style={{ fontSize: 13, color: s.color, lineHeight: 1.65 }}>{children}</div>
         </div>
     );
@@ -87,13 +88,13 @@ function Shot({ src, alt, caption }) {
 // ── tabs ──────────────────────────────────────────────────────────────────────
 
 const TABS = [
-    { id: 'overview', label: 'Overview',        icon: '🧮' },
-    { id: 'create',   label: 'Create & Author',  icon: '✏️' },
-    { id: 'settings', label: 'Settings',         icon: '⚙️' },
-    { id: 'import',   label: 'Import a Paper',   icon: '📄' },
-    { id: 'student',  label: 'What Students See',icon: '👀' },
-    { id: 'results',  label: 'Results & Marks',  icon: '📊' },
-    { id: 'gotchas',  label: 'Gotchas',          icon: '⚠️' },
+    { id: 'overview', label: 'Overview',        icon: 'tutorial' },
+    { id: 'create',   label: 'Create & Author',  icon: 'edit' },
+    { id: 'settings', label: 'Settings',         icon: 'settings' },
+    { id: 'import',   label: 'Import a Paper',   icon: 'assignment' },
+    { id: 'student',  label: 'What Students See',icon: 'preview' },
+    { id: 'results',  label: 'Results & Marks',  icon: 'insights' },
+    { id: 'gotchas',  label: 'Gotchas',          icon: 'warning' },
 ];
 
 // ── tab content ───────────────────────────────────────────────────────────────
@@ -192,7 +193,7 @@ function TabCreate() {
 
             <SectionTitle>Reusing Questions</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
-                <strong>📥 Import questions</strong>, in the toolbar at the top of the editor, copies whole questions from
+                <strong><LmIcon name="import" size={13} /> Import questions</strong>, in the toolbar at the top of the editor, copies whole questions from
                 another tutorial — in this class or any other class you teach — into the one you have open.
                 Copies are independent from the moment they land: editing them never touches the original,
                 and no student work comes with them. This is separate from importing from a scanned paper —
@@ -246,9 +247,9 @@ function TabImport() {
 
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ol style={{ margin: 0, paddingLeft: 18 }}>
-                    <li><strong>Upload.</strong> From the list page, click <strong>📄 Import from a paper</strong> and pick one or more PDF/image files. The paper is read automatically, and you land on this review screen.</li>
-                    <li><strong>Suggest variables.</strong> Click <strong>✨ Suggest variables</strong> on a question — the model proposes which numbers in the paper should become variables, with a type, a sensible range, and a note showing exactly what value the paper actually used.</li>
-                    <li><strong>Derive answers.</strong> Click <strong>✨ Derive answers from the paper</strong> — the model writes the formula, then immediately checks it by substituting the paper's own original numbers back in and comparing the result to the paper's printed answer.</li>
+                    <li><strong>Upload.</strong> From the list page, click <strong><LmIcon name="assignment" size={13} /> Import from a paper</strong> and pick one or more PDF/image files. The paper is read automatically, and you land on this review screen.</li>
+                    <li><strong>Suggest variables.</strong> Click <strong><LmIcon name="ai" size={13} /> Suggest variables</strong> on a question — the model proposes which numbers in the paper should become variables, with a type, a sensible range, and a note showing exactly what value the paper actually used.</li>
+                    <li><strong>Derive answers.</strong> Click <strong><LmIcon name="ai" size={13} /> Derive answers from the paper</strong> — the model writes the formula, then immediately checks it by substituting the paper's own original numbers back in and comparing the result to the paper's printed answer.</li>
                     <li><strong>Read the verification badge on every answer</strong> before trusting it: <strong style={{ color: '#166534' }}>✓ matches the paper</strong> (green), <strong style={{ color: '#991b1b' }}>✗ does not match</strong> (red), <strong>? not checkable</strong> (orange), or <strong>✗ will not parse</strong> (red). This badge is advisory, not a gate — nothing stops you from merging a question whose answer is still unverified, so treat a non-green badge as a hold, not a suggestion.</li>
                     <li><strong>Roll samples</strong> on this screen shows the answer key alongside each draw (unlike the editor's own preview) — the last sanity check before this goes anywhere near students.</li>
                     <li><strong>Merge</strong> the questions you've selected into a new, unpublished tutorial, ready for the normal editor.</li>
@@ -382,8 +383,8 @@ export default function TutorialManual({ standalone = false }) {
                             width: 30, height: 30, borderRadius: 8,
                             background: 'linear-gradient(135deg,#0d9488,#14b8a6)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 15,
-                        }}>🧮</div>
+                            color: '#fff',
+                        }}><LmIcon name="tutorial" size={16} /></div>
                         <span style={{ fontSize: 14, fontWeight: 700, color: '#ccfbf1' }}>
                             Tutorials — Teacher Manual
                         </span>
@@ -408,8 +409,8 @@ export default function TutorialManual({ standalone = false }) {
                         width: 42, height: 42, borderRadius: 10,
                         background: 'linear-gradient(135deg,#0d9488,#14b8a6)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 20,
-                    }}>🧮</div>
+                        color: '#fff',
+                    }}><LmIcon name="tutorial" size={21} /></div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="tum-title" style={{ fontWeight: 800, color: T.text }}>Tutorials — Teacher Manual</div>
                         <div className="tum-subtitle" style={{ color: T.textMuted, marginTop: 2 }}>

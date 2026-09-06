@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import getEnvironment from '../../getenvironment';
+import { LmIcon } from '../components/Icon';
 
 // ── design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -36,10 +37,10 @@ const cssReset = `
 function Note({ type = 'info', children }) {
     const cfg = {
         info: { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8', icon: 'ℹ' },
-        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: '⚠' },
-        tip: { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: '💡' },
-        key: { bg: '#f0fdfa', border: '#99f6e4', color: '#115e59', icon: '🔑' },
-        danger: { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: '⛔' },
+        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: 'warning' },
+        tip: { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: 'tip' },
+        key: { bg: '#f0fdfa', border: '#99f6e4', color: '#115e59', icon: 'key' },
+        danger: { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: 'danger' },
     };
     const s = cfg[type] || cfg.info;
     return (
@@ -48,7 +49,7 @@ function Note({ type = 'info', children }) {
             padding: '10px 14px', marginBottom: 16,
             display: 'flex', gap: 10, alignItems: 'flex-start',
         }}>
-            <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{s.icon}</span>
+            <span style={{ flexShrink: 0, marginTop: 2, color: s.color }}><LmIcon name={s.icon} size={15} /></span>
             <div style={{ fontSize: 13, color: s.color, lineHeight: 1.65 }}>{children}</div>
         </div>
     );
@@ -82,7 +83,7 @@ function ShotSlot({ screen, path, caption }) {
                 borderRadius: 10, padding: '20px 18px',
                 border: '1px dashed #99f6e4', background: '#f6fdfc', textAlign: 'center',
             }}>
-                <div style={{ fontSize: 18, marginBottom: 6 }}>🖼️</div>
+                <div style={{ marginBottom: 6, color: T.accent }}><LmIcon name="image" size={19} /></div>
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: '#115e59', lineHeight: 1.5 }}>
                     Screenshot: {screen}
                 </div>
@@ -144,12 +145,12 @@ function Rows({ items }) {
 // ── tabs ──────────────────────────────────────────────────────────────────────
 
 const TABS = [
-    { id: 'overview', label: 'Overview', icon: '📋' },
-    { id: 'build', label: 'Build a Form', icon: '✏️' },
-    { id: 'share', label: 'Publish & Share', icon: '🔗' },
-    { id: 'student', label: 'What Respondents See', icon: '📱' },
-    { id: 'responses', label: 'Responses', icon: '📊' },
-    { id: 'gotchas', label: 'Gotchas', icon: '⚠️' },
+    { id: 'overview', label: 'Overview', icon: 'form' },
+    { id: 'build', label: 'Build a Form', icon: 'edit' },
+    { id: 'share', label: 'Publish & Share', icon: 'link' },
+    { id: 'student', label: 'What Respondents See', icon: 'mobile' },
+    { id: 'responses', label: 'Responses', icon: 'insights' },
+    { id: 'gotchas', label: 'Gotchas', icon: 'warning' },
 ];
 
 // ── tab content ───────────────────────────────────────────────────────────────
@@ -468,8 +469,8 @@ export default function FormsManual({ standalone = false }) {
                             width: 30, height: 30, borderRadius: 8,
                             background: 'linear-gradient(135deg,#0f766e,#2dd4bf)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 15,
-                        }}>📋</div>
+                            color: '#fff',
+                        }}><LmIcon name="form" size={16} /></div>
                         <span style={{ fontSize: 14, fontWeight: 700, color: '#99f6e4' }}>
                             Forms — Teacher Manual
                         </span>
@@ -494,8 +495,8 @@ export default function FormsManual({ standalone = false }) {
                         width: 42, height: 42, borderRadius: 10,
                         background: 'linear-gradient(135deg,#0f766e,#2dd4bf)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 20,
-                    }}>📋</div>
+                        color: '#fff',
+                    }}><LmIcon name="form" size={21} /></div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="fmm-title" style={{ fontWeight: 800, color: T.text }}>Forms — Teacher Manual</div>
                         <div className="fmm-subtitle" style={{ color: T.textMuted, marginTop: 2 }}>

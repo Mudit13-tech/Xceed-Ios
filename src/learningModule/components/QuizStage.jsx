@@ -11,6 +11,7 @@ import {
 } from '../quizStage';
 import StageBar from './StageBar';
 import ExamPulse from './ExamPulse';
+import { LmIcon } from './Icon';
 
 /**
  * The canvas a quiz runs on — the brief and the sitting alike.
@@ -82,7 +83,7 @@ export default function QuizStage({
              that cannot work reads as the test being broken, and the sitting
              lets that browser through rather than gating on it. */
           !isFullscreen && fullscreenSupported() && (
-            <Button size="xs" variant="outline" onClick={enter} leftIcon={<span aria-hidden="true">⛶</span>}>
+            <Button size="xs" variant="outline" onClick={enter} leftIcon={<LmIcon name="fullscreen" size={14} />}>
               Fullscreen
             </Button>
           )

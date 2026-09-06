@@ -27,6 +27,7 @@ import {
   Text,
 } from '@chakra-ui/react';
 import RichText from './RichText';
+import { LmIcon } from './Icon';
 
 const TYPE_LABEL = {
   mcq: 'Choose one',
@@ -263,7 +264,8 @@ export default function QuizPreviewModal({ isOpen, onClose, quiz }) {
         {showAnswers && question.explanation && (
           <Box mt={3} p={3} bg="purple.50" borderRadius="md" borderWidth="1px" borderColor="purple.200">
             <Text fontSize="xs" fontWeight="700" color="purple.700" mb={1}>
-              💡 Explanation
+              <LmIcon name="tip" size={12} style={{ marginRight: 4 }} />
+              Explanation
             </Text>
             <RichText>{question.explanation}</RichText>
           </Box>
@@ -305,7 +307,8 @@ export default function QuizPreviewModal({ isOpen, onClose, quiz }) {
             colorScheme={deliveryMode === 'all_at_once' ? 'purple' : 'gray'}
             onClick={() => setDeliveryMode('all_at_once')}
           >
-            📋 All on one page
+            <LmIcon name="quiz" size={13} style={{ marginRight: 4 }} />
+            All on one page
           </Button>
           <Button
             size="xs"
@@ -413,11 +416,13 @@ export default function QuizPreviewModal({ isOpen, onClose, quiz }) {
       size={isFullScreen ? 'full' : '5xl'}
       scrollBehavior="inside"
     >
-      <ModalOverlay backdropFilter="blur(3px)" />
+      <ModalOverlay backdropFilter="blur(3px)" bg={isFullScreen ? 'blackAlpha.800' : undefined} />
       <ModalContent
         borderRadius={isFullScreen ? '0' : 'xl'}
-        bg={isFullScreen ? 'lmBg.subtle' : undefined}
+        bg={isFullScreen ? 'lmBg.page' : 'lmBg.surface'}
+        color="lmFg.heading"
         minH={isFullScreen ? '100vh' : undefined}
+        m={isFullScreen ? 0 : undefined}
       >
         <ModalHeader borderBottomWidth="1px" py={isFullScreen ? 4 : 3}>
           {isFullScreen ? (
@@ -425,7 +430,8 @@ export default function QuizPreviewModal({ isOpen, onClose, quiz }) {
               <Flex justify="space-between" align="center" wrap="wrap" gap={2}>
                 <Box>
                   <Text fontSize="lg" fontWeight="700">
-                    👁️ Full Screen Student Preview: {quiz.title}
+                    <LmIcon name="preview" size={17} style={{ marginRight: 6 }} />
+                    Full Screen Student Preview: {quiz.title}
                   </Text>
                   <Text fontSize="xs" color="lmFg.muted" fontWeight="normal">
                     {questions.length} question{questions.length === 1 ? '' : 's'} · {totalMarks} total mark
@@ -434,7 +440,8 @@ export default function QuizPreviewModal({ isOpen, onClose, quiz }) {
                 </Box>
 
                 <Button size="sm" colorScheme="purple" variant="outline" onClick={toggleFullScreen}>
-                  📉 Exit Full Screen
+                  <LmIcon name="close" size={14} style={{ marginRight: 6 }} />
+                  Exit Full Screen
                 </Button>
               </Flex>
             </Container>
@@ -443,7 +450,8 @@ export default function QuizPreviewModal({ isOpen, onClose, quiz }) {
               <Box>
                 <HStack spacing={2}>
                   <Text fontSize="lg" fontWeight="700">
-                    👁️ Student Preview: {quiz.title}
+                    <LmIcon name="preview" size={17} style={{ marginRight: 6 }} />
+                    Student Preview: {quiz.title}
                   </Text>
                 </HStack>
                 <Text fontSize="xs" color="lmFg.muted" fontWeight="normal">
@@ -453,7 +461,8 @@ export default function QuizPreviewModal({ isOpen, onClose, quiz }) {
               </Box>
 
               <Button size="xs" colorScheme="purple" variant="outline" onClick={toggleFullScreen}>
-                🖥️ Full Screen
+                <LmIcon name="desktop" size={13} style={{ marginRight: 6 }} />
+                Full Screen
               </Button>
             </Flex>
           )}

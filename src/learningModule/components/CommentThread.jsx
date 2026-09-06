@@ -12,6 +12,7 @@ import {
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { relativeTime } from '../format';
+import { LmIcon } from './Icon';
 
 /**
  * Comment list + composer, reused for class comments on stream posts and
@@ -124,7 +125,7 @@ export default function CommentThread({
               variant="ghost"
               colorScheme="gray"
               aria-label="Delete comment"
-              icon={<span>✕</span>}
+              icon={<LmIcon name="close" size={13} />}
               onClick={() => remove(comment._id)}
               flexShrink={0}
             />

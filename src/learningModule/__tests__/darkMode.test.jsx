@@ -1,7 +1,23 @@
 import React from 'react';
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+
+const getAllFiles = (dir) => {
+  const entries = readdirSync(dir, { withFileTypes: true });
+  let files = [];
+  for (const entry of entries) {
+    const res = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) {
+      if (entry.name !== '__tests__') {
+        files = files.concat(getAllFiles(res));
+      }
+    } else if (entry.isFile() && (entry.name.endsWith('.jsx') || entry.name.endsWith('.js'))) {
+      files.push(res);
+    }
+  }
+  return files;
+};
 import { execSync } from 'node:child_process';
 import { ChakraProvider, Box, Text, extendTheme, theme as chakraTheme } from '@chakra-ui/react';
 
@@ -321,10 +337,7 @@ const PROPS = [
 
 describe('no light-only colour literals in the module', () => {
   it('has none outside the named exceptions', () => {
-    const files = execSync(
-      "find src/learningModule -name '*.jsx' -o -name '*.js' | grep -v __tests__",
-      { encoding: 'utf8' },
-    ).trim().split('\n');
+    const files = getAllFiles('src/learningModule');
 
     const re = new RegExp(`\\b(${PROPS.join('|')})=(?:"([^"{}]*)"|'([^'{}]*)'|\\{([^{}]*)\\})`, 'g');
     const found = [];

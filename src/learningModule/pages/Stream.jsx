@@ -30,6 +30,7 @@ import RichTextEditor from '../components/RichTextEditor';
 import { isRichTextEmpty } from '../richTextUtils';
 import { DueBadge, EmptyState, ErrorState, Loading, StateBadge, buttonTextStyles } from '../components/common';
 import { courseworkLink, courseworkMeta, relativeTime } from '../format';
+import { LmIcon } from '../components/Icon';
 
 function Composer({ classId, onPosted }) {
   const [open, setOpen] = useState(false);
@@ -163,6 +164,8 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
 
   const react = async () => {
     try {
+      // The stored reaction value, not an icon: the server keys reactions by
+      // this string and existing rows already carry it.
       const result = await lmApi.reactToAnnouncement(classId, item._id, '👍');
       setReactions(result.reactions);
     } catch (error) {
@@ -224,7 +227,12 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
             <Text fontWeight="600" fontSize="sm" noOfLines={1} maxW="100%" wordBreak="break-all">
               {item.authorName}
             </Text>
-            {item.pinned && <Badge colorScheme="yellow" flexShrink={0}>📌 Pinned</Badge>}
+            {item.pinned && (
+              <Badge colorScheme="yellow" flexShrink={0} display="inline-flex" alignItems="center" gap={1}>
+                <LmIcon name="pin" size={11} />
+                Pinned
+              </Badge>
+            )}
             {item.status === 'scheduled' && <Badge colorScheme="purple" flexShrink={0}>Scheduled</Badge>}
             {item.status === 'draft' && <Badge colorScheme="gray" flexShrink={0}>Draft</Badge>}
             {item.audience?.length > 0 && <Badge colorScheme="cyan" flexShrink={0}>Targeted</Badge>}
@@ -291,7 +299,7 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
           variant={myReaction ? 'solid' : 'ghost'}
           colorScheme="blue"
           onClick={react}
-          leftIcon={<span>👍</span>}
+          leftIcon={<LmIcon name="like" size={14} />}
           flexShrink={0}
         >
           {reactions.length || ''}
@@ -304,7 +312,8 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
           </Tooltip>
         )}
         <Button size="xs" variant="ghost" onClick={() => setShowComments((v) => !v)} flexShrink={0}>
-          💬 {commentCount} class {commentCount === 1 ? 'comment' : 'comments'}
+          <LmIcon name="comment" size={13} style={{ marginRight: 6 }} />
+          {commentCount} class {commentCount === 1 ? 'comment' : 'comments'}
         </Button>
       </Flex>
 
@@ -349,10 +358,10 @@ function CourseworkStreamCard({ item, classId }) {
           bg={`${meta.colorScheme}.50`}
           align="center"
           justify="center"
-          fontSize="lg"
+          color={`${meta.colorScheme}.600`}
           flexShrink={0}
         >
-          {meta.icon}
+          <LmIcon name={meta.icon} size={20} />
         </Flex>
         <Box flex="1" minW={0}>
           <Text fontSize="sm" color="lmFg.subtle">
@@ -377,7 +386,8 @@ function CourseworkStreamCard({ item, classId }) {
       </Flex>
       {item.aiSourceSessionId && (
         <Badge mt={3} colorScheme="purple">
-          ✨ Generated from a class recording
+          <LmIcon name="ai" size={11} style={{ marginRight: 4 }} />
+          Generated from a class recording
         </Badge>
       )}
       {item.workType === 'material' && item.instructions && (
@@ -469,7 +479,7 @@ export default function Stream() {
         {debouncedSearch ? (
           !data?.results?.length ? (
             <EmptyState
-              icon="🔎"
+              icon="search"
               title="No results found"
               description={`No class content matched "${debouncedSearch}".`}
             />
@@ -511,7 +521,7 @@ export default function Stream() {
           )
         ) : !data?.items?.length ? (
           <EmptyState
-            icon="📭"
+            icon="empty"
             title="Nothing here yet"
             description={
               isTeacher

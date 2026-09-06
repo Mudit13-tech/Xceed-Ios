@@ -100,14 +100,14 @@ it('saves with the edited title', async () => {
 it('shows the share link once published', async () => {
   publishForm.mockResolvedValue({ published: true, shareCode: 'abc123' });
   updateForm.mockResolvedValue(baseForm());
-  getForm.mockResolvedValueOnce(baseForm()).mockResolvedValueOnce(baseForm({ published: true, shareCode: 'abc123' }));
+  getForm.mockResolvedValueOnce(baseForm({ published: false })).mockResolvedValue(baseForm({ published: true, shareCode: 'abc123' }));
   const { default: FormEditor } = await import('../pages/FormEditor');
   renderWithProviders(<FormEditor />);
   await screen.findByDisplayValue('Feedback');
 
   fireEvent.click(screen.getByRole('button', { name: /^publish$/i }));
   await waitFor(() => expect(publishForm).toHaveBeenCalledWith('c1', 'f1', { publish: true }));
-  expect(await screen.findByDisplayValue('https://api.test/learning/form/link/abc123')).toBeInTheDocument();
+  expect((await screen.findAllByDisplayValue('https://api.test/learning/form/link/abc123')).length).toBeGreaterThan(0);
 });
 
 it('does not offer a share link before the form is published', async () => {

@@ -49,6 +49,7 @@ import {
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { LmIcon } from '../components/Icon';
 import QuizReview from '../components/QuizReview';
 import { richTextToPlain } from '../richTextUtils';
 import { formatDateTime, relativeTime } from '../format';
@@ -123,7 +124,7 @@ function TimeLeft({ deadline, skewMs }) {
  */
 const ACTIONS = {
   continue: {
-    label: '▶️ Reopen — continue',
+    label: 'Reopen — continue',
     title: 'Let them carry on',
     colorScheme: 'blue',
     confirm: 'Reopen',
@@ -133,7 +134,7 @@ const ACTIONS = {
       }. Use this when the test ended for a reason that was not their doing — a dropped connection, a dead battery, the window closing mid-paper.`,
   },
   restart: {
-    label: '🔄 Restart as a new test',
+    label: 'Restart as a new test',
     title: 'Give them a fresh paper',
     colorScheme: 'orange',
     confirm: 'Restart',
@@ -141,7 +142,7 @@ const ACTIONS = {
       `Everything ${attempt.studentName || attempt.studentEmail} answered is deleted and they sit the test again from question 1, on a freshly shuffled paper. Their old score goes with it.`,
   },
   delete: {
-    label: '🗑 Delete this response',
+    label: 'Delete this response',
     title: 'Remove the attempt',
     colorScheme: 'red',
     confirm: 'Delete',
@@ -168,7 +169,8 @@ function AttemptActions({ attempt, onAct, showContinue = true, hideResultsContro
           colorScheme="blue"
           onClick={() => onAct('continue')}
         >
-          {attempt.status === 'in_progress' ? '⏱ More time' : '▶️ Reopen'}
+          <LmIcon name={attempt.status === 'in_progress' ? 'timer' : 'play'} size={13} style={{ marginRight: 4 }} />
+          {attempt.status === 'in_progress' ? 'More time' : 'Reopen'}
         </Button>
       )}
       {!hideResultsControls && (
@@ -178,7 +180,8 @@ function AttemptActions({ attempt, onAct, showContinue = true, hideResultsContro
           colorScheme="orange"
           onClick={() => onAct('restart')}
         >
-          🔄 Restart
+          <LmIcon name="refresh" size={13} style={{ marginRight: 4 }} />
+          Restart
         </Button>
       )}
       <Button
@@ -187,7 +190,8 @@ function AttemptActions({ attempt, onAct, showContinue = true, hideResultsContro
         colorScheme="red"
         onClick={() => onAct('delete')}
       >
-        🗑 Delete
+        <LmIcon name="delete" size={13} style={{ marginRight: 4 }} />
+        Delete
       </Button>
     </HStack>
   );
@@ -246,7 +250,7 @@ function AttemptAnswersModal({ attempt, classId, onClose }) {
             <Loading label="Loading the paper…" />
           ) : review.length === 0 ? (
             <EmptyState
-              icon="📝"
+              icon="assignment"
               title="Nothing to show"
               description="This sitting has no marked answers — it may still be in progress."
             />
@@ -1705,7 +1709,8 @@ export default function QuizResults() {
                   isLoading={releasing}
                   isDisabled={!isConducted}
                 >
-                  📢 Publish results now
+                  <LmIcon name="announcement" size={14} style={{ marginRight: 6 }} />
+                  Publish results now
                 </Button>
               </Box>
             </Tooltip>
@@ -1867,7 +1872,7 @@ export default function QuizResults() {
           {/* ---- attempts ---- */}
           <TabPanel px={0}>
             {attempts.length === 0 ? (
-              <EmptyState icon="📊" title="No attempts yet" description="Results appear as students sit the test." />
+              <EmptyState icon="insights" title="No attempts yet" description="Results appear as students sit the test." />
             ) : (
               <SectionCard>
                 <Flex justify="space-between" align="center" gap={3} mb={4} wrap="wrap">
@@ -1892,7 +1897,7 @@ export default function QuizResults() {
 
                   <InputGroup size="xs" maxW="240px">
                     <InputLeftElement pointerEvents="none" color="lmFg.faint">
-                      🔍
+                      <LmIcon name="search" size={13} />
                     </InputLeftElement>
                     <Input
                       placeholder="Search student or roll..."
@@ -2077,7 +2082,8 @@ export default function QuizResults() {
                 <Grid templateColumns={{ base: '1fr', md: '1fr 1fr' }} gap={3} mb={4}>
                   <Box p={3} bg="lmHue.red50" borderWidth="1px" borderColor="lmHue.red200" borderRadius="md">
                     <Text fontSize="xs" fontWeight="700" color="lmHue.red700" textTransform="uppercase">
-                      ⚠️ Most Difficult Question
+                      <LmIcon name="warning" size={12} style={{ marginRight: 4 }} />
+                      Most Difficult Question
                     </Text>
                     <Text fontSize="xs" fontWeight="600" color="lmFg.heading" mt={1} noOfLines={2}>
                       {richTextToPlain(questionInsights.hardest.question || '')}

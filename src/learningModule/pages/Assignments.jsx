@@ -15,6 +15,7 @@ import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import { toDateTimeInput } from '../format';
 import PaperPreviewModal from '../components/PaperPreviewModal';
+import { LmIcon } from '../components/Icon';
 
 /**
  * Lists the class's parameterised assignments — the ones where every student
@@ -170,7 +171,8 @@ export default function Assignments() {
               isLoading={importing}
               onClick={() => fileRef.current?.click()}
             >
-              📄 Import from a paper
+              <LmIcon name="assignment" size={14} style={{ marginRight: 6 }} />
+              Import from a paper
             </Button>
             <input
               ref={fileRef}
@@ -181,7 +183,8 @@ export default function Assignments() {
               onChange={(event) => startImport([...event.target.files])}
             />
             <Button as="a" href="/learning/assignmentmanual" target="_blank" rel="noreferrer" variant="ghost">
-              📖 Manual
+              <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
+              Manual
             </Button>
             <Button colorScheme="teal" onClick={create}>
               + New assignment
@@ -194,7 +197,7 @@ export default function Assignments() {
 
       {assignments.length === 0 ? (
         <EmptyState
-          icon="🧮"
+          icon="assignment"
           title="No assignments yet"
           description={
             isTeacher

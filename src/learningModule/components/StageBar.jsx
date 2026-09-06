@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Flex, HStack, Heading, Text } from '@chakra-ui/react';
+import { LmIcon } from './Icon';
 
 /**
  * The chrome a student screen is allowed: which platform this is, whose paper
@@ -27,9 +28,7 @@ export default function StageBar({ label = 'Assessment', subject, faculty, title
       wrap="wrap"
     >
       <HStack spacing={2} flexShrink={0}>
-        <Text fontSize="xl" aria-hidden="true">
-          🎓
-        </Text>
+        <LmIcon name="brand" size={22} />
         <Box>
           <Heading size="sm" color="lmFg.heading" lineHeight="1.1">
             XCEED Learning
@@ -54,7 +53,8 @@ export default function StageBar({ label = 'Assessment', subject, faculty, title
             )}
             {faculty && (
               <Text fontSize="xs" color="lmFg.muted">
-                👤 {faculty}
+                <LmIcon name="user" size={12} style={{ marginRight: 4 }} />
+                {faculty}
               </Text>
             )}
           </Box>

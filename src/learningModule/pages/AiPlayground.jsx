@@ -1,27 +1,28 @@
 import React from 'react';
 import { Badge, Box, Flex, HStack, Heading, SimpleGrid, Text } from '@chakra-ui/react';
+import { LmIcon } from '../components/Icon';
 
 // Placeholder tab. The teaching side of the AI features already ships as AI
 // Studio; this is the student-facing counterpart, announced here so the class
 // knows it is coming rather than finding an empty tab later.
 const PLANNED = [
   {
-    icon: '💬',
+    icon: 'comment',
     title: 'Ask your lectures',
     description: 'Put a question to the transcript of any lecture in this class and get the passage it came from.',
   },
   {
-    icon: '🃏',
+    icon: 'cards',
     title: 'Practice cards',
     description: 'Flashcards and practice questions generated from the material your teacher has posted.',
   },
   {
-    icon: '🧭',
+    icon: 'compass',
     title: 'Explain this',
     description: 'Step through a worked solution at your own pace, with hints instead of answers.',
   },
   {
-    icon: '📈',
+    icon: 'trend-up',
     title: 'Know your gaps',
     description: 'A read on the topics your quiz attempts say you should revisit first.',
   },
@@ -40,9 +41,9 @@ export default function AiPlayground() {
         textAlign="center"
         mb={5}
       >
-        <Text fontSize="4xl" mb={2}>
-          🤖
-        </Text>
+        <Box color="purple.500" mb={2} display="flex" justifyContent="center">
+          <LmIcon name="ai" size={40} strokeWidth={1.5} />
+        </Box>
         <HStack justify="center" spacing={3} mb={3}>
           <Heading size="lg" color="lmFg.heading">
             AI Playground
@@ -70,7 +71,9 @@ export default function AiPlayground() {
             align="flex-start"
             opacity={0.85}
           >
-            <Text fontSize="2xl">{feature.icon}</Text>
+            <Box color="purple.500">
+              <LmIcon name={feature.icon} size={22} />
+            </Box>
             <Box>
               <Heading size="sm" color="lmFg.heading" mb={1}>
                 {feature.title}

@@ -83,11 +83,11 @@ describe('QuizPreviewModal', () => {
   it('toggles full screen mode on button click', () => {
     renderWithProviders(<QuizPreviewModal isOpen={true} onClose={() => {}} quiz={sampleQuiz} />);
 
-    const fsBtn = screen.getByRole('button', { name: /🖥️ Full Screen/i });
+    const fsBtn = screen.getByRole('button', { name: /full screen/i });
     expect(fsBtn).toBeInTheDocument();
 
     fireEvent.click(fsBtn);
 
-    expect(screen.getByRole('button', { name: /📉 Exit Full Screen/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Exit Full Screen' })).toBeInTheDocument();
   });
 });

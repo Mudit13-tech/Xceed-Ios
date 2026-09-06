@@ -259,7 +259,7 @@ export default function MyGroundTruthPhotos() {
     if (state.error.code === 'NOT_ON_ERP_ROSTER') {
       return (
         <EmptyState
-          icon="🪪"
+          icon="attendance-card"
           title="We could not match your account to the student list"
           description={state.error.message}
         />
@@ -314,7 +314,7 @@ export default function MyGroundTruthPhotos() {
 
       {!data.hasGroundTruth ? (
         <EmptyState
-          icon="📷"
+          icon="camera"
           title="No attendance photos yet"
           description="Your class has not been photographed for the attendance system yet. Once it has, your photos will appear here and you will be able to choose which are used."
         />

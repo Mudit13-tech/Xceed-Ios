@@ -11,6 +11,7 @@ import {
   useColorModeValue,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
+import { LmIcon } from './Icon';
 
 // Helper to normalize any date input (String "YYYY-MM-DD", Date object, or ISO timestamp) to "YYYY-MM-DD"
 function toDateString(d) {
@@ -180,7 +181,8 @@ export default function SubjectAttendanceStrip({ klass }) {
         {/* Left Side: Summary Metrics */}
         <HStack spacing={2} flexShrink={0} wrap="wrap">
           <Text fontSize="xs" fontWeight="700" color="lmFg.body">
-            📊 Attendance:
+            <LmIcon name="insights" size={12} style={{ marginRight: 4 }} />
+            Attendance:
           </Text>
           {stats.total > 0 ? (
             <>

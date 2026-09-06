@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import getEnvironment from '../../getenvironment';
+import { LmIcon } from '../components/Icon';
 
 import shotList from '../manualAssets/assignments/list.png';
 import shotEditor from '../manualAssets/assignments/editor.png';
@@ -40,10 +41,10 @@ const cssReset = `
 function Note({ type = 'info', children }) {
     const cfg = {
         info:    { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8', icon: 'ℹ' },
-        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: '⚠' },
-        tip:     { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: '💡' },
-        key:     { bg: '#fff7ed', border: '#fed7aa', color: '#9a3412', icon: '🔑' },
-        danger:  { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: '⛔' },
+        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: 'warning' },
+        tip:     { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: 'tip' },
+        key:     { bg: '#fff7ed', border: '#fed7aa', color: '#9a3412', icon: 'key' },
+        danger:  { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: 'danger' },
     };
     const s = cfg[type] || cfg.info;
     return (
@@ -52,7 +53,7 @@ function Note({ type = 'info', children }) {
             padding: '10px 14px', marginBottom: 16,
             display: 'flex', gap: 10, alignItems: 'flex-start',
         }}>
-            <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{s.icon}</span>
+            <span style={{ flexShrink: 0, marginTop: 2, color: s.color }}><LmIcon name={s.icon} size={15} /></span>
             <div style={{ fontSize: 13, color: s.color, lineHeight: 1.65 }}>{children}</div>
         </div>
     );
@@ -86,13 +87,13 @@ function Shot({ src, alt, caption }) {
 // ── tabs ──────────────────────────────────────────────────────────────────────
 
 const TABS = [
-    { id: 'overview', label: 'Overview',         icon: '📐' },
-    { id: 'create',   label: 'Create & Author',   icon: '✏️' },
-    { id: 'settings', label: 'Settings',          icon: '⚙️' },
-    { id: 'import',   label: 'Import a Paper',    icon: '📄' },
-    { id: 'student',  label: 'What Students See', icon: '👀' },
-    { id: 'grade',    label: 'Grading & Results', icon: '✅' },
-    { id: 'gotchas',  label: 'Gotchas',           icon: '⚠️' },
+    { id: 'overview', label: 'Overview',         icon: 'geometry' },
+    { id: 'create',   label: 'Create & Author',   icon: 'edit' },
+    { id: 'settings', label: 'Settings',          icon: 'settings' },
+    { id: 'import',   label: 'Import a Paper',    icon: 'assignment' },
+    { id: 'student',  label: 'What Students See', icon: 'preview' },
+    { id: 'grade',    label: 'Grading & Results', icon: 'success' },
+    { id: 'gotchas',  label: 'Gotchas',           icon: 'warning' },
 ];
 
 // ── tab content ───────────────────────────────────────────────────────────────
@@ -183,7 +184,7 @@ function TabCreate() {
 
             <SectionTitle>Reusing Questions</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
-                <strong>📥 Import questions</strong>, in the toolbar at the top of the editor, copies whole
+                <strong><LmIcon name="import" size={13} /> Import questions</strong>, in the toolbar at the top of the editor, copies whole
                 questions from another assignment — this class or any other you teach — as independent
                 copies with no shared history.
             </div>
@@ -240,9 +241,9 @@ function TabImport() {
 
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ol style={{ margin: 0, paddingLeft: 18 }}>
-                    <li><strong>Upload</strong> one or more PDF/image files via <strong>📄 Import from a paper</strong>.</li>
-                    <li><strong>✨ Suggest variables</strong> — the model proposes which numbers to turn into variables, showing what the paper originally used.</li>
-                    <li><strong>✨ Derive answers from the paper</strong> — writes the formula and checks it by substituting the paper's own numbers back in.</li>
+                    <li><strong>Upload</strong> one or more PDF/image files via <strong><LmIcon name="assignment" size={13} /> Import from a paper</strong>.</li>
+                    <li><strong><LmIcon name="ai" size={13} /> Suggest variables</strong> — the model proposes which numbers to turn into variables, showing what the paper originally used.</li>
+                    <li><strong><LmIcon name="ai" size={13} /> Derive answers from the paper</strong> — writes the formula and checks it by substituting the paper's own numbers back in.</li>
                     <li>Read every verification badge: <strong style={{ color: '#166534' }}>✓ matches the paper</strong>, or one of the not-yet-trustworthy states (mismatch / not checkable / will not parse). <strong>Nothing blocks merging an unverified answer</strong> — this is a check for you to act on, not a safeguard the system enforces.</li>
                     <li><strong>Roll samples</strong> here shows the answer key alongside the draws — deliberately, since this screen is teacher-only.</li>
                     <li><strong>Merge</strong> your selected questions into a new, unpublished assignment.</li>
@@ -369,8 +370,8 @@ export default function AssignmentManual({ standalone = false }) {
                             width: 30, height: 30, borderRadius: 8,
                             background: 'linear-gradient(135deg,#c2410c,#ea580c)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 15,
-                        }}>📐</div>
+                            color: '#fff',
+                        }}><LmIcon name="geometry" size={16} /></div>
                         <span style={{ fontSize: 14, fontWeight: 700, color: '#fed7aa' }}>
                             Assignments — Teacher Manual
                         </span>
@@ -395,8 +396,8 @@ export default function AssignmentManual({ standalone = false }) {
                         width: 42, height: 42, borderRadius: 10,
                         background: 'linear-gradient(135deg,#c2410c,#ea580c)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 20,
-                    }}>📐</div>
+                        color: '#fff',
+                    }}><LmIcon name="geometry" size={21} /></div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="agm-title" style={{ fontWeight: 800, color: T.text }}>Assignments — Teacher Manual</div>
                         <div className="agm-subtitle" style={{ color: T.textMuted, marginTop: 2 }}>

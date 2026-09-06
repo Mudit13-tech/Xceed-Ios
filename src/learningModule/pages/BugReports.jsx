@@ -100,8 +100,8 @@ function ReportForm({ classes, pointsPerReport, onSent }) {
   return (
     <VStack align="stretch" spacing={3}>
       <Select value={kind} onChange={(event) => setKind(event.target.value)} maxW="420px">
-        <option value="bug">🐛 Something is broken (bug)</option>
-        <option value="suggestion">💡 Something could be better (suggestion)</option>
+        <option value="bug">Something is broken (bug)</option>
+        <option value="suggestion">Something could be better (suggestion)</option>
       </Select>
       <Input
         placeholder={KIND_COPY[kind].title}
@@ -207,7 +207,7 @@ function AdminQueue({ reports, counts, onReviewed }) {
       </HStack>
 
       {reports.length === 0 ? (
-        <EmptyState icon="🎉" title="Nothing in the queue" />
+        <EmptyState icon="success" title="Nothing in the queue" />
       ) : (
         reports.map((report) => (
           <Box key={report._id} borderWidth="1px" borderRadius="md" p={4}>
@@ -354,7 +354,7 @@ export default function BugReports() {
   const history = (
     <SectionCard title="Your submissions">
       {mine.reports.length === 0 ? (
-        <EmptyState icon="🐛" title="Nothing sent yet" />
+        <EmptyState icon="empty" title="Nothing sent yet" />
       ) : (
         <VStack align="stretch" spacing={2}>
           {mine.reports.map((report) => (

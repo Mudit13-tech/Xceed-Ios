@@ -24,6 +24,7 @@ import { AttachmentList } from '../components/Attachments';
 import MaterialModal from '../components/MaterialModal';
 import { EmptyState, ErrorState, Loading, buttonTextStyles } from '../components/common';
 import { formatDate } from '../format';
+import { LmIcon } from '../components/Icon';
 
 function TopicManager({ classId, topics, onChanged }) {
   const [name, setName] = useState('');
@@ -180,8 +181,8 @@ function MaterialRow({ item, classId, isTeacher, onChanged, onEdit }) {
       _hover={{ borderColor: 'blue.300' }}
     >
       <Flex align="center" gap={4}>
-        <Flex w="40px" h="40px" borderRadius="full" bg="lmHue.green50" align="center" justify="center" flexShrink={0}>
-          📚
+        <Flex w="40px" h="40px" borderRadius="full" bg="lmHue.green50" color="green.600" align="center" justify="center" flexShrink={0}>
+          <LmIcon name="material" size={20} />
         </Flex>
         <Box
           as={RouterLink}
@@ -197,7 +198,12 @@ function MaterialRow({ item, classId, isTeacher, onChanged, onEdit }) {
             {item.status !== 'published' && (
               <Badge colorScheme={item.status === 'draft' ? 'gray' : 'purple'}>{item.status}</Badge>
             )}
-            {item.aiSourceSessionId && <Badge colorScheme="purple">✨ AI</Badge>}
+            {item.aiSourceSessionId && (
+              <Badge colorScheme="purple" display="inline-flex" alignItems="center" gap={1}>
+                <LmIcon name="ai" size={11} />
+                AI
+              </Badge>
+            )}
           </Flex>
           <HStack spacing={3} mt={1} wrap="wrap">
             <Text fontSize="xs" color="lmFg.muted">
@@ -292,7 +298,7 @@ export default function Material() {
 
         {items.length === 0 ? (
           <EmptyState
-            icon="📚"
+            icon="material"
             title="No material yet"
             description={
               isTeacher

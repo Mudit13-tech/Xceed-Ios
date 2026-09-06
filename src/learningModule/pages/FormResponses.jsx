@@ -146,7 +146,7 @@ function ResponsesTab({ classId, formId, form, responses, onDeleted }) {
   };
 
   if (!responses.length) {
-    return <EmptyState icon="📭" title="No responses yet" description="Share the form to start collecting responses." />;
+    return <EmptyState icon="form" title="No responses yet" description="Share the form to start collecting responses." />;
   }
 
   return (

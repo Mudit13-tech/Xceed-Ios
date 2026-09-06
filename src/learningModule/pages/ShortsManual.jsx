@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import getEnvironment from '../../getenvironment';
+import { LmIcon } from '../components/Icon';
 
 import shotList from '../manualAssets/shorts/list.png';
 import shotEditor from '../manualAssets/shorts/editor.png';
@@ -41,10 +42,10 @@ const cssReset = `
 function Note({ type = 'info', children }) {
     const cfg = {
         info:    { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8', icon: 'ℹ' },
-        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: '⚠' },
-        tip:     { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: '💡' },
-        key:     { bg: '#faf5ff', border: '#e9d5ff', color: '#6b21a8', icon: '🔑' },
-        danger:  { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: '⛔' },
+        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: 'warning' },
+        tip:     { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: 'tip' },
+        key:     { bg: '#faf5ff', border: '#e9d5ff', color: '#6b21a8', icon: 'key' },
+        danger:  { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: 'danger' },
     };
     const s = cfg[type] || cfg.info;
     return (
@@ -53,7 +54,7 @@ function Note({ type = 'info', children }) {
             padding: '10px 14px', marginBottom: 16,
             display: 'flex', gap: 10, alignItems: 'flex-start',
         }}>
-            <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{s.icon}</span>
+            <span style={{ flexShrink: 0, marginTop: 2, color: s.color }}><LmIcon name={s.icon} size={15} /></span>
             <div style={{ fontSize: 13, color: s.color, lineHeight: 1.65 }}>{children}</div>
         </div>
     );
@@ -87,12 +88,12 @@ function Shot({ src, alt, caption }) {
 // ── tabs ──────────────────────────────────────────────────────────────────────
 
 const TABS = [
-    { id: 'overview', label: 'Overview',        icon: '⚡' },
-    { id: 'create',   label: 'Build a Deck',     icon: '✏️' },
-    { id: 'present',  label: 'Presenting Live',  icon: '📽️' },
-    { id: 'student',  label: 'What Students See',icon: '📱' },
-    { id: 'reports',  label: 'Sessions & Reports',icon: '📊' },
-    { id: 'gotchas',  label: 'Gotchas',          icon: '⚠️' },
+    { id: 'overview', label: 'Overview',        icon: 'short' },
+    { id: 'create',   label: 'Build a Deck',     icon: 'edit' },
+    { id: 'present',  label: 'Presenting Live',  icon: 'present' },
+    { id: 'student',  label: 'What Students See',icon: 'mobile' },
+    { id: 'reports',  label: 'Sessions & Reports',icon: 'insights' },
+    { id: 'gotchas',  label: 'Gotchas',          icon: 'warning' },
 ];
 
 // ── tab content ───────────────────────────────────────────────────────────────
@@ -184,7 +185,7 @@ function TabCreate() {
                 </ul>
             </div>
             <Note type="tip">
-                <strong>📥 Import slides</strong> copies slides from another Short — this class or any other
+                <strong><LmIcon name="import" size={13} /> Import slides</strong> copies slides from another Short — this class or any other
                 you teach — as independent copies with no shared history, exactly like question import
                 elsewhere in the module.
             </Note>
@@ -333,8 +334,8 @@ export default function ShortsManual({ standalone = false }) {
                             width: 30, height: 30, borderRadius: 8,
                             background: 'linear-gradient(135deg,#7c3aed,#a855f7)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 15,
-                        }}>⚡</div>
+                            color: '#fff',
+                        }}><LmIcon name="short" size={16} /></div>
                         <span style={{ fontSize: 14, fontWeight: 700, color: '#e9d5ff' }}>
                             Shorts — Teacher Manual
                         </span>
@@ -359,8 +360,8 @@ export default function ShortsManual({ standalone = false }) {
                         width: 42, height: 42, borderRadius: 10,
                         background: 'linear-gradient(135deg,#7c3aed,#a855f7)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 20,
-                    }}>⚡</div>
+                        color: '#fff',
+                    }}><LmIcon name="short" size={21} /></div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="shm-title" style={{ fontWeight: 800, color: T.text }}>Shorts — Teacher Manual</div>
                         <div className="shm-subtitle" style={{ color: T.textMuted, marginTop: 2 }}>

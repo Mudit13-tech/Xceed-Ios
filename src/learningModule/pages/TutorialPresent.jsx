@@ -25,6 +25,7 @@ import useShortStream from '../hooks/useShortStream';
 import { ErrorState, Loading, SectionCard } from '../components/common';
 import RichText from '../components/RichText';
 import { decimalPlacesHint } from '../format';
+import { LmIcon } from '../components/Icon';
 
 /**
  * The teacher's live board for a teacher-paced tutorial.
@@ -113,7 +114,8 @@ function QuestionDetail({ question }) {
 
       {question.hint && (
         <Text fontSize="xs" color="blue.600" mt={2}>
-          💡 Hint (shown only when you switch it on): {question.hint.replace(/<[^>]*>/g, ' ').trim()}
+          <LmIcon name="tip" size={13} style={{ marginRight: 4 }} />
+          Hint (shown only when you switch it on): {question.hint.replace(/<[^>]*>/g, ' ').trim()}
         </Text>
       )}
     </Box>

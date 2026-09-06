@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import getEnvironment from '../../getenvironment';
+import { LmIcon } from '../components/Icon';
 
 // Captured at 900 CSS px so each one displays at about 1:1 in this column —
 // see the note on <Shot>. The older 1280px captures under shorts/, quiz/ and
@@ -61,10 +62,10 @@ const cssReset = `
 function Note({ type = 'info', children }) {
     const cfg = {
         info: { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8', icon: 'ℹ' },
-        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: '⚠' },
-        tip: { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: '💡' },
-        key: { bg: '#eef2ff', border: '#c7d2fe', color: '#3730a3', icon: '🔑' },
-        danger: { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: '⛔' },
+        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: 'warning' },
+        tip: { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: 'tip' },
+        key: { bg: '#eef2ff', border: '#c7d2fe', color: '#3730a3', icon: 'key' },
+        danger: { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: 'danger' },
     };
     const s = cfg[type] || cfg.info;
     return (
@@ -132,7 +133,7 @@ function ShotSlot({ screen, path, caption }) {
                 borderRadius: 10, padding: '20px 18px',
                 border: '1px dashed #c7d2fe', background: '#f8faff', textAlign: 'center',
             }}>
-                <div style={{ fontSize: 18, marginBottom: 6 }}>🖼️</div>
+                <div style={{ marginBottom: 6, color: '#3730a3' }}><LmIcon name="image" size={19} /></div>
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: '#3730a3', lineHeight: 1.5 }}>
                     Screenshot: {screen}
                 </div>
@@ -165,7 +166,8 @@ function Part({ number, icon, title, href, where, children }) {
                     width: 38, height: 38, borderRadius: 9, flexShrink: 0,
                     background: '#eef2ff', border: '1px solid #c7d2fe',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
-                }}>{icon}</div>
+                    color: T.accent,
+                }}><LmIcon name={icon} size={19} /></div>
                 <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{
                         fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
@@ -194,7 +196,8 @@ function Part({ number, icon, title, href, where, children }) {
                 fontSize: 13, fontWeight: 700, color: '#fff', background: T.accent,
                 textDecoration: 'none', padding: '9px 16px', borderRadius: 8,
             }}>
-                📖 Open Part {number} in a new tab <span aria-hidden="true">↗</span>
+                <LmIcon name="manual" size={14} />
+                Open Part {number} in a new tab <span aria-hidden="true">↗</span>
             </a>
         </div>
     );
@@ -207,7 +210,7 @@ function Feature({ icon, name, where, image, children }) {
             border: `1px solid ${T.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 12,
         }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
-                <span style={{ fontSize: 15, flexShrink: 0 }}>{icon}</span>
+                <span style={{ flexShrink: 0, color: T.accent }}><LmIcon name={icon} size={16} /></span>
                 <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>{name}</div>
                     {where && <div style={{ fontSize: 11.5, color: T.textMuted, marginTop: 2 }}>{where}</div>}
@@ -250,8 +253,8 @@ export default function GettingStartedManual({ standalone = false }) {
                             width: 30, height: 30, borderRadius: 8,
                             background: 'linear-gradient(135deg,#4f46e5,#818cf8)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 15,
-                        }}>🚀</div>
+                            color: '#fff',
+                        }}><LmIcon name="brand" size={16} /></div>
                         <span style={{ fontSize: 14, fontWeight: 700, color: '#c7d2fe' }}>
                             XCEED Learning — Manuals
                         </span>
@@ -277,8 +280,8 @@ export default function GettingStartedManual({ standalone = false }) {
                         width: 42, height: 42, borderRadius: 10,
                         background: 'linear-gradient(135deg,#4f46e5,#818cf8)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 20,
-                    }}>🚀</div>
+                        color: '#fff',
+                    }}><LmIcon name="brand" size={21} /></div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="gsm-title" style={{ fontWeight: 800, color: T.text }}>
                             XCEED Learning — Introduction and Manuals
@@ -350,7 +353,7 @@ export default function GettingStartedManual({ standalone = false }) {
 
                     <Part
                         number={1}
-                        icon="🏫"
+                        icon="classes"
                         title="Setting up the classroom"
                         href="/learning/setupmanual"
                         where="before any of them — this is the class itself"
@@ -364,7 +367,7 @@ export default function GettingStartedManual({ standalone = false }) {
                         <Shot src={shotDashboard} alt="The Learning dashboard, listing the classes you teach" />
                     </Part>
 
-                    <Part number={2} icon="⚡" title="Shorts" href="/learning/shortsmanual" where="Shorts">
+                    <Part number={2} icon="short" title="Shorts" href="/learning/shortsmanual" where="Shorts">
                         <P>
                             Much like Mentimeter — instant live questions the whole room answers on their phones
                             while you present from the front — but with no cap on how many students can join, and
@@ -378,7 +381,7 @@ export default function GettingStartedManual({ standalone = false }) {
                         <Shot src={shotShorts} alt="The Shorts tab for a class" />
                     </Part>
 
-                    <Part number={3} icon="📝" title="Quizzes" href="/learning/quizmanual" where="Quizzes">
+                    <Part number={3} icon="quiz" title="Quizzes" href="/learning/quizmanual" where="Quizzes">
                         <P>
                             The assessment engine: a timed, marked paper with a real gradebook row behind it.
                             Question banks, sectioning, shuffling, negative marking, per-question timers and
@@ -390,7 +393,7 @@ export default function GettingStartedManual({ standalone = false }) {
                         <Shot src={shotQuizzes} alt="The Quizzes tab for a class" />
                     </Part>
 
-                    <Part number={4} icon="📚" title="Tutorials" href="/learning/tutorialmanual" where="Tutorials">
+                    <Part number={4} icon="tutorial" title="Tutorials" href="/learning/tutorialmanual" where="Tutorials">
                         <P>
                             Guided practice at the student&apos;s own pace: explanation, question, feedback, next
                             step. Nothing is invigilated and the emphasis is on getting there rather than on the
@@ -407,7 +410,7 @@ export default function GettingStartedManual({ standalone = false }) {
                         <Shot src={shotTutorials} alt="The Tutorials tab for a class" />
                     </Part>
 
-                    <Part number={5} icon="📄" title="Assignments" href="/learning/assignmentmanual" where="Assignments">
+                    <Part number={5} icon="assignment" title="Assignments" href="/learning/assignmentmanual" where="Assignments">
                         <P>
                             Work set with a due date and handed back in — files, typed answers, or a structured
                             set of questions. Late submissions are flagged rather than silently accepted, so what
@@ -427,7 +430,7 @@ export default function GettingStartedManual({ standalone = false }) {
                         <Shot src={shotAssignments} alt="The Assignments tab for a class" />
                     </Part>
 
-                    <Part number={6} icon="📋" title="Forms" href="/learning/formsmanual" where="Forms">
+                    <Part number={6} icon="form" title="Forms" href="/learning/formsmanual" where="Forms">
                         <P>
                             Everything that is not an assessment: feedback, sign-up sheets, project-group
                             declarations, consent, a quick survey. Eight question types, an optional closing time,
@@ -438,7 +441,7 @@ export default function GettingStartedManual({ standalone = false }) {
                         <Shot src={shotForms} alt="The Forms tab for a class" />
                     </Part>
 
-                    <Part number={7} icon="💻" title="Coding" href="/learning/codingmanual" where="Coding">
+                    <Part number={7} icon="coding" title="Coding" href="/learning/codingmanual" where="Coding">
                         <P>
                             Notebooks of text and code cells that students actually run — Python and C execute
                             inside the browser, with no server to provision and nothing to install. Hidden test
@@ -458,38 +461,38 @@ export default function GettingStartedManual({ standalone = false }) {
                         to know when to reach for them.
                     </P>
 
-                    <Feature icon="📢" name="Stream" where="Class navbar · Stream" image={shotStream}>
+                    <Feature icon="stream" name="Stream" where="Class navbar · Stream" image={shotStream}>
                         The class noticeboard, and the first tab anyone lands on. You post announcements with
                         attachments; whether students may reply or start their own posts is a class setting.
                         Everything you publish elsewhere also lands here, so the stream is the honest record of
                         what the class has been asked to do.
                     </Feature>
 
-                    <Feature icon="📁" name="Material" where="Class navbar · Material" image={shotMaterial}>
+                    <Feature icon="material" name="Material" where="Class navbar · Material" image={shotMaterial}>
                         Notes, slides, links and recordings — the things to read or watch before the work, which
                         is why it sits beside Shorts rather than with the things you hand in. Material can be
                         filed under topics, so a term&apos;s worth stays navigable in week eleven.
                     </Feature>
 
-                    <Feature icon="📊" name="Grades" where="Class navbar · Grades" image={shotGrades}>
+                    <Feature icon="grades" name="Grades" where="Class navbar · Grades" image={shotGrades}>
                         The gradebook. Every marked quiz, assignment, tutorial and notebook lands here as a
                         column, per student, and whether students can see their own is a class setting.
                     </Feature>
 
-                    <Feature icon="🤖" name="AI Studio" where="Class navbar · AI Studio" image={shotStudio}>
+                    <Feature icon="ai" name="AI Studio" where="Class navbar · AI Studio" image={shotStudio}>
                         Turns a recorded lecture into notes, a tutorial and a quiz, which you then review and
                         publish to the class. It can pull a recording the attendance module already captured, or
                         take a transcript you paste in. Everything it produces is a draft for you to check — it
                         publishes nothing on its own.
                     </Feature>
 
-                    <Feature icon="💬" name="Forum" where="Class navbar · Forum" image={shotForum}>
+                    <Feature icon="discussion" name="Forum" where="Class navbar · Forum" image={shotForum}>
                         Where the class talks and staff join in, kept separate from the stream so a student
                         question is not competing with the homework for the same space. Each student may start one
                         new topic a week, and the button says so before anything is typed.
                     </Feature>
 
-                    <Feature icon="🟣" name="Anonymous Feedback" where="Class navbar · Anonymous Feedback" image={shotFeedback}>
+                    <Feature icon="feedback" name="Anonymous Feedback" where="Class navbar · Anonymous Feedback" image={shotFeedback}>
                         The one tab that runs the other way — from the class to you — which is why it sits last
                         and in its own colour. Students write about teaching, pace, content, assessment or
                         communication, and you read it with no names attached. Be clear with your class about what
@@ -499,7 +502,7 @@ export default function GettingStartedManual({ standalone = false }) {
                         be actionable.
                     </Feature>
 
-                    <Feature icon="👥" name="People, Insights and Leaderboard" where="Class header, beside the class code" image={shotInsights}>
+                    <Feature icon="people" name="People, Insights and Leaderboard" where="Class header, beside the class code" image={shotInsights}>
                         <strong>People</strong> is the roster — invite, approve, promote to co-teacher, remove.
                         <strong> Insights</strong> is what you open the class to check: who is behind and what
                         needs chasing. <strong>Leaderboard</strong> shows points and badges for the class, weekly
@@ -507,7 +510,7 @@ export default function GettingStartedManual({ standalone = false }) {
                         late.
                     </Feature>
 
-                    <Feature icon="🏅" name="Points and badges" where="Class header · Leaderboard → How points work" image={shotLeaderboard}>
+                    <Feature icon="medal" name="Points and badges" where="Class header · Leaderboard → How points work" image={shotLeaderboard}>
                         Students earn points for real work: an assignment is worth about 30, a submission 25 on
                         time and 10 late, sitting a quiz 20 plus up to 20 more by score, a tutorial or notebook
                         20, answering a whole Short session 5, starting a forum topic 15, writing anonymous
@@ -520,31 +523,31 @@ export default function GettingStartedManual({ standalone = false }) {
 
                     <SectionTitle>Across all your classes</SectionTitle>
 
-                    <Feature icon="🏠" name="Dashboard" where="/learning" image={shotDashboard}>
+                    <Feature icon="classes" name="Dashboard" where="/learning" image={shotDashboard}>
                         Every class you teach or are enrolled in, under Active, Completed and Archived, with
                         counts for pending work, submissions waiting to be reviewed and what is due this week. An
                         exam that is open for you right now is banner-ed at the top, above everything else.
                     </Feature>
 
-                    <Feature icon="✅" name="To-do" where="Left sidebar · To-do" image={shotTodo}>
+                    <Feature icon="todo" name="To-do" where="Left sidebar · To-do" image={shotTodo}>
                         The cross-class pile. For a student, what is upcoming and what is already missing; for a
                         teacher, what has been handed in and is waiting to be marked. It is the one screen that
                         answers &ldquo;what do I owe, across everything?&rdquo;
                     </Feature>
 
-                    <Feature icon="🗓️" name="Calendar" where="Left sidebar · Calendar" image={shotCalendar}>
+                    <Feature icon="calendar" name="Calendar" where="Left sidebar · Calendar" image={shotCalendar}>
                         Due dates from every class on one month view, with institute holidays drawn in from the
                         attendance module — so a deadline you set on a holiday is visibly a deadline on a holiday
                         before you publish it.
                     </Feature>
 
-                    <Feature icon="🕘" name="Timetable" where="Left sidebar · Timetable" image={shotTimetable}>
+                    <Feature icon="timetable" name="Timetable" where="Left sidebar · Timetable" image={shotTimetable}>
                         The teaching timetable, in the same design as the platform&apos;s own timetable module. For
                         a student it detects their department and semester from where they are actually enrolled,
                         so it opens on the right grid rather than asking them to pick one.
                     </Feature>
 
-                    <Feature icon="🔔" name="Notifications" where="Bell, top right" image={shotNotifications}>
+                    <Feature icon="notifications" name="Notifications" where="Bell, top right" image={shotNotifications}>
                         Announcements, new coursework, grades released, comments and deadlines. Each student
                         controls which of those reach them, per class, and you can mute a class you are only
                         watching.

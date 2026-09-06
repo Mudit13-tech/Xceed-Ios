@@ -59,22 +59,47 @@ const FORM_GUEST_KEY = 'lmFormGuest';
 export const formGuest = {
   save: (formId, token) => {
     try {
-      sessionStorage.setItem(FORM_GUEST_KEY, JSON.stringify({ formId: String(formId), token }));
+      const data = JSON.parse(sessionStorage.getItem(FORM_GUEST_KEY) || 'null');
+      let map = {};
+      if (data && typeof data === 'object' && !data.token) {
+        map = data;
+      } else if (data && data.formId && data.token) {
+        map[data.formId] = data.token;
+      }
+      if (formId && token) {
+        map[String(formId)] = token;
+      }
+      sessionStorage.setItem(FORM_GUEST_KEY, JSON.stringify(map));
     } catch {
-      // A browser refusing storage is not a reason to fail the join; the
-      // respondent simply cannot survive a reload.
+      // A browser refusing storage is not a reason to fail the join
     }
   },
-  token: () => {
+  token: (formId) => {
     try {
-      return JSON.parse(sessionStorage.getItem(FORM_GUEST_KEY) || 'null')?.token || null;
+      const data = JSON.parse(sessionStorage.getItem(FORM_GUEST_KEY) || 'null');
+      if (!data) return null;
+      if (typeof data === 'string') return data;
+      if (data.token && data.formId) {
+        if (!formId || String(formId) === String(data.formId)) return data.token;
+      }
+      if (formId && data[String(formId)]) return data[String(formId)];
+      const values = Object.values(data);
+      return typeof values[0] === 'string' ? values[0] : values[0]?.token || null;
     } catch {
       return null;
     }
   },
-  clear: () => {
+  clear: (formId) => {
     try {
-      sessionStorage.removeItem(FORM_GUEST_KEY);
+      if (formId) {
+        const data = JSON.parse(sessionStorage.getItem(FORM_GUEST_KEY) || 'null');
+        if (data && typeof data === 'object') {
+          delete data[String(formId)];
+          sessionStorage.setItem(FORM_GUEST_KEY, JSON.stringify(data));
+        }
+      } else {
+        sessionStorage.removeItem(FORM_GUEST_KEY);
+      }
     } catch {
       /* nothing to clear */
     }
@@ -128,7 +153,7 @@ export const quizSession = {
 /** `/classes/:classId/attempts/:attemptId/...` → the attempt id, or null. */
 const attemptIdIn = (path) => path.match(/\/attempts\/([a-f\d]{24})(?:\/|$)/i)?.[1] || null;
 
-async function request(path, { method = 'GET', body, raw = false, signal, keepalive = false } = {}) {
+async function request(path, { method = 'GET', body, raw = false, signal, keepalive = false, formId } = {}) {
   const options = {
     method,
     credentials: 'include',
@@ -141,6 +166,7 @@ async function request(path, { method = 'GET', body, raw = false, signal, keepal
     // body of all in-flight keepalive requests at 64KB, which a quiz answer is
     // nowhere near.
     keepalive,
+    formId,
   };
 
   const token = localStorage.getItem('token');
@@ -151,7 +177,7 @@ async function request(path, { method = 'GET', body, raw = false, signal, keepal
   const guestToken = shortGuest.token();
   if (guestToken) options.headers['X-Short-Guest'] = guestToken;
 
-  const formGuestToken = formGuest.token();
+  const formGuestToken = formGuest.token(options.formId);
   if (formGuestToken) options.headers['X-Form-Guest'] = formGuestToken;
 
   // Attached by path rather than by each call site, so a sitting endpoint added
@@ -970,8 +996,8 @@ const lmApi = {
   /* `sendMail: false` opens the accounts without telling anybody — for a
      department seeded ahead of a term, where the welcome mail should go out
      later (or not at all). Omitted, the import mails, as it always did. */
-  adminImportFaculty: (dept, { sendMail = true } = {}) =>
-    request('/admin/faculty/import', { method: 'POST', body: { dept, sendMail } }),
+  adminImportFaculty: (dept, { sendMail = true, notifyAdmin = false } = {}) =>
+    request('/admin/faculty/import', { method: 'POST', body: { dept, sendMail, notifyAdmin } }),
   /* lm-admin — student accounts. Same 403 for anyone who is not a platform admin. */
   adminListStudents: (params = {}) => request(`/admin/students${qs(params)}`),
   adminCreateStudent: (body) => request('/admin/students', { method: 'POST', body }),
@@ -986,6 +1012,12 @@ const lmApi = {
      platform admins, and the server scopes an HOD to their own department
      whatever `dept` asks for. */
   getHodDashboard: (params = {}) => request(`/hod/dashboard${qs(params)}`),
+  /* What the timetable allocates to each of a department's faculty, marked up
+     with which of those subjects has a classroom in this module. Same gate and
+     the same department mapping as the dashboard; one department and one
+     session at a time — `dept` and `session` both default to the server's
+     choice (the account's own department, the session in progress). */
+  getHodSubjects: (params = {}) => request(`/hod/subjects${qs(params)}`),
   /* Bulk import from an ERP roster export (.xlsx: name, roll no, branch,
      email), parsed client-side — the server only ever sees plain rows of
      `{ name, rollNumber, dept, email }`. `preview` classifies each row
@@ -1118,10 +1150,10 @@ const lmApi = {
       method: 'POST',
       body: name ? { name } : {},
     }),
-  getFormByLink: (shareCode) => request(`/forms/link/${encodeURIComponent(shareCode)}`),
-  submitFormResponseByLink: (shareCode, answers) =>
-    request(`/forms/link/${encodeURIComponent(shareCode)}/responses`, { method: 'POST', body: { answers } }),
-  formShareUrl: (shareCode) => `${window.location.origin}/learning/form/link/${shareCode}`,
+  getFormByLink: (shareCode, formId) => request(`/forms/link/${encodeURIComponent(shareCode)}`, { formId }),
+  submitFormResponseByLink: (shareCode, answers, formId) =>
+    request(`/forms/link/${encodeURIComponent(shareCode)}/responses`, { method: 'POST', body: { answers }, formId }),
+  formShareUrl: (shareCode) => `${getEnvironment()}/learning/form/link/${shareCode}`,
 
   /* analytics + uploads */
   analytics: (classId) => request(`/classes/${classId}/analytics`),

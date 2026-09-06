@@ -17,6 +17,7 @@ import {
 import lmApi from '../api/lmApi';
 import { loginPathFor } from '../../authRedirect';
 import { ErrorState, Loading } from '../components/common';
+import { LmIcon } from '../components/Icon';
 import useStableNavigate from '../hooks/useStableNavigate';
 import NotificationPreferencesModal from '../components/NotificationPreferencesModal';
 import SubjectAttendanceStrip from '../components/SubjectAttendanceStrip';
@@ -126,8 +127,14 @@ export default function ClassLayout() {
               {[klass.section, klass.subject, klass.room].filter(Boolean).join(' · ')}
             </Text>
             <HStack fontSize="sm" opacity={0.85} mt={0.5} spacing={3} wrap="wrap">
-              <Text whiteSpace="nowrap">👤 {klass.ownerName}</Text>
-              <Text whiteSpace="nowrap">📄 {klass.counts?.courseworkCount ?? 0} items</Text>
+              <Text whiteSpace="nowrap" display="flex" alignItems="center" gap={1.5}>
+                <LmIcon name="user" size={13} />
+                {klass.ownerName}
+              </Text>
+              <Text whiteSpace="nowrap" display="flex" alignItems="center" gap={1.5}>
+                <LmIcon name="coursework" size={13} />
+                {klass.counts?.courseworkCount ?? 0} items
+              </Text>
             </HStack>
           </Box>
 
@@ -137,7 +144,12 @@ export default function ClassLayout() {
               to={`/learning/class/${classId}/people`}
               size="sm"
               aria-label="People"
-              icon={<span>👥 {klass.counts?.studentCount ?? 0}</span>}
+              icon={
+                <Box as="span" display="inline-flex" alignItems="center" gap={1}>
+                  <LmIcon name="people" size={16} />
+                  {klass.counts?.studentCount ?? 0}
+                </Box>
+              }
               display={{ base: 'flex', md: 'none' }}
               {...headerLinkStyles}
             />
@@ -145,7 +157,7 @@ export default function ClassLayout() {
               as={NavLink}
               to={`/learning/class/${classId}/people`}
               size="sm"
-              leftIcon={<span>👥</span>}
+              leftIcon={<LmIcon name="people" size={16} />}
               display={{ base: 'none', md: 'flex' }}
               {...headerLinkStyles}
             >
@@ -158,7 +170,7 @@ export default function ClassLayout() {
                 to={`/learning/class/${classId}/insights`}
                 size="sm"
                 aria-label="Insights"
-                icon={<span>📊</span>}
+                icon={<LmIcon name="insights" size={16} />}
                 display={{ base: 'flex', md: 'none' }}
                 {...headerLinkStyles}
               />
@@ -168,7 +180,7 @@ export default function ClassLayout() {
                 as={NavLink}
                 to={`/learning/class/${classId}/insights`}
                 size="sm"
-                leftIcon={<span>📊</span>}
+                leftIcon={<LmIcon name="insights" size={16} />}
                 display={{ base: 'none', md: 'flex' }}
                 {...headerLinkStyles}
               >
@@ -181,7 +193,7 @@ export default function ClassLayout() {
               to={`/learning/class/${classId}/leaderboard`}
               size="sm"
               aria-label="Leaderboard"
-              icon={<span>🏆</span>}
+              icon={<LmIcon name="leaderboard" size={16} />}
               display={{ base: 'flex', md: 'none' }}
               {...headerLinkStyles}
             />
@@ -189,7 +201,7 @@ export default function ClassLayout() {
               as={NavLink}
               to={`/learning/class/${classId}/leaderboard`}
               size="sm"
-              leftIcon={<span>🏆</span>}
+              leftIcon={<LmIcon name="leaderboard" size={16} />}
               display={{ base: 'none', md: 'flex' }}
               {...headerLinkStyles}
             >
@@ -216,7 +228,7 @@ export default function ClassLayout() {
                 onClick={() => setPrefsOpen(true)}
                 size="sm"
                 aria-label="Notification preferences"
-                icon={<span>🔔</span>}
+                icon={<LmIcon name="notifications" size={16} />}
                 {...headerLinkStyles}
               />
             </Tooltip>
@@ -227,7 +239,7 @@ export default function ClassLayout() {
                   to={`/learning/class/${classId}/settings`}
                   size="sm"
                   aria-label="Class settings"
-                  icon={<span>⚙️</span>}
+                  icon={<LmIcon name="settings" size={16} />}
                   {...headerLinkStyles}
                 />
               </Tooltip>

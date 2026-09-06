@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useNavigate, useOutletContext } from 'react-router-dom';
 import { Badge, Box, Button, Flex, HStack, Heading, Text, useDisclosure } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { DeadlineCountdown, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { CopyLinkButton, DeadlineCountdown, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import FormPreviewModal from '../components/FormPreviewModal';
+import { LmIcon } from '../components/Icon';
 
 /**
  * Lists the class's forms — a Google-Forms-like builder, entirely separate
@@ -61,7 +62,8 @@ export default function Forms() {
         {isTeacher && (
           <>
             <Button as="a" href="/learning/formsmanual" target="_blank" rel="noreferrer" variant="ghost" size="sm">
-              📖 Manual
+              <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
+            Manual
             </Button>
             <Button colorScheme="teal" onClick={create}>
               + New form
@@ -74,7 +76,7 @@ export default function Forms() {
 
       {forms.length === 0 ? (
         <EmptyState
-          icon="📝"
+          icon="form"
           title="No forms yet"
           description={
             isTeacher
@@ -126,6 +128,9 @@ export default function Forms() {
               <HStack>
                 {isTeacher ? (
                   <>
+                    {form.published && form.shareCode && (
+                      <CopyLinkButton to={`/learning/form/link/${form.shareCode}`} size="sm" />
+                    )}
                     <Button
                       as={RouterLink}
                       to={`/learning/class/${classId}/form/${form._id}/edit`}

@@ -41,8 +41,8 @@ describe('learningModule <CodingManual />', () => {
     expect(screen.getByText(/Provide Starter Prompt \/ Skeleton & Publish/i)).toBeInTheDocument();
 
     // Language specifics
-    expect(screen.getByText(/🐍 Python Test Execution/i)).toBeInTheDocument();
-    expect(screen.getByText(/⚙️ C Test Execution/i)).toBeInTheDocument();
+    expect(screen.getByText(/Python Test Execution/i)).toBeInTheDocument();
+    expect(screen.getByText(/C Test Execution/i)).toBeInTheDocument();
     expect(screen.getByText(/Smart Output Normalization:/i)).toBeInTheDocument();
   });
 

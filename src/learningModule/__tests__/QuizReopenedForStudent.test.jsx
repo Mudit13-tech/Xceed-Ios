@@ -131,7 +131,7 @@ describe('a reopened sitting in the student quiz list', () => {
     renderWithProviders(<Quizzes />);
 
     expect(await screen.findByRole('link', { name: /resume test/i })).toBeTruthy();
-    expect(screen.queryByText(/✅ Completed/)).toBeNull();
+    expect(screen.queryByText(/^Completed$/)).toBeNull();
   });
 
   it('marks a genuinely finished paper as completed', async () => {
@@ -144,6 +144,6 @@ describe('a reopened sitting in the student quiz list', () => {
 
     await waitFor(() => expect(listQuizzes).toHaveBeenCalled());
     expect(screen.queryByRole('link', { name: /resume test/i })).toBeNull();
-    expect(screen.getByText(/✅ Completed/)).toBeTruthy();
+    expect(screen.getByText(/^Completed$/)).toBeTruthy();
   });
 });

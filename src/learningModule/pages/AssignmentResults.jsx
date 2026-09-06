@@ -126,7 +126,7 @@ export default function AssignmentResults() {
       )}
 
       {submitted.length === 0 ? (
-        <EmptyState icon="🧮" title="No submissions yet" description="Results appear as students submit." />
+        <EmptyState icon="assignment" title="No submissions yet" description="Results appear as students submit." />
       ) : (
         <>
           <SectionCard

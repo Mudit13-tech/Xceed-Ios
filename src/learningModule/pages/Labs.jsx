@@ -130,7 +130,7 @@ export default function Labs() {
 
       {labs.length === 0 ? (
         <EmptyState
-          icon="🔌"
+          icon="lab"
           title="No experiments yet"
           description={
             isTeacher

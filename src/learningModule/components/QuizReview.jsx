@@ -14,6 +14,7 @@ import {
 import RichText from './RichText';
 import { SectionCard } from './common';
 import { richTextToPlain } from '../richTextUtils';
+import { LmIcon } from './Icon';
 
 /**
  * Per-question review after submitting.
@@ -104,7 +105,7 @@ export default function QuizReview({ review, title = 'Question review', answerLa
 
         <InputGroup size="xs" maxW="240px">
           <InputLeftElement pointerEvents="none" color="lmFg.faint">
-            🔍
+            <LmIcon name="search" size={13} />
           </InputLeftElement>
           <Input
             placeholder="Search questions..."

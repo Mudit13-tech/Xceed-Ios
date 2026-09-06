@@ -25,6 +25,7 @@ import { ErrorState, Loading, SectionCard, StatTile } from '../components/common
 import RichText from '../components/RichText';
 import AssignmentUploads from '../components/AssignmentUploads';
 import { decimalPlacesHint, formatAnswerValue, formatDateTime } from '../format';
+import { LmIcon } from '../components/Icon';
 
 const answerId = (questionId, key) => `${questionId}:${key}`;
 
@@ -438,7 +439,9 @@ export default function AssignmentPlayer() {
 
           {question.hint && !submitted && (
             <Flex fontSize="xs" color="blue.600" mb={3} gap={1}>
-              <Text>💡</Text>
+              <Box color="orange.400">
+                <LmIcon name="tip" size={18} />
+              </Box>
               <RichText fontSize="xs" color="blue.600">
                 {question.hint}
               </RichText>

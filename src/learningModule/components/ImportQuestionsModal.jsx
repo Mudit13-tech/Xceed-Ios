@@ -195,7 +195,7 @@ export default function ImportQuestionsModal({
 
           {noSources ? (
             <EmptyState
-              icon="📭"
+              icon="empty"
               title="Nothing to import from yet"
               description="You can import from anything else in this class, or from any other class you teach or co-teach."
             />
@@ -265,7 +265,7 @@ export default function ImportQuestionsModal({
 
                     {parts.length === 0 ? (
                       <EmptyState
-                        icon="🗂"
+                        icon="bank"
                         title={`No ${partLabel} in there`}
                         description="Pick a different one above."
                       />

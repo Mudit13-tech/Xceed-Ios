@@ -180,6 +180,21 @@ export default function NotificationSettingsTab() {
   const [message, setMessage] = useState({ text: '', type: '' });
   const [updatingRole, setUpdatingRole] = useState(null);
   const [removingId, setRemovingId] = useState(null);
+  /* The appointed heads of department, from the platform mapping the superadmin
+     screen writes. Not editable here — shown because this page decides who gets
+     mailed, and a list that leaves them out reads as the whole answer. */
+  const [departmentHeads, setDepartmentHeads] = useState([]);
+
+  /* Ground-truth photo reminder. Its department list is its own rather than the
+     one above: this send reads the ERP roster, and only a department spelled the
+     way the roster spells it has recipients behind it. */
+  const [gtScope, setGtScope] = useState('all');
+  const [gtBranches, setGtBranches] = useState([]);
+  const [gtStudent, setGtStudent] = useState('');
+  const [gtNote, setGtNote] = useState('');
+  const [gtAudience, setGtAudience] = useState(null);
+  const [gtSending, setGtSending] = useState(false);
+  const [gtResult, setGtResult] = useState(null);
 
   useEffect(() => {
     fetch(`${BASE}/`, { credentials: 'include' })
@@ -188,6 +203,7 @@ export default function NotificationSettingsTab() {
         setEnabled(!!d.settings?.enabled);
         setRoles(d.settings?.roles || []);
         setRecipients(d.settings?.recipients || []);
+        setDepartmentHeads(d.departmentHeads || []);
         if (d.settings?.dailySummaryConfig) setDailySummaryConfig(d.settings.dailySummaryConfig);
         if (d.settings?.facultySummaryConfig) setFacultySummaryConfig(d.settings.facultySummaryConfig);
         if (d.settings?.studentAttendanceConfig) setStudentConfig(d.settings.studentAttendanceConfig);
@@ -212,10 +228,69 @@ export default function NotificationSettingsTab() {
       .finally(() => setDepsLoading(false));
   }, [role]);
 
+  useEffect(() => {
+    fetch(`${BASE}/ground-truth-reminder/audience`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setGtAudience(d))
+      .catch(() => { /* the card still sends; only the counts are missing */ });
+  }, []);
+
   function showMsg(text, type = 'success') {
     setMessage({ text, type });
     setTimeout(() => setMessage({ text: '', type: '' }), 3000);
   }
+
+  // How many students the current selection would reach, so the button can say
+  // it before it is pressed rather than after.
+  const gtReach = (() => {
+    if (!gtAudience) return null;
+    if (gtScope === 'all') return gtAudience.total;
+    if (gtScope === 'department') {
+      return gtAudience.branches
+        .filter((b) => gtBranches.includes(b.branch))
+        .reduce((sum, b) => sum + b.count, 0);
+    }
+    return null;
+  })();
+
+  const gtReady =
+    gtScope === 'all'
+      ? true
+      : gtScope === 'department'
+        ? gtBranches.length > 0
+        : Boolean(gtStudent.trim());
+
+  const toggleGtBranch = (branch) => {
+    setGtResult(null);
+    setGtBranches((current) =>
+      current.includes(branch) ? current.filter((b) => b !== branch) : [...current, branch],
+    );
+  };
+
+  const sendGroundTruthReminder = async () => {
+    setGtSending(true);
+    setGtResult(null);
+    try {
+      const res = await fetch(`${BASE}/ground-truth-reminder/send`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scope: gtScope,
+          branches: gtBranches,
+          student: gtStudent.trim(),
+          note: gtNote.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not send');
+      setGtResult({ text: data.message, type: 'success' });
+    } catch (err) {
+      setGtResult({ text: err.message, type: 'error' });
+    } finally {
+      setGtSending(false);
+    }
+  };
 
   const handleToggle = async () => {
     const newEnabled = !enabled;
@@ -865,10 +940,10 @@ export default function NotificationSettingsTab() {
         </div>
       </div>
 
-      {/* End-of-class summary mailed to the faculty who taught the period */}
+      {/* End-of-class attendance outcome mailed to the timetable faculty */}
       <div className="ns-card">
         <div className="ns-card-header">
-          <span className="ns-section-title">Faculty attendance summary</span>
+          <span className="ns-section-title">Faculty attendance email</span>
         </div>
         <div className="ns-card-body">
           <div
@@ -884,8 +959,9 @@ export default function NotificationSettingsTab() {
                 Email faculty at the end of each class
               </div>
               <div style={{ fontSize: 12, color: T.textMuted }}>
-                Sends present/absent roll numbers to the faculty on the timetable, using their
-                address from the Faculty directory. Not tied to the roles above.
+                Sends present/absent roll numbers after a successful run. If no attendance check
+                succeeds, sends the faculty a manual-attendance warning instead. Uses the Faculty
+                directory address and is not tied to the roles above.
               </div>
             </div>
             <div
@@ -1109,6 +1185,158 @@ export default function NotificationSettingsTab() {
         </div>
       </div>
 
+      {/* Ground-truth photo reminder — a one-off send, not an alert rule, so it
+          has no toggle: nothing here fires on its own. */}
+      <div className="ns-card">
+        <div
+          className="ns-card-header"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+        >
+          <span className="ns-section-title">Ask students to update their photos</span>
+          {gtAudience && (
+            <span className="ns-group-count">{gtAudience.total} on the roster</span>
+          )}
+        </div>
+        <div className="ns-card-body">
+          <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.6, marginBottom: 14 }}>
+            Sends a reminder to refresh the reference photos the recogniser matches faces
+            against. The mail links to the student&apos;s own <strong>My Attendance</strong> page,
+            where they sign in as themselves — it carries no personal link, so it is safe to
+            send to a whole department.
+          </div>
+
+          <div className="ns-add-row" style={{ marginBottom: 12 }}>
+            <select
+              className="native-input"
+              value={gtScope}
+              onChange={(e) => {
+                setGtScope(e.target.value);
+                setGtResult(null);
+              }}
+              style={{ flex: 1, minWidth: 200 }}
+            >
+              <option value="all">All students</option>
+              <option value="department">One department</option>
+              <option value="student">One student</option>
+            </select>
+
+            {gtScope === 'student' && (
+              <input
+                type="text"
+                className="native-input"
+                value={gtStudent}
+                onChange={(e) => {
+                  setGtStudent(e.target.value);
+                  setGtResult(null);
+                }}
+                placeholder="Roll number or email address"
+                style={{ flex: 2, minWidth: 240 }}
+              />
+            )}
+
+            <button
+              className="native-btn"
+              onClick={sendGroundTruthReminder}
+              disabled={gtSending || !gtReady}
+              style={{
+                background: T.accent,
+                color: '#fff',
+                opacity: gtSending || !gtReady ? 0.55 : 1,
+                flexShrink: 0,
+              }}
+            >
+              {gtSending
+                ? 'Sending…'
+                : gtReach != null
+                  ? `Send to ${gtReach}`
+                  : 'Send reminder'}
+            </button>
+          </div>
+
+          {gtScope === 'department' && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 8, lineHeight: 1.6 }}>
+                Tick every department to include. One department is sometimes recorded under
+                more than one name — <strong>tick all of its spellings</strong> or the rest of
+                it will not be mailed.
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  maxHeight: 190,
+                  overflowY: 'auto',
+                }}
+              >
+                {(gtAudience?.branches || []).map((b) => {
+                  const picked = gtBranches.includes(b.branch);
+                  return (
+                    <label
+                      key={b.branch}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 7,
+                        padding: '7px 11px',
+                        borderRadius: 8,
+                        border: `1px solid ${picked ? T.accent : T.border}`,
+                        background: picked ? 'rgba(99,102,241,.08)' : 'transparent',
+                        fontSize: 12.5,
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={picked}
+                        onChange={() => toggleGtBranch(b.branch)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span style={{ fontWeight: picked ? 700 : 500 }}>{b.branch}</span>
+                      <span style={{ color: T.textMuted }}>{b.count}</span>
+                    </label>
+                  );
+                })}
+                {gtAudience && gtAudience.branches.length === 0 && (
+                  <span style={{ fontSize: 12.5, color: T.textMuted }}>
+                    No departments on the roster yet.
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          <input
+            type="text"
+            className="native-input"
+            value={gtNote}
+            onChange={(e) => setGtNote(e.target.value)}
+            placeholder="Optional line to add to the mail (e.g. a deadline)"
+            style={{ width: '100%' }}
+          />
+
+          {gtResult && (
+            <div
+              style={{
+                marginTop: 12,
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: gtResult.type === 'error' ? T.danger : T.success || T.accent,
+              }}
+            >
+              {gtResult.text}
+            </div>
+          )}
+
+          <div style={{ fontSize: 12, color: T.textMuted, marginTop: 10, lineHeight: 1.6 }}>
+            Mail is queued and sent in the background, so a large send keeps going after you
+            leave this page. A student who was already sent one today is skipped, so pressing
+            this twice will not mail anyone twice.
+          </div>
+        </div>
+      </div>
+
       {/* Add recipient */}
       <div className="ns-card">
         <div className="ns-card-header">
@@ -1183,6 +1411,57 @@ export default function NotificationSettingsTab() {
               }}
             >
               {message.text}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Heads of department, from the platform mapping rather than from the
+          list below. Read-only here on purpose: the appointment is made once,
+          on the superadmin screen, and every module reads it — so a handover
+          there is a handover here, with nobody editing two lists. */}
+      <div className="ns-card">
+        <div
+          className="ns-card-header"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+        >
+          <span className="ns-section-title">Heads of department</span>
+          <span className="ns-group-count">{departmentHeads.length} mapped</span>
+        </div>
+        <div className="ns-card-body">
+          <p style={{ fontSize: 12.5, color: T.textMuted, marginTop: 0, marginBottom: 14 }}>
+            Assigned on the superadmin&apos;s <strong>Heads of Department</strong> screen, not
+            here. Each one receives their own department&apos;s alerts, and which alerts those
+            are is the <strong>Dept Head</strong> row in the table above — the mapping decides
+            who the head is, never what they are subscribed to.
+          </p>
+          {departmentHeads.length === 0 ? (
+            <div style={{ fontSize: 13, color: T.textMuted, textAlign: 'center', padding: '12px 0' }}>
+              No department has a head assigned yet.
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+                gap: 10,
+              }}
+            >
+              {departmentHeads.map((head) => (
+                <div key={head.dept} className="ns-recipient-row">
+                  <span
+                    style={{
+                      fontWeight: 500,
+                      color: T.text,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {head.email || '— no address on the account —'}
+                    <span className="ns-dept-tag">{head.dept}</span>
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </div>

@@ -15,7 +15,6 @@ import {
   Flex,
   HStack,
   Heading,
-  Icon,
   IconButton,
   Menu,
   MenuButton,
@@ -24,6 +23,8 @@ import {
   MenuList,
   Text,
   Tooltip,
+  Skeleton,
+  SkeletonCircle,
   useColorMode,
   useColorModeValue,
   useDisclosure,
@@ -34,6 +35,7 @@ import lmApi from '../api/lmApi';
 import useStableNavigate from '../hooks/useStableNavigate';
 import { canCreateClass, isStudentOnly } from '../roles';
 import NotificationBell from './NotificationBell';
+import { LmIcon } from './Icon';
 import { buttonTextStyles } from './common';
 
 // Split out of the shell: every student sees it exactly once, and nobody else
@@ -112,36 +114,39 @@ function SunIcon({ size = 18 }) {
 }
 
 const NAV_ITEMS = [
-  { to: '/learning', label: 'Classes', icon: '🏫', end: true },
-  { to: '/learning/todo', label: 'To-do', icon: '✅' },
-  { to: '/learning/calendar', label: 'Calendar', icon: '📅' },
-  { to: '/learning/timetable', label: 'Timetable', icon: '⏰' },
-  { to: '/learning/notifications', label: 'Notifications', icon: '🔔' },
+  { to: '/learning', label: 'Classes', icon: 'classes', end: true },
+  { to: '/learning/todo', label: 'To-do', icon: 'todo' },
+  { to: '/learning/calendar', label: 'Calendar', icon: 'calendar' },
+  { to: '/learning/timetable', label: 'Timetable', icon: 'timetable' },
+  { to: '/learning/notifications', label: 'Notifications', icon: 'notifications' },
   // Where the "you were marked Present/Absent" mail and notification land.
   // Students only: staff read the same markings from the attendance module,
   // and nobody else has a roll number to look up.
-  { to: '/learning/attendance', label: 'My attendance', icon: '🪪', studentOnly: true },
+  { to: '/learning/attendance', label: 'My attendance', icon: 'attendance-card', studentOnly: true },
   // Points and badges are a student's record. Staff earn none — they set the
   // work rather than doing it, and the leaderboard leaves them off entirely —
   // so a "My progress" that was always empty would only invite the question.
-  { to: '/learning/profile', label: 'My progress', icon: '🎖️', studentOnly: true },
+  { to: '/learning/profile', label: 'My progress', icon: 'progress', studentOnly: true },
   // Last, and separated below. Reporting something broken — or asking for
   // something better — is not navigation: it is what you do *instead* of what
   // you came here for, and it has to be reachable from wherever the thing broke.
-  { to: '/learning/bugs', label: 'Bug / Suggestion', icon: '🛠️', foot: true },
+  { to: '/learning/bugs', label: 'Bug / Suggestion', icon: 'suggestion', foot: true },
   // The help desk, which lives outside this module (/help) because most of the
   // people it serves cannot get as far as this rail. Reachable from in here
   // too: "why can I not see my class?" is asked far more often from a signed-in
   // screen than from the login page, and a signed-in visitor skips its email
   // verification entirely — the server issues its pass off the session.
-  { to: '/help', label: 'Help desk', icon: '☎️', foot: true },
+  { to: '/help', label: 'Help desk', icon: 'help-desk', foot: true },
   // Platform-wide stats and queues at a glance. Only an lm-admin (or other
   // platform-admin) account can open it — the server 403s everyone else — so
   // the link itself is hidden rather than left to dead-end.
-  { to: '/learning/lm-admin', label: 'Admin', icon: '🛡️', foot: true, adminOnly: true },
+  { to: '/learning/lm-admin', label: 'Admin', icon: 'admin', foot: true, adminOnly: true },
   // Shown to heads of department as well as admins — it is their screen, and
   // the server scopes it to their department. See RequireHod.
-  { to: '/learning/hod-dashboard', label: 'HOD Dashboard', icon: '📊', foot: true, hodOrAdmin: true },
+  { to: '/learning/hod-dashboard', label: 'HOD Dashboard', icon: 'dashboard', foot: true, hodOrAdmin: true },
+  // What the timetable allocates to the department’s faculty, and which of it
+  // has a classroom here. Same audience and same gate as the dashboard above.
+  { to: '/learning/hod-subjects', label: 'Subjects', icon: 'subjects', foot: true, hodOrAdmin: true },
 ];
 
 /**
@@ -181,7 +186,7 @@ function DevTeamCta({ onNavigate }) {
       sx={{ '&.active': { bg: hoverBg, borderColor: 'teal.500' } }}
     >
       <Flex align="center" gap={2}>
-        <Text as="span">🚀</Text>
+        <LmIcon name="dev-team" size={18} />
         <Text fontSize="sm" fontWeight="700">
           Join our dev team
         </Text>
@@ -229,8 +234,31 @@ const PORTABLE_TABS = new Set([
  * of always-visible furniture on the page. Identity still lives in the header
  * avatar menu, one click away, which is the only place it was ever needed.
  */
+function ClassSwitcherSkeleton() {
+  const switcherBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+
+  return (
+    <Box mt={6} bg={switcherBg} borderRadius="lg" borderWidth="1px" borderColor={borderColor} p={4} data-testid="class-switcher-skeleton">
+      <Skeleton height="10px" width="50%" borderRadius="sm" mb={4} />
+      <HStack spacing={3} mb={3}>
+        <SkeletonCircle size="3" flexShrink={0} />
+        <Skeleton height="12px" width="70%" borderRadius="sm" />
+      </HStack>
+      <HStack spacing={3} mb={3}>
+        <SkeletonCircle size="3" flexShrink={0} />
+        <Skeleton height="12px" width="60%" borderRadius="sm" />
+      </HStack>
+      <HStack spacing={3}>
+        <SkeletonCircle size="3" flexShrink={0} />
+        <Skeleton height="12px" width="80%" borderRadius="sm" />
+      </HStack>
+    </Box>
+  );
+}
+
 function ClassSwitcher({ classes, activeClassId, carriedTab, onNavigate }) {
-  if (!classes) return null;
+  if (!classes) return <ClassSwitcherSkeleton />;
 
   const switcherBg = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
@@ -368,7 +396,7 @@ function NavItems({ onNavigate, studentOnly = false, isAdmin = false, isHod = fa
             '&.active': { bg: activeBg, color: activeColor, fontWeight: '600' },
           }}
         >
-          <Text as="span">{item.icon}</Text>
+          <LmIcon name={item.icon} size={18} />
           {item.label}
         </Box>
       ))}
@@ -488,13 +516,13 @@ export default function LearningLayout() {
               display={{ base: 'inline-flex', md: 'none' }}
               variant="ghost"
               aria-label="Open menu"
-              icon={<span>☰</span>}
+              icon={<LmIcon name="menu" size={20} />}
               onClick={onOpen}
               ml={-2}
               mr={-1}
             />
             <Flex as={RouterLink} to="/learning" align="center" gap={2} _hover={{ textDecoration: 'none' }}>
-              <Text fontSize="xl">🎓</Text>
+              <LmIcon name="brand" size={24} />
               <Box>
                 <Heading size="sm" color={headerTitleColor} lineHeight="1.1">
                   XCEED Learning
@@ -638,7 +666,10 @@ export default function LearningLayout() {
         <DrawerContent>
           <DrawerCloseButton />
           <DrawerHeader>
-            <Icon as="span">🎓</Icon> XCEED Learning
+            <Flex align="center" gap={2}>
+              <LmIcon name="brand" size={20} />
+              XCEED Learning
+            </Flex>
           </DrawerHeader>
           <DrawerBody>
 

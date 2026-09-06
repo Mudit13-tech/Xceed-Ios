@@ -93,7 +93,7 @@ export default function Profile() {
   if (!profile.sessions.length) {
     return (
       <EmptyState
-        icon="🎖️"
+        icon="progress"
         title="Nothing here yet"
         description="Turn work in, sit a quiz, join a Short — it all shows up here."
       />

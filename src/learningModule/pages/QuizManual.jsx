@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import getEnvironment from '../../getenvironment';
+import { LmIcon } from '../components/Icon';
 
 import shotQuizzesList from '../manualAssets/quiz/quizzes-list.png';
 import shotCreateModal from '../manualAssets/quiz/create-quiz-modal.png';
@@ -68,11 +69,11 @@ function Step({ n, title, children }) {
 
 function Note({ type = 'info', children }) {
     const cfg = {
-        info:    { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8', icon: 'ℹ' },
-        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: '⚠' },
-        tip:     { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: '💡' },
-        key:     { bg: '#faf5ff', border: '#e9d5ff', color: '#6b21a8', icon: '🔑' },
-        danger:  { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: '⛔' },
+        info:    { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8', icon: 'info' },
+        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: 'warning' },
+        tip:     { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: 'tip' },
+        key:     { bg: '#faf5ff', border: '#e9d5ff', color: '#6b21a8', icon: 'key' },
+        danger:  { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: 'danger' },
     };
     const s = cfg[type] || cfg.info;
     return (
@@ -81,7 +82,7 @@ function Note({ type = 'info', children }) {
             padding: '10px 14px', marginBottom: 16,
             display: 'flex', gap: 10, alignItems: 'flex-start',
         }}>
-            <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{s.icon}</span>
+            <span style={{ flexShrink: 0, marginTop: 2, color: s.color }}><LmIcon name={s.icon} size={15} /></span>
             <div style={{ fontSize: 13, color: s.color, lineHeight: 1.65 }}>{children}</div>
         </div>
     );
@@ -213,16 +214,16 @@ function StudentQuestionMock() {
 // ── tabs ──────────────────────────────────────────────────────────────────────
 
 const TABS = [
-    { id: 'overview', label: 'Overview',          icon: '🗂️' },
-    { id: 'create',   label: 'Create & Author',   icon: '✏️' },
-    { id: 'publish',  label: 'Publish',           icon: '🚀' },
-    { id: 'settings', label: 'Settings',          icon: '⚙️' },
-    { id: 'monitor',  label: 'Monitor & Fix',     icon: '🛰️' },
-    { id: 'letin',    label: 'Let a Student In',  icon: '🚪' },
-    { id: 'lockout',  label: 'Locked Out of SEB', icon: '🔒' },
-    { id: 'grade',    label: 'Grade & Release',   icon: '✅' },
-    { id: 'analytics',label: 'Analytics',         icon: '📊' },
-    { id: 'gotchas',  label: 'Gotchas',           icon: '⚠️' },
+    { id: 'overview', label: 'Overview',          icon: 'bank' },
+    { id: 'create',   label: 'Create & Author',   icon: 'edit' },
+    { id: 'publish',  label: 'Publish',           icon: 'announcement' },
+    { id: 'settings', label: 'Settings',          icon: 'settings' },
+    { id: 'monitor',  label: 'Monitor & Fix',     icon: 'live' },
+    { id: 'letin',    label: 'Let a Student In',  icon: 'exit' },
+    { id: 'lockout',  label: 'Locked Out of SEB', icon: 'locked' },
+    { id: 'grade',    label: 'Grade & Release',   icon: 'success' },
+    { id: 'analytics',label: 'Analytics',         icon: 'insights' },
+    { id: 'gotchas',  label: 'Gotchas',           icon: 'warning' },
 ];
 
 // ── tab content ───────────────────────────────────────────────────────────────
@@ -247,18 +248,18 @@ function TabOverview({ setTab }) {
                 border: '1px solid #e4e8f5', overflow: 'hidden', marginBottom: 24, flexWrap: 'wrap',
             }}>
                 {[
-                    { id: 'create',   icon: '✏️', label: 'Create & author', sub: 'Pick a format · write questions' },
-                    { id: 'publish',  icon: '🚀', label: 'Publish',         sub: 'Share the link · schedule the window' },
-                    { id: 'settings', icon: '⚙️', label: 'Configure',       sub: 'Usually: leave the defaults' },
-                    { id: 'monitor',  icon: '🛰️', label: 'Monitor',         sub: 'Attendance · let students back in' },
-                    { id: 'grade',    icon: '✅', label: 'Grade & release', sub: 'Answer key · publish results' },
+                    { id: 'create',   icon: 'edit',         label: 'Create & author', sub: 'Pick a format · write questions' },
+                    { id: 'publish',  icon: 'announcement',  label: 'Publish',         sub: 'Share the link · schedule the window' },
+                    { id: 'settings', icon: 'settings',      label: 'Configure',       sub: 'Usually: leave the defaults' },
+                    { id: 'monitor',  icon: 'live',          label: 'Monitor',         sub: 'Attendance · let students back in' },
+                    { id: 'grade',    icon: 'success',       label: 'Grade & release', sub: 'Answer key · publish results' },
                 ].map((s, i, arr) => (
                     <div key={s.id} style={{
                         flex: '1 1 140px', padding: '16px 14px', textAlign: 'center',
                         borderRight: i < arr.length - 1 ? '1px solid #e4e8f5' : 'none',
                         cursor: 'pointer',
                     }} onClick={() => setTab(s.id)}>
-                        <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
+                        <div style={{ marginBottom: 6, color: T.accent }}><LmIcon name={s.icon} size={22} /></div>
                         <div style={{ fontWeight: 700, fontSize: 12, color: T.accent }}>{s.label}</div>
                         <div style={{ fontSize: 11, color: T.textMuted, marginTop: 3 }}>{s.sub}</div>
                     </div>
@@ -297,15 +298,15 @@ function TabOverview({ setTab }) {
             <SectionTitle>Quiz or Exam?</SectionTitle>
             <div className="qzm-grid-3" style={{ marginBottom: 20 }}>
                 {[
-                    { icon: '📝', title: 'Quiz — one page, one timer', desc: 'All questions on one page, answered in any order, answers shown on submit. One countdown for the whole paper. Best for a low-stakes recap.' },
-                    { icon: '🎓', title: 'Exam — one question at a time', desc: 'Questions are handed out one at a time under a single countdown for the whole paper. Each student sees their score as they submit; worked answers stay held back until released.' },
-                    { icon: '⏱️', title: 'Exam — a timer per question', desc: 'Every question carries its own allowance and moves on by itself when it runs out. No overall clock — placement-test behaviour.' },
+                    { icon: 'quiz', title: 'Quiz — one page, one timer', desc: 'All questions on one page, answered in any order, answers shown on submit. One countdown for the whole paper. Best for a low-stakes recap.' },
+                    { icon: 'exam', title: 'Exam — one question at a time', desc: 'Questions are handed out one at a time under a single countdown for the whole paper. Each student sees their score as they submit; worked answers stay held back until released.' },
+                    { icon: 'timer', title: 'Exam — a timer per question', desc: 'Every question carries its own allowance and moves on by itself when it runs out. No overall clock — placement-test behaviour.' },
                 ].map(c => (
                     <div key={c.title} style={{
                         background: '#fff', border: '1px solid #e4e8f5',
                         borderRadius: 10, padding: '14px 16px',
                     }}>
-                        <div style={{ fontSize: 22, marginBottom: 8 }}>{c.icon}</div>
+                        <div style={{ marginBottom: 8, color: T.accent }}><LmIcon name={c.icon} size={22} /></div>
                         <div style={{ fontWeight: 700, fontSize: 13, color: T.text, marginBottom: 4 }}>{c.title}</div>
                         <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.6 }}>{c.desc}</div>
                     </div>
@@ -333,16 +334,16 @@ function TabOverview({ setTab }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                 {[
-                    { icon: '⚙️', name: 'Settings', desc: 'Delivery & timing, marking, proctoring, instructions and access — the gear opens the same five tabs described on the Settings tab.' },
-                    { icon: '🕒', name: 'Schedule — the timer button', desc: 'Only on a published paper. Reopens the Schedule dialog so you can move the start time, the entry cut-off, the closing time or the results time after the paper is already live. This is the button to reach for whenever a timing needs to change.' },
-                    { icon: '⬇️', name: 'Download the paper', desc: 'A menu with two documents: Questions only, and Questions with answers. The second carries the answer key — mind who is behind you when you open it.' },
-                    { icon: '🗑️', name: 'Delete quiz', desc: 'Removes the paper and everything attached to it.' },
+                    { icon: 'settings', name: 'Settings', desc: 'Delivery & timing, marking, proctoring, instructions and access — the gear opens the same five tabs described on the Settings tab.' },
+                    { icon: 'time', name: 'Schedule — the timer button', desc: 'Only on a published paper. Reopens the Schedule dialog so you can move the start time, the entry cut-off, the closing time or the results time after the paper is already live. This is the button to reach for whenever a timing needs to change.' },
+                    { icon: 'download', name: 'Download the paper', desc: 'A menu with two documents: Questions only, and Questions with answers. The second carries the answer key — mind who is behind you when you open it.' },
+                    { icon: 'delete', name: 'Delete quiz', desc: 'Removes the paper and everything attached to it.' },
                 ].map(r => (
                     <div key={r.name} style={{
                         display: 'flex', gap: 12, alignItems: 'flex-start',
                         background: '#fff', border: '1px solid #e4e8f5', borderRadius: 8, padding: '10px 14px',
                     }}>
-                        <span style={{ fontSize: 18, flexShrink: 0 }}>{r.icon}</span>
+                        <span style={{ flexShrink: 0, marginTop: 2, color: T.accent }}><LmIcon name={r.icon} size={17} /></span>
                         <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.65 }}>
                             <strong>{r.name}</strong> — {r.desc}
                         </div>
@@ -356,10 +357,10 @@ function TabOverview({ setTab }) {
                 <ul style={{ margin: '8px 0 0 0', paddingLeft: 18 }}>
                     <li><strong>Publish</strong> — on a draft. Opens the Schedule dialog and mints the student link.</li>
                     <li><strong>Edit</strong> — the question editor.</li>
-                    <li><strong>🧾 Attendance</strong> — on a published paper. The hall register, taken down the class roster. This is also where a paper is <strong>terminated</strong> — see Monitor &amp; Fix.</li>
+                    <li><strong><LmIcon name="receipt" size={13} /> Attendance</strong> — on a published paper. The hall register, taken down the class roster. This is also where a paper is <strong>terminated</strong> — see Monitor &amp; Fix.</li>
                     <li><strong>Live control</strong> — while the paper is running. Who is writing, who has been shut out, and <strong>Let in</strong> — see the Let a Student In tab. <strong>Let in lives here only while the paper is live, plus five minutes after the window closes</strong>; once the exam is over the panel still lists everyone who was shut out, but a sitting is reopened from <strong>Results</strong>.</li>
-                    <li><strong>🔑 Access code</strong> — only on a paper that requires Safe Exam Browser. One code, for a student whose machine genuinely cannot run SEB — see the Locked Out of SEB tab for what it does <em>not</em> cover. The code itself is printed on the card beside the room code, so you can read it off without opening anything.</li>
-                    <li><strong>📍 Room code</strong> — on any published paper. The code you read out to the hall; a student cannot start without entering it. Shown on the card itself, so this button is only needed to replace the code or turn the requirement off.</li>
+                    <li><strong><LmIcon name="key" size={13} /> Access code</strong> — only on a paper that requires Safe Exam Browser. One code, for a student whose machine genuinely cannot run SEB — see the Locked Out of SEB tab for what it does <em>not</em> cover. The code itself is printed on the card beside the room code, so you can read it off without opening anything.</li>
+                    <li><strong><LmIcon name="location" size={13} /> Room code</strong> — on any published paper. The code you read out to the hall; a student cannot start without entering it. Shown on the card itself, so this button is only needed to replace the code or turn the requirement off.</li>
                     <li><strong>Results</strong> — scores, analysis and the answer key, live from the first submission.</li>
                 </ul>
             </div>
@@ -373,7 +374,7 @@ function TabCreate() {
             <SectionTitle>Starting a New Paper</SectionTitle>
             <Step n={1} title="Open Create quiz">
                 From the Quizzes &amp; exams tab, click <strong>+ Create quiz</strong>. If you already
-                recorded the class, <strong>✨ Generate from a recording</strong> sends you to the AI
+                recorded the class, <strong><LmIcon name="ai" size={13} /> Generate from a recording</strong> sends you to the AI
                 Studio instead, which can draft questions from that recording for you to review here afterwards.
             </Step>
             <Shot src={shotCreateModal} alt="Create a quiz modal, showing title, description and delivery mode"
@@ -731,7 +732,7 @@ function TabPublish() {
                         shows it immediately, above the share link.</li>
                     <li>The code is then <strong>printed on the quiz card</strong> and at the top of
                         <strong> Live control</strong>, so you can read it out without opening anything.</li>
-                    <li><strong>📍 Room code</strong> on the card generates a replacement or turns the
+                    <li><strong><LmIcon name="location" size={13} /> Room code</strong> on the card generates a replacement or turns the
                         requirement off. Generating a new one <em>immediately</em> retires the old one — do not
                         press it mid-sitting unless you intend to read a new code out to everyone still waiting
                         to start.</li>
@@ -771,7 +772,7 @@ function TabPublish() {
             <SectionTitle>Changing a Timing Afterwards</SectionTitle>
             <Note type="tip">
                 Every field above stays editable after publishing. On the quiz card, click the
-                <strong> 🕒 timer icon (Schedule)</strong> — it reopens this same dialog on a live paper so you
+                <strong> <LmIcon name="time" size={13} /> timer icon (Schedule)</strong> — it reopens this same dialog on a live paper so you
                 can push a deadline back, open a scheduled release early, or extend the closing time
                 mid-sitting. That icon is the answer whenever a timing needs to move; you do not need to
                 unpublish or re-share the link, which never changes. The one exception is the
@@ -791,7 +792,7 @@ function TabMonitor() {
         <div>
             <Note type="key">
                 Two controls run a sitting, and they do different jobs.
-                <strong> 🧾 Attendance</strong> is the register — the whole class roster, including the
+                <strong> <LmIcon name="receipt" size={13} /> Attendance</strong> is the register — the whole class roster, including the
                 students who never appeared — and it is also where a paper is stopped.
                 <strong> Live control</strong> is built from attempts — who is writing right now, and who has
                 been shut out and needs letting back in.
@@ -799,7 +800,7 @@ function TabMonitor() {
 
             <SectionTitle>Attendance — the Hall Register</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, marginBottom: 12 }}>
-                Click <strong>🧾 Attendance</strong> on a published quiz&apos;s card. It lists every enrolled
+                Click <strong><LmIcon name="receipt" size={13} /> Attendance</strong> on a published quiz&apos;s card. It lists every enrolled
                 student, in roll-number order, whether or not they have started — which is exactly who an
                 absence needs to be recorded against. Walk the hall with this open.
             </div>
@@ -881,8 +882,8 @@ function TabMonitor() {
                 spelling out exactly what happens before anything is touched:
                 <ul style={{ margin: '8px 0 0 0', paddingLeft: 18 }}>
                     <li><strong>▶️ Let in / Reopen — continue.</strong> The student keeps every answer already given and resumes where they left off. Use this when the test ended for a reason that was not their doing — a dropped connection, a dead battery, the window closing mid-paper. <em>This is the one you will use most.</em></li>
-                    <li><strong>🔄 Restart as a new test.</strong> Everything they answered is deleted and they sit the test again from question 1, on a freshly shuffled paper. Their old score goes with it. Use this for a genuine do-over, not a continuation.</li>
-                    <li><strong>🗑 Delete this response.</strong> Removes the sitting and its score, and frees the attempt slot so the student can start again themselves — but only while the quiz window is still open. Once it has closed, use Restart instead.</li>
+                    <li><strong><LmIcon name="refresh" size={13} /> Restart as a new test.</strong> Everything they answered is deleted and they sit the test again from question 1, on a freshly shuffled paper. Their old score goes with it. Use this for a genuine do-over, not a continuation.</li>
+                    <li><strong><LmIcon name="delete" size={13} /> Delete this response.</strong> Removes the sitting and its score, and frees the attempt slot so the student can start again themselves — but only while the quiz window is still open. Once it has closed, use Restart instead.</li>
                 </ul>
             </div>
         </div>
@@ -1212,8 +1213,8 @@ export default function QuizManual({ standalone = false }) {
                             width: 30, height: 30, borderRadius: 8,
                             background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 15,
-                        }}>📝</div>
+                            color: '#fff',
+                        }}><LmIcon name="quiz" size={16} /></div>
                         <span style={{ fontSize: 14, fontWeight: 700, color: '#e0e7ff' }}>
                             Quiz &amp; Exam Module — Teacher Manual
                         </span>
@@ -1239,8 +1240,8 @@ export default function QuizManual({ standalone = false }) {
                         width: 42, height: 42, borderRadius: 10,
                         background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 20,
-                    }}>📝</div>
+                        color: '#fff',
+                    }}><LmIcon name="quiz" size={21} /></div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="qzm-title" style={{ fontWeight: 800, color: T.text }}>Quiz &amp; Exam Module — Teacher Manual</div>
                         <div className="qzm-subtitle" style={{ color: T.textMuted, marginTop: 2 }}>

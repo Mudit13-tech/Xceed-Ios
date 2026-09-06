@@ -21,6 +21,7 @@ import { loginPathFor } from '../../authRedirect';
 import { DeadlineCountdown, Loading } from '../components/common';
 import { formatDateTime } from '../format';
 import FormRenderer from '../components/FormRenderer';
+import { LmIcon } from '../components/Icon';
 
 /**
  * The public entry point for a form shared as "anyone with the link".
@@ -46,8 +47,8 @@ export default function FormLinkJoin() {
   const [existingResponse, setExistingResponse] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const openForm = useCallback(async () => {
-    const state = await lmApi.getFormByLink(shareCode);
+  const openForm = useCallback(async (formIdHint) => {
+    const state = await lmApi.getFormByLink(shareCode, formIdHint);
     setForm(state.form);
     setExistingResponse(state.existingResponse);
     setPhase('form');
@@ -60,7 +61,7 @@ export default function FormLinkJoin() {
       try {
         const result = await lmApi.joinFormByLink(shareCode, { name: displayName });
         if (result.guestToken) lmApi.formGuest.save(result.formId, result.guestToken);
-        await openForm();
+        await openForm(result.formId);
       } catch (err) {
         const reason = err.payload?.code;
         if (reason === 'LOGIN_REQUIRED') {
@@ -91,7 +92,7 @@ export default function FormLinkJoin() {
   const submit = async (answers) => {
     setSubmitting(true);
     try {
-      await lmApi.submitFormResponseByLink(shareCode, answers);
+      await lmApi.submitFormResponseByLink(shareCode, answers, form?._id);
       setPhase('thanks');
       toast({ status: 'success', title: 'Response recorded' });
     } catch (err) {
@@ -191,7 +192,9 @@ export default function FormLinkJoin() {
         <Box h="6px" bgGradient="linear(to-r, purple.500, pink.500, orange.400)" />
         <VStack align="stretch" spacing={5} p={8}>
           <Box textAlign="center">
-            <Text fontSize="3xl">📝</Text>
+            <Box color="blue.500">
+            <LmIcon name="form" size={30} strokeWidth={1.5} />
+          </Box>
             <Heading size="lg" bgGradient="linear(to-r, purple.500, pink.500)" bgClip="text">
               {phase === 'needsName' ? 'One more thing' : 'Opening the form…'}
             </Heading>

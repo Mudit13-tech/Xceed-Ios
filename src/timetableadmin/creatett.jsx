@@ -90,6 +90,13 @@ function CreateTimetable() {
   const [shareEmail, setShareEmail] = useState("");
   const [shareSaving, setShareSaving] = useState(false);
 
+  // Sharing a single timetable is the exception, not the route by which
+  // department coordinators get their tables — an appointment on the Dept
+  // Coordinators page already puts every table of that department on their
+  // dashboard. So the column only appears for the people the server would
+  // actually let share something: a table's owner, and institute coordinators.
+  const canShareAny = table.some((timetable) => timetable.canManage);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData({
@@ -900,15 +907,17 @@ function CreateTimetable() {
                         >
                           Link
                         </Th>
-                        <Th
-                          color="teal.700"
-                          fontSize="sm"
-                          fontWeight="bold"
-                          borderBottom="2px"
-                          borderColor="teal.200"
-                        >
-                          Access
-                        </Th>
+                        {canShareAny && (
+                          <Th
+                            color="teal.700"
+                            fontSize="sm"
+                            fontWeight="bold"
+                            borderBottom="2px"
+                            borderColor="teal.200"
+                          >
+                            Access
+                          </Th>
+                        )}
                       </Tr>
                     </Thead>
                     <Tbody>
@@ -961,22 +970,26 @@ function CreateTimetable() {
                               {timetable.code}
                             </Button>
                           </Td>
-                          <Td>
-                            <Tooltip
-                              label="Let a department coordinator open and edit this timetable from their own login"
-                              hasArrow
-                            >
-                              <Button
-                                size="sm"
-                                colorScheme="purple"
-                                variant="ghost"
-                                leftIcon={<FaUserPlus />}
-                                onClick={() => openShareModal(timetable)}
-                              >
-                                Manage
-                              </Button>
-                            </Tooltip>
-                          </Td>
+                          {canShareAny && (
+                            <Td>
+                              {timetable.canManage && (
+                                <Tooltip
+                                  label="One-off access to this single timetable. Department coordinators already see every timetable of the departments they are appointed to."
+                                  hasArrow
+                                >
+                                  <Button
+                                    size="sm"
+                                    colorScheme="purple"
+                                    variant="ghost"
+                                    leftIcon={<FaUserPlus />}
+                                    onClick={() => openShareModal(timetable)}
+                                  >
+                                    Manage
+                                  </Button>
+                                </Tooltip>
+                              )}
+                            </Td>
+                          )}
                         </Tr>
                       ))}
                     </Tbody>

@@ -30,6 +30,7 @@ import {
 import lmApi from '../api/lmApi';
 import { buttonTextStyles, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import { formatDate } from '../format';
+import { LmIcon } from '../components/Icon';
 
 /**
  * Points and badges for one class.
@@ -43,7 +44,9 @@ import { formatDate } from '../format';
  * by the person who set the homework is not one anybody wants to be on.
  */
 
-const MEDALS = ['🥇', '🥈', '🥉'];
+// Gold, silver and bronze for the top three. One medal glyph tinted three
+// ways rather than three separate pictures, so the rail reads as a set.
+const MEDAL_COLORS = ['#c9a227', '#8c96a0', '#a97142'];
 
 function Row({ row, highlight, onOpen }) {
   const bg = useColorModeValue('purple.50', 'purple.900');
@@ -76,7 +79,11 @@ function Row({ row, highlight, onOpen }) {
         : {})}
     >
       <Box minW="34px" fontSize="lg" textAlign="center">
-        {MEDALS[row.rank - 1] || (
+        {MEDAL_COLORS[row.rank - 1] ? (
+          <Box color={MEDAL_COLORS[row.rank - 1]} display="flex" justifyContent="center">
+            <LmIcon name="medal" size={19} strokeWidth={2} />
+          </Box>
+        ) : (
           <Text fontSize="sm" color={mutedText} fontVariantNumeric="tabular-nums">
             {row.rank}
           </Text>
@@ -110,7 +117,7 @@ function Board({ data, onOpenStudent }) {
   if (!data.rows.length) {
     return (
       <EmptyState
-        icon="🏁"
+        icon="finish"
         title="Nothing on the board yet"
         description="Points arrive as work is turned in and the class joins in."
       />
@@ -458,7 +465,7 @@ function TeacherView({ week, all, classId }) {
         subtitle={busiest ? `Most of it: ${KIND_LABELS[busiest.kind] || busiest.kind}` : undefined}
       >
         {summary.byKind.length === 0 ? (
-          <EmptyState icon="📊" title="Nothing earned yet" />
+          <EmptyState icon="insights" title="Nothing earned yet" />
         ) : (
           <VStack align="stretch" spacing={2}>
             {summary.byKind.map((row) => {
@@ -486,7 +493,7 @@ function TeacherView({ week, all, classId }) {
           {/* The part a teacher can act on. Ascending on purpose: the top of a
               leaderboard looks after itself. */}
           {summary.quietest.length === 0 ? (
-            <EmptyState icon="🤔" title="Nobody has earned anything yet" />
+            <EmptyState icon="empty" title="Nobody has earned anything yet" />
           ) : (
             <VStack align="stretch" spacing={1}>
               {summary.quietest.map((row) => (
@@ -517,7 +524,7 @@ function TeacherView({ week, all, classId }) {
 
         <SectionCard title="Badges held">
           {summary.badges.length === 0 ? (
-            <EmptyState icon="🏅" title="No badges earned yet" />
+            <EmptyState icon="medal" title="No badges earned yet" />
           ) : (
             <VStack align="stretch" spacing={1}>
               {summary.badges.map((badge) => (

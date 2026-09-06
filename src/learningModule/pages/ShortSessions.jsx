@@ -70,7 +70,7 @@ export default function ShortSessions() {
 
       {sessions.length === 0 ? (
         <EmptyState
-          icon="📽️"
+          icon="present"
           title="Never presented"
           description="Present this short to a class and its results will show up here."
         />

@@ -36,6 +36,7 @@ import { isRichTextEmpty } from '../richTextUtils';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
 import StartShortModal from '../components/StartShortModal';
 import { Link as RouterLink } from 'react-router-dom';
+import { LmIcon } from '../components/Icon';
 
 /**
  * Authoring surface for a Short.
@@ -839,7 +840,8 @@ export default function ShortEditor() {
             setImporting(true);
           }}
         >
-          📥 Import slides
+          <LmIcon name="import" size={14} style={{ marginRight: 6 }} />
+          Import slides
         </Button>
       </HStack>
 

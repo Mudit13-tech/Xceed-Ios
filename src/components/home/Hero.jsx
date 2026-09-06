@@ -64,6 +64,40 @@ const Hero = () => {
     <StarryBackgroundAnimation/>
     <section id="home" >
       <div className="tw-py-8 tw-px-4 tw-mx-auto tw-max-w-screen-xl tw-text-center lg:tw-py-14 lg:tw-px-12">
+        {/* The two newest modules, first in the badge row and on a line of their
+            own so they are not lost among the conference links below. Each goes
+            to its public introduction page, not straight into the module — the
+            people these are aimed at usually do not have an account yet. */}
+        <div className="tw-mb-2 tw-flex tw-flex-wrap tw-justify-center tw-gap-3">
+          <Link
+            to="/xceed-learning"
+            className="tw-inline-flex tw-justify-between tw-items-center tw-py-1 tw-px-1 tw-pr-4 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"
+          >
+            <span className="tw-text-xs tw-bg-teal-500 tw-font-bold tw-uppercase tw-rounded-full tw-text-white tw-px-4 tw-py-1.5 tw-mr-3">
+              Newly launched
+            </span>{" "}
+            <span className="tw-text-sm tw-font-medium">XCEED Learning</span>
+            <ChevronRightIcon
+              strokeWidth={2.5}
+              className="tw-size-4 tw-text-white"
+            />
+          </Link>
+          <Link
+            to="/ileed"
+            className="tw-inline-flex tw-justify-between tw-items-center tw-py-1 tw-px-1 tw-pr-4 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"
+          >
+            <span className="tw-text-xs tw-bg-teal-500 tw-font-bold tw-uppercase tw-rounded-full tw-text-white tw-px-4 tw-py-1.5 tw-mr-3">
+              Newly launched
+            </span>{" "}
+            <span className="tw-text-sm tw-font-medium">
+              iLEED — Attendance
+            </span>
+            <ChevronRightIcon
+              strokeWidth={2.5}
+              className="tw-size-4 tw-text-white"
+            />
+          </Link>
+        </div>
         <Link
           to="https://glogift2026.com/"
           className="tw-inline-flex tw-justify-between tw-items-center tw-py-1 tw-px-1 tw-pr-4 tw-mb-7 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"

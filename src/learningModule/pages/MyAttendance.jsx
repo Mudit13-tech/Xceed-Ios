@@ -258,7 +258,7 @@ export default function MyAttendance() {
       >
         {visible.length === 0 ? (
           <EmptyState
-            icon="📋"
+            icon="attendance"
             title="Nothing here yet"
             description={
               records.length === 0

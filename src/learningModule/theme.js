@@ -133,6 +133,8 @@ export const learningModuleSemanticTokens = {
       // Hover on a row or a nav item: lighter than the surface in dark mode,
       // because on a dark ground "raised" is the direction of light.
       hover: { default: 'gray.100', _dark: 'gray.700' },
+      // A subtle background for controls, sunken areas and preview canvas.
+      subtle: { default: 'gray.50', _dark: 'gray.900' },
       // A tooltip, popover or code block that should read as a layer above.
       elevated: { default: 'white', _dark: 'gray.700' },
     },

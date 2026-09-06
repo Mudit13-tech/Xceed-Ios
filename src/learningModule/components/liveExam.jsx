@@ -38,6 +38,7 @@ import lmApi from '../api/lmApi';
 import ExamCodes from './ExamCodes';
 import { SectionCard } from './common';
 import { formatDateTime, relativeTime } from '../format';
+import { LmIcon } from './Icon';
 
 /**
  * The mid-exam control panel, and the pieces of the invigilation views it
@@ -1579,12 +1580,19 @@ export function LiveCounts({ live }) {
   return (
     <HStack spacing={2} mt={1} fontSize="xs" wrap="wrap">
       <Text color={shutOut > 0 ? 'red.500' : 'lmFg.muted'} fontWeight={shutOut > 0 ? '700' : '400'}>
-        🚫 {shutOut} terminated
+        <LmIcon name="blocked" size={12} style={{ marginRight: 4 }} />
+        {shutOut} terminated
       </Text>
       <Text color="lmFg.muted">·</Text>
-      <Text color="lmFg.muted">✍️ {writing} writing</Text>
+      <Text color="lmFg.muted">
+        <LmIcon name="write" size={12} style={{ marginRight: 4 }} />
+        {writing} writing
+      </Text>
       <Text color="lmFg.muted">·</Text>
-      <Text color="lmFg.muted">✅ {submitted} submitted</Text>
+      <Text color="lmFg.muted">
+        <LmIcon name="success" size={12} style={{ marginRight: 4 }} />
+        {submitted} submitted
+      </Text>
     </HStack>
   );
 }
@@ -1659,7 +1667,8 @@ export default function LiveExamControl({ classId, quiz, live, onDone }) {
         variant={alerts > 0 ? 'solid' : 'outline'}
         onClick={() => setIsOpen(true)}
       >
-        🎥 Live control
+        <LmIcon name="webcam" size={14} style={{ marginRight: 6 }} />
+        Live control
         {alerts > 0 && (
           <Badge ml={2} colorScheme="red" fontSize="0.6rem">
             {alerts}

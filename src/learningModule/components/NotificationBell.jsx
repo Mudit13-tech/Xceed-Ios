@@ -23,8 +23,9 @@ import {
 import { keyframes } from '@emotion/react';
 import lmApi from '../api/lmApi';
 import { buttonTextStyles } from './common';
-import { relativeTime } from '../format';
+import { notificationIcon, relativeTime } from '../format';
 import NotificationPreferencesModal from './NotificationPreferencesModal';
+import { LmIcon } from './Icon';
 
 const POLL_MS = 60000;
 
@@ -37,21 +38,6 @@ const ring = keyframes`
   50% { transform: rotate(0); }
   100% { transform: rotate(0); }
 `;
-
-const TYPE_ICONS = {
-  announcement: '📣',
-  coursework: '📄',
-  comment: '💬',
-  grade: '💯',
-  submission: '📥',
-  invite: '✉️',
-  join_request: '🙋',
-  quiz: '🧠',
-  quiz_result: '🎯',
-  material: '📚',
-  feedback: '🕊️',
-  dev_team: '🚀',
-};
 
 export default function NotificationBell() {
   const [items, setItems] = useState([]);
@@ -139,7 +125,7 @@ export default function NotificationBell() {
             size="xs"
             variant="ghost"
             aria-label="Notification settings"
-            icon={<span>⚙️</span>}
+            icon={<LmIcon name="settings" size={16} />}
             onClick={() => setPrefsModalOpen(true)}
             title="Notification settings"
           />
@@ -147,7 +133,7 @@ export default function NotificationBell() {
             size="xs"
             variant="ghost"
             aria-label="Close notifications"
-            icon={<span>✕</span>}
+            icon={<LmIcon name="close" size={16} />}
             onClick={onClose}
             title="Close notifications"
           />
@@ -174,7 +160,9 @@ export default function NotificationBell() {
               onClick={() => open(notification)}
               {...buttonTextStyles}
             >
-              <Text>{TYPE_ICONS[notification.type] || '🔔'}</Text>
+              <Box color="lmFg.subtle" pt={0.5}>
+                <LmIcon name={notificationIcon(notification.type)} size={18} />
+              </Box>
               <Box flex="1" minW={0}>
                 <Text fontSize="sm" fontWeight={notification.read ? '400' : '600'} noOfLines={2}>
                   {notification.title}
@@ -204,7 +192,11 @@ export default function NotificationBell() {
               variant="ghost"
               aria-label="Notifications"
               onClick={onOpen}
-              icon={<Box as="span" display="inline-block" animation={unread > 0 ? `${ring} 2s ease infinite` : 'none'}>🔔</Box>}
+              icon={
+                <Box as="span" display="inline-flex" animation={unread > 0 ? `${ring} 2s ease infinite` : 'none'}>
+                  <LmIcon name="notifications" size={20} />
+                </Box>
+              }
             />
             {unread > 0 && (
               <Badge
@@ -235,7 +227,11 @@ export default function NotificationBell() {
               <IconButton
                 variant="ghost"
                 aria-label="Notifications"
-                icon={<Box as="span" display="inline-block" animation={unread > 0 ? `${ring} 2s ease infinite` : 'none'}>🔔</Box>}
+                icon={
+                <Box as="span" display="inline-flex" animation={unread > 0 ? `${ring} 2s ease infinite` : 'none'}>
+                  <LmIcon name="notifications" size={20} />
+                </Box>
+              }
               />
               {unread > 0 && (
                 <Badge
@@ -270,7 +266,7 @@ export default function NotificationBell() {
                     size="xs"
                     variant="ghost"
                     aria-label="Notification settings"
-                    icon={<span>⚙️</span>}
+                    icon={<LmIcon name="settings" size={16} />}
                     onClick={() => setPrefsModalOpen(true)}
                     title="Notification settings"
                   />
@@ -298,7 +294,9 @@ export default function NotificationBell() {
                     onClick={() => open(notification)}
                     {...buttonTextStyles}
                   >
-                    <Text>{TYPE_ICONS[notification.type] || '🔔'}</Text>
+                    <Box color="lmFg.subtle" pt={0.5}>
+                <LmIcon name={notificationIcon(notification.type)} size={18} />
+              </Box>
                     <Box flex="1" minW={0}>
                       <Text fontSize="sm" fontWeight={notification.read ? '400' : '600'} noOfLines={2}>
                         {notification.title}

@@ -24,6 +24,7 @@ import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import StartShortModal from '../components/StartShortModal';
 import { relativeTime } from '../format';
+import { LmIcon } from '../components/Icon';
 
 /**
  * The class's Shorts — decks of instant questions run live from the front of the
@@ -187,7 +188,8 @@ export default function Shorts() {
         {isTeacher && (
           <>
             <Button as="a" href="/learning/shortsmanual" target="_blank" rel="noreferrer" variant="ghost" size="sm">
-              📖 Manual
+              <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
+            Manual
             </Button>
             <Button colorScheme="purple" size="sm" onClick={create} isLoading={busy === 'new'}>
               New short
@@ -224,7 +226,7 @@ export default function Shorts() {
 
       {shorts.length === 0 ? (
         <EmptyState
-          icon="⚡"
+          icon="short"
           title="No shorts yet"
           description={
             isTeacher

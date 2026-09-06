@@ -53,7 +53,7 @@ function GradebookGrid({ classId, isTeacher }) {
   if (loading) return <Loading label="Building the gradebook…" />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!data?.coursework?.length) {
-    return <EmptyState icon="💯" title="No graded work yet" description="Assignments and quizzes appear here once they are assigned." />;
+    return <EmptyState icon="grades" title="No graded work yet" description="Assignments and quizzes appear here once they are assigned." />;
   }
 
   const saveEdits = async () => {

@@ -37,7 +37,6 @@ import {
   useDisclosure,
   useToast,
 } from '@chakra-ui/react';
-import { DeleteIcon } from '@chakra-ui/icons';
 import lmApi from '../api/lmApi';
 import PublishQuizModal from '../components/PublishQuizModal';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
@@ -46,6 +45,7 @@ import RichTextEditor from '../components/RichTextEditor';
 import { CopyLinkButton, ErrorState, Loading, SectionCard } from '../components/common';
 import { duplicateOptionIndexes, questionsWithDuplicateOptions } from '../questionRules';
 import { toDateTimeInput } from '../format';
+import { LmIcon } from '../components/Icon';
 
 const BLANK_QUESTION = {
   question: '',
@@ -86,7 +86,7 @@ const TYPE_LABELS = {
 const METHODOLOGIES = [
   {
     key: 'one_page',
-    icon: '📋',
+    icon: 'quiz',
     label: 'All questions on one page, one timer',
     hint: 'Students answer in any order and submit when ready, under a single countdown. Best for classroom quizzes.',
     deliveryMode: 'all_at_once',
@@ -313,7 +313,7 @@ function QuestionCard({ question, index, sections, onChange, onRemove, onDuplica
                   variant="ghost"
                   aria-label="Remove option"
                   colorScheme="red"
-                  icon={<DeleteIcon />}
+                  icon={<LmIcon name="delete" size={15} />}
                   onClick={() => {
                     set('options', question.options.filter((_, i) => i !== optionIndex));
                     set(
@@ -629,7 +629,8 @@ export default function QuizEditor({ mode = 'questions' }) {
         <HStack>
           {quiz.published && <CopyLinkButton to={`/learning/class/${classId}/quiz/${quizId}`} />}
           <Button size="sm" variant="outline" colorScheme="purple" onClick={previewDialog.onOpen}>
-            👁️ Preview
+            <LmIcon name="preview" size={14} style={{ marginRight: 6 }} />
+            Preview
           </Button>
           <Button size="sm" variant="outline" onClick={save} isLoading={saving}>
             Save
@@ -1522,7 +1523,8 @@ export default function QuizEditor({ mode = 'questions' }) {
                     is the same act as writing one, and this is where a teacher is
                     looking when they decide they have written this before. */}
                 <Button variant="outline" onClick={openImport} isLoading={saving}>
-                  📥 Import questions
+                  <LmIcon name="import" size={14} style={{ marginRight: 6 }} />
+              Import questions
                 </Button>
               </Flex>
 
@@ -1531,7 +1533,8 @@ export default function QuizEditor({ mode = 'questions' }) {
                   moment a teacher loses the work they just typed. */}
               <Flex justify="flex-end" gap={2} mt={6} pt={4} borderTopWidth="1px" borderColor="lmBorder.base">
                 <Button size="sm" variant="outline" colorScheme="purple" onClick={previewDialog.onOpen}>
-                  👁️ Preview
+                  <LmIcon name="preview" size={14} style={{ marginRight: 6 }} />
+            Preview
                 </Button>
                 <Button size="sm" variant="outline" onClick={save} isLoading={saving}>
                   Save
@@ -1588,7 +1591,7 @@ export default function QuizEditor({ mode = 'questions' }) {
                       variant="ghost"
                       colorScheme="red"
                       aria-label="Delete section"
-                      icon={<DeleteIcon />}
+                      icon={<LmIcon name="delete" size={15} />}
                       onClick={() => set({ sections: quiz.sections.filter((_, i) => i !== index) })}
                     />
                   </Flex>

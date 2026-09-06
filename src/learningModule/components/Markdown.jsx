@@ -38,10 +38,15 @@ const escapeHtml = (text) =>
  * Known limitation: a lone "$" (e.g. "costs $5") is left alone since the
  * regex requires a closing "$" to treat something as math — but "$5 and $10"
  * on the same line *would* look like a valid inline-math pair to a naive
- * regex. To guard against that, a $...$ match is only treated as math if its
- * contents look LaTeX-ish (contain a backslash, ^, _, or {}); otherwise it's
- * left as plain text. Teachers hitting an edge case here can still escape as
- * "\$5" or switch to \( \) delimiters for real inline formulas near currency.
+ * regex. To guard against that, a $...$ match is only treated as math if it
+ * contains a LaTeX/math marker — a backslash, ^, _, {}, brackets, parens, an
+ * equals sign, or a comparison — OR is a single token with no whitespace at
+ * all (x, n, y[n], O(n), x_1, ...). A currency false-pair's captured middle
+ * ("5 and ", "5-" is the exception worth noting: a genuine "$50-$100" range
+ * would be misread as math too) is ordinary words/numbers with none of
+ * those markers, so that shape is the one this still rejects. Teachers
+ * hitting an edge case here can still escape as "\$5" or switch to \( \)
+ * delimiters for real inline formulas near currency.
  */
 function extractMath(source) {
   const mathBlocks = [];
@@ -62,8 +67,8 @@ function extractMath(source) {
     return `\0MATH${mathBlocks.length - 1}\0`;
   };
 
-  // Looks like actual LaTeX rather than plain text / currency figures.
-  const looksLikeMath = (expr) => /[\\^_{}]/.test(expr);
+  // Looks like actual LaTeX/math rather than plain text / currency figures.
+  const looksLikeMath = (expr) => /[\\^_{}[\]()=<>]/.test(expr) || !/\s/.test(expr.trim());
 
   let text = source;
 

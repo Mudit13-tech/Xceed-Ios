@@ -25,6 +25,7 @@ import {
   FiUserPlus,
   FiUploadCloud,
   FiDatabase,
+  FiMail,
 } from 'react-icons/fi';
 
 const MODULES = [
@@ -71,6 +72,14 @@ const MODULES = [
     accent: 'teal',
   },
   {
+    title: 'Heads of Department',
+    description:
+      'Map each department to the account that heads it. Every module that needs to reach a head of department reads this one mapping.',
+    to: '/superadmin/hods',
+    icon: FiUserCheck,
+    accent: 'purple',
+  },
+  {
     title: 'Bugs & Suggestions',
     description: 'Read what users have reported, and approve the reports worth acting on.',
     to: '/superadmin/bugs',
@@ -84,6 +93,14 @@ const MODULES = [
     to: '/superadmin/dev-team',
     icon: FiUserPlus,
     accent: 'teal',
+  },
+  {
+    title: 'Mail Senders',
+    description:
+      'Which mailbox each module sends from, and how much mail each sender has sent this week.',
+    to: '/superadmin/mail',
+    icon: FiMail,
+    accent: 'blue',
   },
   {
     title: 'Pull & Deploy',

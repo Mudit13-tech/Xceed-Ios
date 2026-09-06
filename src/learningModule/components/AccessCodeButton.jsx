@@ -16,6 +16,7 @@ import {
 } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
+import { LmIcon } from './Icon';
 
 /**
  * The Safe Exam Browser access code, from the quiz list.
@@ -66,7 +67,8 @@ export default function AccessCodeButton({ classId, quiz, onDone }) {
   return (
     <>
       <Button size="sm" variant="outline" onClick={() => setIsOpen(true)}>
-        🔑 Access code
+        <LmIcon name="key" size={14} style={{ marginRight: 6 }} />
+        Access code
       </Button>
       <Modal isOpen={isOpen} onClose={close} size="lg">
         <ModalOverlay />

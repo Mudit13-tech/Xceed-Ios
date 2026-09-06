@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Heading, Text } from '@chakra-ui/react';
+import { LmIcon } from '../components/Icon';
 
 /**
  * Where Safe Exam Browser is sent to quit.
@@ -19,7 +20,7 @@ export default function SebExit() {
   return (
     <Box maxW="520px" mx="auto" py={16} px={6} textAlign="center">
       <Text fontSize="3xl" mb={2} aria-hidden="true">
-        ✅
+        <LmIcon name="success" size={34} strokeWidth={1.5} />
       </Text>
       <Heading size="md" mb={3}>
         Your test is submitted

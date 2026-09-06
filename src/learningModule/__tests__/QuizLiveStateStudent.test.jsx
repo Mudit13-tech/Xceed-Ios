@@ -54,7 +54,7 @@ describe('Student view of Quiz live status and published results (Issue #2115)',
 
     expect(screen.getByText('Active Live Quiz')).toBeTruthy();
     // Live button is rendered for active quiz
-    expect(screen.getByText(/🟢 Live/)).toBeTruthy();
+    expect(screen.getByText(/^Live$/)).toBeTruthy();
     // Start test button is available
     expect(screen.getByRole('link', { name: /Start test/i })).toBeTruthy();
   });
@@ -78,7 +78,7 @@ describe('Student view of Quiz live status and published results (Issue #2115)',
 
     expect(screen.getByText('Concluded Quiz With Results')).toBeTruthy();
     // Live button MUST NOT be rendered
-    expect(screen.queryByText(/🟢 Live/)).toBeNull();
+    expect(screen.queryByText(/^Live$/)).toBeNull();
     // Start test MUST NOT be rendered
     expect(screen.queryByRole('link', { name: /Start test/i })).toBeNull();
     /* A "Missed" badge, not a disabled "Quiz ended" button.
@@ -156,9 +156,9 @@ describe('Student view of Quiz live status and published results (Issue #2115)',
 
     expect(screen.getByRole('heading', { name: 'Completed Quiz' })).toBeTruthy();
     // Live button is not rendered
-    expect(screen.queryByText(/🟢 Live/)).toBeNull();
+    expect(screen.queryByText(/^Live$/)).toBeNull();
     // Completed badge is shown
-    expect(screen.getByText('✅ Completed')).toBeTruthy();
+    expect(screen.getByText('Completed')).toBeTruthy();
     // See your result button is available
     expect(screen.getByRole('link', { name: /See your result/i })).toBeTruthy();
   });

@@ -24,6 +24,7 @@ import {
 import lmApi from '../api/lmApi';
 import RichText from '../components/RichText';
 import { ErrorState, Loading } from '../components/common';
+import { LmIcon } from '../components/Icon';
 
 const TYPE_LABEL = {
   mcq: 'Choose one',
@@ -45,6 +46,33 @@ export default function QuizPreviewPage() {
   const [showAnswers, setShowAnswers] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userAnswers, setUserAnswers] = useState({});
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, []);
+
+  const toggleFullScreen = async () => {
+    if (!isFullScreen) {
+      setIsFullScreen(true);
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch (err) {}
+    } else {
+      setIsFullScreen(false);
+      try {
+        if (document.fullscreenElement && document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+      } catch (err) {}
+    }
+  };
 
   const loadQuiz = useCallback(async () => {
     setError(null);
@@ -246,7 +274,8 @@ export default function QuizPreviewPage() {
         {showAnswers && question.explanation && (
           <Box mt={4} p={3.5} bg="purple.50" borderRadius="lg" borderWidth="1px" borderColor="purple.200">
             <Text fontSize="xs" fontWeight="700" color="purple.700" mb={1}>
-              💡 Explanation
+              <LmIcon name="tip" size={12} style={{ marginRight: 4 }} />
+              Explanation
             </Text>
             <RichText>{question.explanation}</RichText>
           </Box>
@@ -270,7 +299,8 @@ export default function QuizPreviewPage() {
               ← Back to quiz editor
             </Button>
             <Heading size="lg" color="lmFg.heading">
-              👁️ Quiz Preview: {quiz.title}
+              <LmIcon name="preview" size={17} style={{ marginRight: 6 }} />
+            Quiz Preview: {quiz.title}
             </Heading>
             <Text fontSize="sm" color="lmFg.muted">
               Student Sitting Layout · {questions.length} question{questions.length === 1 ? '' : 's'} · {totalMarks} mark
@@ -278,14 +308,30 @@ export default function QuizPreviewPage() {
             </Text>
           </Box>
 
-          <Button
-            size="sm"
-            colorScheme="purple"
-            variant="outline"
-            onClick={() => navigate(`/learning/class/${classId}/quizzes`)}
-          >
-            Exit Preview
-          </Button>
+          <HStack spacing={2}>
+            <Button
+              size="sm"
+              colorScheme="purple"
+              variant="outline"
+              onClick={toggleFullScreen}
+            >
+              <LmIcon name={isFullScreen ? 'close' : 'desktop'} size={13} style={{ marginRight: 6 }} />
+            {isFullScreen ? 'Exit Full Screen' : 'Full Screen'}
+            </Button>
+            <Button
+              size="sm"
+              colorScheme="gray"
+              variant="outline"
+              onClick={() => {
+                if (document.fullscreenElement && document.exitFullscreen) {
+                  document.exitFullscreen().catch(() => {});
+                }
+                navigate(`/learning/class/${classId}/quizzes`);
+              }}
+            >
+              Exit Preview
+            </Button>
+          </HStack>
         </Flex>
 
         <Alert status="info" borderRadius="lg" mb={5} fontSize="xs">
@@ -320,7 +366,8 @@ export default function QuizPreviewPage() {
               colorScheme={deliveryMode === 'all_at_once' ? 'purple' : 'gray'}
               onClick={() => setDeliveryMode('all_at_once')}
             >
-              📋 All on one page
+              <LmIcon name="quiz" size={13} style={{ marginRight: 4 }} />
+            All on one page
             </Button>
             <Button
               size="xs"

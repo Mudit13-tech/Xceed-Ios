@@ -277,10 +277,10 @@ const DeptCoordinators = () => {
               <AlertIcon />
               <AlertDescription fontSize="sm">
                 Appointing somebody also gives their account the Department Time
-                Table Coordinator role (DTTI) if it does not already have one.
-                Somebody who is signed in at the time must sign out and back in
-                before the new role takes effect. Withdrawing an appointment does
-                not take the role back — it only removes the department, and an
+                Table Coordinator role (DTTI) if it does not already have one,
+                and emails them to say so. Somebody who is signed in at the time
+                must sign out and back in before the new role takes effect.
+                Withdrawing an appointment does not take the role back — it only removes the department, and an
                 account left with none falls back to the department recorded on
                 it. Remove the role itself under User Management.
               </AlertDescription>

@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Box, Button, Flex, HStack, Input, SimpleGrid, Text } from '@chakra-ui/react';
 import { evaluate, formatResult } from '../calculator';
+import { LmIcon } from './Icon';
 
 /**
  * The on-screen scientific calculator offered during a sitting.
@@ -245,7 +246,7 @@ export default function QuizCalculator() {
         size="sm"
         colorScheme="purple"
         boxShadow="lg"
-        leftIcon={<span aria-hidden="true">🖩</span>}
+        leftIcon={<LmIcon name="calculator" size={14} />}
         onClick={() => setOpen(true)}
       >
         Calculator
@@ -292,7 +293,8 @@ export default function QuizCalculator() {
         onPointerCancel={endDrag}
       >
         <Text fontSize="sm" fontWeight="700" color="lmFg.body">
-          🖩 Calculator
+          <LmIcon name="calculator" size={15} style={{ marginRight: 6 }} />
+          Calculator
         </Text>
         <Box flex="1" />
         <Button

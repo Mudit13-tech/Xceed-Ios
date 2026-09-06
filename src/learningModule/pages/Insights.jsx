@@ -95,7 +95,7 @@ export default function Insights() {
 
       <SectionCard title="Per-assignment breakdown" mb={4}>
         {perCoursework.length === 0 ? (
-          <EmptyState icon="📄" title="No classwork yet" />
+          <EmptyState icon="assignment" title="No classwork yet" />
         ) : (
           <Box overflowX="auto">
             <Table size="sm">
@@ -147,7 +147,7 @@ export default function Insights() {
 
       <SectionCard title="Per-student breakdown">
         {perStudent.length === 0 ? (
-          <EmptyState icon="👥" title="No students enrolled" />
+          <EmptyState icon="people" title="No students enrolled" />
         ) : (
           <Box overflowX="auto">
             <Table size="sm">

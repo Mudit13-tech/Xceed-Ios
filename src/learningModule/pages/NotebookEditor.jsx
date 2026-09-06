@@ -33,6 +33,7 @@ import { toDateTimeInput } from '../format';
 import useNotebookKernel from '../hooks/useNotebookKernel';
 import { MAX_IMPORT_CELLS, cellsFromFile } from '../notebookImport';
 import { runCellTestCases } from '../utils/testRunner';
+import { LmIcon } from '../components/Icon';
 
 /**
  * Authoring a coding notebook.
@@ -772,7 +773,8 @@ export default function NotebookEditor() {
             setImportingCells(true);
           }}
         >
-          📥 Import cells
+          <LmIcon name="import" size={14} style={{ marginRight: 6 }} />
+          Import cells
         </Button>
       </HStack>
 
