@@ -135,10 +135,19 @@ function SyncCard({ onImported, lastUploadAt, lastUploadFrom }) {
       </div>
       <div className="er-card-body">
         <div className="er-hint">
-          Pulled straight from the institute&apos;s student database — <strong>Name</strong>,{' '}
-          <strong>Roll No.</strong>, <strong>Department</strong>, <strong>Official Email</strong>. Re-running
-          the sync updates the students it names and leaves everyone else alone.
+          Read from the student accounts the learning module&apos;s ERP roster import maintains —{' '}
+          <strong>Name</strong>, <strong>Roll No.</strong>, <strong>Department</strong>,{' '}
+          <strong>Official Email</strong>. Upload the ERP export there and it appears here.
+          Re-running the sync updates the students it names and leaves everyone else alone.
         </div>
+        {preview?.selfCorrected > 0 && (
+          <div className="er-hint">
+            {preview.selfCorrected} student{preview.selfCorrected === 1 ? '' : 's'} changed{' '}
+            {preview.selfCorrected === 1 ? 'their' : 'their'} own roll number after the import and{' '}
+            {preview.selfCorrected === 1 ? 'was' : 'were'} left out — a self-typed roll number is not
+            the ERP&apos;s answer. Re-running the roster import overwrites it and brings them back.
+          </div>
+        )}
         <div className="er-hint">
           Last write to the list: {lastUploadAt ? new Date(lastUploadAt).toLocaleString() : 'never'}
           {lastUploadFrom && (
