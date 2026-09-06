@@ -334,6 +334,11 @@ const lmApi = {
       },
     }),
   inviteStatus: (classId, batchId) => request(`/classes/${classId}/members/invite-status/${batchId}`),
+  // The Attendance module's roster for this class's subject, already resolved
+  // from roll numbers to addresses and flagged against the current roster —
+  // see memberController.previewErpImport. Read-only: it fills the invite box,
+  // it does not enrol anybody.
+  previewErpImport: (classId) => request(`/classes/${classId}/members/erp-preview`),
   decideJoinRequest: (classId, membershipId, approve) =>
     request(`/classes/${classId}/members/${membershipId}/decide`, { method: 'POST', body: { approve } }),
   updateMember: (classId, membershipId, body) =>

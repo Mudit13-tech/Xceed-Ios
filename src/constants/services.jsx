@@ -1,8 +1,10 @@
 import {
   AcademicCapIcon,
+  BookOpenIcon,
   BriefcaseIcon,
   Cog6ToothIcon,
   PresentationChartLineIcon,
+  VideoCameraIcon,
   WrenchScrewdriverIcon,
 } from '@heroicons/react/24/solid';
 import { GiPodiumWinner } from "react-icons/gi";
@@ -125,5 +127,28 @@ export const services = [
     title: 'Success Stories',
     description:
       'WDM Club at our esteemed institution has taken a pioneering step to offer a unique foundation elective course for first-year students. This course aims to provide an immersive and comprehensive introduction to web development, a critical technology in the field of software engineering which is the future!. The foundation elective course offered is designed to cater to students from diverse academic backgrounds. Inaddition to this, Through workshops, and hackathons, we aim to empower our members with the knowledge and practical experience necessary for success in the dynamic field of software development.',
+  },
+  /* The two newest modules. Both carry an `href`, so their card opens the
+     introduction page written for it instead of the generic /services/:id
+     template — those pages say considerably more than a card's worth. */
+  {
+    id: 9,
+    icon: <BookOpenIcon />,
+    type: 'institute',
+    href: '/xceed-learning',
+    tag: 'Newly launched',
+    title: 'XCEED Learning',
+    description:
+      'A learning platform built for the way courses actually run at NITJ. Every subject gets a class holding its material, assignments, quizzes, coding labs, notebooks, live in-class Shorts and feedback forms, so faculty stop spreading one course across a drive folder, a quiz tool and a spreadsheet. Work that can grade itself does; the rest is graded in a single screen, and the gradebook, attendance view and insights keep themselves up to date as you teach. Students get one home page carrying their timetable, calendar, to-do list and notifications, in the browser, with nothing to install.',
+  },
+  {
+    id: 10,
+    icon: <VideoCameraIcon />,
+    type: 'institute',
+    href: '/ileed',
+    tag: 'Newly launched',
+    title: 'iLEED — Automated Attendance',
+    description:
+      'Intelligent Learning Engagement and Entity Detection turns the CCTV already installed in classrooms into an attendance register. Ground truth is captured from those same cameras rather than from ID photographs, so the model recognises students under the angles and lighting it will actually meet; each face cluster is mapped to a roll number once, and recognition is scoped to the students registered for the subject being taught. Sessions then mark themselves. Frames are kept alongside every entry for verification, students can contest a session, and each ERP override carries a reason and an author.',
   },
 ];

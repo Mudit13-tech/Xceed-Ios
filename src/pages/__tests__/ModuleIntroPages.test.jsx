@@ -27,7 +27,7 @@ const renderAt = (ui) => render(<MemoryRouter>{ui}</MemoryRouter>);
 const hrefOf = (name) => screen.getByRole('link', { name }).getAttribute('href');
 
 describe('home hero badges', () => {
-  it('offers both new modules as "newly launched", ahead of the conference links', () => {
+  it('offers both new modules as "newly launched", above the rail', () => {
     renderAt(<Hero />);
 
     const badges = screen.getAllByText('Newly launched');
@@ -35,6 +35,66 @@ describe('home hero badges', () => {
 
     expect(hrefOf(/XCEED Learning/)).toBe('/xceed-learning');
     expect(hrefOf(/iLEED/)).toBe('/ileed');
+  });
+
+  it('keeps the rest on one scrollable line rather than wrapping', () => {
+    const { container } = renderAt(<Hero />);
+
+    const rail = container.querySelector('.hero-badge-rail');
+    expect(rail).toBeTruthy();
+    // A wrapping rail is the bug this replaced: it grew a row per year and
+    // pushed the heading further down the page each time.
+    expect(rail.className).toContain('tw-overflow-x-auto');
+    expect(rail.className).not.toContain('tw-flex-wrap');
+  });
+
+  it('still carries the sites that were briefly dropped from the row', () => {
+    renderAt(<Hero />);
+
+    expect(hrefOf(/VISTA-2026/)).toBe('https://vistanitj.com/');
+    expect(hrefOf(/Chemcon-2024/)).toBe('https://chemcon2024.com/');
+    expect(hrefOf(/Timetable/)).toBe('/timetable');
+  });
+});
+
+describe('institute services', () => {
+  it('lists both new modules and sends their cards to the introduction pages', async () => {
+    const { services } = await import('../../constants/services');
+    const institute = services.filter((s) => s.type === 'institute');
+
+    const learning = institute.find((s) => s.href === '/xceed-learning');
+    const ileed = institute.find((s) => s.href === '/ileed');
+
+    expect(learning?.title).toMatch(/XCEED Learning/);
+    expect(ileed?.title).toMatch(/iLEED/);
+
+    // Both wear the same pill as the hero badges, and nothing older does.
+    expect(learning?.tag).toBe('Newly launched');
+    expect(ileed?.tag).toBe('Newly launched');
+    expect(services.filter((s) => s.tag)).toHaveLength(2);
+
+    // Ids stay unique — /services/:id is matched by find(), so a duplicate
+    // would silently shadow another service rather than fail.
+    const ids = services.map((s) => s.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('shows the tag on the card, and omits it where there is none', async () => {
+    const { default: ServiceCard } = await import(
+      '../../components/home/Services/ServiceCard'
+    );
+
+    const { rerender } = renderAt(
+      <ServiceCard id={9} title="XCEED Learning" description="…" tag="Newly launched" />
+    );
+    expect(screen.getByText('Newly launched')).toBeInTheDocument();
+
+    rerender(
+      <MemoryRouter>
+        <ServiceCard id={5} title="Institute Time Table Module" description="…" />
+      </MemoryRouter>
+    );
+    expect(screen.queryByText('Newly launched')).not.toBeInTheDocument();
   });
 });
 

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import SectionHeader from '../ui/home/SectionHeader';
 
 const JoinUs = () => {
@@ -38,21 +39,33 @@ const JoinUs = () => {
               <li>Tailwind CSS</li>
               <li>Chakra UI</li>
               <li>Mongo DB</li>
+              <li>AI deployments</li>
+              <li>Computer vision (a basic idea is enough)</li>
             </ul>
+            {/* The bar is spelled out per item rather than applied to the whole
+                list: iLEED needs people who can pick computer vision up, not
+                people who already know it, and holding the last two entries to
+                the same standard as React would turn them away. */}
             <p className="tw-text-gray-400 sm:tw-text-lg tw-text-justify">
               We expect students to have intermediate to advanced level of
-              knowledge in above technologies who are expected to available on
-              call between 6pm to 11pm on working days.
+              knowledge in the web technologies above, and a basic working idea
+              of AI deployment and computer vision. Members are expected to be
+              available on call between 6pm to 11pm on working days.
             </p>
+            {/* Applications used to be a Google Form. They now run through the
+                learning module, which checks eligibility as you fill it in and
+                keeps one application per student per semester — neither of
+                which a form could do. */}
             <p className="tw-text-gray-400 sm:tw-text-lg tw-text-justify">
-              If you want to be part of XCEED Community, fill up this form
-              {'  '}
-              <a
-                href="https://forms.gle/iCEP3gYkDkfsnEWn6"
-                className="tw-text-cyan-600  dark:tw-text-cyan-300"
+              If you want to be part of the XCEED Community, apply through the{' '}
+              <Link
+                to="/learning/dev-team"
+                className="tw-text-cyan-600 dark:tw-text-cyan-300"
               >
-                https://forms.gle/iCEP3gYkDkfsnEWn6
-              </a>
+                XCEED Learning module
+              </Link>
+              . Sign in with your institute account, and the application is
+              under Dev Team.
             </p>
           </div>
         </div>
