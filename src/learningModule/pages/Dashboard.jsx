@@ -29,8 +29,11 @@ import {
   TabPanel,
   TabPanels,
   Tabs,
+  Tag,
   Text,
   Tooltip,
+  Wrap,
+  WrapItem,
   useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
@@ -49,13 +52,19 @@ import { LmIcon } from '../components/Icon';
 import { CLASS_COLORS } from '../format';
 import { canCreateClass } from '../roles';
 
+// getDay() is 0=Sunday..6=Saturday; the timetable itself never schedules
+// Sunday (see server's ttInternals.DAYS), so that index is left unmapped.
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
 function ClassCard({ klass, onOpen }) {
   const cardBg = useColorModeValue('white', 'gray.800');
   const cardBorder = useColorModeValue('gray.200', 'gray.700');
   const ownerColor = useColorModeValue('gray.600', 'gray.300');
   const metaColor = useColorModeValue('gray.500', 'gray.400');
+  const todayBorder = useColorModeValue('green.500', 'green.300');
 
   const isTeacher = ['teacher', 'co-teacher'].includes(klass.myRole);
+  const todayName = WEEKDAY_NAMES[new Date().getDay()];
   return (
     <Box
       as="button"
@@ -149,12 +158,32 @@ function ClassCard({ klass, onOpen }) {
           </Flex>
         )}
 
-        {/* Timetable schedule display */}
+        {/* Timetable schedule display — the slot(s) falling on today get a
+            green border so a student/teacher can spot "am I in this class
+            today" at a glance without opening the class. */}
         {klass.schedule && klass.schedule.length > 0 && (
-          <Text mt={3} fontSize="xs" color={metaColor} noOfLines={2}>
-            <LmIcon name="calendar" size={12} style={{ marginRight: 4 }} />
-            {klass.schedule.join(', ')}
-          </Text>
+          <Wrap mt={3} spacing={1} align="center">
+            <WrapItem>
+              <Text fontSize="xs" color={metaColor}>📅</Text>
+            </WrapItem>
+            {klass.schedule.map((item, idx) => {
+              const isToday = item.day === todayName;
+              return (
+                <WrapItem key={`${item.day}-${item.label}-${idx}`}>
+                  <Tag
+                    size="sm"
+                    fontSize="0.7rem"
+                    colorScheme="gray"
+                    variant="subtle"
+                    borderWidth={isToday ? '2px' : '1px'}
+                    borderColor={isToday ? todayBorder : 'transparent'}
+                  >
+                    {item.label}
+                  </Tag>
+                </WrapItem>
+              );
+            })}
+          </Wrap>
         )}
 
         {/* Quiz marks released and not yet read. Deliberately on the subject

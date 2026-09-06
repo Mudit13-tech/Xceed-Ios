@@ -3,6 +3,62 @@ import { ChevronRightIcon } from "@heroicons/react/24/outline";
 import { useState, useEffect } from 'react'
 // import { ChevronRightIcon } from '@chakra-ui/icons'
 import StarryBackgroundAnimation from './StarryBackgroundAnimation.jsx';
+import './heroBadges.css';
+
+/**
+ * The pills under the hero: a tag, a name, and somewhere to go.
+ *
+ * `tagBg` is a whole class name rather than a colour fragment on purpose —
+ * Tailwind scans this file as text, so a composed `tw-bg-${colour}-500` would
+ * never reach the build.
+ */
+function HeroBadge({ to, tag, tagBg, label, external }) {
+  return (
+    <Link
+      to={to}
+      target={external ? '_blank' : undefined}
+      rel={external ? 'noreferrer' : undefined}
+      className="tw-inline-flex tw-flex-shrink-0 tw-items-center tw-whitespace-nowrap tw-py-1 tw-px-1 tw-pr-4 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"
+    >
+      <span
+        className={`tw-text-xs ${tagBg} tw-font-bold tw-uppercase tw-rounded-full tw-text-white tw-px-4 tw-py-1.5 tw-mr-3`}
+      >
+        {tag}
+      </span>
+      <span className="tw-text-sm tw-font-medium">{label}</span>
+      <ChevronRightIcon strokeWidth={2.5} className="tw-size-4 tw-text-white" />
+    </Link>
+  );
+}
+
+/** The two newest modules — given their own line above the rail. */
+const NEW_BADGES = [
+  {
+    to: '/xceed-learning',
+    tag: 'Newly launched',
+    tagBg: 'tw-bg-teal-500',
+    label: 'XCEED Learning',
+  },
+  {
+    to: '/ileed',
+    tag: 'Newly launched',
+    tagBg: 'tw-bg-teal-500',
+    label: 'iLEED — Attendance',
+  },
+];
+
+/** Newest first; the rail scrolls, so the list can keep growing. */
+const RAIL_BADGES = [
+  { to: 'https://glogift2026.com/', tag: 'Sold!', tagBg: 'tw-bg-orange-500', label: 'GLOGIFT-2026', external: true },
+  { to: 'https://cipher2026.com/', tag: 'Sold!', tagBg: 'tw-bg-yellow-500', label: 'CIPHER-2026', external: true },
+  { to: 'https://eaicnitj.com/', tag: 'Sold!', tagBg: 'tw-bg-green-500', label: 'EAIC-2026', external: true },
+  { to: 'https://vistanitj.com/', tag: 'Sold!', tagBg: 'tw-bg-gray-500', label: 'VISTA-2026', external: true },
+  { to: 'https://igc2025nitj.com/', tag: 'Sold!', tagBg: 'tw-bg-pink-500', label: 'IGC-2025', external: true },
+  { to: 'https://amsdt2025.com/', tag: 'Sold!', tagBg: 'tw-bg-blue-500', label: 'AMSDT-2025', external: true },
+  { to: 'https://eaic2025.netlify.app/', tag: 'Sold!', tagBg: 'tw-bg-violet-400', label: 'EAIC-2025', external: true },
+  { to: 'https://chemcon2024.com/', tag: 'Sold!', tagBg: 'tw-bg-orange-500', label: 'Chemcon-2024', external: true },
+  { to: '/timetable', tag: 'Module', tagBg: 'tw-bg-violet-600', label: 'Timetable' },
+];
 function AnimatedBadge({ newBg, soldBg }) {
   const words = ['NEW', 'SOLD!']
   const [wordIndex, setWordIndex] = useState(0)
@@ -64,180 +120,27 @@ const Hero = () => {
     <StarryBackgroundAnimation/>
     <section id="home" >
       <div className="tw-py-8 tw-px-4 tw-mx-auto tw-max-w-screen-xl tw-text-center lg:tw-py-14 lg:tw-px-12">
-        {/* The two newest modules, first in the badge row and on a line of their
-            own so they are not lost among the conference links below. Each goes
-            to its public introduction page, not straight into the module — the
+        {/* The two newest modules, on a line of their own above the rail so
+            they are not lost among the conference links. Each goes to its
+            public introduction page rather than straight into the module — the
             people these are aimed at usually do not have an account yet. */}
-        <div className="tw-mb-2 tw-flex tw-flex-wrap tw-justify-center tw-gap-3">
-          <Link
-            to="/xceed-learning"
-            className="tw-inline-flex tw-justify-between tw-items-center tw-py-1 tw-px-1 tw-pr-4 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"
-          >
-            <span className="tw-text-xs tw-bg-teal-500 tw-font-bold tw-uppercase tw-rounded-full tw-text-white tw-px-4 tw-py-1.5 tw-mr-3">
-              Newly launched
-            </span>{" "}
-            <span className="tw-text-sm tw-font-medium">XCEED Learning</span>
-            <ChevronRightIcon
-              strokeWidth={2.5}
-              className="tw-size-4 tw-text-white"
-            />
-          </Link>
-          <Link
-            to="/ileed"
-            className="tw-inline-flex tw-justify-between tw-items-center tw-py-1 tw-px-1 tw-pr-4 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"
-          >
-            <span className="tw-text-xs tw-bg-teal-500 tw-font-bold tw-uppercase tw-rounded-full tw-text-white tw-px-4 tw-py-1.5 tw-mr-3">
-              Newly launched
-            </span>{" "}
-            <span className="tw-text-sm tw-font-medium">
-              iLEED — Attendance
-            </span>
-            <ChevronRightIcon
-              strokeWidth={2.5}
-              className="tw-size-4 tw-text-white"
-            />
-          </Link>
+        <div className="tw-mb-10 tw-flex tw-flex-wrap tw-justify-center tw-gap-3">
+          {NEW_BADGES.map((badge) => (
+            <HeroBadge key={badge.to} {...badge} />
+          ))}
         </div>
-        <Link
-          to="https://glogift2026.com/"
-          className="tw-inline-flex tw-justify-between tw-items-center tw-py-1 tw-px-1 tw-pr-4 tw-mb-7 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"
-          role="alert"
-          target="_blank"
-        >
-          {/* <AnimatedBadge newBg="yellow-500" soldBg="yellow-500" /> */}
-          <span className="tw-text-xs tw-bg-orange-500 tw-font-bold tw-uppercase tw-rounded-full tw-text-white tw-px-4 tw-py-1.5 tw-mr-3">
-            Sold!
-          </span>{" "}
-          <span className="tw-text-sm tw-font-medium">GLOGIFT-2026</span>
-          <ChevronRightIcon
-            strokeWidth={2.5}
-            className="tw-size-4 tw-text-white"
-          />
-        </Link>
-        <Link
-          to="https://cipher2026.com/"
-          className="tw-inline-flex tw-justify-between tw-items-center tw-py-1 tw-px-1 tw-pr-4 tw-mb-7 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"
-          role="alert"
-          target="_blank"
-        >
-          {/* <AnimatedBadge newBg="yellow-500" soldBg="yellow-500" /> */}
-          <span className="tw-text-xs tw-bg-yellow-500 tw-font-bold tw-uppercase tw-rounded-full tw-text-white tw-px-4 tw-py-1.5 tw-mr-3">
-            Sold!
-          </span>{" "}
-          <span className="tw-text-sm tw-font-medium">CIPHER-2026</span>
-          <ChevronRightIcon
-            strokeWidth={2.5}
-            className="tw-size-4 tw-text-white"
-          />
-        </Link>
-        <Link
-          to="https://eaicnitj.com/"
-          className="tw-inline-flex tw-justify-between tw-items-center tw-py-1 tw-px-1 tw-pr-4 tw-mb-7 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"
-          role="alert"
-          target="_blank"
-        >
-          {/* <AnimatedBadge newBg="green-500" soldBg="green-500" /> */}
 
-          <span className="tw-text-xs tw-bg-green-500 tw-font-bold tw-uppercase tw-rounded-full tw-text-white tw-px-4 tw-py-1.5 tw-mr-3">
-            Sold!
-          </span>{" "}
-          <span className="tw-text-sm tw-font-medium">EAIC-2026</span>
-          <ChevronRightIcon
-            strokeWidth={2.5}
-            className="tw-size-4 tw-text-white"
-          />
-        </Link>
-         <Link
-          to="https://vistanitj.com/"
-          className="tw-inline-flex tw-justify-between tw-items-center tw-py-1 tw-px-1 tw-pr-4 tw-mb-7 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"
-          role="alert"
-          target="_blank"
+        {/* Everything else stays on one line and scrolls sideways. There are
+            more of these every year, and wrapping them pushed the heading
+            further down the page with each one added. */}
+        <nav
+          aria-label="XCEED sites and modules"
+          className="hero-badge-rail tw-mb-7 tw-flex tw-gap-3 tw-overflow-x-auto tw-py-1"
         >
-          <span className="tw-text-xs tw-bg-gray-500 tw-font-bold tw-uppercase tw-rounded-full tw-text-white tw-px-4 tw-py-1.5 tw-mr-3">
-            Sold!
-          </span>{" "}
-          <span className="tw-text-sm tw-font-medium">VISTA-2026</span>
-          <ChevronRightIcon
-            strokeWidth={2.5}
-            className="tw-size-4 tw-text-white"
-          />
-        </Link>
-        <Link
-          to="https://igc2025nitj.com/"
-          className="tw-inline-flex tw-justify-between tw-items-center tw-py-1 tw-px-1 tw-pr-4 tw-mb-7 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"
-          role="alert"
-          target="_blank"
-        >
-          <span className="tw-text-xs tw-bg-pink-500 tw-font-bold tw-uppercase tw-rounded-full tw-text-white tw-px-4 tw-py-1.5 tw-mr-3">
-            Sold!
-          </span>{" "}
-          <span className="tw-text-sm tw-font-medium">IGC-2025</span>
-          <ChevronRightIcon
-            strokeWidth={2.5}
-            className="tw-size-4 tw-text-white"
-          />
-        </Link>
-<Link
-          to="https://amsdt2025.com/"
-          className="tw-inline-flex tw-justify-between tw-items-center tw-py-1 tw-px-1 tw-pr-4 tw-mb-7 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"
-          role="alert"
-          target="_blank"
-        >
-          <span className="tw-text-xs tw-bg-blue-500 tw-font-bold tw-uppercase tw-rounded-full tw-text-white tw-px-4 tw-py-1.5 tw-mr-3">
-            Sold!
-          </span>{" "}
-          <span className="tw-text-sm tw-font-medium">AMSDT-2025</span>
-          <ChevronRightIcon
-            strokeWidth={2.5}
-            className="tw-size-4 tw-text-white"
-          />
-        </Link>
-              <Link
-          to="https://eaic2025.netlify.app/"
-          className="tw-inline-flex tw-justify-between tw-items-center tw-py-1 tw-px-1 tw-pr-4 tw-mb-7 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"
-          role="alert"
-          target="_blank"
-        >
-          {/* <AnimatedBadge newBg="yellow-500" soldBg="yellow-500" /> */}
-          <span className="tw-text-xs tw-bg-violet-400 tw-font-bold tw-uppercase tw-rounded-full tw-text-white tw-px-4 tw-py-1.5 tw-mr-3">
-            Sold!
-          </span>{" "}
-          <span className="tw-text-sm tw-font-medium">EAIC-2025</span>
-          <ChevronRightIcon
-            strokeWidth={2.5}
-            className="tw-size-4 tw-text-white"
-          />
-        </Link>
-  
-        <Link
-          to="https://chemcon2024.com/"
-          className="tw-inline-flex tw-justify-between tw-items-center tw-py-1 tw-px-1 tw-pr-4 tw-mb-7 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"
-          role="alert"
-        >
-          <span className="tw-text-xs tw-bg-orange-500 tw-font-bold tw-uppercase tw-rounded-full tw-text-white tw-px-4 tw-py-1.5 tw-mr-3">
-            Sold!
-          </span>{" "}
-          <span className="tw-text-sm tw-font-medium">Chemcon-2024</span>
-          <ChevronRightIcon
-            strokeWidth={2.5}
-            className="tw-size-4 tw-text-white"
-          />
-        </Link>
- 
-                <Link
-          to="/timetable"
-          className="tw-inline-flex tw-justify-between tw-items-center tw-py-1 tw-px-1 tw-pr-4 tw-mb-7 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"
-          role="alert"
-        >
-          <span className="tw-text-xs tw-bg-violet-600 tw-font-bold tw-uppercase tw-rounded-full tw-text-white tw-px-4 tw-py-1.5 tw-mr-3">
-            Module
-          </span>{" "}
-          <span className="tw-text-sm tw-font-medium">Timetable</span>
-          <ChevronRightIcon
-            strokeWidth={2.5}
-            className="tw-size-4 tw-text-white"
-          />
-        </Link>
+          {RAIL_BADGES.map((badge) => (
+            <HeroBadge key={badge.to} {...badge} />
+          ))}
+        </nav>
         {/* <Link
           to="/nirf"
           className="tw-inline-flex tw-justify-between tw-items-center tw-py-1 tw-px-1 tw-pr-4 tw-mb-7 tw-text-sm tw-text-gray-700 tw-bg-gray-100 tw-rounded-full dark:tw-bg-gray-800 dark:tw-text-white hover:tw-bg-gray-200 dark:hover:tw-bg-gray-700"

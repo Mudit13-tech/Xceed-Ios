@@ -2,7 +2,15 @@ import clsx from 'clsx';
 // import useMousePosition from '../../../hooks/useMousePosition';
 import { useMouse } from '@uidotdev/usehooks';
 
-const TeamCard = ({ name, designation, image, github, linkedin, variant }) => {
+const TeamCard = ({
+  name,
+  designation,
+  currentRole,
+  image,
+  github,
+  linkedin,
+  variant,
+}) => {
   const [mouse, ref] = useMouse();
   const xIntersecting = mouse.elementX > 0;
   const yIntersecting = mouse.elementY > 0;
@@ -39,6 +47,15 @@ const TeamCard = ({ name, designation, image, github, linkedin, variant }) => {
         <p className="tw-text-sm tw-text-gray-500 dark:tw-text-gray-400">
           {designation}
         </p>
+        {/* Where they are now, under the role they held here. Kept visually
+            quieter than the club role — this section is about the club — and
+            omitted entirely when unknown rather than shown as a blank line. */}
+        {currentRole ? (
+          <p className="tw-mt-1 tw-text-xs tw-text-cyan-600 dark:tw-text-cyan-300">
+            <span className="tw-text-gray-500 dark:tw-text-gray-500">Now: </span>
+            {currentRole}
+          </p>
+        ) : null}
         <div className="tw-flex tw-items-center md:tw-justify-start tw-justify-center tw-mt-3 tw-mb-5 tw-space-x-5">
           <a
             href={github}

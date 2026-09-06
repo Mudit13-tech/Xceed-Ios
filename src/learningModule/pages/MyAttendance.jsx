@@ -223,9 +223,13 @@ export default function MyAttendance() {
 
   return (
     <Tabs colorScheme="blue" variant="enclosed" isLazy>
-      <TabList>
-        <Tab fontSize="sm">Markings &amp; disputes</Tab>
-        <Tab fontSize="sm">My photos</Tab>
+      {/* The second tab is named for what it does rather than for what it holds:
+          a student who reads "my photos" expects an album, and this is the set
+          the face recognition matches them against. Scrolls rather than wraps
+          on a phone — a wrapped tab strip reads as two rows of nothing. */}
+      <TabList overflowX="auto" overflowY="hidden" sx={{ scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
+        <Tab fontSize="sm" whiteSpace="nowrap">Markings &amp; disputes</Tab>
+        <Tab fontSize="sm" whiteSpace="nowrap">Facial recognition ground truth image update</Tab>
       </TabList>
 
       <TabPanels>

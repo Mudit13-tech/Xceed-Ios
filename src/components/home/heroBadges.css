@@ -1,0 +1,39 @@
+/* The hero badge rail — one horizontal line of pills that scrolls sideways
+   rather than wrapping onto more rows. */
+
+.hero-badge-rail {
+  /* Centred while the pills fit, but `safe` hands the browser back to
+     flex-start once they overflow: plain `center` would push the first pill
+     off the left edge with no way to scroll back to it. The declaration
+     above is the fallback for anything that does not understand `safe`. */
+  justify-content: flex-start;
+  justify-content: safe center;
+
+  /* The bar is the scroll affordance; a scrollbar under a row of pills is
+     not. Firefox and the old IE syntax first, WebKit/Blink below. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  /* Fades whichever end has more to show, so an overflowing rail reads as
+     scrollable without a visible track. */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 28px,
+    #000 calc(100% - 28px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 28px,
+    #000 calc(100% - 28px),
+    transparent 100%
+  );
+}
+
+.hero-badge-rail::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}

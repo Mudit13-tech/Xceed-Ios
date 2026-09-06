@@ -3,6 +3,7 @@ import About from '../components/home/About';
 import JoinUs from '../components/home/JoinUs';
 import GrowthTree from '../components/home/Tree/Tree';
 import Footer from '../components/footer';
+import InstagramFollowBar from '../components/home/InstagramFollowBar';
 import Services from '../components/home/Services';
 import RevenueDistribution from '../components/home/RevenueDistribution';
 import TeamSection from '../components/home/TeamSection';
@@ -23,7 +24,7 @@ const Home = () => {
   }, [location]);
 
   return (
-    <main className="tw-font-jakarta tw-dark">
+    <main className="tw-font-jakarta tw-dark tw-pb-20">
       {/* <Navbar /> */}
       <Hero />
       <Services />
@@ -36,6 +37,9 @@ const Home = () => {
       <TeamSection />
       <JoinUs />
       <Footer />
+      {/* Pinned to the viewport, so the padding above keeps it clear of the
+          footer's last line instead of sitting on top of it. */}
+      <InstagramFollowBar />
     </main>
   );
 };

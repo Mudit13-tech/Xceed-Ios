@@ -38,6 +38,11 @@ const CSS = `
   .er-btn:disabled { opacity: .45; cursor: not-allowed; }
   .er-btn-primary { background: ${T.accent}; color: #fff; }
   .er-btn-ghost { background: transparent; border: 1px solid ${T.border}; color: ${T.textMuted}; }
+  /* "This is the state you are already in", not "press this". Marked with a
+     tick and a filled outline so the pair reads as a two-position switch
+     rather than as two equally-available actions. */
+  .er-btn-current { background: ${T.successDim}; border: 1px solid ${T.success}; color: ${T.success}; cursor: default; }
+  .er-btn-current:hover { opacity: 1; }
 
   .er-input { padding: 8px 12px; border-radius: 7px; border: 1px solid ${T.border}; background: #f8f9fd; color: ${T.text}; font-family: ${T.fontBody}; font-size: 13px; outline: none; }
   .er-input:focus { border-color: ${T.borderFocus}; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
@@ -49,7 +54,7 @@ const CSS = `
 
   .er-filters { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 14px; }
   .er-table-scroll { overflow-x: auto; }
-  .er-table-scroll .ams-table { min-width: 900px; }
+  .er-table-scroll .ams-table { min-width: 1080px; }
   .er-mono { font-family: ${T.fontMono}; }
 
   .er-pill { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
@@ -58,7 +63,10 @@ const CSS = `
   .er-pill.none { background: #eef0f8; color: ${T.textMuted}; }
   .er-pill.bad { background: ${T.dangerDim}; color: ${T.danger}; }
 
-  @media (max-width: 900px) { .er-stats { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+  .er-stats.er-stats-5 { grid-template-columns: repeat(5, minmax(0,1fr)); }
+
+  @media (max-width: 1100px) { .er-stats.er-stats-5 { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+  @media (max-width: 900px) { .er-stats, .er-stats.er-stats-5 { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 `;
 
 const OUTCOME = {
@@ -71,6 +79,18 @@ const OUTCOME = {
 async function post(path, body) {
   const response = await fetch(`${ROSTER_BASE}${path}`, {
     method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || 'Request failed');
+  return data;
+}
+
+async function patch(path, body) {
+  const response = await fetch(`${ROSTER_BASE}${path}`, {
+    method: 'PATCH',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -135,10 +155,19 @@ function SyncCard({ onImported, lastUploadAt, lastUploadFrom }) {
       </div>
       <div className="er-card-body">
         <div className="er-hint">
-          Pulled straight from the institute&apos;s student database — <strong>Name</strong>,{' '}
-          <strong>Roll No.</strong>, <strong>Department</strong>, <strong>Official Email</strong>. Re-running
-          the sync updates the students it names and leaves everyone else alone.
+          Read from the student accounts the learning module&apos;s ERP roster import maintains —{' '}
+          <strong>Name</strong>, <strong>Roll No.</strong>, <strong>Department</strong>,{' '}
+          <strong>Official Email</strong>. Upload the ERP export there and it appears here.
+          Re-running the sync updates the students it names and leaves everyone else alone.
         </div>
+        {preview?.selfCorrected > 0 && (
+          <div className="er-hint">
+            {preview.selfCorrected} student{preview.selfCorrected === 1 ? '' : 's'} changed{' '}
+            {preview.selfCorrected === 1 ? 'their' : 'their'} own roll number after the import and{' '}
+            {preview.selfCorrected === 1 ? 'was' : 'were'} left out — a self-typed roll number is not
+            the ERP&apos;s answer. Re-running the roster import overwrites it and brings them back.
+          </div>
+        )}
         <div className="er-hint">
           Last write to the list: {lastUploadAt ? new Date(lastUploadAt).toLocaleString() : 'never'}
           {lastUploadFrom && (
@@ -232,6 +261,14 @@ export default function ErpStudentListPage() {
   const [batchYear, setBatchYear] = useState('');
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState(null);
+  // Which row's update window is mid-flight. One at a time is enough: this is a
+  // button an admin presses for one student who has asked.
+  const [togglingRoll, setTogglingRoll] = useState(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [openCount, setOpenCount] = useState(0);
+  // Feedback for the update-window actions specifically, shown beside them
+  // rather than in the page-top notice the sync card uses.
+  const [windowNotice, setWindowNotice] = useState(null);
 
   const limit = 50;
 
@@ -253,6 +290,7 @@ export default function ErpStudentListPage() {
       const data = await response.json().catch(() => ({}));
       setStudents(data.students || []);
       setTotal(data.total || 0);
+      setOpenCount(data.openCount || 0);
     } finally {
       setLoading(false);
     }
@@ -267,6 +305,94 @@ export default function ErpStudentListPage() {
 
   const pages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total]);
 
+  // Everything the update-window bar says about "now", derived from the same
+  // filtered counts the buttons act on.
+  const filtered = q.trim().length >= 2 || Boolean(branch) || Boolean(batchYear);
+  const scopeNoun = filtered ? 'matching students' : 'students';
+  const someOpen = openCount > 0;
+  const allOpen = total > 0 && openCount === total;
+
+  /**
+   * Open or close one student's ground-truth update window.
+   *
+   * A student may re-pick the photos face recognition matches them against once
+   * a week, because every change rebuilds the embeddings of every subject they
+   * are enrolled in. This button waives that wait for one student — the case it
+   * exists for is "my photos are wrong and I cannot wait until Friday", which
+   * the office hears and the student cannot decide for themselves.
+   *
+   * The window it opens is single use: the student's own save closes it. So
+   * "Close" here is for a window opened by mistake, not routine tidying up.
+   *
+   * The row is patched in place rather than the table reloaded: reloading would
+   * cost the whole per-student photo scan listRoster does, to change one pill.
+   */
+  const toggleUpdateWindow = async (student) => {
+    const open = !student.photoUpdatesOpen;
+    setTogglingRoll(student.rollNo);
+    try {
+      const result = await patch(`/${encodeURIComponent(student.rollNo)}/photo-updates`, { open });
+      setStudents((rows) => rows.map((row) => (row.rollNo === student.rollNo
+        ? {
+          ...row,
+          photoUpdatesOpen: result.photoUpdatesOpen,
+          photoUpdatesOpenedAt: result.photoUpdatesOpenedAt,
+          photoUpdatesUsedAt: result.photoUpdatesUsedAt,
+        }
+        : row)));
+      setOpenCount((count) => Math.max(0, count + (result.photoUpdatesOpen ? 1 : -1)));
+      setWindowNotice({ text: result.message, ok: true });
+      loadSummary();
+    } catch (err) {
+      setWindowNotice({ text: `Could not change ${student.rollNo}'s update window — ${err.message}`, ok: false });
+    } finally {
+      setTogglingRoll(null);
+    }
+  };
+
+  /**
+   * The same switch for everybody the table is currently showing.
+   *
+   * Scoped to the live filter, not to the collection: an admin who has narrowed
+   * to one branch means that branch, and this is the one action on this page
+   * that can cost a rebuild for every subject in the institute. The button says
+   * which of the two it is about to do, and the confirm repeats the number,
+   * because "open for all" read off a forgotten filter is the mistake worth
+   * spending a click on.
+   *
+   * The filter travels in the body so the server rebuilds it with the same code
+   * the table was listed with; sending a list of roll numbers instead would
+   * only ever describe the fifty rows on this page.
+   */
+  const setAllUpdateWindows = async (open) => {
+    const scope = filtered
+      ? `the ${total} student${total === 1 ? '' : 's'} matching the current filter`
+      : `all ${total} student${total === 1 ? '' : 's'} on the list`;
+    const confirmed = window.confirm(open
+      ? `Open a ground truth update window for ${scope}?\n\nEach one may then make a single change, `
+        + 'and their window closes as soon as they save.'
+      : `Close the update window for ${scope}?\n\nAnyone who has not used theirs yet loses it, and `
+        + 'goes back to the once-a-week rule.');
+    if (!confirmed) return;
+
+    setBulkBusy(true);
+    try {
+      const result = await patch('/photo-updates', {
+        open,
+        q: q.trim().length >= 2 ? q.trim() : '',
+        branch,
+        batchYear,
+      });
+      setWindowNotice({ text: result.message, ok: true });
+      loadStudents();
+      loadSummary();
+    } catch (err) {
+      setWindowNotice({ text: `Could not change those update windows — ${err.message}`, ok: false });
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   return (
     <div style={{ padding: '20px 24px', fontFamily: T.fontBody, color: T.text }}>
       <style>{CSS}</style>
@@ -279,8 +405,8 @@ export default function ErpStudentListPage() {
       </p>
 
       {notice && (
-        <div className="er-card" style={{ borderColor: T.success }}>
-          <div className="er-card-body" style={{ fontSize: 13 }}>{notice}</div>
+        <div className="er-card" style={{ borderColor: notice.ok === false ? T.danger : T.success }}>
+          <div className="er-card-body" style={{ fontSize: 13 }}>{notice.text}</div>
         </div>
       )}
 
@@ -288,14 +414,14 @@ export default function ErpStudentListPage() {
         lastUploadAt={summary?.lastUploadAt}
         lastUploadFrom={summary?.lastUploadFrom}
         onImported={(result) => {
-          setNotice(result.message);
+          setNotice({ text: result.message, ok: true });
           loadSummary();
           loadStudents();
         }}
       />
 
       {summary && (
-        <div className="er-stats">
+        <div className="er-stats er-stats-5">
           <div className="er-stat">
             <div className="er-stat-n">{summary.total}</div>
             <div className="er-stat-l">On the list</div>
@@ -303,6 +429,10 @@ export default function ErpStudentListPage() {
           <div className="er-stat">
             <div className="er-stat-n">{summary.selfUpdated}</div>
             <div className="er-stat-l">Have changed their photos</div>
+          </div>
+          <div className="er-stat">
+            <div className="er-stat-n">{summary.updatesOpen ?? 0}</div>
+            <div className="er-stat-l">Update windows open</div>
           </div>
           <div className="er-stat">
             <div className="er-stat-n">{summary.branches.length}</div>
@@ -351,6 +481,82 @@ export default function ErpStudentListPage() {
             </select>
           </div>
 
+          <div
+            style={{
+              display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
+              padding: '12px 14px', marginBottom: 14,
+              border: `1px solid ${T.border}`, borderRadius: 10, background: T.surfaceAlt,
+            }}
+          >
+            <div style={{ flex: '1 1 420px' }}>
+              {/* The state first, in a sentence, because it is the question an
+                  admin arrives with — "is it open right now?" — and reading it
+                  off which of two buttons is highlighted is a puzzle, not an
+                  answer. */}
+              <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
+                <span className={`er-pill ${allOpen ? 'ok' : someOpen ? 'warn' : 'none'}`} style={{ marginRight: 8 }}>
+                  {allOpen ? 'All open' : someOpen ? 'Partly open' : 'All closed'}
+                </span>
+                {someOpen
+                  ? `${openCount} of ${total} ${scopeNoun} ${openCount === 1 ? 'has' : 'have'} an update window open.`
+                  : `No update windows are open — ${scopeNoun === 'students' ? 'everyone is' : 'all of them are'} on the once-a-week rule.`}
+              </div>
+              <div className="er-hint" style={{ marginTop: 6 }}>
+                A student may re-pick the face photos the cameras match them against{' '}
+                <strong>once a week</strong> — every change rebuilds the embeddings of every subject
+                they are enrolled in, so it is not free. An open window waives that wait for{' '}
+                <strong>one update</strong> and closes itself the moment that student saves. These
+                buttons apply to{' '}
+                <strong>
+                  {filtered
+                    ? `the ${total} student${total === 1 ? '' : 's'} matching the filters above`
+                    : `all ${total} student${total === 1 ? '' : 's'} on the list`}
+                </strong>, not only the rows on this page.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className={`er-btn ${allOpen ? 'er-btn-current' : 'er-btn-primary'}`}
+                onClick={() => setAllUpdateWindows(true)}
+                disabled={bulkBusy || loading || total === 0}
+                title={allOpen
+                  ? 'Every student in this list already has a window open.'
+                  : 'Give each of these students one update, without waiting out the week.'}
+              >
+                {bulkBusy ? 'Working…' : allOpen ? '✓ Open for all' : 'Open for all'}
+              </button>
+              <button
+                type="button"
+                className={`er-btn ${openCount === 0 ? 'er-btn-current' : 'er-btn-ghost'}`}
+                onClick={() => setAllUpdateWindows(false)}
+                disabled={bulkBusy || loading || total === 0}
+                title={openCount === 0
+                  ? 'Nobody in this list has a window open.'
+                  : 'Take back every unused window in this list.'}
+              >
+                {openCount === 0 ? '✓ Closed for all' : 'Close for all'}
+              </button>
+            </div>
+          </div>
+
+          {/* Beside the buttons, not only in the banner at the top of the page:
+              a row action's result three screens up is a result nobody sees,
+              which is indistinguishable from the button doing nothing. */}
+          {windowNotice && (
+            <div
+              className="er-hint"
+              style={{
+                marginTop: 0, marginBottom: 14, padding: '9px 12px', borderRadius: 8,
+                color: windowNotice.ok ? T.success : T.danger,
+                background: windowNotice.ok ? T.successDim : T.dangerDim,
+                fontWeight: 600,
+              }}
+            >
+              {windowNotice.text}
+            </div>
+          )}
+
           <div className="er-table-scroll">
             <table className="ams-table">
               <thead>
@@ -362,16 +568,17 @@ export default function ErpStudentListPage() {
                   <th>ERP photo</th>
                   <th>Attendance photos</th>
                   <th>Changed by student</th>
+                  <th>Ground truth updates</th>
                   <th>Source</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && students.length === 0 && (
-                  <tr><td colSpan={8} style={{ color: T.textMuted }}>Loading…</td></tr>
+                  <tr><td colSpan={9} style={{ color: T.textMuted }}>Loading…</td></tr>
                 )}
                 {!loading && students.length === 0 && (
                   <tr>
-                    <td colSpan={8} style={{ color: T.textMuted }}>
+                    <td colSpan={9} style={{ color: T.textMuted }}>
                       Nothing here yet. Sync from the student database above.
                     </td>
                   </tr>
@@ -419,6 +626,36 @@ export default function ErpStudentListPage() {
                         </>
                       ) : (
                         <span style={{ color: T.textMuted, fontSize: 12 }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`er-pill ${student.photoUpdatesOpen ? 'ok' : 'none'}`}>
+                        {student.photoUpdatesOpen ? 'Open · one update' : 'Once a week'}
+                      </span>
+                      <div style={{ marginTop: 6 }}>
+                        <button
+                          type="button"
+                          className="er-btn er-btn-ghost"
+                          onClick={() => toggleUpdateWindow(student)}
+                          disabled={togglingRoll === student.rollNo || bulkBusy}
+                          title={student.photoUpdatesOpen
+                            ? 'Take the window back before it is used. It closes on its own once the student saves.'
+                            : 'Let this student re-pick their ground truth photos once, without waiting out the week.'}
+                        >
+                          {togglingRoll === student.rollNo
+                            ? 'Saving…'
+                            : student.photoUpdatesOpen ? 'Close window' : 'Open window'}
+                        </button>
+                      </div>
+                      {student.photoUpdatesOpen && student.photoUpdatesOpenedAt && (
+                        <div className="er-hint">
+                          Opened {new Date(student.photoUpdatesOpenedAt).toLocaleDateString()} · unused
+                        </div>
+                      )}
+                      {!student.photoUpdatesOpen && student.photoUpdatesUsedAt && (
+                        <div className="er-hint">
+                          Window used {new Date(student.photoUpdatesUsedAt).toLocaleDateString()}
+                        </div>
                       )}
                     </td>
                     <td>

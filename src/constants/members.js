@@ -17,10 +17,22 @@ export const faculty = [
   },
 ];
 
+/*
+ * `currentRole` — where a founding member works now, shown under the club role
+ * they held here.
+ *
+ * Compiled in September 2026 from public search results for each profile URL
+ * below, because LinkedIn itself refuses automated readers (HTTP 999) and there
+ * is no API for this. That makes every value a point-in-time snapshot with no
+ * way to notice when it stops being true: these are early-career people who
+ * change jobs often, and a wrong employer on a public page is worse than none.
+ * Drop the field rather than guess, and confirm with the person when you can.
+ */
 export const dohit = {
   id: 1,
   name: 'Dohit Deegwal',
   designation: 'Club Lead',
+  currentRole: 'Software Development Engineer, Urban Company',
   image: '/home/team/Dohit.webp',
   github: 'https://www.github.com/dohitdeegwal',
   linkedin: 'https://www.linkedin.com/in/dohitdeegwal',
@@ -30,6 +42,7 @@ export const aditya = {
   id: 10,
   name: 'Aditya Gupta',
   designation: 'Club Lead',
+  currentRole: 'Software Developer, Amazon',
   image: '/home/team/Aditya.webp',
   github: 'https://github.com/Adityagupta1625',
   linkedin: 'https://www.linkedin.com/in/aditya-gupta-6014081bb/',
@@ -38,6 +51,7 @@ export const gautam = {
   id: 2,
   name: 'Gautam Singla',
   designation: 'Co-Lead',
+  currentRole: 'Software Engineer, Crego',
   image: '/home/team/Gautam.webp',
   github: 'https://github.com/ggsingla',
   linkedin: 'https://www.linkedin.com/in/ggsingla/',
@@ -46,6 +60,7 @@ export const pihu = {
   id: 6,
   name: 'Pihu',
   designation: 'Co-lead',
+  currentRole: 'Software Engineer, Oracle',
   image: '/home/team/Pihu.webp',
   github: 'https://github.com/pihu24',
   linkedin: 'https://www.linkedin.com/in/pihu-nitj/',
@@ -54,6 +69,7 @@ export const aashima = {
   id: 3,
   name: 'Aashima Tyagi',
   designation: 'Software Development Lead',
+  currentRole: 'Software Engineer, Adobe',
   image: '/home/team/Aashima.webp',
   github: 'https://github.com/Aashimatyagi',
   linkedin:
@@ -64,6 +80,7 @@ export const bhavya = {
   id: 4,
   name: 'Bhavya Mittal',
   designation: 'Finance Lead & Fullstack Developer',
+  currentRole: 'Software Engineer, Oracle',
   image: '/home/team/Bhavya.webp',
   github: 'https://github.com/dev-bhavya/',
   linkedin: 'https://www.linkedin.com/in/mbhavya09/',
@@ -73,6 +90,7 @@ export const lavish = {
   id: 5,
   name: 'Lavish Goyal',
   designation: 'Deployment and Networking Lead',
+  currentRole: 'Software Engineer, Letterdrop',
   image: '/home/team/Lavish.webp',
   github: 'https://github.com/goellavish10',
 
@@ -82,6 +100,7 @@ export const ravinder = {
   id: 7,
   name: 'Ravinder Chadha',
   designation: 'Software Development Lead',
+  currentRole: 'Data Engineer, RapidFort',
   image: '/home/team/Ravinder.webp',
   github: 'https://github.com/ravinder-chadha',
   linkedin: 'https://www.linkedin.com/in/ravinder-chadha/',
@@ -91,6 +110,7 @@ export const prince = {
   id: 8,
   name: 'Prince Verma',
   designation: 'Institute Website Lead',
+  currentRole: 'Software Engineer, Credeau Solutions',
   image: '/home/team/Prince.webp',
   linkedin:
     'https://www.linkedin.com/in/princeverma360?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app',
