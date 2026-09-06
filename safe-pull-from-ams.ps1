@@ -11,9 +11,59 @@ if ($status) {
     exit 1
 }
 
-# 2. Switch to ams-update branch
+# 2. Switch to ams-update and catch it up with origin.
+#
+# The workflow's sync does `git checkout ams-update` from origin, so an Action
+# run since this clone's last sync leaves the local branch behind. A bare
+# checkout here would then lay this run's "Automated AMS Sync" commit on the
+# stale tip, forking the vendor branch into two lineages - and the damage is
+# already done four steps before the push at step 8 reports it. Fetching first
+# is the only thing that prevents it; the push can only ever complain.
+#
+# --ff-only because catching up is a fast-forward or it is nothing. A reset (or
+# a merge that silently rewrites) here is how the Action's sync commit gets
+# dropped from the base the next workflow run merges against - the failure that
+# eats local edits with no conflict raised. See the block at step 8.
 Write-Host "Switching to 'ams-update' tracking branch..." -ForegroundColor Yellow
 git checkout ams-update
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "Could not check out ams-update. Not syncing." -ForegroundColor Red
+    Write-Host "Step 3 unpacks AMS's client into the working tree, so continuing here" -ForegroundColor Yellow
+    Write-Host "would extract it over whatever branch is actually checked out." -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host "Fetching origin so the sync starts from the latest AMS snapshot..." -ForegroundColor Yellow
+git fetch origin
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "Could not fetch from origin. Not syncing." -ForegroundColor Red
+    Write-Host "Going ahead risks committing this sync onto a stale ams-update, which is" -ForegroundColor Yellow
+    Write-Host "the exact thing this step exists to prevent. Reconnect and re-run." -ForegroundColor Yellow
+    exit 1
+}
+
+if (git rev-parse --verify --quiet origin/ams-update) {
+    git merge --ff-only origin/ams-update
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host "ams-update holds commits origin/ams-update does not - the local and" -ForegroundColor Red
+        Write-Host "workflow lineages have already forked. Not syncing on top of that." -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Join them first. A merge, never a force: forcing deletes the Action's" -ForegroundColor Yellow
+        Write-Host "sync commit from the base the next workflow run merges against." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  git merge origin/ams-update" -ForegroundColor Cyan
+        Write-Host "  git checkout main; git merge ams-update" -ForegroundColor Cyan
+        Write-Host "  git push --atomic origin main ams-update" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "Then re-run this script." -ForegroundColor Yellow
+        exit 1
+    }
+} else {
+    Write-Host "No origin/ams-update yet - nothing to catch up to." -ForegroundColor DarkGray
+}
 
 # 3. Archive from AMS and Extract here
 Write-Host "Exporting client code from AMS..." -ForegroundColor Yellow
