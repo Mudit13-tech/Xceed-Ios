@@ -112,7 +112,7 @@ export default function LabResults() {
       </Flex>
 
       {!data.attempts.length ? (
-        <EmptyState icon="🔬" title="Nobody has started yet" description="Submissions will appear here." />
+        <EmptyState icon="lab" title="Nobody has started yet" description="Submissions will appear here." />
       ) : (
         <SectionCard mb={3}>
           <Table size="sm">

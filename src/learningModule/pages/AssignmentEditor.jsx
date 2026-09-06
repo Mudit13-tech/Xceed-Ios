@@ -44,6 +44,7 @@ import Equation from '../components/Equation';
 import TableBuilderModal from '../components/TableBuilderModal';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
 import { formatAnswerValue, toDateTimeInput } from '../format';
+import { LmIcon } from '../components/Icon';
 
 // Integer by default: a question asking for "a 7 Ω resistor" is the common
 // case, and a teacher who wants decimals says so, rather than having to turn
@@ -1301,7 +1302,8 @@ export default function AssignmentEditor() {
               setImporting(true);
             }}
           >
-            📥 Import questions
+            <LmIcon name="import" size={14} style={{ marginRight: 6 }} />
+            Import questions
           </Button>
           {/* Sits beside Save because that is the workflow: fix the formula,
               save it, push the fix through to the papers already sat. */}
@@ -1312,7 +1314,8 @@ export default function AssignmentEditor() {
             isLoading={reevaluating}
             onClick={reevaluate}
           >
-            ♻ Re-evaluate
+            <LmIcon name="reuse" size={14} style={{ marginRight: 6 }} />
+            Re-evaluate
           </Button>
           <Button size="sm" variant="outline" onClick={save} isLoading={saving}>
             Save

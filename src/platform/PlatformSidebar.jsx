@@ -9,7 +9,7 @@ import {
   Divider,
 } from '@chakra-ui/react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FiSettings, FiLayers, FiHome, FiDatabase, FiSend, FiUsers } from 'react-icons/fi';
+import { FiSettings, FiLayers, FiHome, FiDatabase, FiUsers } from 'react-icons/fi';
 
 const PlatformSidebar = () => {
   const navigate = useNavigate();
@@ -47,16 +47,10 @@ const PlatformSidebar = () => {
       description: 'View All Data',
     },
     {
-      name: 'Photo Swap Batch Send',
-      path: '/attendance/photo-swap-batch-send',
-      icon: FiSend,
-      description: 'Email Photo Update Links',
-    },
-    {
       name: 'ERP Student List',
       path: '/attendance/erp-student-list',
       icon: FiUsers,
-      description: 'Upload Roll Numbers & Official Emails',
+      description: 'Roll Numbers & Official Emails',
     },
   ];
 

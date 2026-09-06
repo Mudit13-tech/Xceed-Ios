@@ -82,6 +82,7 @@ const LmAdminFaculty = lazyWithPreload(() => import('./pages/LmAdminFaculty'));
 const LmAdminStudents = lazyWithPreload(() => import('./pages/LmAdminStudents'));
 const LmAdminFacultyClasses = lazyWithPreload(() => import('./pages/LmAdminFacultyClasses'));
 const LmAdminHodDashboard = lazyWithPreload(() => import('./pages/LmAdminHodDashboard'));
+const LmHodSubjects = lazyWithPreload(() => import('./pages/LmHodSubjects'));
 const QuizManual = lazyWithPreload(() => import('./pages/QuizManual'));
 const ShortsManual = lazyWithPreload(() => import('./pages/ShortsManual'));
 const AssignmentManual = lazyWithPreload(() => import('./pages/AssignmentManual'));
@@ -179,6 +180,9 @@ const LEARNING_ROUTES = (
             console links to it. */}
         <Route element={<RequireHod />}>
           <Route path="hod-dashboard" element={<LmAdminHodDashboard />} />
+          {/* What the timetable allocates to the department’s faculty. Same
+              guard and the same department mapping as the dashboard. */}
+          <Route path="hod-subjects" element={<LmHodSubjects />} />
         </Route>
 
         <Route path="class/:classId" element={<ClassLayout />}>

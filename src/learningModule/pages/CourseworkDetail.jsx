@@ -26,6 +26,7 @@ import MaterialModal from '../components/MaterialModal';
 import RichText from '../components/RichText';
 import { DueBadge, ErrorState, Loading, SectionCard, StateBadge } from '../components/common';
 import { courseworkMeta, formatDateTime } from '../format';
+import { LmIcon } from '../components/Icon';
 
 /** The student's "Your work" panel — draft, turn in, unsubmit, see the grade. */
 function YourWork({ classId, coursework, submission, onChanged }) {
@@ -220,7 +221,9 @@ export default function CourseworkDetail() {
         <Box flex="1" minW={0} w="100%">
           <SectionCard>
             <Flex gap={3} align="flex-start">
-              <Text fontSize="2xl">{meta.icon}</Text>
+              <Box color={`${meta.colorScheme}.600`} pt={1}>
+                <LmIcon name={meta.icon} size={24} />
+              </Box>
               <Box flex="1" minW={0}>
                 <Heading size="md" color="lmFg.heading">
                   {item.title}
@@ -233,7 +236,12 @@ export default function CourseworkDetail() {
                   {item.points > 0 && <Text fontSize="sm" color="lmFg.subtle">{item.points} points</Text>}
                   <DueBadge dueDate={item.dueDate} />
                   {item.topicName && <Badge colorScheme="gray">{item.topicName}</Badge>}
-                  {item.aiSourceSessionId && <Badge colorScheme="purple">✨ From a class recording</Badge>}
+                  {item.aiSourceSessionId && (
+                    <Badge colorScheme="purple" display="inline-flex" alignItems="center" gap={1}>
+                      <LmIcon name="ai" size={11} />
+                      From a class recording
+                    </Badge>
+                  )}
                 </HStack>
               </Box>
               {isTeacher && isMaterial && (

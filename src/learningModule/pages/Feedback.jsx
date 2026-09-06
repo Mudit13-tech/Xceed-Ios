@@ -18,9 +18,9 @@ import {
   Tooltip,
   useToast,
 } from '@chakra-ui/react';
-import { ViewIcon, ViewOffIcon } from '@chakra-ui/icons';
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { LmIcon } from '../components/Icon';
 import { formatDate, formatDateTime, relativeTime } from '../format';
 
 /**
@@ -37,19 +37,22 @@ import { formatDate, formatDateTime, relativeTime } from '../format';
  * broken layout.
  */
 
+// `icon` names an entry in the module's icon set (components/Icon.jsx). Native
+// <option> elements cannot hold one, so the pickers list the label alone and
+// the icon appears where the choice is read back — on the badge and the tag.
 const CATEGORY_META = {
-  teaching: { label: 'Teaching style', icon: '🎓' },
-  pace: { label: 'Pace of the course', icon: '⏱️' },
-  content: { label: 'Course content', icon: '📚' },
-  assessment: { label: 'Assessment & grading', icon: '📝' },
-  communication: { label: 'Communication', icon: '💬' },
-  other: { label: 'Something else', icon: '💡' },
+  teaching: { label: 'Teaching style', icon: 'exam' },
+  pace: { label: 'Pace of the course', icon: 'timer' },
+  content: { label: 'Course content', icon: 'material' },
+  assessment: { label: 'Assessment & grading', icon: 'assignment' },
+  communication: { label: 'Communication', icon: 'comment' },
+  other: { label: 'Something else', icon: 'tip' },
 };
 
 const SENTIMENT_META = {
-  praise: { label: 'Praise', colorScheme: 'green', icon: '👏' },
-  suggestion: { label: 'Suggestion', colorScheme: 'blue', icon: '💡' },
-  concern: { label: 'Concern', colorScheme: 'orange', icon: '⚠️' },
+  praise: { label: 'Praise', colorScheme: 'green', icon: 'star' },
+  suggestion: { label: 'Suggestion', colorScheme: 'blue', icon: 'tip' },
+  concern: { label: 'Concern', colorScheme: 'orange', icon: 'warning' },
 };
 
 const STATUS_META = {
@@ -218,7 +221,7 @@ function StudentView({ data, classId, klass, toast, onChange }) {
               >
                 {Object.entries(CATEGORY_META).map(([key, meta]) => (
                   <option key={key} value={key}>
-                    {meta.icon} {meta.label}
+                    {meta.label}
                   </option>
                 ))}
               </Select>
@@ -235,7 +238,7 @@ function StudentView({ data, classId, klass, toast, onChange }) {
               >
                 {Object.entries(SENTIMENT_META).map(([key, meta]) => (
                   <option key={key} value={key}>
-                    {meta.icon} {meta.label}
+                    {meta.label}
                   </option>
                 ))}
               </Select>
@@ -275,7 +278,7 @@ function StudentView({ data, classId, klass, toast, onChange }) {
       >
         {data.items.length === 0 ? (
           <EmptyState
-            icon="✉️"
+            icon="invite"
             title="Nothing sent yet"
             description="Anything you send appears here so you can follow what happened to it."
           />
@@ -439,7 +442,7 @@ function StaffView({ data, classId, toast, onChange }) {
 
       {items.length === 0 ? (
         <EmptyState
-          icon="🕊️"
+          icon="feedback"
           title={data.items.length ? 'Nothing matches that filter' : 'No feedback yet'}
           description={
             data.items.length
@@ -472,11 +475,13 @@ function FeedbackCard({ item, isAdminView, onUpdate }) {
     <Box bg="lmBg.surface" borderWidth="1px" borderColor="lmBorder.base" borderRadius="lg" p={5}>
       <Flex justify="space-between" align="flex-start" gap={3} wrap="wrap" mb={3}>
         <HStack spacing={2} wrap="wrap">
-          <Badge colorScheme={sentiment.colorScheme}>
-            {sentiment.icon} {sentiment.label}
+          <Badge colorScheme={sentiment.colorScheme} display="inline-flex" alignItems="center" gap={1}>
+            <LmIcon name={sentiment.icon} size={11} />
+            {sentiment.label}
           </Badge>
-          <Tag size="sm" variant="subtle">
-            {CATEGORY_META[item.category]?.icon} {categoryLabel(item.category)}
+          <Tag size="sm" variant="subtle" gap={1}>
+            <LmIcon name={CATEGORY_META[item.category]?.icon} size={12} />
+            {categoryLabel(item.category)}
           </Tag>
           <Badge colorScheme={STATUS_META[item.status]?.colorScheme || 'gray'} variant="outline">
             {STATUS_META[item.status]?.label || item.status}
@@ -602,7 +607,7 @@ function RevealableEmail({ email }) {
           colorScheme="gray"
           aria-label={shown ? `Hide email address` : `Show email address`}
           aria-pressed={shown}
-          icon={shown ? <ViewOffIcon /> : <ViewIcon />}
+          icon={<LmIcon name={shown ? 'hide' : 'preview'} size={16} />}
           onClick={() => setShown((value) => !value)}
         />
       </Tooltip>

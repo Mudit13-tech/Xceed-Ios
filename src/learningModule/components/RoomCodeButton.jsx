@@ -19,6 +19,7 @@ import {
 } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
+import { LmIcon } from './Icon';
 
 /**
  * The room code, from the quiz list.
@@ -78,7 +79,8 @@ export default function RoomCodeButton({ classId, quiz, onDone }) {
   return (
     <>
       <Button size="sm" variant="outline" onClick={open}>
-        📍 Room code
+        <LmIcon name="location" size={14} style={{ marginRight: 6 }} />
+        Room code
       </Button>
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} size="lg">
         <ModalOverlay />

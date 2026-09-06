@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   AlertIcon,
   Box,
   Button,
   Flex,
+  IconButton,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -15,7 +16,9 @@ import {
   Text,
   useToast,
 } from '@chakra-ui/react';
+import { FiMaximize2, FiMinimize2 } from 'react-icons/fi';
 import FormRenderer from './FormRenderer';
+import { LmIcon } from './Icon';
 
 /**
  * FormPreviewModal
@@ -24,6 +27,42 @@ import FormRenderer from './FormRenderer';
  */
 export default function FormPreviewModal({ isOpen, onClose, form, classId }) {
   const toast = useToast();
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsFullScreen(false);
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+  }, [isOpen]);
+
+  const toggleFullScreen = async () => {
+    if (!isFullScreen) {
+      setIsFullScreen(true);
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch (err) {}
+    } else {
+      setIsFullScreen(false);
+      try {
+        if (document.fullscreenElement && document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+      } catch (err) {}
+    }
+  };
+
+  const handleClose = () => {
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+    setIsFullScreen(false);
+    onClose();
+  };
 
   if (!form) return null;
 
@@ -39,19 +78,28 @@ export default function FormPreviewModal({ isOpen, onClose, form, classId }) {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="4xl" scrollBehavior="inside">
+    <Modal isOpen={isOpen} onClose={handleClose} size={isFullScreen ? 'full' : '4xl'} scrollBehavior="inside">
       <ModalOverlay backdropFilter="blur(3px)" />
-      <ModalContent borderRadius="xl">
+      <ModalContent borderRadius={isFullScreen ? '0' : 'xl'}>
         <ModalHeader borderBottomWidth="1px">
           <Flex justify="space-between" align="center" wrap="wrap" gap={2} pr={8}>
             <Box>
               <Text fontSize="lg" fontWeight="700">
-                👁️ Student Preview: {form.title || 'Untitled form'}
+                <LmIcon name="preview" size={17} style={{ marginRight: 6 }} />
+            Student Preview: {form.title || 'Untitled form'}
               </Text>
               <Text fontSize="xs" color="lmFg.muted" fontWeight="normal">
                 {questions.length} question{questions.length === 1 ? '' : 's'}
               </Text>
             </Box>
+            <IconButton
+              icon={isFullScreen ? <FiMinimize2 /> : <FiMaximize2 />}
+              aria-label={isFullScreen ? 'Exit full screen' : 'Full screen'}
+              title={isFullScreen ? 'Exit full screen' : 'Full screen'}
+              size="sm"
+              variant="ghost"
+              onClick={toggleFullScreen}
+            />
           </Flex>
         </ModalHeader>
 
@@ -83,7 +131,7 @@ export default function FormPreviewModal({ isOpen, onClose, form, classId }) {
         </ModalBody>
 
         <ModalFooter borderTopWidth="1px">
-          <Button colorScheme="gray" onClick={onClose}>
+          <Button colorScheme="gray" onClick={handleClose}>
             Close Preview
           </Button>
         </ModalFooter>

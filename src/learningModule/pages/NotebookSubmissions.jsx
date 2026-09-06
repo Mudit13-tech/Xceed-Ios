@@ -274,7 +274,7 @@ export default function NotebookSubmissions() {
       )}
 
       {attempts.length === 0 ? (
-        <EmptyState icon="🐍" title="Nobody has opened it yet" description="Work will appear here as students start." />
+        <EmptyState icon="coding" title="Nobody has opened it yet" description="Work will appear here as students start." />
       ) : (
         <Box overflowX="auto">
           <Table size="sm">

@@ -15,6 +15,7 @@ import {
 import lmApi from '../api/lmApi';
 import StageBar from '../components/StageBar';
 import { loginPathFor } from '../../authRedirect';
+import { LmIcon } from '../components/Icon';
 
 /**
  * Code entry for joining a live Short.
@@ -114,7 +115,9 @@ export default function ShortJoin() {
         <Box h="6px" bgGradient="linear(to-r, purple.500, pink.500, orange.400)" />
         <VStack align="stretch" spacing={5} p={8}>
           <Box textAlign="center">
-            <Text fontSize="3xl">⚡</Text>
+            <Box color="teal.500">
+            <LmIcon name="short" size={30} strokeWidth={1.5} />
+          </Box>
             <Heading
               size="lg"
               bgGradient="linear(to-r, purple.500, pink.500)"

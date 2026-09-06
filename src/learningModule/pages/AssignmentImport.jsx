@@ -27,6 +27,7 @@ import RichText from '../components/RichText';
 import RichTextEditor from '../components/RichTextEditor';
 import { ErrorState, Loading, SectionCard } from '../components/common';
 import { formatAnswerValue } from '../format';
+import { LmIcon } from '../components/Icon';
 
 /**
  * Building a parameterised assignment from a photographed or scanned paper.
@@ -240,7 +241,14 @@ function DraftQuestion({ classId, draftId, question, index, onChanged, selected,
           isLoading={working}
           onClick={() => run(() => lmApi.suggestAssignmentImportVariables(classId, draftId, question._id), 'Suggestion failed')}
         >
-          {question.variables?.length ? 'Suggest again' : '✨ Suggest variables'}
+          {question.variables?.length ? (
+                        'Suggest again'
+                      ) : (
+                        <>
+                          <LmIcon name="ai" size={13} style={{ marginRight: 4 }} />
+                          Suggest variables
+                        </>
+                      )}
         </Button>
       </Flex>
 
@@ -272,7 +280,8 @@ function DraftQuestion({ classId, draftId, question, index, onChanged, selected,
           isDisabled={!question.variables?.length}
           onClick={() => run(() => lmApi.deriveAssignmentImportAnswers(classId, draftId, question._id), 'Derivation failed')}
         >
-          ✨ Derive answers from the paper
+          <LmIcon name="ai" size={14} style={{ marginRight: 6 }} />
+          Derive answers from the paper
         </Button>
       </Flex>
 

@@ -28,6 +28,7 @@ import lmApi from '../api/lmApi';
 import CommentThread from '../components/CommentThread';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import { relativeTime } from '../format';
+import { LmIcon } from '../components/Icon';
 
 /**
  * The class forum.
@@ -137,7 +138,8 @@ function Thread({ discussion, classId, isTeacher, onChanged }) {
     return (
       <Box borderWidth="1px" borderRadius="md" px={4} py={3} opacity={0.6}>
         <Text fontSize="sm" fontStyle="italic">
-          🚫 A discussion here was removed{discussion.removedByName ? ` by ${discussion.removedByName}` : ''}.
+          <LmIcon name="blocked" size={13} style={{ marginRight: 4 }} />
+          A discussion here was removed{discussion.removedByName ? ` by ${discussion.removedByName}` : ''}.
         </Text>
       </Box>
     );
@@ -282,7 +284,7 @@ export default function Discussions() {
 
         {ordered.length === 0 ? (
           <EmptyState
-            icon="💬"
+            icon="discussion"
             title="Nothing here yet"
             description="Be the first to ask the class something."
           />

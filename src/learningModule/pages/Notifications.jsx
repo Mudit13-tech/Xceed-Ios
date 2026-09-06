@@ -3,23 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Badge, Box, Button, Flex, HStack, Heading, IconButton,useColorModeValue, Text } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { buttonTextStyles, EmptyState, ErrorState, Loading } from '../components/common';
-import { relativeTime } from '../format';
+import { notificationIcon, relativeTime } from '../format';
 import NotificationPreferencesModal from '../components/NotificationPreferencesModal';
-
-const TYPE_ICONS = {
-  announcement: '📣',
-  coursework: '📄',
-  comment: '💬',
-  grade: '💯',
-  submission: '📥',
-  invite: '✉️',
-  join_request: '🙋',
-  quiz: '🧠',
-  quiz_result: '🎯',
-  material: '📚',
-  feedback: '🕊️',
-  dev_team: '🚀',
-};
+import { LmIcon } from '../components/Icon';
 
 export default function Notifications() {
   const [items, setItems] = useState([]);
@@ -78,7 +64,7 @@ export default function Notifications() {
           <Button
             size="sm"
             variant="outline"
-            leftIcon={<span>⚙️</span>}
+            leftIcon={<LmIcon name="settings" size={14} />}
             onClick={() => setPrefsModalOpen(true)}
           >
             Notification Settings
@@ -115,7 +101,7 @@ export default function Notifications() {
       <ErrorState error={error} onRetry={load} />
 
       {items.length === 0 ? (
-        <EmptyState icon="🔔" title="No notifications" description="Class activity shows up here." />
+        <EmptyState icon="notifications" title="No notifications" description="Class activity shows up here." />
       ) : (
         items.map((notification) => (
           <Flex
@@ -129,7 +115,9 @@ export default function Notifications() {
             gap={3}
             align="flex-start"
           >
-            <Text fontSize="lg">{TYPE_ICONS[notification.type] || '🔔'}</Text>
+            <Box color="lmFg.subtle" pt={0.5}>
+              <LmIcon name={notificationIcon(notification.type)} size={20} />
+            </Box>
             <Box
               as="button"
               flex="1"
@@ -162,7 +150,7 @@ export default function Notifications() {
               size="xs"
               variant="ghost"
               aria-label="Dismiss notification"
-              icon={<span>✕</span>}
+              icon={<LmIcon name="close" size={14} />}
               onClick={async () => {
                 await lmApi.deleteNotification(notification._id).catch(() => {});
                 load();

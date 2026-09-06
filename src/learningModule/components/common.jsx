@@ -9,12 +9,16 @@ import {
   Flex,
   HStack,
   Heading,
+  SimpleGrid,
+  Skeleton,
+  SkeletonText,
   Spinner,
   Text,
   Tooltip,
   useClipboard,
 } from '@chakra-ui/react';
 import { formatDateTime, relativeTime } from '../format';
+import { LmIcon } from './Icon';
 
 /**
  * The text colour a bare-button control has to state for itself.
@@ -48,13 +52,13 @@ export function Loading({ label = 'Loading…', minH = '200px' }) {
  * not enrolled in this subject.
  */
 const ACCESS_DENIED = {
-  ROLE_REQUIRED: { icon: '🔒', title: 'You do not have the necessary role for these pages' },
-  NOT_ENROLLED: { icon: '📕', title: 'You do not have access to this subject' },
-  JOIN_PENDING: { icon: '⏳', title: 'Waiting for your teacher to approve you' },
+  ROLE_REQUIRED: { icon: 'locked', title: 'You do not have the necessary role for these pages' },
+  NOT_ENROLLED: { icon: 'material', title: 'You do not have access to this subject' },
+  JOIN_PENDING: { icon: 'pending', title: 'Waiting for your teacher to approve you' },
   // A teacher-paced tutorial is entered in the room. Missing the session is not
   // something the student can retry their way out of, so it reads as a closed
   // door rather than a failure.
-  NOT_JOINED: { icon: '🙋', title: 'This tutorial opens during the live session' },
+  NOT_JOINED: { icon: 'exit', title: 'This tutorial opens during the live session' },
 };
 
 export const accessDeniedOf = (error) =>
@@ -79,9 +83,9 @@ export function ErrorState({ error, onRetry }) {
         borderRadius="lg"
       >
         <Flex align="flex-start" gap={4}>
-          <Text fontSize="2xl" lineHeight="1.2" aria-hidden="true">
-            {denied.icon}
-          </Text>
+          <Box color="orange.500" pt={0.5}>
+            <LmIcon name={denied.icon} size={24} />
+          </Box>
           <Box>
             <Heading size="sm" color="lmFg.heading">
               {denied.title}
@@ -117,10 +121,17 @@ export function ErrorState({ error, onRetry }) {
   );
 }
 
-export function EmptyState({ icon = '📭', title, description, action }) {
+/**
+ * `icon` is a name from the module's icon set (see components/Icon.jsx), drawn
+ * in the muted body colour so it frames the message rather than competing with
+ * it — an empty state is a signpost, not an illustration.
+ */
+export function EmptyState({ icon = 'empty', title, description, action }) {
   return (
     <Center flexDirection="column" py={12} px={6} textAlign="center" gap={2}>
-      <Text fontSize="4xl">{icon}</Text>
+      <Box color="lmFg.muted" mb={1}>
+        <LmIcon name={icon} size={32} strokeWidth={1.5} />
+      </Box>
       <Heading size="sm" color="lmFg.body">
         {title}
       </Heading>
@@ -204,6 +215,59 @@ export function StatTile({ label, value, hint, accent = 'blue.500' }) {
   );
 }
 
+export function StatTileSkeleton() {
+  return (
+    <Box
+      bg="lmBg.surface"
+      borderWidth="1px"
+      borderColor="lmBorder.base"
+      borderRadius="lg"
+      p={4}
+      data-testid="stat-tile-skeleton"
+    >
+      <Skeleton height="12px" width="60%" borderRadius="sm" mb={3} />
+      <Skeleton height="28px" width="40%" borderRadius="md" mb={2} />
+      <Skeleton height="10px" width="50%" borderRadius="sm" />
+    </Box>
+  );
+}
+
+export function ClassCardSkeleton() {
+  return (
+    <Box
+      bg="lmBg.surface"
+      borderWidth="1px"
+      borderColor="lmBorder.base"
+      borderRadius="lg"
+      overflow="hidden"
+      data-testid="class-card-skeleton"
+    >
+      <Box p={5} pb={4} bg="lmBg.track">
+        <Skeleton height="22px" width="75%" borderRadius="md" mb={2} />
+        <Skeleton height="14px" width="45%" borderRadius="sm" />
+      </Box>
+      <Box p={5}>
+        <Skeleton height="14px" width="60%" borderRadius="sm" mb={4} />
+        <HStack spacing={4}>
+          <Skeleton height="14px" width="50px" borderRadius="sm" />
+          <Skeleton height="14px" width="50px" borderRadius="sm" />
+          <Skeleton height="14px" width="60px" borderRadius="sm" />
+        </HStack>
+      </Box>
+    </Box>
+  );
+}
+
+export function ClassCardGridSkeleton({ count = 6 }) {
+  return (
+    <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5} data-testid="class-card-grid-skeleton">
+      {Array.from({ length: count }).map((_, index) => (
+        <ClassCardSkeleton key={index} />
+      ))}
+    </SimpleGrid>
+  );
+}
+
 /**
  * Copies an in-app route as a full, shareable URL. The stored value is absolute
  * because the link is meant to leave the app — pasted into a chat, an email or
@@ -215,7 +279,8 @@ export function CopyLinkButton({ to, label = 'Copy link', copiedLabel = 'Link co
   return (
     <Tooltip label={hasCopied ? copiedLabel : url} placement="top">
       <Button size="sm" variant="outline" onClick={onCopy} {...rest}>
-        {hasCopied ? '✓ Copied' : `🔗 ${label}`}
+        <LmIcon name={hasCopied ? 'check' : 'link'} size={14} style={{ marginRight: 6 }} />
+        {hasCopied ? 'Copied' : label}
       </Button>
     </Tooltip>
   );

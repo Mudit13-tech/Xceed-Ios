@@ -166,7 +166,7 @@ export default function LmAdminFacultyClasses() {
       >
         {classes.length === 0 ? (
           <EmptyState
-            icon="📚"
+            icon="subjects"
             title="No classes"
             description="This faculty member has not created any classes yet."
           />

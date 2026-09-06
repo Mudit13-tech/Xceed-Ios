@@ -755,7 +755,7 @@ export default function People() {
       >
         {members.students.filter((m) => m.status !== 'pending').length === 0 ? (
           <EmptyState
-            icon="👥"
+            icon="people"
             title="No students yet"
             description={
               isTeacher

@@ -18,6 +18,7 @@ import {
 import lmApi from '../api/lmApi';
 import { DueBadge, EmptyState, ErrorState, Loading, StateBadge } from '../components/common';
 import { courseworkMeta } from '../format';
+import { LmIcon } from '../components/Icon';
 
 function WorkRow({ entry, showStudent }) {
   const rowBg = useColorModeValue('white', 'gray.700');
@@ -51,7 +52,9 @@ function WorkRow({ entry, showStudent }) {
         bg={entry.class?.coverColor || 'gray.300'}
         flexShrink={0}
       />
-      <Text fontSize="lg">{meta.icon}</Text>
+      <Box color={`${meta.colorScheme}.600`}>
+        <LmIcon name={meta.icon} size={20} />
+      </Box>
       <Box flex="1" minW={0}>
         <Heading size="sm" noOfLines={1}>
           {entry.title || 'Untitled'}
@@ -113,21 +116,21 @@ export default function Todo() {
         <TabPanels>
           <TabPanel px={0}>
             {assigned.length === 0 ? (
-              <EmptyState icon="🎉" title="Nothing pending" description="You are all caught up." />
+              <EmptyState icon="success" title="Nothing pending" description="You are all caught up." />
             ) : (
               assigned.map((entry) => <WorkRow key={entry.submissionId} entry={entry} />)
             )}
           </TabPanel>
           <TabPanel px={0}>
             {missing.length === 0 ? (
-              <EmptyState icon="✅" title="Nothing missing" description="No overdue work." />
+              <EmptyState icon="success" title="Nothing missing" description="No overdue work." />
             ) : (
               missing.map((entry) => <WorkRow key={entry.submissionId} entry={entry} />)
             )}
           </TabPanel>
           <TabPanel px={0}>
             {done.length === 0 ? (
-              <EmptyState icon="📥" title="Nothing turned in yet" />
+              <EmptyState icon="submission" title="Nothing turned in yet" />
             ) : (
               done.map((entry) => <WorkRow key={entry.submissionId} entry={entry} />)
             )}

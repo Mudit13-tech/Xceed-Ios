@@ -28,6 +28,7 @@ import RichText from '../components/RichText';
 import ShortResults from '../components/ShortResults';
 import StageBar from '../components/StageBar';
 import useShortStream from '../hooks/useShortStream';
+import { LmIcon } from '../components/Icon';
 
 /**
  * The same bar the quiz stage carries.
@@ -77,9 +78,9 @@ function TitleCard({ state, cardBg }) {
   const first = state.slideIndex === 0;
   return (
     <Box bg={cardBg} borderWidth="1px" borderRadius="xl" p={8} textAlign="center">
-      <Text fontSize="4xl" lineHeight="1">
-        ⚡
-      </Text>
+      <Box color="teal.500" display="flex" justifyContent="center">
+        <LmIcon name="short" size={40} strokeWidth={1.5} />
+      </Box>
       <Heading size="lg" mt={3}>
         {state.title}
       </Heading>

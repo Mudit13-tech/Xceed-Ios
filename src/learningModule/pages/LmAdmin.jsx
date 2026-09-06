@@ -580,8 +580,8 @@ export default function LmAdmin() {
       </SectionCard>
 
       <SectionCard
-        title="HOD Activity Dashboard"
-        subtitle="Track faculty & class activities, view semester-wise subjects created, posts, shorts, quizzes, coding exercises, and forms posted."
+        title="HOD Dashboard"
+        subtitle="A department semester by semester: cohort sizes, content set, work handed in, quiz scores and six months of trend."
         action={
           <RouterLinkStyle as={RouterLink} to="/learning/lm-admin/hod-dashboard" fontSize="sm" color="purple.600" fontWeight="600">
             Open HOD Dashboard →
@@ -589,7 +589,7 @@ export default function LmAdmin() {
         }
       >
         <Text fontSize="sm" color="lmFg.muted">
-          Ranks classes by total activity score to give HODs and administrators immediate visibility into active vs idle classrooms across departments.
+          Shows heads of department and administrators what each semester holds and what students are doing with it — never a ranking of the faculty who own those classes.
         </Text>
       </SectionCard>
 
@@ -609,7 +609,7 @@ export default function LmAdmin() {
         <VStack align="stretch" spacing={4}>
           <CountBadges counts={bugs.byStatus} styles={BUG_STATUS_STYLE} />
           {bugs.recent.length === 0 ? (
-            <EmptyState icon="🎉" title="Nothing open" />
+            <EmptyState icon="success" title="Nothing open" />
           ) : (
             <VStack align="stretch" spacing={2}>
               {bugs.recent.map((report) => (
@@ -638,7 +638,7 @@ export default function LmAdmin() {
         <VStack align="stretch" spacing={4}>
           <CountBadges counts={feedback.byStatus} styles={FEEDBACK_STATUS_STYLE} />
           {feedback.recent.length === 0 ? (
-            <EmptyState icon="💬" title="No feedback yet" />
+            <EmptyState icon="comment" title="No feedback yet" />
           ) : (
             <VStack align="stretch" spacing={2}>
               {feedback.recent.map((item) => (

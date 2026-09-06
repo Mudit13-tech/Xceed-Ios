@@ -48,6 +48,7 @@ import lmApi from '../api/lmApi';
 import { serverFileLinkProps } from '../../utils/nativeCapabilities';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import { formatDateTime, relativeTime } from '../format';
+import { LmIcon } from '../components/Icon';
 
 /**
  * "Join our development team" — students asking to help build XCEED itself.
@@ -659,7 +660,7 @@ function RequirementBar({ title, done, required, remaining, pending, met, childr
     <Box>
       <Flex justify="space-between" align="baseline" gap={3} wrap="wrap" mb={1}>
         <Text fontSize="sm" fontWeight="600">
-          {met ? '✅ ' : ''}
+          {met && <LmIcon name="success" size={13} style={{ marginRight: 4 }} />}
           {title}
         </Text>
         <Text fontSize="sm" fontWeight="700" color={met ? 'green.500' : undefined}>
@@ -937,7 +938,7 @@ function EligibilityPanel({ eligibility, participations, onChanged }) {
 
   return (
     <SectionCard
-      title={eligibility.eligible ? '✅ You are eligible to apply' : '🔓 Unlock the application'}
+      title={eligibility.eligible ? 'You are eligible to apply' : 'Unlock the application'}
       subtitle={
         eligibility.eligible
           ? 'Both requirements are met. The application form is below.'
@@ -1169,7 +1170,7 @@ function AdminQueue({ applications, counts }) {
   const labelColor = useColorModeValue('gray.500', 'gray.400');
   const flagBg = useColorModeValue('orange.50', 'orange.900');
 
-  if (!applications.length) return <EmptyState icon="📭" title="No applications yet" />;
+  if (!applications.length) return <EmptyState icon="empty" title="No applications yet" />;
 
   return (
     <VStack align="stretch" spacing={3}>
@@ -1204,7 +1205,8 @@ function AdminQueue({ applications, counts }) {
 
             {flags.length ? (
               <Box bg={flagBg} borderRadius="md" px={3} py={2} mb={2} fontSize="xs">
-                ⚠️ {flags.join(' · ')}
+                <LmIcon name="warning" size={12} style={{ marginRight: 4 }} />
+                {flags.join(' · ')}
               </Box>
             ) : null}
 
@@ -1307,7 +1309,7 @@ export default function DevTeam() {
 
   const applyPanel = (
     <SectionCard
-      title="🚀 Join our development team"
+      title="Join our development team"
       subtitle="XCEED invites developers to join the team. If you want to work on the thing you are using, tell us about yourself — one application per person, per semester."
     >
       {mine.current ? (

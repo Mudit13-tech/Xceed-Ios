@@ -30,6 +30,7 @@ import {
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { formatDateTime, toDateTimeInput } from '../format';
+import { LmIcon } from './Icon';
 
 /**
  * Publishing, and the four moments it settles.
@@ -455,7 +456,7 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
                   already writing. Marked with a pin rather than a step number so
                   it does not read as a fifth clock. */}
               <ClockRow
-                step="📍"
+                step={<LmIcon name="location" size={13} />}
                 title="Room code"
                 subtitle="A short code you read out to the room when the sitting begins. Students type it on an on-screen keypad to start, so somebody sitting the paper from anywhere else never hears it — it is what stops a friend taking the test remotely."
                 isInvalid={roomUnanswered}

@@ -19,7 +19,6 @@ import {
   UnorderedList,
   VStack,
 } from '@chakra-ui/react';
-import { RepeatIcon, TimeIcon } from '@chakra-ui/icons';
 import lmApi from '../api/lmApi';
 import getEnvironment from '../../getenvironment';
 import { SectionCard } from '../components/common';
@@ -29,6 +28,7 @@ import { generateInitialTimetableData } from '../../timetableadmin/timetableData
 import TimetableWidget from '../components/TimetableWidget';
 import SafeChild from '../components/SafeChild';
 import { isStudentOnly } from '../roles';
+import { LmIcon } from '../components/Icon';
 
 /**
  * Standard department acronym mappings to bridge student class department names
@@ -387,7 +387,7 @@ export default function Timetable() {
         isPrimary,
         label: `${matchedDept} · Semester ${matchedSem} (${item.subjects} subject${
           item.subjects === 1 ? '' : 's'
-        })${isPrimary ? ' ⭐ (Primary)' : ''}`,
+        })${isPrimary ? ' · Primary' : ''}`,
       };
     });
   }, [basis, options, suggestion]);
@@ -526,7 +526,7 @@ export default function Timetable() {
               isLoading={loadingTT}
               variant="outline"
               colorScheme="purple"
-              leftIcon={<RepeatIcon />}
+              leftIcon={<LmIcon name="refresh" size={15} />}
               flexShrink={0}
             >
               Refresh
@@ -625,7 +625,7 @@ export default function Timetable() {
 
             {lockedTime && (
               <HStack spacing={2} mb={4}>
-                <TimeIcon color="green.500" />
+                <Box as="span" color="green.500"><LmIcon name="time" size={15} /></Box>
                 <Text fontSize="sm" fontWeight="semibold" color="green.600">
                   Last saved: {lockedTime}
                 </Text>

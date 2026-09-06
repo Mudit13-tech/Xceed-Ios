@@ -24,6 +24,7 @@ import {
 import lmApi from '../api/lmApi';
 import { LIVE_POLL_MS, nameOf } from './liveExam';
 import { relativeTime } from '../format';
+import { LmIcon } from './Icon';
 
 /**
  * Taking the register during an exam.
@@ -442,7 +443,8 @@ export default function AttendanceControl({ classId, quiz, onDone }) {
   return (
     <>
       <Button size="sm" colorScheme="blue" variant="outline" onClick={() => setIsOpen(true)}>
-        🧾 Attendance
+        <LmIcon name="receipt" size={14} style={{ marginRight: 6 }} />
+        Attendance
       </Button>
       {isOpen && (
         <AttendanceModal

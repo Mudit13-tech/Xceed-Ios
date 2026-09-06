@@ -31,8 +31,9 @@ import {
 import { FiArrowDown, FiArrowUp, FiCopy, FiTrash2 } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
-import { ErrorState, Loading, SectionCard } from '../components/common';
+import { CopyLinkButton, ErrorState, Loading, SectionCard } from '../components/common';
 import FormPreviewModal from '../components/FormPreviewModal';
+import { LmIcon } from '../components/Icon';
 
 /**
  * Authoring surface for a form — a Google-Forms-like builder. Entirely
@@ -355,6 +356,7 @@ export default function FormEditor() {
         questions: questions.map((question, order) => ({ ...question, _key: undefined, order })),
       });
       setForm(updated);
+      if (updated.questions) setQuestions(withKeys(updated.questions));
       toast({ status: 'success', title: 'Saved' });
       return true;
     } catch (err) {
@@ -371,6 +373,7 @@ export default function FormEditor() {
     try {
       const result = await lmApi.publishForm(classId, formId, { publish: !form.published });
       toast({ status: 'success', title: result.published ? 'Published' : 'Unpublished' });
+      setForm((current) => ({ ...current, published: result.published, shareCode: result.shareCode || current.shareCode }));
       await load();
     } catch (err) {
       toast({ status: 'error', title: err.message });
@@ -389,11 +392,15 @@ export default function FormEditor() {
         <Heading size="md" flex="1">
           Edit form
         </Heading>
+        {form.published && form.shareCode && (
+          <CopyLinkButton to={`/learning/form/link/${form.shareCode}`} />
+        )}
         <Button size="sm" variant="ghost" onClick={() => navigate(`/learning/class/${classId}/forms`)}>
           Back
         </Button>
         <Button size="sm" variant="outline" colorScheme="purple" onClick={previewDialog.onOpen}>
-          👁️ Preview
+          <LmIcon name="preview" size={14} style={{ marginRight: 6 }} />
+          Preview
         </Button>
         <Button size="sm" onClick={() => save()} isLoading={saving}>
           Save
@@ -443,6 +450,20 @@ export default function FormEditor() {
               <option value="anyone">Anyone with the link, including guests</option>
             </Select>
           </FormControl>
+
+          {form.published && form.shareCode && (
+            <FormControl>
+              <FormLabel fontSize="sm">Shareable link</FormLabel>
+              <HStack maxW="540px">
+                <Input
+                  size="sm"
+                  isReadOnly
+                  value={lmApi.formShareUrl(form.shareCode)}
+                />
+                <CopyLinkButton to={`/learning/form/link/${form.shareCode}`} size="sm" />
+              </HStack>
+            </FormControl>
+          )}
 
           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
             <FormControl>

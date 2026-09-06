@@ -45,6 +45,7 @@ const SuperAdminPage = lazyWithPreload(() => import('./dashboard/superadmin'));
 const BugReportsAdmin = lazyWithPreload(() => import('./dashboard/bugReports'));
 const DevTeamApplicationsAdmin = lazyWithPreload(() => import('./dashboard/devTeamApplications'));
 const DeptAdminAssignPage = lazyWithPreload(() => import('./dashboard/deptAdminAssign'));
+const HodAssignPage = lazyWithPreload(() => import('./dashboard/hodAssign'));
 const CommonSlot = lazyWithPreload(() => import('./timetableadmin/commonslot.jsx'));
 const Subjects = lazyWithPreload(() => import('./timetableadmin/addsubjects'));
 const ImportTT = lazyWithPreload(() => import('./timetableadmin/importt.jsx'));
@@ -88,6 +89,10 @@ const DeptCoordinators = lazyWithPreload(() => import('./timetableadmin/deptcoor
 const InstituteMergedDownload = lazyWithPreload(() => import('./timetableadmin/instituteMergedDownload.jsx'));
 
 const Home = lazyWithPreload(() => import('./pages/Home'));
+// Public introductions to the two newest modules, linked from the top of the
+// home hero. They are landing pages, not the modules themselves.
+const XceedLearningIntro = lazyWithPreload(() => import('./pages/XceedLearningIntro'));
+const ILeedIntro = lazyWithPreload(() => import('./pages/ILeedIntro'));
 const GuidePage = lazyWithPreload(() => import('./pages/GuidePage'));
 const HelpdeskPage = lazyWithPreload(() => import('./pages/HelpdeskPage'));
 const PrivacyPolicy = lazyWithPreload(() => import('./pages/PrivacyPolicy'));
@@ -212,6 +217,7 @@ const GpuMetrics = lazyWithPreload(() => import('./attendancemodule/GpuMetrics')
 const NodeConsole = lazyWithPreload(() => import('./attendancemodule/NodeConsole'));
 const ReactConsole = lazyWithPreload(() => import('./attendancemodule/ReactConsole'));
 const DeployConsole = lazyWithPreload(() => import('./dashboard/DeployConsole'));
+const MailConsole = lazyWithPreload(() => import('./dashboard/MailConsole'));
 const AMSManual = lazyWithPreload(() => import('./attendancemodule/manual'));
 const TTManual = lazyWithPreload(() => import('./timetableadmin/TTManual'));
 const CertManual = lazyWithPreload(() => import('./certificatemodule/CertManual'));
@@ -265,8 +271,19 @@ function RouteFallback() {
 const APP_ROUTES = (
         <Routes>
           {/* Landing Page */}
+          {/* The app opens on the login screen, not on the web landing page:
+              an installed app has one job on launch and a marketing page is
+              not it. Home keeps a route of its own so the links into it —
+              Navbar's brand, the intro pages' calls to action — still land
+              somewhere. */}
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/home" element={<Home />} />
+          {/* Module introductions. Public on purpose — their audience is the
+              faculty and department staff being introduced to a module before
+              anyone has given them an account. Both are listed in Navbar's
+              publicPaths so the auth redirect leaves them alone. */}
+          <Route path="/xceed-learning" element={<XceedLearningIntro />} />
+          <Route path="/ileed" element={<ILeedIntro />} />
           <Route path="/guide" element={<GuidePage />} />
           {/* The help desk. Public by necessity: the people it serves are the
               ones who cannot sign in, so a guard here would exclude its whole
@@ -300,6 +317,12 @@ const APP_ROUTES = (
             {/* Whole-server deploy — not attendance-specific, so it lives here
                 rather than under /attendance with the module's own ops pages. */}
             <Route path="deploy" element={<DeployConsole />} />
+            {/* Which mailbox each module's mail goes out from, and a week of
+                volume per sender. Platform-wide, so it sits here. */}
+            <Route path="mail" element={<MailConsole />} />
+            {/* The department → head mapping every module reads. Platform-wide,
+                so it sits here rather than inside any one module. */}
+            <Route path="hods" element={<HodAssignPage />} />
           </Route>
           <Route path="/usermanagement" element={<RequireAdmin />}>
             <Route index element={<UserManagement />} />

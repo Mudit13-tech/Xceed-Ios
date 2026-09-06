@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import getEnvironment from '../../getenvironment';
+import { LmIcon } from '../components/Icon';
 
 import shotList from '../manualAssets/notebooks/list.png';
 import shotEditor from '../manualAssets/notebooks/editor.png';
@@ -64,11 +65,11 @@ function Step({ n, title, children }) {
 function Note({ type = 'info', children }) {
     const cfg = {
         info:    { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8', icon: 'ℹ' },
-        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: '⚠' },
-        tip:     { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: '💡' },
-        key:     { bg: '#eff6ff', border: '#bfdbfe', color: '#1e40af', icon: '🔑' },
-        purple:  { bg: '#faf5ff', border: '#e9d5ff', color: '#6b21a8', icon: '🧪' },
-        danger:  { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: '⛔' },
+        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: 'warning' },
+        tip:     { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: 'tip' },
+        key:     { bg: '#eff6ff', border: '#bfdbfe', color: '#1e40af', icon: 'key' },
+        purple:  { bg: '#faf5ff', border: '#e9d5ff', color: '#6b21a8', icon: 'test' },
+        danger:  { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: 'danger' },
     };
     const s = cfg[type] || cfg.info;
     return (
@@ -77,7 +78,7 @@ function Note({ type = 'info', children }) {
             padding: '10px 14px', marginBottom: 16,
             display: 'flex', gap: 10, alignItems: 'flex-start',
         }}>
-            <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{s.icon}</span>
+            <span style={{ flexShrink: 0, marginTop: 2, color: s.color }}><LmIcon name={s.icon} size={15} /></span>
             <div style={{ fontSize: 13, color: s.color, lineHeight: 1.65 }}>{children}</div>
         </div>
     );
@@ -128,7 +129,7 @@ function TestCaseExampleCard({ title, language, code, testCases = [] }) {
                 justifyContent: 'space-between',
             }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span>{language === 'python' ? '🐍' : '⚙️'}</span>
+                    <LmIcon name={language === 'python' ? 'coding' : 'settings'} size={15} />
                     <span>{title}</span>
                 </div>
                 <span style={{
@@ -255,7 +256,8 @@ function VisualTestCasesEditorMock() {
                         fontSize: 11, fontWeight: 600, background: '#7c3aed', color: '#fff',
                         padding: '3px 10px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4,
                     }}>
-                        🧪 Test Cases (2)
+                        <LmIcon name="test" size={12} />
+                        Test Cases (2)
                     </span>
                     <span style={{
                         fontSize: 11, fontWeight: 600, background: '#f1f5f9', color: '#475569',
@@ -394,7 +396,8 @@ function VisualStudentTestMock() {
                         fontSize: 11, fontWeight: 700, background: '#10b981', color: '#fff',
                         border: 'none', padding: '4px 10px', borderRadius: 5, cursor: 'pointer',
                     }}>
-                        🧪 Run Hidden Test Case
+                        <LmIcon name="test" size={12} style={{ marginRight: 4 }} />
+                        Run Hidden Test Case
                     </button>
                     <span style={{
                         fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#166534',
@@ -447,13 +450,13 @@ function VisualStudentTestMock() {
 // ── tabs ──────────────────────────────────────────────────────────────────────
 
 const TABS = [
-    { id: 'overview',  label: 'Overview',          icon: '🐍' },
-    { id: 'create',    label: 'Author a Notebook', icon: '✏️' },
-    { id: 'testcases', label: 'Hidden Test Cases', icon: '🧪' },
-    { id: 'runtime',   label: 'What Can Run',      icon: '⚙️' },
-    { id: 'student',   label: 'What Students See', icon: '👀' },
-    { id: 'grade',     label: 'Grading',           icon: '✅' },
-    { id: 'gotchas',   label: 'Gotchas',           icon: '⚠️' },
+    { id: 'overview',  label: 'Overview',          icon: 'coding' },
+    { id: 'create',    label: 'Author a Notebook', icon: 'edit' },
+    { id: 'testcases', label: 'Hidden Test Cases', icon: 'test' },
+    { id: 'runtime',   label: 'What Can Run',      icon: 'settings' },
+    { id: 'student',   label: 'What Students See', icon: 'preview' },
+    { id: 'grade',     label: 'Grading',           icon: 'success' },
+    { id: 'gotchas',   label: 'Gotchas',           icon: 'warning' },
 ];
 
 // ── tab content ───────────────────────────────────────────────────────────────
@@ -516,7 +519,7 @@ function TabCreate() {
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                     <li><strong>Locked</strong> — visible and runnable, but the student cannot edit the source code (its Input/stdin box remains editable).</li>
                     <li><strong>Hidden setup</strong> — never shown to the student. In Python it runs once into the kernel before their cells; in C, its source is prepended literally to every cell before compiling (must not define <code>main()</code>).</li>
-                    <li><strong>🧪 Test Cases (N)</strong> — opens the hidden test case authoring panel to set up secret stdin/stdout test pairs and verify your solution before publishing.</li>
+                    <li><strong><LmIcon name="test" size={13} /> Test Cases (N)</strong> — opens the hidden test case authoring panel to set up secret stdin/stdout test pairs and verify your solution before publishing.</li>
                     <li><strong>⌨️ Input (stdin)</strong> — pre-typed standard input fed to <code>input()</code> in Python or <code>scanf</code>/<code>fgets</code> in C.</li>
                 </ul>
             </div>
@@ -536,7 +539,7 @@ function TabCreate() {
                 <strong>Import .ipynb / .py</strong> (Python) or <strong>Import .c</strong> appends cells from
                 a file to the end of the notebook. IPython magics (<code>%matplotlib inline</code>, <code>!pip install x</code>)
                 are stripped or converted automatically into Packages. Separately,
-                <strong> 📥 Import cells</strong> pulls cells from a notebook in another class you teach.
+                <strong> <LmIcon name="import" size={13} /> Import cells</strong> pulls cells from a notebook in another class you teach.
             </div>
         </div>
     );
@@ -559,7 +562,7 @@ function TabTestCases() {
 
             <div className="cdm-grid-3" style={{ marginBottom: 16 }}>
                 <div style={{ background: '#fff', border: '1px solid #e4e8f5', borderRadius: 8, padding: '12px 14px' }}>
-                    <div style={{ fontSize: 16, marginBottom: 4 }}>🔒</div>
+                    <div style={{ marginBottom: 4, color: T.accent }}><LmIcon name="locked" size={17} /></div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 4 }}>Confidential Inputs</div>
                     <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
                         Students never see your test inputs or expected outputs in their UI, preventing hardcoded or pattern-matched answers.
@@ -567,7 +570,7 @@ function TabTestCases() {
                 </div>
 
                 <div style={{ background: '#fff', border: '1px solid #e4e8f5', borderRadius: 8, padding: '12px 14px' }}>
-                    <div style={{ fontSize: 16, marginBottom: 4 }}>⚡</div>
+                    <div style={{ marginBottom: 4, color: T.accent }}><LmIcon name="short" size={17} /></div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 4 }}>In-Browser Execution</div>
                     <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
                         Runs via WebAssembly workers (Pyodide &amp; Clang). Zero server latency, zero cloud compute costs, and infinite scalability.
@@ -575,7 +578,7 @@ function TabTestCases() {
                 </div>
 
                 <div style={{ background: '#fff', border: '1px solid #e4e8f5', borderRadius: 8, padding: '12px 14px' }}>
-                    <div style={{ fontSize: 16, marginBottom: 4 }}>📊</div>
+                    <div style={{ marginBottom: 4, color: T.accent }}><LmIcon name="insights" size={17} /></div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 4 }}>Submissions Analytics</div>
                     <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
                         The Submissions dashboard shows instant test pass counts (e.g. <code>All Passed (3/3)</code>) for every student.
@@ -636,7 +639,10 @@ function TabTestCases() {
             <SectionTitle>Language-Specific Execution Details</SectionTitle>
             <div className="cdm-grid-2" style={{ marginBottom: 16 }}>
                 <div style={{ background: '#fff', border: '1px solid #e4e8f5', borderRadius: 8, padding: '14px' }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8', marginBottom: 6 }}>🐍 Python Test Execution</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <LmIcon name="coding" size={15} />
+                        Python Test Execution
+                    </div>
                     <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.7 }}>
                         <ul style={{ margin: 0, paddingLeft: 16 }}>
                             <li>Runs in Pyodide WebAssembly worker.</li>
@@ -648,7 +654,10 @@ function TabTestCases() {
                 </div>
 
                 <div style={{ background: '#fff', border: '1px solid #e4e8f5', borderRadius: 8, padding: '14px' }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#7c3aed', marginBottom: 6 }}>⚙️ C Test Execution</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#7c3aed', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <LmIcon name="settings" size={15} />
+                        C Test Execution
+                    </div>
                     <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.7 }}>
                         <ul style={{ margin: 0, paddingLeft: 16 }}>
                             <li>Each cell is compiled with real Clang WebAssembly with its own <code>main()</code>.</li>
@@ -878,8 +887,8 @@ export default function CodingManual({ standalone = false }) {
                             width: 30, height: 30, borderRadius: 8,
                             background: 'linear-gradient(135deg,#1d4ed8,#3b82f6)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 15,
-                        }}>🐍</div>
+                            color: '#fff',
+                        }}><LmIcon name="coding" size={16} /></div>
                         <span style={{ fontSize: 14, fontWeight: 700, color: '#dbeafe' }}>
                             Coding Notebooks — Teacher Manual
                         </span>
@@ -904,8 +913,8 @@ export default function CodingManual({ standalone = false }) {
                         width: 42, height: 42, borderRadius: 10,
                         background: 'linear-gradient(135deg,#1d4ed8,#3b82f6)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 20,
-                    }}>🐍</div>
+                        color: '#fff',
+                    }}><LmIcon name="coding" size={21} /></div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="cdm-title" style={{ fontWeight: 800, color: T.text }}>Coding Notebooks — Teacher Manual</div>
                         <div className="cdm-subtitle" style={{ color: T.textMuted, marginTop: 2 }}>

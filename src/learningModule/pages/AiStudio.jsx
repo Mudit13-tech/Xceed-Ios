@@ -14,6 +14,7 @@ import {
   FormLabel,
   HStack,
   Heading,
+  IconButton,
   Input,
   Modal,
   ModalBody,
@@ -42,8 +43,182 @@ import RichTextEditor from '../components/RichTextEditor';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import { formatDate, relativeTime } from '../format';
 import { duplicateOptionIndexes } from '../questionRules';
+import { LmIcon } from '../components/Icon';
 
 const prettySize = (bytes) => (bytes ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : '');
+
+/** Small outline icons for the three editor layouts — a rect divided to hint
+ * at where the split falls, so the icon reads correctly at 16px. */
+function LayoutIcon({ variant }) {
+  const common = { width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.3 };
+  if (variant === 'split') {
+    return (
+      <svg {...common}>
+        <rect x="1.5" y="1.5" width="13" height="13" rx="1.5" />
+        <line x1="8" y1="1.5" x2="8" y2="14.5" />
+      </svg>
+    );
+  }
+  if (variant === 'tabs') {
+    return (
+      <svg {...common}>
+        <rect x="1.5" y="1.5" width="13" height="13" rx="1.5" />
+        <line x1="1.5" y1="5" x2="14.5" y2="5" />
+        <line x1="7" y1="1.5" x2="7" y2="5" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <rect x="1.5" y="1.5" width="13" height="13" rx="1.5" />
+      <line x1="1.5" y1="8" x2="14.5" y2="8" />
+    </svg>
+  );
+}
+
+const LAYOUT_OPTIONS = [
+  { value: 'tabs', label: 'Edit / Preview tabs' },
+  { value: 'split', label: 'Side by side' },
+  { value: 'stacked', label: 'Stacked' },
+];
+
+function LayoutSwitcher({ layout, onChange }) {
+  return (
+    <HStack spacing={1}>
+      {LAYOUT_OPTIONS.map((opt) => (
+        <IconButton
+          key={opt.value}
+          aria-label={opt.label}
+          title={opt.label}
+          icon={<LayoutIcon variant={opt.value} />}
+          size="xs"
+          variant={layout === opt.value ? 'solid' : 'ghost'}
+          colorScheme={layout === opt.value ? 'blue' : 'gray'}
+          onClick={() => onChange(opt.value)}
+        />
+      ))}
+    </HStack>
+  );
+}
+
+/**
+ * Editor + preview for one markdown field, in one of three layouts:
+ *  - "tabs"    — GitHub's own Edit/Preview tab switcher (the default).
+ *  - "split"   — editor and preview side by side.
+ *  - "stacked" — the original layout: editor on top, preview below, always
+ *                both visible at once.
+ * Layout is owned by the caller so every editor on the page shares one
+ * remembered preference; which of Edit/Preview is showing in "tabs" mode is
+ * local to each editor, since Notes and Tutorial have independent content.
+ */
+function MarkdownEditorPreview({ value, onChange, layout, onLayoutChange }) {
+  const [activeTab, setActiveTab] = useState('edit');
+
+  return (
+    <Box>
+      <Flex justify="flex-end" mb={2}>
+        <LayoutSwitcher layout={layout} onChange={onLayoutChange} />
+      </Flex>
+
+      {layout === 'split' && (
+        <Flex gap={4} align="stretch" mb={2}>
+          <Box flex="1" minW={0}>
+            <Text fontSize="xs" color="lmFg.muted" mb={1}>
+              Editor
+            </Text>
+            <Textarea
+              fontSize="sm"
+              fontFamily="mono"
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              h="800px"
+            />
+          </Box>
+          <Box flex="1" minW={0}>
+            <Text fontSize="xs" color="lmFg.muted" mb={1}>
+              Preview
+            </Text>
+            <Box h="800px" overflowY="auto" borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" p={3}>
+              <Markdown>{value}</Markdown>
+            </Box>
+          </Box>
+        </Flex>
+      )}
+
+      {layout === 'stacked' && (
+        <>
+          <Textarea
+            rows={24}
+            fontSize="sm"
+            fontFamily="mono"
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            mb={2}
+          />
+          <Divider mb={4} />
+          <Text fontSize="xs" color="lmFg.muted" mb={2}>
+            Preview
+          </Text>
+          <Markdown>{value}</Markdown>
+        </>
+      )}
+
+      {layout === 'tabs' && (
+        <Box borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" overflow="hidden">
+          <HStack spacing={0} borderBottomWidth="1px" borderColor="lmBorder.base" bg="lmBg.subtle">
+            {['edit', 'preview'].map((tab) => (
+              <Box
+                key={tab}
+                as="button"
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                px={4}
+                py={2}
+                fontSize="sm"
+                fontWeight={activeTab === tab ? '600' : '400'}
+                borderBottomWidth="2px"
+                borderColor={activeTab === tab ? 'blue.500' : 'transparent'}
+                color={activeTab === tab ? 'lmFg.base' : 'lmFg.muted'}
+                textTransform="capitalize"
+              >
+                {tab}
+              </Box>
+            ))}
+          </HStack>
+          <Box p={4}>
+            {activeTab === 'edit' ? (
+              <Textarea
+                rows={36}
+                fontSize="sm"
+                fontFamily="mono"
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                border="none"
+                p={0}
+                _focus={{ boxShadow: 'none' }}
+                resize="vertical"
+              />
+            ) : (
+              <Markdown>{value}</Markdown>
+            )}
+          </Box>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+const NOTES_LAYOUT_STORAGE_KEY = 'lm.aiStudio.notesLayout';
+const NOTES_LAYOUT_VALUES = LAYOUT_OPTIONS.map((opt) => opt.value);
+
+function readStoredLayout() {
+  try {
+    const stored = localStorage.getItem(NOTES_LAYOUT_STORAGE_KEY);
+    return NOTES_LAYOUT_VALUES.includes(stored) ? stored : 'tabs';
+  } catch {
+    return 'tabs';
+  }
+}
 
 /** Step 1 — pick a recording captured by the attendance module, or paste text. */
 function NewSessionModal({ isOpen, onClose, classId, onCreated }) {
@@ -143,7 +318,7 @@ function NewSessionModal({ isOpen, onClose, classId, onCreated }) {
                   <Loading minH="120px" label="Fetching recordings…" />
                 ) : recordings.length === 0 ? (
                   <EmptyState
-                    icon="🎧"
+                    icon="audio"
                     title="No class recordings available"
                     description="Recordings captured with audio by the attendance module appear here once they finish."
                   />
@@ -229,6 +404,7 @@ function QuestionEditor({ question, index, onChange, onRemove }) {
             <option value="mcq">Single choice</option>
             <option value="msq">Multi choice</option>
             <option value="truefalse">True/False</option>
+            <option value="numerical">Numerical</option>
           </Select>
           <Select size="xs" w="90px" value={question.difficulty} onChange={(e) => set('difficulty', e.target.value)}>
             <option value="easy">Easy</option>
@@ -244,7 +420,7 @@ function QuestionEditor({ question, index, onChange, onRemove }) {
             aria-label="Marks"
           />
           <Button size="xs" variant="ghost" colorScheme="red" onClick={onRemove}>
-            ✕
+            <LmIcon name="close" size={13} />
           </Button>
         </HStack>
       </Flex>
@@ -307,6 +483,38 @@ function QuestionEditor({ question, index, onChange, onRemove }) {
         </Stack>
       )}
 
+      {question.type === 'numerical' && (
+        <HStack spacing={2} mb={2} align="flex-end">
+          <FormControl maxW="140px">
+            <FormLabel fontSize="xs">Correct answer</FormLabel>
+            <Input
+              size="xs"
+              type="number"
+              value={question.correctAnswers?.[0] ?? ''}
+              onChange={(e) => set('correctAnswers', [e.target.value])}
+            />
+          </FormControl>
+          <FormControl maxW="110px">
+            <FormLabel fontSize="xs">Tolerance %</FormLabel>
+            <Input
+              size="xs"
+              type="number"
+              value={question.tolerancePercent ?? 0}
+              onChange={(e) => set('tolerancePercent', Number(e.target.value) || 0)}
+            />
+          </FormControl>
+          <FormControl maxW="110px">
+            <FormLabel fontSize="xs">Tolerance ±</FormLabel>
+            <Input
+              size="xs"
+              type="number"
+              value={question.toleranceAbs ?? 0}
+              onChange={(e) => set('toleranceAbs', Number(e.target.value) || 0)}
+            />
+          </FormControl>
+        </HStack>
+      )}
+
       <RichTextEditor
         compact
         minH="56px"
@@ -331,14 +539,24 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
   const [working, setWorking] = useState('');
   const [transcriptDraft, setTranscriptDraft] = useState('');
   const [artefacts, setArtefacts] = useState(['notes', 'tutorial', 'quiz']);
-  const [questionCount, setQuestionCount] = useState(10);
+  const [questionCount, setQuestionCount] = useState('10');
   const [difficulty, setDifficulty] = useState('mixed');
   const [askQuestion, setAskQuestion] = useState('');
   const [askAnswer, setAskAnswer] = useState('');
   const [draftQuestions, setDraftQuestions] = useState([]);
   const [notesTopicId, setNotesTopicId] = useState('');
+  const [notesLayout, setNotesLayout] = useState(readStoredLayout);
   const toast = useToast();
   const navigate = useNavigate();
+
+  const changeNotesLayout = (next) => {
+    setNotesLayout(next);
+    try {
+      localStorage.setItem(NOTES_LAYOUT_STORAGE_KEY, next);
+    } catch {
+      // Private browsing / storage disabled — the choice still applies for this visit.
+    }
+  };
 
   const load = useCallback(async () => {
     setError(null);
@@ -393,7 +611,12 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
             <Badge colorScheme={session.status === 'ready' ? 'green' : session.status === 'failed' ? 'red' : 'gray'}>
               {session.status}
             </Badge>
-            {session.recordingFilename && <Text>🎧 {session.recordingFilename}</Text>}
+            {session.recordingFilename && (
+              <Text display="flex" alignItems="center" gap={1.5}>
+                <LmIcon name="audio" size={14} />
+                {session.recordingFilename}
+              </Text>
+            )}
             {session.transcript?.wordCount > 0 && <Text>{session.transcript.wordCount} words</Text>}
           </HStack>
         </Box>
@@ -468,7 +691,7 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                       Transcribe automatically
                     </Button>
                     <Text fontSize="xs" color="lmFg.muted">
-                      Requires a speech-to-text service (LM_TRANSCRIBE_URL). Otherwise paste below.
+                      Uses the built-in speech-to-text service. If it fails, paste the transcript below.
                     </Text>
                   </HStack>
                 </Box>
@@ -523,7 +746,10 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                     min={1}
                     max={30}
                     value={questionCount}
-                    onChange={(event) => setQuestionCount(Number(event.target.value))}
+                    onChange={(event) => setQuestionCount(event.target.value)}
+                    onBlur={() =>
+                      setQuestionCount(String(Math.min(Math.max(Number(questionCount) || 10, 1), 30)))
+                    }
                   />
                 </FormControl>
                 <FormControl maxW="160px">
@@ -548,14 +774,15 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                     () =>
                       lmApi.generateFromSession(classId, sessionId, {
                         artefacts,
-                        questionCount,
+                        questionCount: Math.min(Math.max(Number(questionCount) || 10, 1), 30),
                         difficulty,
                       }),
                     'Study material generated',
                   )
                 }
               >
-                ✨ Generate {artefacts.join(', ') || 'nothing'}
+                <LmIcon name="ai" size={14} style={{ marginRight: 6 }} />
+                Generate {artefacts.join(', ') || 'nothing'}
               </Button>
               {!hasTranscript && (
                 <Text fontSize="xs" color="lmFg.muted" mt={2}>
@@ -589,6 +816,7 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                     <Button
                       size="sm"
                       colorScheme="green"
+                      paddingX={8}
                       isLoading={working === 'publishNotes'}
                       onClick={() =>
                         run(
@@ -611,15 +839,13 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                       Published as class material
                     </Badge>
                   )}
-                  <Textarea
-                    rows={8}
-                    fontSize="sm"
-                    fontFamily="mono"
+                  <MarkdownEditorPreview
                     value={session.notes.markdown}
-                    onChange={(event) =>
-                      setSession((prev) => ({ ...prev, notes: { ...prev.notes, markdown: event.target.value } }))
+                    onChange={(value) =>
+                      setSession((prev) => ({ ...prev, notes: { ...prev.notes, markdown: value } }))
                     }
-                    mb={2}
+                    layout={notesLayout}
+                    onLayoutChange={changeNotesLayout}
                   />
                   <Button
                     size="sm"
@@ -636,14 +862,9 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                   >
                     Save edits
                   </Button>
-                  <Divider mb={4} />
-                  <Text fontSize="xs" color="lmFg.muted" mb={2}>
-                    Preview
-                  </Text>
-                  <Markdown>{session.notes.markdown}</Markdown>
                 </>
               ) : (
-                <EmptyState icon="📝" title="No notes yet" description="Generate them from the Transcript tab." />
+                <EmptyState icon="document" title="No notes yet" description="Generate them from the Transcript tab." />
               )}
             </SectionCard>
           </TabPanel>
@@ -746,18 +967,16 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                   {session.tutorial.markdown && (
                     <>
                       <Divider my={4} />
-                      <Textarea
-                        rows={8}
-                        fontSize="sm"
-                        fontFamily="mono"
+                      <MarkdownEditorPreview
                         value={session.tutorial.markdown}
-                        onChange={(event) =>
+                        onChange={(value) =>
                           setSession((prev) => ({
                             ...prev,
-                            tutorial: { ...prev.tutorial, markdown: event.target.value },
+                            tutorial: { ...prev.tutorial, markdown: value },
                           }))
                         }
-                        mb={2}
+                        layout={notesLayout}
+                        onLayoutChange={changeNotesLayout}
                       />
                       <Button
                         size="sm"
@@ -777,16 +996,11 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
                       >
                         Save edits
                       </Button>
-                      <Divider mb={4} />
-                      <Text fontSize="xs" color="lmFg.muted" mb={2}>
-                        Preview
-                      </Text>
-                      <Markdown>{session.tutorial.markdown}</Markdown>
                     </>
                   )}
                 </>
               ) : (
-                <EmptyState icon="🧑‍🏫" title="No tutorial yet" description="Generate it from the Transcript tab." />
+                <EmptyState icon="tutorial" title="No tutorial yet" description="Generate it from the Transcript tab." />
               )}
             </SectionCard>
           </TabPanel>
@@ -833,7 +1047,7 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
               }
             >
               {draftQuestions.length === 0 ? (
-                <EmptyState icon="🧠" title="No quiz draft yet" description="Generate one from the Transcript tab." />
+                <EmptyState icon="quiz" title="No quiz draft yet" description="Generate one from the Transcript tab." />
               ) : (
                 <>
                   {draftQuestions.map((question, index) => (
@@ -942,7 +1156,7 @@ function StudentLibrary({ classId }) {
   if (!sessions.length) {
     return (
       <EmptyState
-        icon="🎧"
+        icon="audio"
         title="No lecture material yet"
         description="When your teacher turns a class recording into notes or a tutorial, it shows up here."
       />
@@ -1058,11 +1272,6 @@ export default function AiStudio() {
                 the transcript. Everything still works — the output is just rougher.
               </Text>
             )}
-            {!status.transcriptionConfigured && (
-              <Text fontSize="xs">
-                Without LM_TRANSCRIBE_URL you can still paste or upload a transcript for any lecture.
-              </Text>
-            )}
           </Box>
         </Alert>
       )}
@@ -1071,7 +1280,7 @@ export default function AiStudio() {
 
       {sessions.length === 0 ? (
         <EmptyState
-          icon="🎧"
+          icon="audio"
           title="No lecture sessions yet"
           description="Pick a recording captured by the attendance module — or paste a transcript — and generate study material from it."
           action={
@@ -1102,7 +1311,12 @@ export default function AiStudio() {
                 <Badge colorScheme={session.status === 'ready' ? 'green' : session.status === 'failed' ? 'red' : 'gray'}>
                   {session.status}
                 </Badge>
-                {session.recordingFilename && <Text>🎧 {session.recordingFilename}</Text>}
+                {session.recordingFilename && (
+              <Text display="flex" alignItems="center" gap={1.5}>
+                <LmIcon name="audio" size={14} />
+                {session.recordingFilename}
+              </Text>
+            )}
               </HStack>
               <HStack mt={2} spacing={2} wrap="wrap">
                 <Badge colorScheme={session.hasTranscript ? 'green' : 'gray'}>

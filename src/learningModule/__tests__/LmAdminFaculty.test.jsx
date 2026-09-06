@@ -150,7 +150,7 @@ describe('LmAdminFaculty import from master faculty', () => {
     await load();
     await userEvent.click(await screen.findByRole('button', { name: /Import all 10 faculty/ }));
     await waitFor(() =>
-      expect(adminImportFaculty).toHaveBeenCalledWith('', { sendMail: true }),
+      expect(adminImportFaculty).toHaveBeenCalledWith('', { sendMail: true, notifyAdmin: false }),
     );
     // The directory and the preview both move — the accounts are new in one and
     // no longer pending in the other.
@@ -165,7 +165,7 @@ describe('LmAdminFaculty import from master faculty', () => {
     await waitFor(() =>
       expect(adminImportFaculty).toHaveBeenCalledWith(
         'Computer Science and Engineering',
-        { sendMail: true },
+        { sendMail: true, notifyAdmin: false },
       ),
     );
   });
@@ -180,7 +180,20 @@ describe('LmAdminFaculty import from master faculty', () => {
     );
     await userEvent.click(await screen.findByRole('button', { name: /Import all 10 faculty/ }));
     await waitFor(() =>
-      expect(adminImportFaculty).toHaveBeenCalledWith('', { sendMail: false }),
+      expect(adminImportFaculty).toHaveBeenCalledWith('', { sendMail: false, notifyAdmin: false }),
+    );
+  });
+
+  it('asks for an admin summary only when that box is ticked', async () => {
+    // Off by default: a bulk import has always stayed out of the admin mailbox,
+    // because the per-account notification would send one mail per person.
+    await load();
+    await userEvent.click(
+      await screen.findByRole('checkbox', { name: /mail the admin mailbox/i }),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /Import all 10 faculty/ }));
+    await waitFor(() =>
+      expect(adminImportFaculty).toHaveBeenCalledWith('', { sendMail: true, notifyAdmin: true }),
     );
   });
 

@@ -12,10 +12,12 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
+import { LmIcon } from './Icon';
 import getEnvironment from '../../getenvironment';
 import { serverFileLinkProps } from '../../utils/nativeCapabilities';
 
-const ICONS = { file: '📎', link: '🔗', video: '🎬', audio: '🎧', note: '📝' };
+// Names from the module's icon set (see Icon.jsx), one per attachment kind.
+const ICONS = { file: 'attachment', link: 'link', video: 'video', audio: 'audio', note: 'document' };
 
 const prettySize = (bytes) => {
   if (!bytes) return '';
@@ -57,7 +59,9 @@ export function AttachmentList({ attachments = [], compact = false }) {
             bg="lmBg.sunken"
             maxW="280px"
           >
-            <Text>{ICONS[attachment.kind] || '📎'}</Text>
+            <Box color="lmFg.subtle">
+              <LmIcon name={ICONS[attachment.kind] || 'attachment'} size={16} />
+            </Box>
             <Box overflow="hidden">
               <Text fontSize="sm" noOfLines={1} color="lmHue.blue700">
                 {attachment.name || attachment.url}
@@ -169,7 +173,7 @@ export function AttachmentPicker({ attachments = [], onChange, disabled, classId
           onClick={() => fileInput.current?.click()}
           isLoading={uploading && !uploadProgress}
           isDisabled={disabled}
-          leftIcon={<span>📎</span>}
+          leftIcon={<LmIcon name="attachment" size={14} />}
         >
           Attach files
         </Button>
@@ -238,7 +242,9 @@ export function AttachmentPicker({ attachments = [], onChange, disabled, classId
               py={1}
               bg="lmBg.surface"
             >
-              <Text fontSize="sm">{ICONS[attachment.kind] || '📎'}</Text>
+              <Box color="lmFg.subtle">
+                <LmIcon name={ICONS[attachment.kind] || 'attachment'} size={15} />
+              </Box>
               <Text fontSize="sm" noOfLines={1} maxW="200px">
                 {attachment.name}
               </Text>
@@ -246,7 +252,7 @@ export function AttachmentPicker({ attachments = [], onChange, disabled, classId
                 size="xs"
                 variant="ghost"
                 aria-label="Remove attachment"
-                icon={<span>✕</span>}
+                icon={<LmIcon name="close" size={13} />}
                 onClick={() => remove(index)}
                 isDisabled={disabled}
               />

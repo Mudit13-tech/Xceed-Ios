@@ -15,6 +15,7 @@ import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import { toDateTimeInput } from '../format';
 import PaperPreviewModal from '../components/PaperPreviewModal';
+import { LmIcon } from '../components/Icon';
 
 /**
  * Whether this row has a deadline to show: one already saved, or one the
@@ -169,7 +170,8 @@ export default function Tutorials() {
             isLoading={importing}
             onClick={() => fileRef.current?.click()}
           >
-            📄 Import from a paper
+            <LmIcon name="assignment" size={14} style={{ marginRight: 6 }} />
+            Import from a paper
           </Button>
           <input
             ref={fileRef}
@@ -180,7 +182,8 @@ export default function Tutorials() {
             onChange={(event) => startImport([...event.target.files])}
           />
           <Button as="a" href="/learning/tutorialmanual" target="_blank" rel="noreferrer" variant="ghost">
-            📖 Manual
+            <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
+            Manual
           </Button>
           <Button colorScheme="teal" onClick={create}>
             + New tutorial
@@ -193,7 +196,7 @@ export default function Tutorials() {
 
       {tutorials.length === 0 ? (
         <EmptyState
-          icon="🧮"
+          icon="tutorial"
           title="No tutorials yet"
           description={
             isTeacher

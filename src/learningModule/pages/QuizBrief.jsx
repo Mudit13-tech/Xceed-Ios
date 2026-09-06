@@ -32,6 +32,7 @@ import CodeKeypad from '../components/CodeKeypad';
 import RichText from '../components/RichText';
 import { acquireCamera, releaseCamera } from '../webcam';
 import { ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { LmIcon } from '../components/Icon';
 import { formatDateTime } from '../format';
 import useProctoring, { isMobileDevice } from '../hooks/useProctoring';
 
@@ -203,6 +204,20 @@ function CountdownPanel({ label, seconds, note, accent }) {
  * same way the paper will — and the fullscreen the student is granted here
  * carries straight through into the sitting.
  */
+/**
+ * Bullet for the "how this test runs" list.
+ *
+ * Chakra's ListIcon expects an icon component; these rules each need a
+ * different one, so the marker is drawn here rather than passed through it.
+ */
+function RuleIcon({ name }) {
+  return (
+    <Box as="span" color="blue.500" mr={2} display="inline-flex" verticalAlign="-3px">
+      <LmIcon name={name} size={15} />
+    </Box>
+  );
+}
+
 export default function QuizBrief() {
   const { classId, klass, isTeacher } = useOutletContext();
   const { quizId } = useParams();
@@ -849,21 +864,21 @@ export default function QuizBrief() {
           <SectionCard title="How this test runs">
             <List spacing={2} fontSize="sm">
               <ListItem>
-                <ListIcon as="span">{settings.deliveryMode === 'one_at_a_time' ? '1️⃣' : '📋'}</ListIcon>
+                <RuleIcon name={settings.deliveryMode === 'one_at_a_time' ? 'sequence' : 'quiz'} />
                 {settings.deliveryMode === 'one_at_a_time'
                   ? 'Questions are shown one at a time.'
                   : 'All questions are shown on one page — answer them in any order.'}
               </ListItem>
               {settings.deliveryMode === 'one_at_a_time' && (
                 <ListItem>
-                  <ListIcon as="span">{settings.allowBacktracking ? '↩️' : '⛔'}</ListIcon>
+                  <RuleIcon name={settings.allowBacktracking ? 'back' : 'danger'} />
                   {settings.allowBacktracking
                     ? 'You may go back to earlier questions and change your answers.'
                     : 'Once you move on, you cannot return to a question.'}
                 </ListItem>
               )}
               <ListItem>
-                <ListIcon as="span">⏱</ListIcon>
+                <RuleIcon name="timer" />
                 {settings.perQuestionTiming
                   ? 'Each question has its own timer and moves on automatically when it runs out.'
                   : settings.timeLimitMinutes
@@ -875,27 +890,27 @@ export default function QuizBrief() {
                   it does not cost you the time you had left either. */}
               {settings.perQuestionTiming && settings.allowBacktracking && (
                 <ListItem>
-                  <ListIcon as="span">⏳</ListIcon>
+                  <RuleIcon name="pending" />
                   A question you come back to resumes with the time it had left. Once a question&apos;s
                   time is gone you can still see it, but you cannot change your answer.
                 </ListItem>
               )}
               {settings.negativeMarking > 0 && (
                 <ListItem>
-                  <ListIcon as="span">➖</ListIcon>
+                  <RuleIcon name="minus" />
                   <b>Negative marking:</b> {settings.negativeMarking} mark(s) deducted for a wrong answer.
                   Unanswered questions are never penalised.
                 </ListItem>
               )}
               {settings.shuffleQuestions && (
                 <ListItem>
-                  <ListIcon as="span">🔀</ListIcon>
+                  <RuleIcon name="shuffle" />
                   Question order is randomised — your paper differs from your neighbour&apos;s.
                 </ListItem>
               )}
               {settings.questionsPerAttempt > 0 && (
                 <ListItem>
-                  <ListIcon as="span">🎲</ListIcon>
+                  <RuleIcon name="random" />
                   {settings.questionsPerAttempt} questions are drawn at random for you.
                 </ListItem>
               )}
@@ -904,29 +919,29 @@ export default function QuizBrief() {
                   closes, whether or not it is closing while they read. */}
               {state.startDeadline && (
                 <ListItem>
-                  <ListIcon as="span">🚪</ListIcon>
+                  <RuleIcon name="exit" />
                   You must <b>begin</b> by {formatDateTime(state.startDeadline)}. Nobody may start after
                   that, though anyone already sitting the paper keeps their full time.
                 </ListItem>
               )}
               <ListItem>
-                <ListIcon as="span">☝️</ListIcon>
+                <RuleIcon name="info" />
                 You get <b>one attempt</b> — once you submit, this test cannot be taken again.
               </ListItem>
               <ListItem>
-                <ListIcon as="span">🖥️</ListIcon>
+                <RuleIcon name="desktop" />
                 The test runs in <b>fullscreen only</b>. Leaving fullscreen, or switching to another
                 tab, window or application, <b>submits your test immediately</b>.
               </ListItem>
               {settings.allowCalculator !== false && (
                 <ListItem>
-                  <ListIcon as="span">🖩</ListIcon>
+                  <RuleIcon name="calculator" />
                   A scientific calculator is available on screen during the test.
                 </ListItem>
               )}
               {settings.resultReleaseAt && (
                 <ListItem>
-                  <ListIcon as="span">📅</ListIcon>
+                  <RuleIcon name="calendar" />
                   Results are released on {formatDateTime(settings.resultReleaseAt)}.
                 </ListItem>
               )}
@@ -1046,7 +1061,8 @@ export default function QuizBrief() {
             bg={brief.sebVerified ? 'lmHue.green50' : 'lmBg.subtle'}
           >
             <Text fontSize="sm" fontWeight="700" mb={1}>
-              🔒 Safe Exam Browser — setup check
+              <LmIcon name="locked" size={14} style={{ marginRight: 6 }} />
+              Safe Exam Browser — setup check
             </Text>
             {sebNotReady ? (
               <Text fontSize="xs" color="lmFg.subtle">
@@ -1055,7 +1071,8 @@ export default function QuizBrief() {
               </Text>
             ) : brief.sebVerified ? (
               <Text fontSize="xs" color="lmHue.green700">
-                ✅ Verified. This page was opened in Safe Exam Browser and matched to the uploaded
+                <LmIcon name="success" size={12} style={{ marginRight: 4 }} />
+                Verified. This page was opened in Safe Exam Browser and matched to the uploaded
                 Config Key — the check a student will pass is the check that just passed. Nothing
                 further to do.
               </Text>
@@ -1077,7 +1094,8 @@ export default function QuizBrief() {
         {settings.requireSafeExamBrowser && !isTeacher && (
           <Box mb={4} p={4} borderWidth="1px" borderColor="lmHue.purple200" bg="lmHue.purple50" borderRadius="lg">
             <Text fontSize="sm" fontWeight="700" mb={1}>
-              🔒 This test requires Safe Exam Browser
+              <LmIcon name="locked" size={14} style={{ marginRight: 6 }} />
+              This test requires Safe Exam Browser
             </Text>
             {sebNotReady ? (
               <Text fontSize="xs" color="lmFg.subtle">
@@ -1090,7 +1108,8 @@ export default function QuizBrief() {
                  a question this student no longer has, and showing it to them
                  reads as the check having failed. All they need now is Start. */
               <Text fontSize="xs" color="lmFg.subtle">
-                ✅ Safe Exam Browser is active and this test has been matched to it. {clockNote}
+                <LmIcon name="success" size={12} style={{ marginRight: 4 }} />
+                Safe Exam Browser is active and this test has been matched to it. {clockNote}
               </Text>
             ) : (
               <>
@@ -1343,7 +1362,8 @@ export default function QuizBrief() {
           >
             <Text fontSize="sm" fontWeight="700" mb={1}>
               {settings.roomCodeRequired ? 'Step 2 — ' : ''}Webcam{' '}
-              {camState === 'granted' ? 'on ✅' : 'required'}
+              {camState === 'granted' ? 'on' : 'required'}
+              {camState === 'granted' && <LmIcon name="success" size={13} style={{ marginLeft: 4 }} />}
             </Text>
             <Text fontSize="xs" color="lmFg.muted" mb={3}>
               This test is invigilated by webcam. Your camera is watched for the length of the paper,
@@ -1388,7 +1408,8 @@ export default function QuizBrief() {
                   first. One tick, on the step it belongs to. */}
               {camState === 'granted' && (
                 <Text fontSize="sm" color="lmHue.green700" fontWeight="700">
-                  ✅ Webcam check passed — your camera is on. You can start the test.
+                  <LmIcon name="success" size={13} style={{ marginRight: 4 }} />
+                  Webcam check passed — your camera is on. You can start the test.
                 </Text>
               )}
               {camState === 'denied' && !cameraSebBlocked && (
@@ -1486,7 +1507,8 @@ export default function QuizBrief() {
               maxW="520px"
             >
               <Text fontSize="sm" fontWeight="600" mb={1}>
-                🔒 {sebNotReady ? 'This test is not ready to start yet' : 'Start from Safe Exam Browser'}
+                <LmIcon name="locked" size={13} style={{ marginRight: 6 }} />
+                {sebNotReady ? 'This test is not ready to start yet' : 'Start from Safe Exam Browser'}
               </Text>
               <Text fontSize="xs" color="lmFg.muted">
                 {sebNotReady
@@ -1536,7 +1558,8 @@ export default function QuizBrief() {
             </Button>
           ) : (
             <Button size="lg" colorScheme="orange" variant="outline" isDisabled>
-              🔒 Results pending
+              <LmIcon name="locked" size={15} style={{ marginRight: 6 }} />
+              Results pending
             </Button>
           )}
           {isTeacher && <Badge colorScheme="blue">Enrolled students only</Badge>}

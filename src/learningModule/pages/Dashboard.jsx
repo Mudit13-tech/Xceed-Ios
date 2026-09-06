@@ -37,12 +37,15 @@ import {
 import lmApi from '../api/lmApi';
 import {
   ClassCardPreview,
+  ClassCardGridSkeleton,
   ColorPicker,
   EmptyState,
   ErrorState,
   Loading,
   StatTile,
+  StatTileSkeleton,
 } from '../components/common';
+import { LmIcon } from '../components/Icon';
 import { CLASS_COLORS } from '../format';
 import { canCreateClass } from '../roles';
 
@@ -89,9 +92,20 @@ function ClassCard({ klass, onOpen }) {
           {klass.ownerName}
         </Text>
         <HStack mt={3} spacing={4} fontSize="xs" color={metaColor}>
-          <Text>👥 {klass.stats?.studentCount ?? 0}</Text>
-          <Text>📄 {klass.stats?.courseworkCount ?? 0}</Text>
-          {isTeacher && <Text>🔑 {klass.code}</Text>}
+          <Text display="flex" alignItems="center" gap={1}>
+            <LmIcon name="people" size={13} />
+            {klass.stats?.studentCount ?? 0}
+          </Text>
+          <Text display="flex" alignItems="center" gap={1}>
+            <LmIcon name="coursework" size={13} />
+            {klass.stats?.courseworkCount ?? 0}
+          </Text>
+          {isTeacher && (
+            <Text display="flex" alignItems="center" gap={1}>
+              <LmIcon name="key" size={13} />
+              {klass.code}
+            </Text>
+          )}
         </HStack>
 
         {/* Points and badges, students only. A teacher's card showing a score
@@ -99,8 +113,17 @@ function ClassCard({ klass, onOpen }) {
             deliberately leaves staff off it. */}
         {!isTeacher && (klass.myPoints > 0 || klass.myBadgeCount > 0) && (
           <Flex mt={3} align="center" gap={2} wrap="wrap">
-            <Badge colorScheme="purple" borderRadius="full" px={2} fontSize="0.7rem">
-              ⭐ {klass.myPoints} pts
+            <Badge
+              colorScheme="purple"
+              borderRadius="full"
+              px={2}
+              fontSize="0.7rem"
+              display="inline-flex"
+              alignItems="center"
+              gap={1}
+            >
+              <LmIcon name="star" size={11} />
+              {klass.myPoints} pts
             </Badge>
             {klass.myWeeklyPoints > 0 && (
               <Badge colorScheme="green" borderRadius="full" px={2} fontSize="0.7rem">
@@ -129,7 +152,8 @@ function ClassCard({ klass, onOpen }) {
         {/* Timetable schedule display */}
         {klass.schedule && klass.schedule.length > 0 && (
           <Text mt={3} fontSize="xs" color={metaColor} noOfLines={2}>
-            📅 {klass.schedule.join(', ')}
+            <LmIcon name="calendar" size={12} style={{ marginRight: 4 }} />
+            {klass.schedule.join(', ')}
           </Text>
         )}
 
@@ -140,7 +164,7 @@ function ClassCard({ klass, onOpen }) {
             result — see quizController.getAttempt. */}
         {!isTeacher && klass.myNewResults > 0 && (
           <Badge mt={3} colorScheme="green" borderRadius="full" px={2}>
-            🎯 {klass.myNewResults} quiz result{klass.myNewResults === 1 ? '' : 's'} announced
+            {klass.myNewResults} quiz result{klass.myNewResults === 1 ? '' : 's'} announced
           </Badge>
         )}
 
@@ -557,25 +581,48 @@ function OpenExamBanner({ exam, muted }) {
     .join(':');
 
   return (
-    <Alert status={waiting ? 'info' : 'success'} borderRadius="lg" mb={4} py={3}>
-      <AlertIcon />
-      <Box flex="1" minW={0}>
-        <Text fontWeight="700">
-          {exam.inProgress
-            ? 'You have a test in progress'
-            : waiting
-              ? `Starts in ${countdown}`
-              : 'A test is open now'}
-          {exam.className ? ` — ${exam.className}` : ''}
-        </Text>
-        <Text fontSize="sm" color={muted}>
-          {exam.title}
-          {exam.requiresSeb ? ' · Safe Exam Browser' : ''}
-        </Text>
-      </Box>
-      <HStack flexShrink={0} spacing={2}>
+    <Alert
+      status={waiting ? 'info' : 'success'}
+      borderRadius="lg"
+      mb={4}
+      py={3}
+      flexDirection={{ base: 'column', md: 'row' }}
+      alignItems={{ base: 'stretch', md: 'center' }}
+      gap={3}
+    >
+      <Flex flex="1" minW={0} align="flex-start">
+        <AlertIcon mt={0.5} flexShrink={0} />
+        <Box minW={0}>
+          <Text fontWeight="700" overflowWrap="anywhere">
+            {exam.inProgress
+              ? 'You have a test in progress'
+              : waiting
+                ? `Starts in ${countdown}`
+                : 'A test is open now'}
+            {exam.className ? ` — ${exam.className}` : ''}
+          </Text>
+          <Text fontSize="sm" color={muted} overflowWrap="anywhere">
+            {exam.title}
+            {exam.requiresSeb ? ' · Safe Exam Browser' : ''}
+          </Text>
+        </Box>
+      </Flex>
+      <Flex
+        flexShrink={0}
+        gap={2}
+        width={{ base: '100%', md: 'auto' }}
+        direction={{ base: 'column', sm: 'row' }}
+      >
         {sebLaunch && (
-          <Button as="a" href={sebLaunch} size="sm" colorScheme="purple" variant="outline">
+          <Button
+            as="a"
+            href={sebLaunch}
+            size="sm"
+            colorScheme="purple"
+            variant="outline"
+            width={{ base: '100%', sm: 'auto' }}
+            whiteSpace="normal"
+          >
             Open Safe Exam Browser
           </Button>
         )}
@@ -584,10 +631,12 @@ function OpenExamBanner({ exam, muted }) {
           to={`/learning/class/${exam.classId}/quiz/${exam._id}`}
           colorScheme={waiting ? 'blue' : 'green'}
           size="sm"
+          width={{ base: '100%', sm: 'auto' }}
+          whiteSpace="normal"
         >
           {exam.inProgress ? 'Continue' : waiting ? 'View details' : 'Open the test'}
         </Button>
-      </HStack>
+      </Flex>
     </Alert>
   );
 }
@@ -689,7 +738,8 @@ export default function Dashboard() {
           {/* The introduction to the whole module. Public, so a teacher who has
               not set anything up yet can also forward it to a colleague. */}
           <Button as="a" href="/learning/manual" target="_blank" rel="noreferrer" variant="ghost">
-            📖 Getting started
+            <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
+            Getting started
           </Button>
           <Button variant="outline" onClick={() => setSearchParams({ join: '1' })}>
             Join class
@@ -702,19 +752,26 @@ export default function Dashboard() {
         </HStack>
       </Flex>
 
-      {overview && (
+      {overview ? (
         <Grid templateColumns={{ base: '1fr 1fr', md: 'repeat(4, 1fr)' }} gap={4} mb={6}>
           <StatTile label="Classes" value={overview.classCount} hint={`${overview.teachingCount} teaching`} />
           <StatTile label="Pending work" value={overview.pendingWork} accent="orange.500" hint="Not turned in" />
           <StatTile label="To review" value={overview.awaitingReview} accent="purple.500" hint="Student submissions" />
           <StatTile label="Due this week" value={overview.dueThisWeek} accent="red.500" />
         </Grid>
+      ) : (
+        <Grid templateColumns={{ base: '1fr 1fr', md: 'repeat(4, 1fr)' }} gap={4} mb={6}>
+          <StatTileSkeleton />
+          <StatTileSkeleton />
+          <StatTileSkeleton />
+          <StatTileSkeleton />
+        </Grid>
       )}
 
       <ErrorState error={error} onRetry={load} />
 
       {loading ? (
-        <Loading label="Loading your classes…" />
+        <ClassCardGridSkeleton count={6} />
       ) : (
         <Tabs colorScheme="blue" variant="soft-rounded">
           <TabList mb={4}>
@@ -726,7 +783,7 @@ export default function Dashboard() {
             <TabPanel px={0}>
               {classes.length === 0 ? (
                 <EmptyState
-                  icon="🏫"
+                  icon="classes"
                   title="No classes yet"
                   description={
                     mayCreateClass
@@ -749,7 +806,7 @@ export default function Dashboard() {
             </TabPanel>
             <TabPanel px={0}>
               {completed.length === 0 ? (
-                <EmptyState icon="🏆" title="Nothing completed yet" description="Classes marked as completed will show up here." />
+                <EmptyState icon="trophy" title="Nothing completed yet" description="Classes marked as completed will show up here." />
               ) : (
                 <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5}>
                   {completed.map((klass) => (
@@ -760,7 +817,7 @@ export default function Dashboard() {
             </TabPanel>
             <TabPanel px={0}>
               {archived.length === 0 ? (
-                <EmptyState icon="🗄️" title="Nothing archived" description="Archived classes stay readable but are hidden from the main list." />
+                <EmptyState icon="archive" title="Nothing archived" description="Archived classes stay readable but are hidden from the main list." />
               ) : (
                 <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5}>
                   {archived.map((klass) => (

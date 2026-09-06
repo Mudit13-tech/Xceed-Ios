@@ -78,20 +78,46 @@ export const CLASS_COLORS = [
   '#455a64',
 ];
 
-const CODING_META = { icon: '🐍', label: 'Coding exercise', colorScheme: 'teal' };
+// `icon` is a name from the learning module's icon set (components/Icon.jsx),
+// not a glyph: every screen that shows one of these renders it with <LmIcon>.
+const CODING_META = { icon: 'coding', label: 'Coding exercise', colorScheme: 'teal' };
 
 export const WORK_TYPE_META = {
-  assignment: { icon: '📄', label: 'Assignment', colorScheme: 'blue' },
-  quiz: { icon: '🧠', label: 'Quiz', colorScheme: 'purple' },
-  question: { icon: '❓', label: 'Question', colorScheme: 'orange' },
-  material: { icon: '📚', label: 'Material', colorScheme: 'green' },
+  assignment: { icon: 'assignment', label: 'Assignment', colorScheme: 'blue' },
+  quiz: { icon: 'quiz', label: 'Quiz', colorScheme: 'purple' },
+  question: { icon: 'question', label: 'Question', colorScheme: 'orange' },
+  material: { icon: 'material', label: 'Material', colorScheme: 'green' },
   coding: CODING_META,
   // Rows published before `coding` was a workType are stored as assignments
   // carrying a `notebookId`, and still resolve through here. Either shape has to
-  // read as a coding exercise: "📄 Assignment due" tells a student nothing about
-  // what they have to open.
+  // read as a coding exercise: an "Assignment due" row tells a student nothing
+  // about what they have to open.
   notebook: CODING_META,
 };
+
+/**
+ * Icon-set name for each notification kind (see components/Icon.jsx).
+ *
+ * Shared by the header bell and the full notifications page so a "grade
+ * released" row is the same picture in both; they drifted apart while each
+ * kept its own copy.
+ */
+export const NOTIFICATION_ICONS = {
+  announcement: 'announcement',
+  coursework: 'coursework',
+  comment: 'comment',
+  grade: 'grade',
+  submission: 'submission',
+  invite: 'invite',
+  join_request: 'join-request',
+  quiz: 'quiz',
+  quiz_result: 'quiz-result',
+  material: 'material',
+  feedback: 'feedback',
+  dev_team: 'dev-team',
+};
+
+export const notificationIcon = (type) => NOTIFICATION_ICONS[type] || 'notifications';
 
 /**
  * The calendar/classwork identity of a coursework row.

@@ -83,7 +83,10 @@ describe('NotificationSettingsTab', () => {
     await user.type(emailInput, 'coord@x.com');
     expect(addButton).not.toBeDisabled();
 
-    const roleSelect = screen.getAllByRole('combobox')[0];
+    // Found by one of its own options rather than by position: the tab has
+    // several selects and a new card above this one used to silently retarget
+    // this line at the wrong control.
+    const roleSelect = screen.getByRole('option', { name: 'Dept Coordinator' }).closest('select');
     await user.selectOptions(roleSelect, 'coordinator');
     await user.click(addButton);
 
@@ -105,5 +108,41 @@ describe('NotificationSettingsTab', () => {
     await user.click(screen.getByRole('button', { name: /add$/i }));
 
     expect(await screen.findByText(/recipient already exists/i)).toBeInTheDocument();
+  });
+
+  /* The appointed heads come from the platform mapping, not from the recipients
+     list, and are shown here because this page decides who gets mailed — a list
+     that leaves them out reads as the whole answer when it is not. */
+  it('lists the appointed heads of department, without a Remove button', async () => {
+    mockFetchRouter({
+      '/settings/notifications/': () =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            settings: SETTINGS,
+            departmentHeads: [
+              { dept: 'CSE', name: 'Dr A Sharma', email: 'cse-head@x.com' },
+              { dept: 'ECE', name: 'Dr B Kaur', email: 'ece-head@x.com' },
+            ],
+          }),
+        }),
+    });
+    renderWithProviders(<NotificationSettingsTab />);
+    await waitFor(() => expect(screen.getByText(/notifications enabled/i)).toBeInTheDocument());
+
+    expect(await screen.findByText('cse-head@x.com')).toBeInTheDocument();
+    expect(screen.getByText('ece-head@x.com')).toBeInTheDocument();
+    expect(screen.getByText('2 mapped')).toBeInTheDocument();
+
+    // The appointment is made on the superadmin screen; there is nothing to
+    // remove here, and the one Remove button on the page is the recipient's.
+    expect(screen.getAllByRole('button', { name: /^remove$/i })).toHaveLength(1);
+  });
+
+  it('says plainly when no department has a head yet', async () => {
+    renderWithProviders(<NotificationSettingsTab />);
+    await waitFor(() => expect(screen.getByText(/notifications enabled/i)).toBeInTheDocument());
+
+    expect(screen.getByText(/no department has a head assigned yet/i)).toBeInTheDocument();
   });
 });

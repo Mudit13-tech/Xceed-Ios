@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import getEnvironment from '../../getenvironment';
+import { LmIcon } from '../components/Icon';
 
 import shotSignIn from '../manualAssets/setup/sign-in.png';
 import shotForgotLink from '../manualAssets/setup/forgot-link.png';
@@ -54,10 +55,10 @@ const cssReset = `
 function Note({ type = 'info', children }) {
     const cfg = {
         info: { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8', icon: 'ℹ' },
-        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: '⚠' },
-        tip: { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: '💡' },
-        key: { bg: '#eef2ff', border: '#c7d2fe', color: '#3730a3', icon: '🔑' },
-        danger: { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: '⛔' },
+        warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: 'warning' },
+        tip: { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534', icon: 'tip' },
+        key: { bg: '#eef2ff', border: '#c7d2fe', color: '#3730a3', icon: 'key' },
+        danger: { bg: '#fef2f2', border: '#fecaca', color: '#991b1b', icon: 'danger' },
     };
     const s = cfg[type] || cfg.info;
     return (
@@ -66,7 +67,7 @@ function Note({ type = 'info', children }) {
             padding: '10px 14px', marginBottom: 16,
             display: 'flex', gap: 10, alignItems: 'flex-start',
         }}>
-            <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{s.icon}</span>
+            <span style={{ flexShrink: 0, marginTop: 2, color: s.color }}><LmIcon name={s.icon} size={15} /></span>
             <div style={{ fontSize: 13, color: s.color, lineHeight: 1.65 }}>{children}</div>
         </div>
     );
@@ -137,7 +138,7 @@ function ShotSlot({ screen, path, caption }) {
                 borderRadius: 10, padding: '20px 18px',
                 border: '1px dashed #c7d2fe', background: '#f8faff', textAlign: 'center',
             }}>
-                <div style={{ fontSize: 18, marginBottom: 6 }}>🖼️</div>
+                <div style={{ marginBottom: 6, color: T.accent }}><LmIcon name="image" size={19} /></div>
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: '#3730a3', lineHeight: 1.5 }}>
                     Screenshot: {screen}
                 </div>
@@ -196,13 +197,13 @@ const jumpTo = (id) => (event) => {
 };
 
 const SECTIONS = [
-    { id: 'accounts', icon: '👤', label: 'Accounts, roles and where to sign in' },
-    { id: 'create-class', icon: '🏫', label: 'Creating a class' },
-    { id: 'class-code', icon: '🔑', label: 'The class code, and how to use it' },
-    { id: 'invite', icon: '✉️', label: 'Adding students by email' },
-    { id: 'join-settings', icon: '⚙️', label: 'Join settings and approving requests' },
-    { id: 'student-join', icon: '🎓', label: 'What a student does to join' },
-    { id: 'password', icon: '🔒', label: 'Setting or resetting a password' },
+    { id: 'accounts', icon: 'user', label: 'Accounts, roles and where to sign in' },
+    { id: 'create-class', icon: 'classes', label: 'Creating a class' },
+    { id: 'class-code', icon: 'key', label: 'The class code, and how to use it' },
+    { id: 'invite', icon: 'invite', label: 'Adding students by email' },
+    { id: 'join-settings', icon: 'settings', label: 'Join settings and approving requests' },
+    { id: 'student-join', icon: 'exam', label: 'What a student does to join' },
+    { id: 'password', icon: 'locked', label: 'Setting or resetting a password' },
 ];
 
 // ── page ──────────────────────────────────────────────────────────────────────
@@ -233,8 +234,8 @@ export default function SetupManual({ standalone = false }) {
                             width: 30, height: 30, borderRadius: 8,
                             background: 'linear-gradient(135deg,#4f46e5,#818cf8)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 15,
-                        }}>🏫</div>
+                            color: '#fff',
+                        }}><LmIcon name="classes" size={16} /></div>
                         <span style={{ fontSize: 14, fontWeight: 700, color: '#c7d2fe' }}>
                             Part 1 · Setting Up the Classroom
                         </span>
@@ -260,8 +261,8 @@ export default function SetupManual({ standalone = false }) {
                         width: 42, height: 42, borderRadius: 10,
                         background: 'linear-gradient(135deg,#4f46e5,#818cf8)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 20,
-                    }}>🏫</div>
+                        color: '#fff',
+                    }}><LmIcon name="classes" size={21} /></div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="sum-title" style={{ fontWeight: 800, color: T.text }}>
                             Setting Up the Classroom
@@ -299,7 +300,7 @@ export default function SetupManual({ standalone = false }) {
                                 onMouseEnter={(e) => { e.currentTarget.style.color = T.accent; }}
                                 onMouseLeave={(e) => { e.currentTarget.style.color = T.text; }}
                             >
-                                <span style={{ flexShrink: 0 }}>{item.icon}</span>
+                                <span style={{ flexShrink: 0, color: T.accent }}><LmIcon name={item.icon} size={15} /></span>
                                 <span>{item.label}</span>
                             </a>
                         ))}

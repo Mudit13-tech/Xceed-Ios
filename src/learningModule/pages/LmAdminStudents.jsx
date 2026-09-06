@@ -36,12 +36,12 @@ import {
   useDisclosure,
   useToast,
 } from '@chakra-ui/react';
-import { EditIcon } from '@chakra-ui/icons';
 import { Link as RouterLink } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { LmIcon } from '../components/Icon';
 
 /**
  * Student accounts and department-wise roster, for an lm-admin.
@@ -251,6 +251,14 @@ function BulkImportStudentsCard({ onImported }) {
    * checkbox existed there was no way to say so. Defaults on, which is what the
    * button did before. */
   const [sendMail, setSendMail] = useState(true);
+  /* Whether the admin mailbox is told what this import created.
+   *
+   * Off by default, which is what a roster import has always done: the
+   * per-account "new user created" notification is deliberately not sent by
+   * bulk imports, because a three-hundred-row roster would send three hundred
+   * of them. Ticking this sends one mail for the whole batch instead — the
+   * counts and the addresses — for an import somebody wants a record of. */
+  const [notifyAdmin, setNotifyAdmin] = useState(false);
   const [mailProgress, setMailProgress] = useState(null);
   const toast = useToast();
   const pollRef = useRef(null);
@@ -265,6 +273,7 @@ function BulkImportStudentsCard({ onImported }) {
     setResult(null);
     setError('');
     setMailProgress(null);
+    setNotifyAdmin(false);
   };
 
   // Polls /admin/students/import-status/:batchId until every queued welcome
@@ -318,15 +327,16 @@ function BulkImportStudentsCard({ onImported }) {
     setError('');
     setBusy(true);
     try {
-      const data = await lmApi.adminImportStudents({ rows, sendMail });
+      const data = await lmApi.adminImportStudents({ rows, sendMail, notifyAdmin, fileName });
       setResult(data);
       setPreview(null);
       toast({
         status: 'success',
         title: `${data.created} account${data.created === 1 ? '' : 's'} created, ${data.updated} updated`,
-        description: sendMail
-          ? undefined
-          : 'No emails sent — the students can be told later from the directory.',
+        description: [
+          sendMail ? null : 'No student emails sent — they can be told later from the directory.',
+          data.adminNotified ? 'A summary was mailed to the admin mailbox.' : null,
+        ].filter(Boolean).join(' ') || undefined,
         duration: 8000,
         isClosable: true,
       });
@@ -341,6 +351,12 @@ function BulkImportStudentsCard({ onImported }) {
       setBusy(false);
     }
   };
+
+  /* The mailbox the summary would go to, as the server names it — an
+     environment can point ADMIN_NOTIFY_EMAIL somewhere other than the default,
+     and a checkbox that names the wrong address is worse than one that names
+     none. Known only once the preview has come back. */
+  const adminMailbox = preview?.adminNotifyEmail || '';
 
   const invalidSample = (preview?.rows || []).filter((row) => row.outcome === 'invalid').slice(0, 5);
 
@@ -384,6 +400,22 @@ function BulkImportStudentsCard({ onImported }) {
               <Text as="span" color="lmFg.muted">
                 {' '}— the mail carries the link they use to set a password. Untick to create the
                 accounts quietly; they can still claim one from “Forgot password”.
+              </Text>
+            </Text>
+          </Checkbox>
+        )}
+
+        {!result && rows.length > 0 && (
+          <Checkbox
+            isChecked={notifyAdmin}
+            onChange={(e) => setNotifyAdmin(e.target.checked)}
+            isDisabled={busy}
+          >
+            <Text fontSize="sm">
+              Also mail the admin mailbox{adminMailbox ? ` (${adminMailbox})` : ''} a summary of this import
+              <Text as="span" color="lmFg.muted">
+                {' '}— one mail listing the accounts this upload created. Off by default: a bulk
+                import stays out of that mailbox unless somebody wants a record of it.
               </Text>
             </Text>
           </Checkbox>
@@ -707,7 +739,7 @@ export default function LmAdminStudents() {
       >
         {students.length === 0 ? (
           <EmptyState
-            icon="🎓"
+            icon="people"
             title={search || selectedDept ? 'Nobody matches those filters' : 'No student accounts yet'}
             description={
               search || selectedDept
@@ -747,7 +779,7 @@ export default function LmAdminStudents() {
                     <Td>
                       <IconButton
                         aria-label="Edit student"
-                        icon={<EditIcon />}
+                        icon={<LmIcon name="edit" size={15} />}
                         size="xs"
                         variant="ghost"
                         onClick={() => {

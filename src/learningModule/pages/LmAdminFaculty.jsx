@@ -101,6 +101,11 @@ function ImportFromMasterCard({ onImported }) {
    * way, and an administrator seeding a department ahead of a term may want the
    * announcement to go out later, or not at all. Defaults on. */
   const [sendMail, setSendMail] = useState(true);
+  /* Whether the admin mailbox is told what this import created. Off by
+   * default — bulk imports have always stayed out of that mailbox, because the
+   * per-account notification would send one mail per imported person. Ticking
+   * this sends a single summary for the batch instead. */
+  const [notifyAdmin, setNotifyAdmin] = useState(false);
   const toast = useToast();
 
   const refresh = useCallback(async () => {
@@ -121,13 +126,14 @@ function ImportFromMasterCard({ onImported }) {
   const runImport = async (dept) => {
     setBusy(dept || '*');
     try {
-      const result = await lmApi.adminImportFaculty(dept, { sendMail });
+      const result = await lmApi.adminImportFaculty(dept, { sendMail, notifyAdmin });
       toast({
         status: result.imported || result.roleAdded ? 'success' : 'info',
         title: dept ? `${dept} imported` : 'Master faculty imported',
-        description: sendMail
-          ? importSummary(result)
-          : `${importSummary(result)} No emails sent.`,
+        description: [
+          sendMail ? importSummary(result) : `${importSummary(result)} No emails sent.`,
+          result.adminNotified ? 'A summary was mailed to the admin mailbox.' : '',
+        ].filter(Boolean).join(' '),
         duration: 9000,
         isClosable: true,
       });
@@ -161,6 +167,10 @@ function ImportFromMasterCard({ onImported }) {
   }
 
   const { departments = [], totals = {} } = preview;
+  /* The mailbox the summary goes to, as the server names it — ADMIN_NOTIFY_EMAIL
+     can be pointed elsewhere, and a checkbox naming the wrong address is worse
+     than one naming none. */
+  const adminMailbox = preview.adminNotifyEmail || '';
   const pending = totals.pending || 0;
 
   return (
@@ -202,9 +212,24 @@ function ImportFromMasterCard({ onImported }) {
         </Text>
       </Checkbox>
 
+      <Checkbox
+        isChecked={notifyAdmin}
+        onChange={(e) => setNotifyAdmin(e.target.checked)}
+        isDisabled={Boolean(busy)}
+        mb={4}
+      >
+        <Text fontSize="sm">
+          Also mail the admin mailbox{adminMailbox ? ` (${adminMailbox})` : ''} a summary of this import
+          <Text as="span" color="lmFg.muted">
+            {' '}— one mail listing the accounts this import created. Off by default: a bulk
+            import stays out of that mailbox unless somebody wants a record of it.
+          </Text>
+        </Text>
+      </Checkbox>
+
       {departments.length === 0 ? (
         <EmptyState
-          icon="📋"
+          icon="attendance"
           title="The master faculty list is empty"
           description="Add faculty in the timetable module first, or use the form below for one-off accounts."
         />
@@ -418,7 +443,7 @@ export default function LmAdminFaculty() {
           </Box>
           <Flex gap={4} align="center" wrap="wrap">
             <RouterLinkStyle as={RouterLink} to="/learning/lm-admin/hod-dashboard" fontSize="sm" color="purple.600">
-              HOD Activity Dashboard →
+              HOD Dashboard →
             </RouterLinkStyle>
             <RouterLinkStyle as={RouterLink} to="/learning/lm-admin" fontSize="sm" color="blue.600">
               ← Admin dashboard
@@ -518,7 +543,7 @@ export default function LmAdminFaculty() {
       >
         {faculty.length === 0 ? (
           <EmptyState
-            icon="🎓"
+            icon="people"
             title={search || selectedDept ? 'Nobody matches that' : 'No faculty accounts yet'}
             description={
               search || selectedDept

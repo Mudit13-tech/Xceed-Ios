@@ -113,7 +113,7 @@ export default function Navbar() {
   useEffect(() => {
     if (isError && error?.message === 'Unauthorized') {
       queryClient.clear();
-      localStorage.removeItem('token');
+      localStorage?.removeItem?.('token');
     }
   }, [isError, error, queryClient]);
 
@@ -126,7 +126,7 @@ export default function Navbar() {
 
       // Clear the cache so another user logging in doesn't see old data/errors
       queryClient.clear();
-      localStorage.removeItem('token');
+      localStorage?.removeItem?.('token');
 
       if (!response.ok) {
         throw new Error('Failed to logout');
@@ -141,6 +141,13 @@ export default function Navbar() {
 
   const publicPaths = [
     '/',
+    // The two module introduction pages linked from the top of the home hero.
+    // They introduce XCEED Learning and iLEED to people who have not been given
+    // an account yet, so bouncing them to /login would hide the pages from the
+    // exact audience they were written for. Neither reads any authenticated
+    // data — the module itself, behind their call-to-action, still does.
+    '/xceed-learning',
+    '/ileed',
     // Public: it is onboarding documentation someone needs before they have an
     // account, and GET /api/v1/guide is unauthenticated to match. Editing it
     // still requires an administrator. This entry and the server route have to

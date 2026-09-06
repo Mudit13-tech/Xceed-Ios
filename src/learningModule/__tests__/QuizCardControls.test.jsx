@@ -135,7 +135,7 @@ describe('the controls that are only ever wanted about a paper, not inside it', 
     await render(listed());
 
     expect(screen.getByRole('button', { name: /schedule quiz/i })).toBeTruthy();
-    expect(screen.queryByText(/🗓 Schedule/)).toBeNull();
+    expect(screen.queryByText(/^Schedule$/)).toBeNull();
   });
 });
 

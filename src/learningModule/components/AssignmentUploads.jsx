@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Box, Button, HStack, Link, Text, useToast } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
+import { LmIcon } from './Icon';
 import { serverFileLinkProps } from '../../utils/nativeCapabilities';
 
 /**
@@ -146,7 +147,7 @@ export default function AssignmentUploads({
             <Button size="sm" variant="outline" onClick={pick} isLoading={busy} loadingText="Uploading">
               Upload photos / PDF
             </Button>
-            <Button size="sm" variant="outline" onClick={takePhoto} isDisabled={busy} leftIcon={<span aria-hidden="true">📷</span>}>
+            <Button size="sm" variant="outline" onClick={takePhoto} isDisabled={busy} leftIcon={<LmIcon name="camera" size={14} />}>
               Take a photo
             </Button>
           </HStack>

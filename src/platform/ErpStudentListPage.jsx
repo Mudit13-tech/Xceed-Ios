@@ -1,19 +1,25 @@
 // client/src/platform/ErpStudentListPage.jsx
 //
-// The institute admin's upload of the ERP student list.
+// The institute admin's sync of the ERP student list.
 //
-// The list is one spreadsheet with one job: pair every roll number with the
-// official email address the ERP holds for it. That pairing is what lets a
-// student open their own attendance photos from the learning module and nobody
-// else's — the resolution deliberately never trusts the roll number a student
-// types into their own profile, which they can edit.
+// The list is one roster with one job: pair every roll number with the
+// official email address the institute holds for it. That pairing is what
+// lets a student open their own attendance photos from the learning module
+// and nobody else's — the resolution deliberately never trusts the roll
+// number a student types into their own profile, which they can edit.
 //
-// Institute-level rather than per-department because the file arrives that way
-// and because it carries every student's address; the route enforces the same
+// The pairing is pulled straight from the Student collection (name, rollNo,
+// dept, mailID) rather than an uploaded file — that collection is already the
+// institute's authoritative student list, so re-typing it into a spreadsheet
+// every time it changes would just be a second, driftable copy of the same
+// data. /erp-roster/from-students/* on the server does the fetch and the same
+// classification pass a file upload would.
+//
+// Institute-level rather than per-department because the source data carries
+// every student's address; the route enforces the same
 // (erpStudentRosterRoutes.js).
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 
 import getEnvironment from '../getenvironment';
 import { theme as T, cssReset } from '../attendancemodule/config';
@@ -59,7 +65,7 @@ const OUTCOME = {
   new:       { label: 'New', cls: 'ok' },
   update:    { label: 'Updates existing', cls: 'warn' },
   invalid:   { label: 'Invalid', cls: 'bad' },
-  duplicate: { label: 'Duplicate in file', cls: 'bad' },
+  duplicate: { label: 'Duplicate', cls: 'bad' },
 };
 
 async function post(path, body) {
@@ -74,61 +80,41 @@ async function post(path, body) {
   return data;
 }
 
-/**
- * Every sheet in the workbook, as objects keyed by whatever the header row
- * says.
- *
- * The header text is ERP's to spell however it likes ("Roll No.", "Official
- * Email ID"), so nothing is matched here — the rows go up as they are and the
- * server does the column matching, which keeps the preview and the import
- * reading the file exactly the same way. Rows that are entirely blank are
- * dropped, since a trailing empty spreadsheet row is not a student.
- */
-async function readWorkbook(file) {
-  const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-  return workbook.SheetNames
-    .flatMap((sheetName) => XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' }))
-    .filter((row) => Object.values(row).some((value) => String(value || '').trim()));
+async function get(path) {
+  const response = await fetch(`${ROSTER_BASE}${path}`, { credentials: 'include' });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || 'Request failed');
+  return data;
 }
 
-function UploadCard({ onImported }) {
-  const [fileName, setFileName] = useState('');
-  const [rows, setRows] = useState([]);
+function SyncCard({ onImported, lastUploadAt, lastUploadFrom }) {
   const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
-  const reset = () => {
-    setFileName(''); setRows([]); setPreview(null); setError(null);
-  };
-
-  const onFile = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setBusy(true); setError(null); setPreview(null);
+  const loadPreview = useCallback(async () => {
+    setLoading(true); setError(null);
     try {
-      const parsed = await readWorkbook(file);
-      setFileName(file.name);
-      setRows(parsed);
       // Preview writes nothing: it is the import's own classification pass, so
-      // what the table promises is what the import will do.
-      setPreview(await post('/preview', { rows: parsed }));
+      // what the table promises is what the sync will do.
+      setPreview(await get('/from-students/preview'));
     } catch (err) {
       setError(err.message);
-      setRows([]);
+      setPreview(null);
     } finally {
-      setBusy(false);
-      // Let the same file be chosen again after a correction.
-      event.target.value = '';
+      setLoading(false);
     }
-  };
+  }, []);
 
-  const runImport = async () => {
+  useEffect(() => { loadPreview(); }, [loadPreview]);
+
+  const runSync = async () => {
     setBusy(true); setError(null);
     try {
-      const result = await post('/import', { rows, fileName });
+      const result = await post('/from-students/import', {});
       onImported(result);
-      reset();
+      await loadPreview();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -142,25 +128,32 @@ function UploadCard({ onImported }) {
   return (
     <div className="er-card">
       <div className="er-card-header">
-        <span>Upload ERP student list</span>
-        {fileName && <span style={{ textTransform: 'none', letterSpacing: 0 }}>{fileName}</span>}
+        <span>Sync ERP student list from the database</span>
+        <button type="button" className="er-btn er-btn-ghost" onClick={loadPreview} disabled={loading || busy}>
+          {loading ? 'Checking…' : 'Re-check'}
+        </button>
       </div>
       <div className="er-card-body">
-        <input
-          type="file"
-          className="er-input"
-          accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          onChange={onFile}
-          disabled={busy}
-        />
         <div className="er-hint">
-          The ERP export, with its own headings — <strong>Name</strong>, <strong>Roll No.</strong>,{' '}
-          <strong>Branch Name</strong>, <strong>Official Email ID</strong>. The Sr. No. column is ignored.
-          Re-uploading a corrected file updates the students it names and leaves everyone else alone.
+          Pulled straight from the institute&apos;s student database — <strong>Name</strong>,{' '}
+          <strong>Roll No.</strong>, <strong>Department</strong>, <strong>Official Email</strong>. Re-running
+          the sync updates the students it names and leaves everyone else alone.
+        </div>
+        <div className="er-hint">
+          Last write to the list: {lastUploadAt ? new Date(lastUploadAt).toLocaleString() : 'never'}
+          {lastUploadFrom && (
+            <> — from <strong>{lastUploadFrom === 'Student database sync' ? 'the database sync' : `file "${lastUploadFrom}"`}</strong></>
+          )}
+          . Any row still showing a file name in its Source column below hasn&apos;t matched a roll
+          number in the student database yet.
         </div>
 
         {error && (
           <div className="er-hint" style={{ color: T.danger, fontWeight: 600 }}>{error}</div>
+        )}
+
+        {loading && !preview && (
+          <div className="er-hint">Checking the student database…</div>
         )}
 
         {preview && (
@@ -174,49 +167,52 @@ function UploadCard({ onImported }) {
               ))}
             </div>
 
-            <div className="er-table-scroll" style={{ maxHeight: 320, overflowY: 'auto' }}>
-              <table className="ams-table">
-                <thead>
-                  <tr>
-                    <th>Roll No.</th><th>Name</th><th>Branch</th><th>Official email</th><th>Outcome</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.rows.slice(0, 200).map((row, index) => (
-                    <tr key={`${row.rollNo}-${index}`}>
-                      <td className="er-mono">{row.rollNo || '—'}</td>
-                      <td>{row.name || '—'}</td>
-                      <td>{row.branch || '—'}</td>
-                      <td className="er-mono">{row.email || '—'}</td>
-                      <td>
-                        <span className={`er-pill ${OUTCOME[row.outcome]?.cls || 'none'}`}>
-                          {OUTCOME[row.outcome]?.label || row.outcome}
-                        </span>
-                        {row.reason && <div className="er-hint">{row.reason}</div>}
-                        {row.emailChangedFrom && (
-                          <div className="er-hint">Address changes from {row.emailChangedFrom}</div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {preview.rows.length > 200 && (
-              <div className="er-hint">Showing the first 200 of {preview.rows.length} rows.</div>
+            {writable === 0 ? (
+              <div className="er-hint" style={{ marginTop: 10 }}>Nothing to sync — already up to date.</div>
+            ) : (
+              <>
+                <div className="er-table-scroll" style={{ maxHeight: 320, overflowY: 'auto' }}>
+                  <table className="ams-table">
+                    <thead>
+                      <tr>
+                        <th>Roll No.</th><th>Name</th><th>Branch</th><th>Official email</th><th>Outcome</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.rows.filter((row) => row.outcome === 'new' || row.outcome === 'update')
+                        .slice(0, 200).map((row, index) => (
+                        <tr key={`${row.rollNo}-${index}`}>
+                          <td className="er-mono">{row.rollNo || '—'}</td>
+                          <td>{row.name || '—'}</td>
+                          <td>{row.branch || '—'}</td>
+                          <td className="er-mono">{row.email || '—'}</td>
+                          <td>
+                            <span className={`er-pill ${OUTCOME[row.outcome]?.cls || 'none'}`}>
+                              {OUTCOME[row.outcome]?.label || row.outcome}
+                            </span>
+                            {row.emailChangedFrom && (
+                              <div className="er-hint">Address changes from {row.emailChangedFrom}</div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {writable > 200 && (
+                  <div className="er-hint">Showing the first 200 of {writable} rows.</div>
+                )}
+              </>
             )}
 
             <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
               <button
                 type="button"
                 className="er-btn er-btn-primary"
-                onClick={runImport}
-                disabled={busy || writable === 0}
+                onClick={runSync}
+                disabled={busy || loading || writable === 0}
               >
-                {busy ? 'Importing…' : `Import ${writable} student${writable === 1 ? '' : 's'}`}
-              </button>
-              <button type="button" className="er-btn er-btn-ghost" onClick={reset} disabled={busy}>
-                Cancel
+                {busy ? 'Syncing…' : `Sync ${writable} student${writable === 1 ? '' : 's'}`}
               </button>
             </div>
           </>
@@ -277,9 +273,9 @@ export default function ErpStudentListPage() {
 
       <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>ERP Student List</h1>
       <p style={{ fontSize: 13, color: T.textMuted, marginBottom: 18, maxWidth: 760, lineHeight: 1.6 }}>
-        The roll-number-to-official-address pairing the ERP holds. It is what lets a student open
-        their own attendance photos from the learning module — and only their own. Uploading it
-        changes nothing about attendance itself.
+        The roll-number-to-official-address pairing, fetched from the student database. It is what
+        lets a student open their own attendance photos from the learning module — and only their
+        own. Syncing it changes nothing about attendance itself.
       </p>
 
       {notice && (
@@ -288,7 +284,9 @@ export default function ErpStudentListPage() {
         </div>
       )}
 
-      <UploadCard
+      <SyncCard
+        lastUploadAt={summary?.lastUploadAt}
+        lastUploadFrom={summary?.lastUploadFrom}
         onImported={(result) => {
           setNotice(result.message);
           loadSummary();
@@ -364,16 +362,17 @@ export default function ErpStudentListPage() {
                   <th>ERP photo</th>
                   <th>Attendance photos</th>
                   <th>Changed by student</th>
+                  <th>Source</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && students.length === 0 && (
-                  <tr><td colSpan={7} style={{ color: T.textMuted }}>Loading…</td></tr>
+                  <tr><td colSpan={8} style={{ color: T.textMuted }}>Loading…</td></tr>
                 )}
                 {!loading && students.length === 0 && (
                   <tr>
-                    <td colSpan={7} style={{ color: T.textMuted }}>
-                      Nothing here yet. Upload the ERP export above.
+                    <td colSpan={8} style={{ color: T.textMuted }}>
+                      Nothing here yet. Sync from the student database above.
                     </td>
                   </tr>
                 )}
@@ -420,6 +419,14 @@ export default function ErpStudentListPage() {
                         </>
                       ) : (
                         <span style={{ color: T.textMuted, fontSize: 12 }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`er-pill ${student.uploadedFrom === 'Student database sync' ? 'ok' : 'warn'}`}>
+                        {student.uploadedFrom === 'Student database sync' ? 'DB sync' : (student.uploadedFrom || 'Unknown')}
+                      </span>
+                      {student.updatedAt && (
+                        <div className="er-hint">{new Date(student.updatedAt).toLocaleDateString()}</div>
                       )}
                     </td>
                   </tr>

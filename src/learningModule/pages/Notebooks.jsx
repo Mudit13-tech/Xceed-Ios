@@ -20,6 +20,7 @@ import { FiChevronDown } from 'react-icons/fi';
 import lmApi from '../api/lmApi';
 import { DeadlineCountdown, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import { formatDate, relativeTime } from '../format';
+import { LmIcon } from '../components/Icon';
 
 /**
  * The class's coding notebooks.
@@ -171,7 +172,8 @@ export default function Notebooks() {
         <Box flex="1" />
         {isTeacher && (
           <Button as="a" href="/learning/codingmanual" target="_blank" rel="noreferrer" variant="ghost" size="sm">
-            📖 Manual
+            <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
+            Manual
           </Button>
         )}
         {isTeacher && (
@@ -195,7 +197,7 @@ export default function Notebooks() {
 
       {notebooks.length === 0 ? (
         <EmptyState
-          icon="🐍"
+          icon="coding"
           title="No notebooks yet"
           description={
             isTeacher

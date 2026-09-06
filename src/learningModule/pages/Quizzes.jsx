@@ -40,7 +40,8 @@ import {
 // fails the whole module, which is a blank page rather than a missing
 // animation. Emotion is a declared dependency and Chakra's own styling engine.
 import { keyframes } from '@emotion/react';
-import { DeleteIcon, DownloadIcon, SettingsIcon, TimeIcon } from '@chakra-ui/icons';
+
+import { LmIcon } from '../components/Icon';
 import lmApi from '../api/lmApi';
 import LiveExamControl, { LiveCounts } from '../components/liveExam';
 import AttendanceControl from '../components/attendanceControl';
@@ -100,7 +101,7 @@ const liveDotBeacon = keyframes`
 const METHODS = {
   quiz: {
     label: 'Quiz — one page, one timer',
-    icon: '📝',
+    icon: 'quiz',
     hint: 'All questions on one page, answered in any order, answers shown on submit. One countdown for the whole paper.',
     timerField: 'Time limit for the whole paper (minutes)',
     timerPlaceholder: 'Leave blank for no limit',
@@ -119,7 +120,7 @@ const METHODS = {
   },
   exam_paper_timer: {
     label: 'Exam — one question at a time, one timer',
-    icon: '🎓',
+    icon: 'exam',
     hint: 'Questions are handed out one at a time with a single countdown over the whole paper. Each student sees their score as they submit; the worked answers stay held back until you release them.',
     timerField: 'Time limit for the whole paper (minutes)',
     timerPlaceholder: 'e.g. 60',
@@ -146,7 +147,7 @@ const METHODS = {
   },
   exam_question_timer: {
     label: 'Exam — one question at a time, a timer on each question',
-    icon: '⏱',
+    icon: 'timer',
     hint: 'Every question carries its own allowance and moves on by itself when it runs out. No overall clock.',
     timerField: 'Seconds per question',
     timerPlaceholder: '60',
@@ -333,8 +334,9 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
                     py={2}
                   >
                     <Radio value={key} alignItems="flex-start">
-                      <Text fontSize="sm" fontWeight="600">
-                        {option.icon} {option.label}
+                      <Text fontSize="sm" fontWeight="600" display="flex" alignItems="center" gap={2}>
+                        <LmIcon name={option.icon} size={16} />
+                        {option.label}
                       </Text>
                       <Text fontSize="xs" color="lmFg.subtle">
                         {option.hint}
@@ -454,7 +456,10 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
                     py={2}
                   >
                     <Radio value="proctored" alignItems="flex-start">
-                      <Text fontSize="sm" fontWeight="600">👁 Proctored — students are watched</Text>
+                      <Text fontSize="sm" fontWeight="600" display="flex" alignItems="center" gap={2}>
+                        <LmIcon name="preview" size={16} />
+                        Proctored — students are watched
+                      </Text>
                       <Text fontSize="xs" color="lmFg.subtle">
                         The next question is loaded quietly while the student reads the current one, so
                         pressing Next is immediate. On a paper that already lets them go back it is sent
@@ -473,7 +478,10 @@ function CreateQuizModal({ isOpen, onClose, classId }) {
                     py={2}
                   >
                     <Radio value="high" alignItems="flex-start">
-                      <Text fontSize="sm" fontWeight="600">🔒 High security — nothing loads ahead</Text>
+                      <Text fontSize="sm" fontWeight="600" display="flex" alignItems="center" gap={2}>
+                        <LmIcon name="locked" size={16} />
+                        High security — nothing loads ahead
+                      </Text>
                       <Text fontSize="xs" color="lmFg.subtle">
                         Nothing about the next question reaches the browser until the student has
                         reached it.
@@ -564,7 +572,7 @@ function SebInstallerDownload() {
         size="sm"
         variant="outline"
         colorScheme="purple"
-        leftIcon={<DownloadIcon />}
+        leftIcon={<LmIcon name="download" size={15} />}
       >
         Safe Exam Browser ({label[platforms[0]]})
       </Button>
@@ -573,7 +581,7 @@ function SebInstallerDownload() {
 
   return (
     <Menu>
-      <MenuButton as={Button} size="sm" variant="outline" colorScheme="purple" leftIcon={<DownloadIcon />}>
+      <MenuButton as={Button} size="sm" variant="outline" colorScheme="purple" leftIcon={<LmIcon name="download" size={15} />}>
         Safe Exam Browser
       </MenuButton>
       <MenuList>
@@ -762,17 +770,19 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
           variant="ghost"
           colorScheme="purple"
           aria-label="Download the paper"
-          icon={<DownloadIcon />}
+          icon={<LmIcon name="download" size={15} />}
           isLoading={Boolean(downloadingPdf)}
         />
       </Tooltip>
       <MenuList zIndex={10}>
         <MenuItem isDisabled={downloadingPdf === 'questions'} onClick={() => handleDownloadPdf(false)}>
-          📝 Questions Only
+          <LmIcon name="assignment" size={14} style={{ marginRight: 8 }} />
+          Questions Only
         </MenuItem>
         {canDownloadKey && (
           <MenuItem isDisabled={downloadingPdf === 'answers'} onClick={() => handleDownloadPdf(true)}>
-            💡 Questions with Answers
+            <LmIcon name="tip" size={14} style={{ marginRight: 8 }} />
+            Questions with Answers
           </MenuItem>
         )}
       </MenuList>
@@ -794,7 +804,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
           size="sm"
           variant="ghost"
           aria-label="Quiz settings"
-          icon={<SettingsIcon />}
+          icon={<LmIcon name="settings" size={15} />}
         />
       </Tooltip>
       {quiz.published && (
@@ -804,7 +814,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
             variant="ghost"
             onClick={onPublish}
             aria-label="Schedule quiz"
-            icon={<TimeIcon />}
+            icon={<LmIcon name="time" size={15} />}
           />
         </Tooltip>
       )}
@@ -815,7 +825,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
         colorScheme="red"
         onClick={onDelete}
         aria-label="Delete quiz"
-        icon={<DeleteIcon />}
+        icon={<LmIcon name="delete" size={15} />}
       />
     </>
   ) : (
@@ -849,8 +859,13 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
         <Box flex="1" minW={{ base: '0', sm: '220px' }} maxW="100%" {...bodyLink}>
           <HStack spacing={2} wrap="wrap">
             <Heading size="sm" wordBreak="break-word">{quiz.title}</Heading>
-            <Badge colorScheme={isExam ? 'red' : 'blue'}>{isExam ? '🎓 Exam' : '📝 Quiz'}</Badge>
-            {quiz.source === 'ai' && <Badge colorScheme="purple">✨ AI</Badge>}
+            <Badge colorScheme={isExam ? 'red' : 'blue'}>{isExam ? 'Exam' : 'Quiz'}</Badge>
+            {quiz.source === 'ai' && (
+              <Badge colorScheme="purple" display="inline-flex" alignItems="center" gap={1}>
+                <LmIcon name="ai" size={11} />
+                AI
+              </Badge>
+            )}
             {isTeacher && (
               <Badge
                 colorScheme={
@@ -902,14 +917,14 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
                   _hover: { textDecoration: 'none', transform: 'scale(1.05)' },
                 }}
               >
-                🟢 {state.label || 'Live'}
+                {state.label || 'Live'}
               </Button>
             )}
 
             {/* Completed badge for student */}
             {!isTeacher && isCompleted && (
               <Badge colorScheme="blue" variant="subtle" borderRadius="full" px={2.5} py={0.5}>
-                ✅ Completed
+                Completed
               </Badge>
             )}
           </HStack>
@@ -930,9 +945,9 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
           {isTeacher && (scheduled || opensAt || entryCloses) && (
             <Text fontSize="xs" color="lmFg.subtle" mt={1}>
               {[
-                scheduled && `🔗 Link goes live ${formatDateTime(quiz.publish.publishAt)}`,
-                opensAt && `▶️ Starts ${formatDateTime(opensAt)}`,
-                entryCloses && `🚪 Entry closes ${formatDateTime(entryCloses)}`,
+                scheduled && `Link goes live ${formatDateTime(quiz.publish.publishAt)}`,
+                opensAt && `Starts ${formatDateTime(opensAt)}`,
+                entryCloses && `Entry closes ${formatDateTime(entryCloses)}`,
               ]
                 .filter(Boolean)
                 .join(' · ')}
@@ -950,14 +965,16 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
           {state.completedAt && (
             <Tooltip label={formatDateTime(state.completedAt)}>
               <Text fontSize="xs" color="lmHue.green700" mt={1} fontWeight="500" display="inline-block">
-                ✅ {state.completedLabel} {relativeTime(state.completedAt)} ·{' '}
+                <LmIcon name="success" size={12} style={{ marginRight: 4 }} />
+                {state.completedLabel} {relativeTime(state.completedAt)} ·{' '}
                 {formatDateTime(state.completedAt)}
               </Text>
             </Tooltip>
           )}
           {!state.completedAt && !state.live && quiz.window?.closed && (
             <Text fontSize="xs" color="lmFg.muted" mt={1}>
-              🔒 Closed {relativeTime(quiz.window.closesAt)} · {formatDateTime(quiz.window.closesAt)}
+              <LmIcon name="locked" size={12} style={{ marginRight: 4 }} />
+              Closed {relativeTime(quiz.window.closesAt)} · {formatDateTime(quiz.window.closesAt)}
             </Text>
           )}
           {/* Terminated first — see `LiveCounts`. It is the only one of the three
@@ -987,7 +1004,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
               carries, and the same thing clears both. */}
           {!isTeacher && quiz.resultsUnread && (
             <Badge colorScheme="green" mt={1} ml={1}>
-              🎯 Results announced — not seen yet
+              Results announced — not seen yet
             </Badge>
           )}
           {!isTeacher && start.why && (
@@ -1081,7 +1098,7 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
                   size="sm"
                   colorScheme={quiz.resultsUnread ? 'green' : 'blue'}
                   variant={quiz.resultsUnread ? 'solid' : 'outline'}
-                  leftIcon={<span>🎯</span>}
+                  leftIcon={<LmIcon name="quiz-result" size={14} />}
                   sx={
                     quiz.resultsUnread
                       ? {
@@ -1096,7 +1113,8 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
               ) : quiz.resultsPending ? (
                 <Tooltip label="Your teacher has not released the results for this test yet.">
                   <Button size="sm" variant="outline" colorScheme="orange" isDisabled>
-                    🔒 Results pending
+                    <LmIcon name="locked" size={14} style={{ marginRight: 6 }} />
+                    Results pending
                   </Button>
                 </Tooltip>
               ) : quiz.window?.closed && !quiz.attemptsUsed ? (
@@ -1256,7 +1274,8 @@ export default function Quizzes() {
           {isTeacher && (
             <>
               <Button as={RouterLink} to={`/learning/class/${classId}/studio`} size="sm" variant="outline">
-                ✨ Generate from a recording
+                <LmIcon name="ai" size={14} style={{ marginRight: 6 }} />
+                Generate from a recording
               </Button>
               <Button
                 as="a"
@@ -1269,7 +1288,8 @@ export default function Quizzes() {
                 borderWidth="2px"
                 fontWeight="semibold"
               >
-                📖 Manual
+                <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
+                Manual
               </Button>
               <Button colorScheme="blue" size="sm" onClick={onOpen}>
                 + Create quiz
@@ -1284,7 +1304,7 @@ export default function Quizzes() {
       <SectionCard>
         {quizzes.length === 0 ? (
           <EmptyState
-            icon="🧠"
+            icon="quiz"
             title="No quizzes yet"
             description={
               isTeacher

@@ -19,6 +19,7 @@ import {
 
 import lmApi from '../api/lmApi';
 import { ErrorState, Loading, SectionCard } from '../components/common';
+import { LmIcon } from '../components/Icon';
 
 /**
  * How points work, in one place a student can be pointed at.
@@ -67,7 +68,8 @@ export default function PointsGuide() {
         subtitle="Points are for effort. Your grades are separate and always will be."
         action={
           <Button as={RouterLink} to={`/learning/class/${classId}/leaderboard`} size="sm" variant="outline">
-            🏆 Leaderboard
+            <LmIcon name="leaderboard" size={14} style={{ marginRight: 6 }} />
+        Leaderboard
           </Button>
         }
       >
