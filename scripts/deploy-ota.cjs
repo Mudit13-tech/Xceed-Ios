@@ -74,8 +74,24 @@ async function deploy() {
   // download, not a prediction of it.
   try {
     const { data: current } = await axios.get(VERSION_URL, { timeout: 10000 });
-    if (Array.isArray(current?.manifest)) {
-      const { changed, unchanged, total } = diffManifests(current.manifest, manifest);
+
+    /* version.json carries `manifest_url`, not the manifest — it is read on
+       every app launch and the manifest is ~140 kB, so it is deliberately not
+       inlined. Looking only for `current.manifest` therefore found nothing on a
+       server that had published several times, and every release reported
+       itself as "the baseline". Follow the url, and keep accepting an inline
+       manifest for a server that chooses to send one. */
+    let previousManifest = Array.isArray(current?.manifest) ? current.manifest : null;
+    if (!previousManifest && current?.manifest_url) {
+      const manifestUrl = current.manifest_url.startsWith('http')
+        ? current.manifest_url
+        : `${SERVER_URL}${current.manifest_url}`;
+      const { data } = await axios.get(manifestUrl, { timeout: 10000 });
+      previousManifest = Array.isArray(data) ? data : data?.manifest;
+    }
+
+    if (Array.isArray(previousManifest)) {
+      const { changed, unchanged, total } = diffManifests(previousManifest, manifest);
       const changedBytes = changed.reduce(
         (sum, entry) => sum + fs.statSync(path.join(DIST_DIR, ...entry.file_name.split('/'))).size,
         0
