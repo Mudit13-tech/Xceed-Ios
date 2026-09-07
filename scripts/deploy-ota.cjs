@@ -158,9 +158,21 @@ async function deploy() {
     // release that never happened.
     process.exitCode = 1;
   } finally {
-    // Cleanup zip
+    /* Cleanup zip.
+     *
+     * Guarded because this is a `finally`: a throw here replaces whatever
+     * actually happened, so a successful publish reports the cleanup error and
+     * exits non-zero. That is not hypothetical — on Windows the request's read
+     * stream can still hold update.zip open when this runs, and unlink fails
+     * with EBUSY on a release the server has already accepted. Losing a temp
+     * file is not worth losing the outcome, so say so and move on; the next run
+     * overwrites it anyway. */
     if (fs.existsSync(ZIP_PATH)) {
-      fs.unlinkSync(ZIP_PATH);
+      try {
+        fs.unlinkSync(ZIP_PATH);
+      } catch (cleanupError) {
+        console.warn(`⚠️  Could not remove ${ZIP_PATH}: ${cleanupError.message}`);
+      }
     }
   }
 }
