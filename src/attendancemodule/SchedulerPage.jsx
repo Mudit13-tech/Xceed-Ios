@@ -529,6 +529,11 @@ function GlobalEditor({ config, onSave }) {
     globalMinRunsPresent: config?.globalMinRunsPresent || 1,
     globalNumRuns: config?.globalNumRuns || 1,
     globalRunDurationSec: config?.globalRunDurationSec || 120,
+    // Empty-room backoff. `!== false` rather than `||` so an explicitly
+    // disabled config does not come back on as true.
+    backoffEnabled: config?.emptyRoomBackoff?.enabled !== false,
+    backoffMinFaces: config?.emptyRoomBackoff?.minFaces || 5,
+    backoffMaxSkips: config?.emptyRoomBackoff?.maxSkips || 4,
   });
   const [saving, setSaving] = useState(false);
 
@@ -549,7 +554,17 @@ function GlobalEditor({ config, onSave }) {
 
   const handleSave = async () => {
     setSaving(true);
-    await onSave(form);
+    // The three backoff fields are edited flat but stored nested, and the PATCH
+    // replaces emptyRoomBackoff wholesale — so send all three every time.
+    const { backoffEnabled, backoffMinFaces, backoffMaxSkips, ...globals } = form;
+    await onSave({
+      ...globals,
+      emptyRoomBackoff: {
+        enabled: backoffEnabled,
+        minFaces: Math.min(100, Math.max(1, Number(backoffMinFaces) || 5)),
+        maxSkips: Math.min(15, Math.max(1, Number(backoffMaxSkips) || 4)),
+      },
+    });
     setSaving(false);
   };
 
@@ -639,6 +654,76 @@ function GlobalEditor({ config, onSave }) {
         <div style={{ fontSize: 10, color: theme.textMuted, marginTop: 5 }}>
           A student is marked Present if detected in at least {form.globalMinRunsPresent} of the {form.globalNumRuns} run{form.globalNumRuns > 1 ? 's' : ''} for the period.
         </div>
+      </div>
+      <div
+        style={{
+          marginBottom: 18,
+          padding: '12px 14px',
+          borderRadius: 6,
+          background: theme.bg,
+          border: `1px solid ${theme.border}`,
+        }}
+      >
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={form.backoffEnabled}
+            onChange={(e) => update('backoffEnabled', e.target.checked)}
+          />
+          <span style={{ fontSize: 12, fontWeight: 600 }}>
+            Skip runs when the room is empty
+          </span>
+        </label>
+        <div style={{ fontSize: 10, color: theme.textMuted, marginTop: 6 }}>
+          A cancelled class still costs every run of the period. When a run sees
+          fewer than the minimum faces, the next run is skipped; if the one after
+          that is still empty, two are skipped, then three, up to the cap. The
+          first run that finds the room occupied restores the normal schedule, so
+          a class that starts late is not written off.
+        </div>
+        {form.backoffEnabled && (
+          <div
+            className="scheduler-grid-2"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 14,
+              marginTop: 12,
+            }}
+          >
+            <div>
+              <Label>Minimum Faces for &ldquo;class in session&rdquo;</Label>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={form.backoffMinFaces}
+                onChange={(e) => update('backoffMinFaces', Number(e.target.value))}
+                style={styles.input}
+              />
+              <div style={{ fontSize: 10, color: theme.textMuted, marginTop: 5 }}>
+                Counts every face the cameras see, enrolled or not. Keep it below
+                your smallest class — a class of {form.backoffMinFaces} or fewer
+                students looks empty from here.
+              </div>
+            </div>
+            <div>
+              <Label>Maximum Runs Skipped in a Row</Label>
+              <input
+                type="number"
+                min={1}
+                max={MAX_RUNS}
+                value={form.backoffMaxSkips}
+                onChange={(e) => update('backoffMaxSkips', Number(e.target.value))}
+                style={styles.input}
+              />
+              <div style={{ fontSize: 10, color: theme.textMuted, marginTop: 5 }}>
+                Caps the escalation so one quiet run can never write off the rest
+                of the period.
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       <button
         onClick={handleSave}

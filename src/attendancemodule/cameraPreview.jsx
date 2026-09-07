@@ -10,9 +10,14 @@ const CAMERA_API = `${apiUrl}/attendancemodule/cameras`;
 
 const statusColor = (status) => {
   if (status === 'online') return 'success';
-  if (status === 'maintenance') return 'warning';
+  // "in_use" means the server skipped the probe because another feature holds
+  // this camera's RTSP slot — amber, not the red of an actual fault.
+  if (status === 'maintenance' || status === 'in_use') return 'warning';
   return 'danger';
 };
+
+// The wire value is snake_case for the query string; a badge should not be.
+const statusLabel = (status) => (status === 'in_use' ? 'in use' : status || 'offline');
 
 function Toast({ toast }) {
   if (!toast) return null;
@@ -53,7 +58,7 @@ function StatusBadge({ status }) {
     <span
       style={{ ...styles.badge(statusColor(status)), display: 'inline-block' }}
     >
-      {status || 'offline'}
+      {statusLabel(status)}
     </span>
   );
 }
@@ -64,6 +69,12 @@ function StatusBadge({ status }) {
 const MAX_AUTO_RETRIES = 2;
 const AUTO_RETRY_DELAY_MS = 3000;
 
+// How soon to look again once a hold's countdown has run out. The expiry the
+// server reports is an upper bound — a check that finishes early frees the
+// camera sooner — so reaching zero means "try now", and if the camera is still
+// held the next refusal just restarts the countdown with the new expiry.
+const BUSY_RECHECK_MS = 3000;
+
 // Single camera feed panel
 function FeedPanel({ camera, quality, scale, refreshKey, onError }) {
   const [feedKey, setFeedKey] = useState(0);
@@ -72,6 +83,10 @@ function FeedPanel({ camera, quality, scale, refreshKey, onError }) {
   const [failReason, setFailReason] = useState('');
   const [streamUrl, setStreamUrl] = useState(null);
   const [retryAttempt, setRetryAttempt] = useState(0);
+  // Set only while an attendance run (or another holder) owns this camera:
+  // {heldBy, holderKind, secondsLeft}. Distinct from `failed` on purpose — this
+  // panel is waiting its turn, not broken, and it reconnects on its own.
+  const [busy, setBusy] = useState(null);
   // Each panel tracks its own preview job so the two feeds never share a slot.
   const jobIdRef = useRef(null);
   const retryCountRef = useRef(0);
@@ -96,6 +111,7 @@ function FeedPanel({ camera, quality, scale, refreshKey, onError }) {
     setFailed(false);
     setFailReason('');
     setStreamUrl(null);
+    setBusy(null);
 
     fetch(`${CAMERA_API}/${camera._id}/preview/start`, {
       method: 'POST',
@@ -104,6 +120,14 @@ function FeedPanel({ camera, quality, scale, refreshKey, onError }) {
     })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
+        // A camera held by an attendance check is not an error condition — the
+        // scheduler outranks this preview by design. Tag it so the catch below
+        // can wait it out instead of burning a retry and showing a warning.
+        if (res.status === 409 && data?.busy) {
+          const err = new Error(data.error || 'Camera in use');
+          err.busy = data;
+          throw err;
+        }
         if (!res.ok) {
           throw new Error(data?.error || `Preview start failed (${res.status})`);
         }
@@ -118,6 +142,21 @@ function FeedPanel({ camera, quality, scale, refreshKey, onError }) {
         setStarting(false);
       })
       .catch((err) => {
+        if (err.busy) {
+          // Waiting for a scheduled check is not a failed attempt, so the
+          // retry quota is restored rather than spent — the camera may be held
+          // for several checks, and burning the quota here would leave nothing
+          // for a genuine connection problem once it finally frees.
+          retryCountRef.current = 0;
+          setRetryAttempt(0);
+          setStarting(false);
+          setBusy({
+            heldBy: err.busy.heldBy || 'another job',
+            holderKind: err.busy.holderKind || '',
+            secondsLeft: Math.max(0, Number(err.busy.retryAfterSec) || 0),
+          });
+          return;
+        }
         if (retryCountRef.current < MAX_AUTO_RETRIES) {
           retryCountRef.current += 1;
           setRetryAttempt(retryCountRef.current);
@@ -150,6 +189,22 @@ function FeedPanel({ camera, quality, scale, refreshKey, onError }) {
         }).catch(() => {});
     };
 }, [camera?._id, refreshKey]);
+
+  // Countdown while another holder owns the camera, then reconnect by itself.
+  // One timer per tick rather than a single interval, so the unmount cleanup
+  // can never leave a reconnect scheduled against a panel that is gone.
+  useEffect(() => {
+    if (!busy) return undefined;
+    if (busy.secondsLeft <= 0) {
+      const t = setTimeout(startFeed, BUSY_RECHECK_MS);
+      return () => clearTimeout(t);
+    }
+    const t = setTimeout(
+      () => setBusy((b) => (b ? { ...b, secondsLeft: b.secondsLeft - 1 } : b)),
+      1000,
+    );
+    return () => clearTimeout(t);
+  }, [busy, startFeed]);
 
   useEffect(() => {
     if (streamUrl) {
@@ -211,13 +266,17 @@ function FeedPanel({ camera, quality, scale, refreshKey, onError }) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {starting && (
+          {busy ? (
+            <span style={{ fontSize: 11, fontWeight: 700, color: theme.warning }}>
+              {busy.holderKind === 'scheduler' ? 'Attendance running' : 'In use'}
+            </span>
+          ) : starting ? (
             <span style={{ fontSize: 11, color: theme.textMuted }}>
               {retryAttempt > 0
                 ? `Retrying (${retryAttempt}/${MAX_AUTO_RETRIES})...`
                 : 'Connecting...'}
             </span>
-          )}
+          ) : null}
           <StatusBadge status={camera?.status} />
         </div>
       </div>
@@ -226,14 +285,43 @@ function FeedPanel({ camera, quality, scale, refreshKey, onError }) {
       <div
         style={{
           position: 'relative',
-          background: starting || failed ? theme.surfaceAlt : '#0a0c14',
+          background: starting || failed || busy ? theme.surfaceAlt : '#0a0c14',
           minHeight: 300,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        {starting ? (
+        {busy ? (
+          <div style={{ textAlign: 'center', padding: 24 }}>
+            <div style={{ fontSize: 28, marginBottom: 10 }}>🎥</div>
+            <div
+              style={{
+                fontSize: 14,
+                fontWeight: 700,
+                color: theme.text,
+                marginBottom: 6,
+              }}
+            >
+              {busy.secondsLeft > 0
+                ? `Loading in ${busy.secondsLeft}s...`
+                : 'Loading...'}
+            </div>
+            <div
+              style={{
+                color: theme.textMuted,
+                fontSize: 12,
+                lineHeight: 1.6,
+                maxWidth: 260,
+                margin: '0 auto',
+              }}
+            >
+              {busy.holderKind === 'scheduler'
+                ? 'This camera is recording attendance right now. The feed starts on its own as soon as the check releases it.'
+                : `In use by ${busy.heldBy}. The feed starts on its own once it is free.`}
+            </div>
+          </div>
+        ) : starting ? (
           <div style={{ textAlign: 'center', padding: 24 }}>
             <div
               style={{

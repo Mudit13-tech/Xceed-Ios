@@ -27,6 +27,16 @@ export const GT_OPTIONS = {
     // interval — see ATTEND_OPTIONS.camera_switch_sec in MLFineTuning.jsx.
     gt_camera_switch_sec:   [60, 120, 180, 240, 300, 450, 600, 900],
     max_imgs_per_run:       [0, 1, 2, 3, 4, 5, 8, 10],
+    // Deepest zoom level an acquisition frame is tiled at. Not a per-run
+    // override like the keys above — it is read from gt_config at the start of
+    // each sub-run, so it only appears on the ML Fine Tuning page.
+    //
+    // Every level costs one more detector pass per frame, all of them
+    // serialised across the whole ML service, and the deep levels buy their
+    // reach by relaxing what they will accept (by 7x, a face at 5 pixels).
+    // That trade is right for attendance and wrong for enrolment, where the
+    // crop becomes the gallery every later match is scored against.
+    gt_max_zoom:            [1, 2, 3, 4, 5, 6, 7],
 };
 
 // Largest offered embed_n that still fits within `target` — used when the

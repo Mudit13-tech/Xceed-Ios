@@ -9,7 +9,7 @@ import axios from 'axios';
 import getEnvironment from './getenvironment';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { queryPersister } from './utils/queryPersister';
+import { queryPersister, shouldPersistQuery } from './utils/queryPersister';
 import { learningModuleTheme } from './learningModule/theme';
 import {
   APP_NAME,
@@ -72,6 +72,8 @@ const persistOptions = {
   persister: queryPersister,
   maxAge: Infinity,
   buster: bundleVersion,
+  // Keeps the signed-in user off disk; see queryPersister.js.
+  dehydrateOptions: { shouldDehydrateQuery: shouldPersistQuery },
 };
 
 const helmetContext = {};

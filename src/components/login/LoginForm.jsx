@@ -251,7 +251,7 @@ const LoginForm = () => {
                 isRequired
               />
               <Box mt={1}>
-                <Text fontSize='xs' color='gray.600'>
+                <Text fontSize='xs' color='gray.500'>
                   {emailCode
                     ? 'The code expires in five minutes and works once.'
                     : 'Asked for after several failed attempts. Not case sensitive.'}
@@ -300,8 +300,7 @@ const LoginForm = () => {
           <Button
             isLoading={isLoading}
             type='submit'
-            colorScheme='blackAlpha'
-            bg={'blackAlpha.900 !important'}
+            colorScheme='blue'
             width={'100%'}>
             Login
           </Button>

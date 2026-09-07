@@ -25,6 +25,7 @@ import lmApi from '../api/lmApi';
 import { ErrorState, Loading, SectionCard } from '../components/common';
 import CircuitCanvas from '../components/lab/CircuitCanvas';
 import {
+  ChipReadings,
   DeviceReadings,
   InstrumentReadings,
   Palette,
@@ -477,6 +478,18 @@ export default function LabBench() {
             </SectionCard>
           )}
 
+          {/* Only rendered when there is a microcontroller on the bench —
+              ChipReadings returns nothing otherwise — so an ordinary circuit's
+              page is unchanged. */}
+          {result?.ok && (result.chips || []).length > 0 && (
+            <SectionCard mt={3}>
+              <Text fontSize="sm" fontWeight="700" mb={2}>
+                Pins
+              </Text>
+              <ChipReadings result={result} />
+            </SectionCard>
+          )}
+
           {/* The scopes, one screen each. */}
           {result?.ok && result.analysis === 'transient' && probes.length > 0 && (
             <SectionCard mt={3}>
@@ -515,6 +528,11 @@ export default function LabBench() {
               onChange={(next) => changeCircuit(updateComponent(circuit, next))}
               onRotate={() => changeCircuit(rotateComponent(circuit, selectedId))}
               onDelete={deleteComponent}
+              // Present on a failed run too, which is the only run that has one:
+              // a sketch that does not compile stops the analysis before a single
+              // timestep, and the message belongs against the code that caused it
+              // rather than in a toast that has already gone.
+              sketchError={result?.sketchError}
             />
           </SectionCard>
 

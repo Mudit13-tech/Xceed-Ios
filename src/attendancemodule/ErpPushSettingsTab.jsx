@@ -5,6 +5,7 @@
 // The status table below follows ErpOverrides.jsx's layout.
 
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { theme, styles } from './config';
 import getEnvironment from '../getenvironment';
 
@@ -32,6 +33,7 @@ const DEMO_ITEMS = [
     reportId: 'demo-1', date: '2026-07-08', timeSlot: '09:00-10:00',
     subject: 'Digital Signal Processing', semester: '5', faculty: 'Dr. Meera Nair', department: 'CSE',
     periodId: 'BTECH-CSE-2023-CSE-301-2026-07-08-09-00-10-00', erpLockState: 'posted_acked',
+    summary: { present: 42, absent: 5 },
     erpPush: {
       status: 'sent', attempts: 1, lastAttemptAt: '2026-07-08T10:05:00+05:30',
       lastError: null, lastResponseCode: 200, responseCode: 'ATTENDANCE_ACCEPTED',
@@ -41,6 +43,7 @@ const DEMO_ITEMS = [
     reportId: 'demo-2', date: '2026-07-08', timeSlot: '10:00-11:00',
     subject: 'Data Structures', semester: '3', faculty: 'Dr. Arvind Rao', department: 'CSE',
     periodId: 'BTECH-CSE-2024-CSE-105-2026-07-08-10-00-11-00', erpLockState: 'none',
+    summary: { present: 37, absent: 8 },
     erpPush: {
       status: 'failed', attempts: 2, lastAttemptAt: '2026-07-08T11:22:00+05:30',
       lastError: 'HTTP 500: {"success":false}', lastResponseCode: 500, responseCode: null,
@@ -50,6 +53,7 @@ const DEMO_ITEMS = [
     reportId: 'demo-3', date: '2026-07-07', timeSlot: '11:00-12:00',
     subject: 'Digital Signal Processing', semester: '5', faculty: 'Dr. Meera Nair', department: 'CSE',
     periodId: 'BTECH-CSE-2023-CSE-301-2026-07-07-11-00-12-00', erpLockState: 'faculty_finalized',
+    summary: { present: 44, absent: 3 },
     erpPush: {
       status: 'failed', attempts: 1, lastAttemptAt: '2026-07-07T12:10:00+05:30',
       lastError: 'Faculty already finalised this period in ERP', lastResponseCode: 409, responseCode: 'PERIOD_ALREADY_FINALIZED',
@@ -59,6 +63,7 @@ const DEMO_ITEMS = [
     reportId: 'demo-4', date: '2026-07-07', timeSlot: '09:00-10:00',
     subject: 'Analog Circuits', semester: '5', faculty: 'Dr. S. Iyer', department: 'ECE',
     periodId: 'BTECH-ECE-2023-ECE-201-2026-07-07-09-00-10-00', erpLockState: 'none',
+    summary: { present: 29, absent: 7 },
     erpPush: {
       status: 'pending', attempts: 0, lastAttemptAt: null,
       lastError: null, lastResponseCode: null, responseCode: null,
@@ -484,7 +489,7 @@ export default function ErpPushSettingsTab() {
       </div>
 
       <div style={{ ...styles.card, padding: 0, overflowX: 'auto', borderTopLeftRadius: 0, borderTopRightRadius: 0, marginBottom: 20 }}>
-        <table className="ams-table" style={{ minWidth: 1080 }}>
+        <table className="ams-table" style={{ minWidth: 1260 }}>
           <thead>
             <tr>
               <th>Date</th>
@@ -492,6 +497,9 @@ export default function ErpPushSettingsTab() {
               <th>Subject</th>
               <th>Sem</th>
               <th>Faculty</th>
+              <th style={{ textAlign: 'center' }}>Present</th>
+              <th style={{ textAlign: 'center' }}>Absent</th>
+              <th>Report</th>
               <th>Period ID</th>
               <th>Status</th>
               <th>Lock</th>
@@ -505,7 +513,7 @@ export default function ErpPushSettingsTab() {
           <tbody>
             {!listLoading && items.length === 0 && (
               <tr>
-                <td colSpan={13} style={{ textAlign: 'center', color: theme.textMuted, padding: 32 }}>
+                <td colSpan={16} style={{ textAlign: 'center', color: theme.textMuted, padding: 32 }}>
                   No push records found.
                 </td>
               </tr>
@@ -517,6 +525,20 @@ export default function ErpPushSettingsTab() {
                 <td>{r.subject || '—'}</td>
                 <td>{r.semester || '—'}</td>
                 <td>{r.faculty || '—'}</td>
+                <td style={{ textAlign: 'center', fontWeight: 700, color: theme.success }}>
+                  {r.summary?.present ?? 0}
+                </td>
+                <td style={{ textAlign: 'center', fontWeight: 700, color: theme.danger }}>
+                  {r.summary?.absent ?? 0}
+                </td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  <Link
+                    to={`/attendance/reports?tab=detail&reportId=${encodeURIComponent(r.reportId)}`}
+                    style={{ color: theme.accent, fontWeight: 700, fontSize: 12, textDecoration: 'none' }}
+                  >
+                    View report →
+                  </Link>
+                </td>
                 <td style={{ fontFamily: theme.fontMono, fontSize: 11, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.periodId || ''}>
                   {r.periodId || '—'}
                 </td>

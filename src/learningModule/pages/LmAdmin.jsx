@@ -6,12 +6,14 @@ import {
   Box,
   Button,
   Flex,
+  HStack,
   Input,
   Link as RouterLinkStyle,
   SimpleGrid,
   Stack,
   Text,
   VStack,
+  useToast,
 } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 
@@ -492,6 +494,76 @@ function SebInstallerCard() {
   );
 }
 
+function DeletionRequestsCard({ requests, onRefresh }) {
+  const toast = useToast();
+
+  const permanentlyDelete = async (classId, className) => {
+    const typed = window.prompt(
+      `This permanently deletes "${className}" and ALL its data. This cannot be undone.\n\nType the class name to confirm.`
+    );
+    if (typed !== className) return;
+    try {
+      await lmApi.deleteClass(classId);
+      toast({ status: 'success', title: 'Class permanently deleted' });
+      onRefresh();
+    } catch (err) {
+      toast({ status: 'error', title: err.message });
+    }
+  };
+
+  const restore = async (classId) => {
+    try {
+      await lmApi.archiveClass(classId, false);
+      toast({ status: 'success', title: 'Class restored to active' });
+      onRefresh();
+    } catch (err) {
+      toast({ status: 'error', title: err.message });
+    }
+  };
+
+  if (!requests?.length) return null;
+
+  return (
+    <SectionCard
+      title={`Class deletion requests (${requests.length})`}
+      subtitle="Faculty have requested these classes be deleted. Approve to permanently remove all data, or restore to cancel."
+    >
+      <VStack align="stretch" spacing={3}>
+        {requests.map((klass) => (
+          <Flex
+            key={klass._id}
+            justify="space-between"
+            align="center"
+            gap={3}
+            wrap="wrap"
+            borderWidth="1px"
+            borderRadius="md"
+            p={3}
+            borderColor="red.200"
+            bg="red.50"
+            _dark={{ bg: 'red.900', borderColor: 'red.700' }}
+          >
+            <Box>
+              <Text fontSize="sm" fontWeight="600">{klass.name}</Text>
+              <Text fontSize="xs" color="lmFg.muted">
+                Requested by {klass.deletionRequestedByName || 'faculty'} · {relativeTime(klass.deletionRequestedAt)}
+              </Text>
+            </Box>
+            <HStack>
+              <Button size="sm" variant="outline" onClick={() => restore(klass._id)}>
+                Restore
+              </Button>
+              <Button size="sm" colorScheme="red" onClick={() => permanentlyDelete(klass._id, klass.name)}>
+                Delete permanently
+              </Button>
+            </HStack>
+          </Flex>
+        ))}
+      </VStack>
+    </SectionCard>
+  );
+}
+
 export default function LmAdmin() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -516,7 +588,7 @@ export default function LmAdmin() {
   if (loading) return <Loading label="Loading admin dashboard…" />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
-  const { courses, people, bugs, feedback } = summary;
+  const { courses, people, bugs, feedback, deletionRequests } = summary;
 
   return (
     <VStack align="stretch" spacing={6}>
@@ -529,12 +601,9 @@ export default function LmAdmin() {
         </Text>
       </Box>
 
-      <SimpleGrid columns={{ base: 2, md: 5 }} spacing={4}>
+        <SimpleGrid columns={{ base: 2, md: 5 }} spacing={4}>
         <StatTile label="Courses" value={courses.total} hint={`${courses.active} active`} accent="blue.500" />
         <StatTile label="Students enrolled" value={people.students} accent="teal.500" />
-        {/* Teaching *memberships*, not accounts: somebody teaching four classes
-            is four of this. The faculty page counts accounts, which is the
-            other question and the one an administrator adding staff is asking. */}
         <StatTile label="Teaching staff" value={people.teachers} accent="orange.500" />
         <StatTile
           label="Bugs & suggestions"
@@ -549,6 +618,8 @@ export default function LmAdmin() {
           accent="purple.500"
         />
       </SimpleGrid>
+
+      <DeletionRequestsCard requests={deletionRequests} onRefresh={load} />
 
       <SectionCard
         title="Faculty accounts"

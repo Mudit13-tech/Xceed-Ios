@@ -276,6 +276,51 @@ const SYMBOLS = {
   },
 
   /**
+   * A clock: a box with the square wave it produces drawn inside it, which is
+   * the one thing a student needs to recognise at a glance on a crowded bench.
+   */
+  clock: {
+    pins: [[-26, 0], [26, 0]],
+    box: [56, 34],
+    draw: () => (
+      <>
+        {lead(-26, 0, -16, 0)}
+        {lead(16, 0, 26, 0)}
+        <rect x={-16} y={-13} width={32} height={26} rx={3}
+              stroke="currentColor" strokeWidth={STROKE} fill="none" />
+        {/* Two cycles of a square wave, so it reads as a clock and not a gate. */}
+        <path d="M -11 5 L -11 -6 L -5 -6 L -5 5 L 1 5 L 1 -6 L 7 -6 L 7 5 L 11 5"
+              stroke="currentColor" strokeWidth={STROKE} fill="none"
+              strokeLinejoin="round" strokeLinecap="round" />
+      </>
+    ),
+  },
+
+  /**
+   * An inverting Schmitt trigger, drawn the way every datasheet draws it: the
+   * buffer triangle, the hysteresis loop inside it, and the inversion bubble on
+   * the output. The bubble matters — it is the difference between a circuit that
+   * oscillates and one that latches, and a student wiring the RC back has to be
+   * able to see which one this is.
+   */
+  schmitt: {
+    pins: [[-26, 0], [26, 0]],
+    box: [56, 34],
+    draw: () => (
+      <>
+        {lead(-26, 0, -14, 0)}
+        {lead(20, 0, 26, 0)}
+        <path d="M -14 -14 L -14 14 L 14 0 Z"
+              stroke="currentColor" strokeWidth={STROKE} fill="none" strokeLinejoin="round" />
+        {/* The hysteresis curve — two offset steps, the symbol's whole meaning. */}
+        <path d="M -9 4 L -3 4 L -3 -4 L 3 -4 M -7 4 L -1 4 M -5 -4 L 1 -4"
+              stroke="currentColor" strokeWidth={STROKE * 0.8} fill="none" strokeLinecap="round" />
+        <circle cx={17} cy={0} r={3} stroke="currentColor" strokeWidth={STROKE} fill="none" />
+      </>
+    ),
+  },
+
+  /**
    * An LED: the diode symbol with the two arrows that mean "emitting", and a
    * body that fills with its own colour when it is conducting.
    *
@@ -352,6 +397,53 @@ const SYMBOLS = {
 
   npn: transistor(false),
   pnp: transistor(true),
+
+  /**
+   * A microcontroller board.
+   *
+   * The only symbol here that is not a textbook glyph, because there is no
+   * textbook glyph for it — every schematic that has one draws a labelled
+   * rectangle, so that is what this is. The labels are the drawing: eight
+   * identical dots on a rectangle would be unwireable, and a student needs to see
+   * that the terminal they are aiming at is the D2 their `digitalWrite(2, HIGH)`
+   * talks to.
+   *
+   * Digital pins along the top and power/analog along the bottom is the real
+   * board's arrangement, which is worth keeping even though nothing depends on
+   * it — it is one less thing to unlearn when they pick up the physical part.
+   */
+  arduino: {
+    // Order is the server's PIN_LAYOUT: 0 is GND, 1–6 are D2–D7, 7 is A0.
+    pins: [[-24, 48], [-40, -48], [-24, -48], [-8, -48], [8, -48], [24, -48], [40, -48], [24, 48]],
+    box: [104, 104],
+    draw: () => {
+      const digital = [
+        [-40, 'D2'], [-24, 'D3'], [-8, 'D4'], [8, 'D5'], [24, 'D6'], [40, 'D7'],
+      ];
+      return (
+        <>
+          {digital.map(([x]) => <React.Fragment key={x}>{lead(x, -48, x, -34)}</React.Fragment>)}
+          {lead(-24, 34, -24, 48)}
+          {lead(24, 34, 24, 48)}
+          <rect x={-46} y={-34} width={92} height={68} rx={6} {...stroke} />
+          {/* The USB socket, which is how anyone recognises the board on sight. */}
+          <rect x={-46} y={-16} width={12} height={20} rx={2} {...stroke} />
+          {digital.map(([x, name]) => (
+            <text key={name} x={x} y={-24} textAnchor="middle" fontSize={7}
+                  fill="currentColor" style={{ userSelect: 'none' }}>
+              {name}
+            </text>
+          ))}
+          <text x={-24} y={30} textAnchor="middle" fontSize={7}
+                fill="currentColor" style={{ userSelect: 'none' }}>GND</text>
+          <text x={24} y={30} textAnchor="middle" fontSize={7}
+                fill="currentColor" style={{ userSelect: 'none' }}>A0</text>
+          <text x={6} y={4} textAnchor="middle" fontSize={9} letterSpacing="1.5"
+                fill="currentColor" style={{ userSelect: 'none' }}>ARDUINO</text>
+        </>
+      );
+    },
+  },
 
   opamp: {
     // 0 non-inverting, 1 inverting, 2 output.

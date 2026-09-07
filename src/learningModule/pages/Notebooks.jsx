@@ -218,8 +218,15 @@ export default function Notebooks() {
           }
         />
       ) : (
-        <VStack align="stretch" spacing={3}>
-          {notebooks.map((notebook) => {
+        <VStack align="stretch" spacing={5}>
+          {/* Assignment notebooks — have a deadline */}
+          {notebooks.filter((nb) => nb.dueDate).length > 0 && (
+            <Box>
+              <Heading size="sm" mb={3} color="lmFg.heading">
+                📋 Assignments
+              </Heading>
+              <VStack align="stretch" spacing={3}>
+                {notebooks.filter((nb) => nb.dueDate).map((notebook) => {
             let [scheme, label] = STATUS_META[notebook.myStatus] || [];
             if (!isTeacher && notebook.myStatus === 'submitted' && notebook.mySubmittedAt && notebook.dueDate) {
               if (new Date(notebook.mySubmittedAt) > new Date(notebook.dueDate)) {
@@ -308,8 +315,104 @@ export default function Notebooks() {
                   </HStack>
                 </Flex>
               </SectionCard>
-            );
-          })}
+                            );
+              })}
+              </VStack>
+            </Box>
+          )}
+
+          {/* Exercise notebooks — no deadline */}
+          {notebooks.filter((nb) => !nb.dueDate).length > 0 && (
+            <Box>
+              <Heading size="sm" mb={3} color="lmFg.heading">
+                🏋️ Exercises
+              </Heading>
+              <VStack align="stretch" spacing={3}>
+                {notebooks.filter((nb) => !nb.dueDate).map((notebook) => {
+                  let [scheme, label] = STATUS_META[notebook.myStatus] || [];
+                  if (!isTeacher && notebook.myStatus === 'submitted' && notebook.mySubmittedAt && notebook.dueDate) {
+                    if (new Date(notebook.mySubmittedAt) > new Date(notebook.dueDate)) {
+                      scheme = 'orange';
+                      label = 'submitted late';
+                    }
+                  }
+                  return (
+                    <SectionCard key={notebook._id}>
+                      <Flex gap={4} wrap="wrap" align="flex-start">
+                        <Box flex="1" minW="220px">
+                          <HStack spacing={2} mb={1} wrap="wrap">
+                            <Text fontWeight="700">{notebook.title}</Text>
+                            <Badge colorScheme={(LANGUAGE_META[notebook.language] || LANGUAGE_META.python)[0]}>
+                              {(LANGUAGE_META[notebook.language] || LANGUAGE_META.python)[1]}
+                            </Badge>
+                            {isTeacher && !notebook.published && <Badge>draft</Badge>}
+                            {!isTeacher && label && <Badge colorScheme={scheme}>{label}</Badge>}
+                            {!isTeacher && notebook.myGraded && <Badge colorScheme="purple">graded</Badge>}
+                            {notebook.packages?.length ? (
+                              <Badge variant="subtle" fontSize="2xs">
+                                {notebook.packages.join(', ')}
+                              </Badge>
+                            ) : null}
+                          </HStack>
+
+                          {notebook.description ? (
+                            <Text fontSize="sm" opacity={0.75} noOfLines={2}>
+                              {notebook.description}
+                            </Text>
+                          ) : null}
+
+                          <Text fontSize="xs" opacity={0.6} mt={1}>
+                            {notebook.codeCellCount} code {notebook.codeCellCount === 1 ? 'cell' : 'cells'} ·{' '}
+                            {notebook.cellCount} total
+                            {isTeacher
+                              ? ` · ${notebook.submittedCount}/${notebook.startedCount} submitted`
+                              : ` · added ${relativeTime(notebook.created_at)}`}
+                          </Text>
+                        </Box>
+
+                        <HStack spacing={2} wrap="wrap">
+                          <Button
+                            as={RouterLink}
+                            to={`/learning/class/${classId}/notebook/${notebook._id}`}
+                            size="sm"
+                            colorScheme="purple"
+                          >
+                            {isTeacher ? 'Open' : notebook.myStatus === 'not-started' ? 'Start' : 'Continue'}
+                          </Button>
+                          {isTeacher && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                as={RouterLink}
+                                to={`/learning/class/${classId}/notebook/${notebook._id}/edit`}
+                              >
+                                Edit
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => togglePublish(notebook)}>
+                                {notebook.published ? 'Unpublish' : 'Publish'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                as={RouterLink}
+                                to={`/learning/class/${classId}/notebook/${notebook._id}/submissions`}
+                              >
+                                Submissions
+                              </Button>
+                              <Button size="sm" variant="ghost" colorScheme="red" onClick={() => remove(notebook)}>
+                                Delete
+                              </Button>
+                            </>
+                          )}
+                        </HStack>
+                      </Flex>
+                    </SectionCard>
+                  );
+                })}
+              </VStack>
+            </Box>
+          )}
         </VStack>
       )}
     </VStack>

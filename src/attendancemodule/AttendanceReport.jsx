@@ -81,6 +81,10 @@ function timeStrToMin(hhmm, fallback) {
 // service by Node on every run. Matches the schema default in
 // server/src/models/acquisitionControl.js.
 const DEFAULT_CAMERA_SWITCH_SEC = 30;
+// Same story for the early-switch rule: a camera whose busiest frame so far
+// held fewer than this many faces is rotated off at half the dwell. Fetched
+// alongside the interval below; 0 means the rule is off.
+const DEFAULT_SPARSE_VIEW_FACES = 5;
 const REPORT_TAB_OPTIONS = [
   ['run', 'Run Attendance (Developers Only)'],
   ['history', 'Saved Reports'],
@@ -148,6 +152,13 @@ export default function AttendanceReport() {
   // Display only: Node sends the same value to the ML service, so this just
   // keeps the banner honest instead of assuming the old hardcoded 30s.
   const [camSwitchSec, setCamSwitchSec] = useState(DEFAULT_CAMERA_SWITCH_SEC);
+  const [sparseFaces, setSparseFaces] = useState(DEFAULT_SPARSE_VIEW_FACES);
+  // Busiest frame seen since the current camera came round — the same figure
+  // the ML service uses to decide an early switch. A ref, not state: it moves
+  // on every frame event and only the countdown ticker reads it, so as state it
+  // would tear the interval down and rebuild it several times a second for a
+  // number nothing renders.
+  const camPeakFacesRef = useRef(0);
   const camCountdownRef = useRef(null);
   const activeCamRef = useRef(null);
   const rtspUrl2Ref = useRef('');
@@ -198,6 +209,9 @@ export default function AttendanceReport() {
       .then((d) => {
         const sec = Number(d?.camera_switch_sec);
         if (Number.isFinite(sec) && sec > 0) setCamSwitchSec(sec);
+        const sparse = Number(d?.sparse_view_faces);
+        // >= 0, not > 0: 0 is the configured "off", not a missing value.
+        if (Number.isFinite(sparse) && sparse >= 0) setSparseFaces(sparse);
       })
       .catch(() => { });
   }, []);
@@ -480,7 +494,16 @@ export default function AttendanceReport() {
     const switchedAt = camSwitchAt || Date.now();
     camCountdownRef.current = setInterval(() => {
       const elapsed = Math.floor((Date.now() - switchedAt) / 1000);
-      const remaining = Math.max(0, camSwitchSec - elapsed);
+      // Mirrors the early-switch rule in rtsp_routes.py: a camera that has not
+      // yet shown sparseFaces faces in one frame only gets half the dwell.
+      // Recomputed every tick because the peak is still moving — the number can
+      // step back UP when the fifth face finally appears, which is exactly what
+      // the ML service just did to that camera's stay.
+      const target =
+        sparseFaces > 0 && camPeakFacesRef.current < sparseFaces
+          ? Math.max(1, Math.floor(camSwitchSec / 2))
+          : camSwitchSec;
+      const remaining = Math.max(0, target - elapsed);
       setCamCountdown(remaining);
     }, 500); // 500ms tick is more responsive than 1000ms
     return () => {
@@ -489,7 +512,7 @@ export default function AttendanceReport() {
         camCountdownRef.current = null;
       }
     };
-  }, [processing, activeCam, camSwitchAt, rtspUrl2, camSwitchSec]);
+  }, [processing, activeCam, camSwitchAt, rtspUrl2, camSwitchSec, sparseFaces]);
 
   // ── Run attendance — SSE stream ───────────────────────────────
   const runAttendance = async () => {
@@ -538,6 +561,7 @@ export default function AttendanceReport() {
     activeCamRef.current = rtspUrl2.trim() ? 1 : null;
     setCamSwitchAt(Date.now()); // start countdown immediately
     setCamCountdown(camSwitchSec);
+    camPeakFacesRef.current = 0;
     rtspUrl2Ref.current = rtspUrl2.trim();
 
     try {
@@ -627,7 +651,14 @@ export default function AttendanceReport() {
                 activeCamRef.current = ev.camera;
                 setActiveCam(ev.camera);
                 setCamSwitchAt(Date.now());
+                // The peak describes one camera's turn, so it resets with it —
+                // before this frame's own count is folded in below.
+                camPeakFacesRef.current = 0;
               }
+              camPeakFacesRef.current = Math.max(
+                camPeakFacesRef.current,
+                Number(ev.faces) || 0,
+              );
             }
             if (ev.type === 'done') {
               setMlResult(ev.result);
@@ -710,6 +741,7 @@ export default function AttendanceReport() {
     activeCamRef.current = rtspUrl2.trim() ? 1 : null;
     setCamSwitchAt(Date.now());
     setCamCountdown(camSwitchSec);
+    camPeakFacesRef.current = 0;
     rtspUrl2Ref.current = rtspUrl2.trim();
 
     try {
