@@ -39,17 +39,27 @@ const queryClient = new QueryClient({
  * staleTime is 0 - nothing restored is ever treated as fresh, it is shown while
  * the refetch runs behind it.
  *
- * buster: keyed to the build's version, so an OTA update starts from an empty
- * cache instead of rehydrating one written by the previous bundle into
- * components that may no longer read that shape. __APP_VERSION__ is defined in
- * vite.config.js (and mirrored in vitest.config.js); it is the version at build
- * time, one behind the version the bundle publishes as, which does not matter
- * to a buster that only has to change between releases.
+ * buster: bumped by hand when the persisted shape changes, so a bundle never
+ * rehydrates a cache written for a layout its components no longer read.
+ *
+ * It used to be the build's version, which was wrong twice over. It threw away
+ * every user's cache on every release — a cold, slow first load after each
+ * update, for releases that did not touch the cache at all. And because this
+ * module is in the chunk every route imports, changing the string renamed that
+ * chunk, which rewrote the import path inside all ~270 route chunks and gave
+ * them new content hashes too. Measured on two publishes with no source change
+ * whatsoever: 270 chunks, 9.79 MB, rebuilt for nothing — and an OTA update
+ * downloads by hash, so users paid for all of it.
+ *
+ * So: bump this when the shape of what queryPersister writes changes, and only
+ * then. It is not a release marker, and nothing should key it to one.
  */
+const QUERY_CACHE_SHAPE = '1';
+
 const persistOptions = {
   persister: queryPersister,
   maxAge: Infinity,
-  buster: __APP_VERSION__,
+  buster: QUERY_CACHE_SHAPE,
 };
 
 const helmetContext = {};
