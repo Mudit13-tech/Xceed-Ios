@@ -19,10 +19,11 @@
 // every student's address; the route enforces the same
 // (erpStudentRosterRoutes.js).
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import getEnvironment from '../getenvironment';
 import { theme as T, cssReset } from '../attendancemodule/config';
+import StudentGroundTruthModal from '../attendancemodule/StudentGroundTruthModal';
 
 const ROSTER_BASE = `${getEnvironment()}/attendancemodule/erp-roster`;
 
@@ -56,6 +57,8 @@ const CSS = `
   .er-table-scroll { overflow-x: auto; }
   .er-table-scroll .ams-table { min-width: 1080px; }
   .er-mono { font-family: ${T.fontMono}; }
+  .er-linkbtn { background: none; border: none; padding: 0; font: inherit; color: ${T.accent}; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
+  .er-linkbtn:hover { text-decoration-style: solid; }
 
   .er-pill { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
   .er-pill.ok { background: ${T.successDim}; color: ${T.success}; }
@@ -107,40 +110,96 @@ async function get(path) {
   return data;
 }
 
+/**
+ * Keeps the roster level with the student database, by itself.
+ *
+ * It used to be a button. The button was there because `User.rollNumber` was
+ * self-declared and somebody had to vouch for it before it became the pairing
+ * that decides whose face photos a student may open — so an admin looked at a
+ * preview and pressed Sync.
+ *
+ * That is no longer what the field is. An administrator's roll number is
+ * stamped (`rollNumberSetByAdminAt`) and neither the identity gate nor the
+ * one-time correction will change it afterwards, and the sync reads only rows
+ * whose roll number is the institute's own. There is nothing left for a human
+ * to vouch for, and a button nobody needs to think about is a button that is
+ * eventually not pressed — which is a roster quietly going stale.
+ *
+ * So the pass runs on load: preview first (it writes nothing), and only if it
+ * finds rows that would actually change does the import follow. The card then
+ * reports what happened rather than asking for permission to do it.
+ *
+ * Two things still stop and wait for a person, and both leave the button:
+ *
+ *   - a conflict the server would not resolve (409 EMAIL_CLAIMED) — one
+ *     address claimed by two live roll numbers is not something to retry into
+ *   - any other failure, where a retry is the obvious next move
+ */
 function SyncCard({ onImported, lastUploadAt, lastUploadFrom }) {
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // What the automatic pass did, so the card can say so plainly. Null until it
+  // has run and found something worth writing.
+  const [autoSynced, setAutoSynced] = useState(null);
+  // One automatic attempt per visit. A failed or conflicted import leaves rows
+  // still classified as writable, and without this the effect that reacts to
+  // that count would go straight back round.
+  const attempted = useRef(false);
 
   const loadPreview = useCallback(async () => {
     setLoading(true); setError(null);
     try {
       // Preview writes nothing: it is the import's own classification pass, so
-      // what the table promises is what the sync will do.
-      setPreview(await get('/from-students/preview'));
+      // what the card reports is what the sync did.
+      const next = await get('/from-students/preview');
+      setPreview(next);
+      return next;
     } catch (err) {
       setError(err.message);
       setPreview(null);
+      return null;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadPreview(); }, [loadPreview]);
+  // Held in a ref so the automatic pass below can depend on nothing: the
+  // parent passes a fresh arrow every render, and an effect that re-ran on
+  // that would re-import on every keystroke in the search box.
+  const onImportedRef = useRef(onImported);
+  onImportedRef.current = onImported;
 
-  const runSync = async () => {
+  const runSync = useCallback(async () => {
     setBusy(true); setError(null);
     try {
       const result = await post('/from-students/import', {});
-      onImported(result);
+      setAutoSynced(result);
+      onImportedRef.current?.(result);
       await loadPreview();
+      return true;
     } catch (err) {
       setError(err.message);
+      return false;
     } finally {
       setBusy(false);
     }
-  };
+  }, [loadPreview]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const first = await loadPreview();
+      if (cancelled || !first) return;
+      const counts = first.summary || {};
+      if ((counts.new || 0) + (counts.update || 0) === 0) return;
+      if (attempted.current) return;
+      attempted.current = true;
+      await runSync();
+    })();
+    return () => { cancelled = true; };
+  }, [loadPreview, runSync]);
 
   const summary = preview?.summary || {};
   const writable = (summary.new || 0) + (summary.update || 0);
@@ -148,24 +207,26 @@ function SyncCard({ onImported, lastUploadAt, lastUploadFrom }) {
   return (
     <div className="er-card">
       <div className="er-card-header">
-        <span>Sync ERP student list from the database</span>
+        <span>ERP student list · synced from the database</span>
         <button type="button" className="er-btn er-btn-ghost" onClick={loadPreview} disabled={loading || busy}>
-          {loading ? 'Checking…' : 'Re-check'}
+          {loading || busy ? 'Checking…' : 'Re-check'}
         </button>
       </div>
       <div className="er-card-body">
         <div className="er-hint">
           Read from the student accounts the learning module&apos;s ERP roster import maintains —{' '}
           <strong>Name</strong>, <strong>Roll No.</strong>, <strong>Department</strong>,{' '}
-          <strong>Official Email</strong>. Upload the ERP export there and it appears here.
-          Re-running the sync updates the students it names and leaves everyone else alone.
+          <strong>Official Email</strong>. Upload the ERP export there and it appears here on
+          your next visit — this page syncs itself, updating the students the database names and
+          leaving everyone else alone.
         </div>
         {preview?.selfCorrected > 0 && (
           <div className="er-hint">
             {preview.selfCorrected} student{preview.selfCorrected === 1 ? '' : 's'} changed{' '}
             {preview.selfCorrected === 1 ? 'their' : 'their'} own roll number after the import and{' '}
-            {preview.selfCorrected === 1 ? 'was' : 'were'} left out — a self-typed roll number is not
-            the ERP&apos;s answer. Re-running the roster import overwrites it and brings them back.
+            {preview.selfCorrected === 1 ? 'was' : 'were'} left out — that roll number was typed by
+            the student, not uploaded, so it is not the ERP&apos;s answer. Re-running the roster
+            import overwrites it, locks it, and brings them back.
           </div>
         )}
         <div className="er-hint">
@@ -197,7 +258,11 @@ function SyncCard({ onImported, lastUploadAt, lastUploadFrom }) {
             </div>
 
             {writable === 0 ? (
-              <div className="er-hint" style={{ marginTop: 10 }}>Nothing to sync — already up to date.</div>
+              <div className="er-hint" style={{ marginTop: 10 }}>
+                {autoSynced
+                  ? autoSynced.message
+                  : 'Level with the student database — nothing to sync.'}
+              </div>
             ) : (
               <>
                 <div className="er-table-scroll" style={{ maxHeight: 320, overflowY: 'auto' }}>
@@ -234,16 +299,26 @@ function SyncCard({ onImported, lastUploadAt, lastUploadFrom }) {
               </>
             )}
 
-            <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-              <button
-                type="button"
-                className="er-btn er-btn-primary"
-                onClick={runSync}
-                disabled={busy || loading || writable === 0}
-              >
-                {busy ? 'Syncing…' : `Sync ${writable} student${writable === 1 ? '' : 's'}`}
-              </button>
-            </div>
+            {/* The rows above are what the automatic pass could not write, so
+                the button is the retry — it appears only when there is one to
+                make. A clean sync leaves nothing here to press. */}
+            {writable > 0 && (
+              <div style={{ display: 'flex', gap: 10, marginTop: 14, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="er-btn er-btn-primary"
+                  onClick={runSync}
+                  disabled={busy || loading}
+                >
+                  {busy ? 'Syncing…' : `Sync ${writable} student${writable === 1 ? '' : 's'}`}
+                </button>
+                <span className="er-hint" style={{ marginTop: 0 }}>
+                  {error
+                    ? 'The automatic sync could not finish. Try again, or sort the rows above out first.'
+                    : 'Left over from the automatic sync — these rows need a person.'}
+                </span>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -269,6 +344,9 @@ export default function ErpStudentListPage() {
   // Feedback for the update-window actions specifically, shown beside them
   // rather than in the page-top notice the sync card uses.
   const [windowNotice, setWindowNotice] = useState(null);
+  // The roster row whose ground-truth photos are open, or null. Only rows with
+  // a batch can be opened — the photos live under it.
+  const [gtTarget, setGtTarget] = useState(null);
 
   const limit = 50;
 
@@ -585,7 +663,18 @@ export default function ErpStudentListPage() {
                 )}
                 {students.map((student) => (
                   <tr key={student.rollNo}>
-                    <td className="er-mono">{student.rollNo}</td>
+                    <td className="er-mono">
+                      {student.batch ? (
+                        <button
+                          type="button"
+                          className="er-linkbtn"
+                          title="View this student's ground truth photos"
+                          onClick={() => setGtTarget({ rollNo: student.rollNo, batch: student.batch })}
+                        >
+                          {student.rollNo}
+                        </button>
+                      ) : student.rollNo}
+                    </td>
                     <td>{student.name || '—'}</td>
                     <td>
                       {student.branch || '—'}
@@ -671,6 +760,18 @@ export default function ErpStudentListPage() {
               </tbody>
             </table>
           </div>
+
+          {gtTarget && (
+            <StudentGroundTruthModal
+              batch={gtTarget.batch}
+              rollNo={gtTarget.rollNo}
+              // No session behind this one, so no attendance facts to show —
+              // the modal leaves that strip out when there is no student.
+              // A save changes the photo counts this table prints, so reload.
+              onSaved={loadStudents}
+              onClose={() => setGtTarget(null)}
+            />
+          )}
 
           {pages > 1 && (
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 14 }}>

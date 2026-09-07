@@ -264,7 +264,27 @@ function PoseGuide() {
  * set, presses Save and is refused has wasted the effort, and the reason ("you
  * changed it four days ago") is not something they can be expected to guess.
  */
-function UpdateWindowNotice({ open, canUpdate, cooldownUntil, cooldownDays = 7, lastPhotoUpdateAt }) {
+function UpdateWindowNotice({
+  open, canUpdate, cooldownUntil, cooldownDays = 7, lastPhotoUpdateAt, selfServiceEnabled = true,
+}) {
+  // An institute-wide switch, not this student's turn coming round: there is
+  // no date to wait for and nothing they can do about it, so it is said
+  // plainly and the once-a-week wording is left out entirely.
+  if (!selfServiceEnabled && !open) {
+    return (
+      <Alert status="info" borderRadius="md" fontSize="sm" alignItems="start">
+        <AlertIcon />
+        <Box>
+          <Text fontWeight="600">Choosing your own photos is turned off.</Text>
+          <Text color="lmFg.muted">
+            Your institute has switched off changing your own attendance photos. They are below to
+            look at. If yours are wrong, your department admin can fix them or let you do it.
+          </Text>
+        </Box>
+      </Alert>
+    );
+  }
+
   if (open) {
     return (
       <Alert status="success" borderRadius="md" fontSize="sm" alignItems="start">
@@ -481,6 +501,7 @@ export default function MyGroundTruthPhotos() {
           <UpdateWindowNotice
             open={Boolean(data.open)}
             canUpdate={canUpdate}
+            selfServiceEnabled={data.selfServiceEnabled !== false}
             cooldownUntil={data.cooldownUntil}
             cooldownDays={data.cooldownDays || 7}
             lastPhotoUpdateAt={data.lastPhotoUpdateAt}
@@ -573,7 +594,9 @@ export default function MyGroundTruthPhotos() {
           >
             <Text fontSize="xs" color="lmFg.muted" flex="1" minW="220px">
               {!canUpdate
-                ? `Read-only until ${formatDate(data.cooldownUntil)}. Contact your department admin if you need to update it sooner.`
+                ? (data.selfServiceEnabled === false
+                  ? 'Read-only — your institute has turned off changing your own photos. Contact your department admin if yours need updating.'
+                  : `Read-only until ${formatDate(data.cooldownUntil)}. Contact your department admin if you need to update it sooner.`)
                 : dirty
                   ? 'Unsaved changes. Nothing is applied until you save.'
                   : 'Photos are never deleted here — moving one to backup keeps it.'}

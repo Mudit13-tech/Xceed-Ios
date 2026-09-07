@@ -27,7 +27,7 @@ import {
   useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
-import { FiArrowLeft, FiShield, FiTrash2, FiUserPlus } from 'react-icons/fi';
+import { FiArrowLeft, FiExternalLink, FiShield, FiTrash2, FiUserPlus } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import getEnvironment from '../getenvironment';
 
@@ -51,6 +51,19 @@ const uniqueDepartments = (values) => {
 const assignedDepartments = (user) =>
   uniqueDepartments([user.dept, ...(user.attendanceDepartments || [])]);
 
+const formatLastActive = (value) => {
+  if (!value) return 'Never';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Never';
+  return date.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
 const sameDepartments = (left, right) => {
   const leftKeys = uniqueDepartments(left).map(departmentKey).sort();
   const rightKeys = uniqueDepartments(right).map(departmentKey).sort();
@@ -63,6 +76,9 @@ const DeptAdminAssignPage = () => {
   const [dept, setDept] = useState('');
   const [departments, setDepartments] = useState([]);
   const [admins, setAdmins] = useState([]);
+  // Keyed by user id. Sourced from the attendance module, not the admins
+  // list itself — see server/src/models/attendanceModule/deptAdminActivity.js.
+  const [activityByUserId, setActivityByUserId] = useState({});
   const [departmentDrafts, setDepartmentDrafts] = useState({});
   const [loadingAdmins, setLoadingAdmins] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -73,6 +89,11 @@ const DeptAdminAssignPage = () => {
   const goBack = () => {
     if (window.history.length > 1) navigate(-1);
     else navigate('/attendance');
+  };
+
+  const viewDeptDashboard = (user) => {
+    if (!user.dept) return;
+    navigate(`/dept-admin/dashboard?department=${encodeURIComponent(user.dept)}`);
   };
 
   const cardBg = useColorModeValue('white', 'gray.800');
@@ -95,6 +116,16 @@ const DeptAdminAssignPage = () => {
       setDepartmentDrafts(
         Object.fromEntries(users.map((user) => [user._id, assignedDepartments(user)])),
       );
+
+      if (users.length) {
+        const userIds = users.map((user) => user._id).join(',');
+        fetch(`${apiUrl}/attendancemodule/dept-admin/admin-activity?userIds=${encodeURIComponent(userIds)}`, {
+          credentials: 'include',
+        })
+          .then((activityRes) => activityRes.ok ? activityRes.json() : { activity: {} })
+          .then((activityData) => setActivityByUserId(activityData.activity || {}))
+          .catch(() => {}); // Last-login column just falls back to "Never" on failure.
+      }
     } catch (err) {
       toast({ title: 'Could not load department admins', description: err.message, status: 'error', duration: 5000, isClosable: true });
     } finally {
@@ -302,7 +333,9 @@ const DeptAdminAssignPage = () => {
                   <Tr>
                     <Th>Email</Th>
                     <Th>Primary Department</Th>
+                    <Th>Last Active</Th>
                     <Th minW="260px">GT / Roll Departments</Th>
+                    <Th width="1%">Dashboard</Th>
                     <Th width="1%">Remove</Th>
                   </Tr>
                 </Thead>
@@ -311,6 +344,7 @@ const DeptAdminAssignPage = () => {
                     <Tr key={user._id}>
                       <Td>{Array.isArray(user.email) ? user.email.join(', ') : user.email}</Td>
                       <Td>{user.dept || '—'}</Td>
+                      <Td whiteSpace="nowrap">{formatLastActive(activityByUserId[user._id])}</Td>
                       <Td>
                         <Flex gap={2} align="center">
                           <Menu closeOnSelect={false}>
@@ -355,6 +389,18 @@ const DeptAdminAssignPage = () => {
                             Save
                           </Button>
                         </Flex>
+                      </Td>
+                      <Td>
+                        <IconButton
+                          aria-label="View department dashboard"
+                          icon={<FiExternalLink />}
+                          size="sm"
+                          colorScheme="cyan"
+                          variant="ghost"
+                          isDisabled={!user.dept}
+                          title={user.dept ? `View ${user.dept} dashboard` : 'No department assigned'}
+                          onClick={() => viewDeptDashboard(user)}
+                        />
                       </Td>
                       <Td>
                         <IconButton

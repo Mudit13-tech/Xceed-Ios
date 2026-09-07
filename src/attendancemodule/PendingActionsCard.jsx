@@ -39,11 +39,15 @@ function PendingTile({ label, value, detail, to, color }) {
   );
 }
 
-export default function PendingActionsCard() {
+export default function PendingActionsCard({ initialDepartment = '' }) {
   const [stats, setStats] = useState(null);
   const [departments, setDepartments] = useState([]);
   const [allSummaryBatches, setAllSummaryBatches] = useState([]);
-  const [department, setDepartment] = useState('');
+  // Seeds the full-access department selector when opened from
+  // /attendance/dept-admins "view dashboard" — a real dept admin's own
+  // department comes from `stats.department` instead (see the auto-select
+  // effect in `load` below), so this only ever matters for full access.
+  const [department, setDepartment] = useState(initialDepartment);
   const [batch, setBatch] = useState('');
   const [fullAccess, setFullAccess] = useState(false);
   const [error, setError] = useState('');

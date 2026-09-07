@@ -56,6 +56,11 @@ export default function CompleteProfile({ onDone }) {
   // already on the account is shown but not retaken.
   const [needsRoll, setNeedsRoll] = useState(false);
   const [nameLocked, setNameLocked] = useState(false);
+  // Set when the institute uploaded this student's roll number. The gate is
+  // still reachable in that case — an import that carried no name leaves the
+  // account asking for one — so the field is shown, filled and closed rather
+  // than hidden, and the server refuses a change to it regardless.
+  const [rollLocked, setRollLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -86,6 +91,7 @@ export default function CompleteProfile({ onDone }) {
         setRollNumber(identity.rollNumber || '');
         setNeedsRoll(Boolean(identity.required));
         setNameLocked(Boolean(identity.nameLocked ?? identity.name));
+        setRollLocked(Boolean(identity.rollNumberLocked));
       })
       .catch(() => {
         // A failed prefill is not a failed form: it opens empty instead.
@@ -112,7 +118,7 @@ export default function CompleteProfile({ onDone }) {
       setError(EMAIL_AS_NAME_MESSAGE);
       return;
     }
-    if (needsRoll && !trimmedRoll) {
+    if (needsRoll && !rollLocked && !trimmedRoll) {
       setError('Your roll number is required.');
       return;
     }
@@ -216,11 +222,14 @@ export default function CompleteProfile({ onDone }) {
                       onChange={(e) => setRollNumber(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && !saving && submit()}
                       maxLength={40}
+                      isReadOnly={rollLocked}
+                      isDisabled={rollLocked}
                     />
                   </InputGroup>
                   <FormHelperText fontSize="xs">
-                    Exactly as your institute issued it. Your teachers find your marks by
-                    this.
+                    {rollLocked
+                      ? 'From your institute’s student records. Tell your teacher or the office if it is wrong — it cannot be changed here.'
+                      : 'Exactly as your institute issued it. Your teachers find your marks by this.'}
                   </FormHelperText>
                 </FormControl>
               )}

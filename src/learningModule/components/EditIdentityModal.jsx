@@ -48,6 +48,10 @@ export default function EditIdentityModal({ isOpen, onClose, onSaved }) {
   // Staff have no roll number to correct; the server decides which of them this
   // account is asked for, exactly as it does for the first-time form.
   const [needsRoll, setNeedsRoll] = useState(false);
+  // A roll number the institute uploaded is shown back but not editable — the
+  // server refuses a change to it either way, and a field that takes a value it
+  // will not keep is worse than one that says why it is closed.
+  const [rollLocked, setRollLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -68,6 +72,7 @@ export default function EditIdentityModal({ isOpen, onClose, onSaved }) {
         setName(identity.name || '');
         setRollNumber(identity.rollNumber || '');
         setNeedsRoll(Boolean(identity.required));
+        setRollLocked(Boolean(identity.rollNumberLocked));
       })
       .catch((err) => {
         if (!cancelled) setError(err.message || 'Could not load your details.');
@@ -92,14 +97,14 @@ export default function EditIdentityModal({ isOpen, onClose, onSaved }) {
       setError(EMAIL_AS_NAME_MESSAGE);
       return;
     }
-    if (needsRoll && !trimmedRoll) {
+    if (needsRoll && !rollLocked && !trimmedRoll) {
       setError('Your roll number is required.');
       return;
     }
     // The edit is spent whether or not it changed anything, so it is worth one
     // question — this is the only point at which it can still be called off.
     const confirmed = window.confirm(
-      needsRoll
+      needsRoll && !rollLocked
         ? `Save "${trimmedName}" and roll number "${trimmedRoll}"?\n\nThis is your one-time edit. After this, only an administrator can change them.`
         : `Save "${trimmedName}"?\n\nThis is your one-time edit. After this, only an administrator can change it.`,
     );
@@ -131,7 +136,7 @@ export default function EditIdentityModal({ isOpen, onClose, onSaved }) {
       <ModalContent>
         <ModalHeader>
           <HStack spacing={2} align="center">
-            <Text>Edit name & roll number</Text>
+            <Text>{rollLocked ? 'Edit name' : 'Edit name & roll number'}</Text>
             <Badge colorScheme="orange" borderRadius="full" px={2}>
               One-time only
             </Badge>
@@ -147,8 +152,9 @@ export default function EditIdentityModal({ isOpen, onClose, onSaved }) {
             <VStack align="stretch" spacing={4}>
               <Alert status="warning" borderRadius="md" fontSize="sm">
                 <AlertIcon />
-                You can correct these once. Once saved, only an administrator can change
-                them again — check the spelling before you save.
+                {rollLocked
+                  ? 'You can correct your name once. Once saved, only an administrator can change it again — check the spelling before you save.'
+                  : 'You can correct these once. Once saved, only an administrator can change them again — check the spelling before you save.'}
               </Alert>
 
               {error && (
@@ -181,10 +187,13 @@ export default function EditIdentityModal({ isOpen, onClose, onSaved }) {
                     onKeyDown={(e) => e.key === 'Enter' && !saving && submit()}
                     placeholder="e.g. 21103078"
                     maxLength={40}
+                    isReadOnly={rollLocked}
+                    isDisabled={rollLocked}
                   />
                   <FormHelperText fontSize="xs">
-                    Exactly as your institute issued it. Your teachers find your marks by
-                    this.
+                    {rollLocked
+                      ? 'From your institute’s student records. Tell your teacher or the office if it is wrong — it cannot be changed here.'
+                      : 'Exactly as your institute issued it. Your teachers find your marks by this.'}
                   </FormHelperText>
                 </FormControl>
               )}
