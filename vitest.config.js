@@ -3,9 +3,18 @@ import react from '@vitejs/plugin-react'
 
 import { mobileOverrides } from './build/mobileOverrides.js'
 
-// The __APP_VERSION__ define that used to be mirrored here is gone from
-// vite.config.js, so there is nothing left to mirror - see the note there for
-// why the app's version is no longer baked into the bundle at all.
+// This used to mirror vite.config.js's __APP_VERSION__ define, without which
+// every module referencing it threw under test. There is no define to mirror
+// any more: the app's version now reaches src/main.jsx through a <meta> tag
+// that vite.config.js injects into index.html, so that a new version cannot
+// rename the chunk every route imports. See the note there.
+//
+// Deliberately not reproduced for tests. Nothing renders index.html under
+// jsdom, so the tag is absent and main.jsx falls back to 'dev' - which is
+// correct, since no test persists a query cache worth busting. Should a test
+// ever need a real version there, set the meta tag in src/test/setup.js rather
+// than reintroducing a define here; a define would put the value back inside
+// the module graph, which is the whole thing this avoids.
 
 export default defineConfig({
   plugins: [mobileOverrides(), react()],
