@@ -39,27 +39,39 @@ const queryClient = new QueryClient({
  * staleTime is 0 - nothing restored is ever treated as fresh, it is shown while
  * the refetch runs behind it.
  *
- * buster: bumped by hand when the persisted shape changes, so a bundle never
- * rehydrates a cache written for a layout its components no longer read.
+ * buster: the release version, so an OTA update starts from an empty cache
+ * rather than rehydrating one written by the previous bundle into components
+ * that may no longer read that shape.
  *
- * It used to be the build's version, which was wrong twice over. It threw away
- * every user's cache on every release — a cold, slow first load after each
- * update, for releases that did not touch the cache at all. And because this
- * module is in the chunk every route imports, changing the string renamed that
- * chunk, which rewrote the import path inside all ~270 route chunks and gave
- * them new content hashes too. Measured on two publishes with no source change
- * whatsoever: 270 chunks, 9.79 MB, rebuilt for nothing — and an OTA update
- * downloads by hash, so users paid for all of it.
+ * Read from a <meta> tag rather than inlined at build time, and that detail is
+ * the whole point. As a `define` it was baked into this module, which lands in
+ * the chunk every route imports — so each new version renamed that chunk,
+ * rewrote the import path inside all ~270 route chunks and changed their hashes
+ * too. Measured across two publishes with no source change at all: 270 chunks,
+ * 9.79 MB, rebuilt for nothing, and a delta OTA made every user download it.
+ * index.html is imported by no JavaScript, so the same value there renames
+ * nothing, and it already changes every release because it names the hashed
+ * entry chunk.
  *
- * So: bump this when the shape of what queryPersister writes changes, and only
- * then. It is not a release marker, and nothing should key it to one.
+ * Deliberately not a hand-maintained constant. Most of this app arrives by
+ * sync from AMS, so a response shape can change without anyone here reviewing
+ * it — a "bump this when the shape changes" rule has nobody to enforce it and
+ * would be wrong exactly when it mattered. Costing a cold first load per update
+ * is the cheaper mistake.
+ *
+ * The fallback covers the dev server before the tag exists and jsdom under
+ * test, where there is no index.html at all; neither persists a cache worth
+ * busting.
  */
-const QUERY_CACHE_SHAPE = '1';
+const bundleVersion =
+  (typeof document !== 'undefined' &&
+    document.querySelector('meta[name="app-version"]')?.content) ||
+  'dev';
 
 const persistOptions = {
   persister: queryPersister,
   maxAge: Infinity,
-  buster: QUERY_CACHE_SHAPE,
+  buster: bundleVersion,
 };
 
 const helmetContext = {};
