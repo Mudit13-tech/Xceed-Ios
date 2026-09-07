@@ -17,6 +17,72 @@ function compareVersions(v1, v2) {
 }
 
 /**
+ * The file list for a delta download, or null to fetch the whole bundle.
+ *
+ * Two shapes are accepted because the server is free to choose either: the
+ * manifest inline on version.json, or a `manifest_url` pointing at it. Prefer
+ * publishing the url — see the note at the call site on why this bundle's
+ * manifest does not belong in a response fetched on every launch. What an entry
+ * means, and why its hash describes the file on disk rather than the bytes on
+ * the wire, is in scripts/otaManifest.cjs.
+ *
+ * Every failure here returns null rather than throwing. A manifest is an
+ * optimisation; not being able to read one is a reason to download the bundle
+ * the old way, not a reason to leave the user on a stale version.
+ */
+async function resolveManifest(versionData, serverUrl) {
+  if (Array.isArray(versionData?.manifest) && versionData.manifest.length > 0) {
+    return versionData.manifest;
+  }
+
+  const manifestUrl = versionData?.manifest_url;
+  if (!manifestUrl) {
+    console.log('[OTA] Server published no manifest — downloading the full bundle.');
+    return null;
+  }
+
+  const absoluteUrl = manifestUrl.startsWith('http')
+    ? manifestUrl
+    : `${serverUrl}${manifestUrl.startsWith('/') ? '' : '/'}${manifestUrl}`;
+
+  try {
+    const { data } = await axios.get(absoluteUrl);
+    const entries = Array.isArray(data) ? data : data?.manifest;
+    if (Array.isArray(entries) && entries.length > 0) {
+      return entries;
+    }
+    console.log('[OTA] Manifest was empty — downloading the full bundle.');
+    return null;
+  } catch (error) {
+    console.log('[OTA] Could not fetch manifest, downloading the full bundle.', error);
+    return null;
+  }
+}
+
+/**
+ * Log how much of the update the device actually has to fetch.
+ *
+ * Purely diagnostic — the plugin does this comparison again internally, against
+ * the APK's builtin assets and its own cache, and downloads accordingly whether
+ * or not this ran. It is here because the saving is otherwise invisible: a
+ * delta download and a full one look identical from the outside.
+ *
+ * getMissingBundleFiles landed in plugin 8.47.0, and the installed APK may be
+ * older than the web bundle asking for it — that skew is the normal state of
+ * things here, so a missing method is expected and reported as nothing at all.
+ */
+async function logDeltaSize(manifest, version) {
+  try {
+    const result = await CapacitorUpdater.getMissingBundleFiles({ manifest, version });
+    const missing = result?.missing?.length ?? 0;
+    const total = result?.total ?? manifest.length;
+    console.log(`[OTA] Delta: fetching ${missing} of ${total} files; ${total - missing} already on device.`);
+  } catch (e) {
+    console.log('[OTA] Delta size unavailable on this build.', e);
+  }
+}
+
+/**
  * @param onUpdateDownloaded optional. Called with the new version number once
  *   the bundle is on disk, and awaited before the update is applied. The
  *   plain `alert()` this replaces was synchronous, and the apply below relied
@@ -81,12 +147,28 @@ export async function setupOtaUpdater({ onUpdateDownloaded, onUpdateFailed } = {
     // Only download if the server version is strictly GREATER than our currently running version
     if (compareVersions(latestVersion, activeVersion) > 0) {
       console.log(`[OTA] Found update ${latestVersion}! Downloading from: ${downloadUrl}`);
-      
+
+      // Resolve the manifest only now, once an update is actually going to
+      // happen. It is ~140 kB for this bundle, and this check runs on every
+      // launch — inlining it in version.json would put that on every user every
+      // time they open the app to save it for the few who have an update to take.
+      const manifest = await resolveManifest(response.data, serverUrl);
+
       // Notify updater to start downloading
-      const versionData = await CapacitorUpdater.download({
+      const downloadOptions = {
         url: downloadUrl,
         version: latestVersion,
-      });
+      };
+      if (manifest) {
+        // Absent this the plugin fetches `url` — the whole bundle — exactly as
+        // before. That is also what an APK whose plugin predates manifest
+        // support does with it: unknown options are ignored rather than
+        // rejected, so a new server stays safe for an old app.
+        downloadOptions.manifest = manifest;
+        await logDeltaSize(manifest, latestVersion);
+      }
+
+      const versionData = await CapacitorUpdater.download(downloadOptions);
 
       console.log(`[OTA] Download complete! Applying update immediately...`);
       

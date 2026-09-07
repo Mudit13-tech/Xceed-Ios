@@ -1,23 +1,23 @@
-import { readFileSync } from 'node:fs'
-
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 import { mobileOverrides } from './build/mobileOverrides.js'
 
-// Mirrors the define in vite.config.js. Vitest does not read that file, so
-// without this every module referencing __APP_VERSION__ throws under test the
-// moment one gets imported - a failure that would show up as an unrelated
-// ReferenceError in whichever test happens to reach main.jsx first.
-const { version: appVersion } = JSON.parse(
-  readFileSync(new URL('./package.json', import.meta.url), 'utf8')
-)
+// This used to mirror vite.config.js's __APP_VERSION__ define, without which
+// every module referencing it threw under test. There is no define to mirror
+// any more: the app's version now reaches src/main.jsx through a <meta> tag
+// that vite.config.js injects into index.html, so that a new version cannot
+// rename the chunk every route imports. See the note there.
+//
+// Deliberately not reproduced for tests. Nothing renders index.html under
+// jsdom, so the tag is absent and main.jsx falls back to 'dev' - which is
+// correct, since no test persists a query cache worth busting. Should a test
+// ever need a real version there, set the meta tag in src/test/setup.js rather
+// than reintroducing a define here; a define would put the value back inside
+// the module graph, which is the whole thing this avoids.
 
 export default defineConfig({
   plugins: [mobileOverrides(), react()],
-  define: {
-    __APP_VERSION__: JSON.stringify(appVersion),
-  },
   test: {
     environment: 'jsdom',
     globals: true,

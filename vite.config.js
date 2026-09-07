@@ -5,19 +5,38 @@ import react from '@vitejs/plugin-react'
 
 import { mobileOverrides } from './build/mobileOverrides.js'
 
-// The app's own version, baked into the bundle so the persisted query cache can
-// be keyed to it - see the `buster` in src/main.jsx.
-//
-// Read out of package.json rather than passed in, so there is one source of
-// truth and no way for a build to disagree with the manifest the OTA deploy
-// reads. Note this is the version *at build time*, which is one behind the
-// version the bundle is published as: scripts/deploy-ota.cjs builds first and
-// only then computes and writes the bump. That is fine for a cache buster,
-// which only has to change between releases rather than match the release
-// number - but it is why this value looks off by one beside the OTA version.
-const { version: appVersion } = JSON.parse(
-  readFileSync(new URL('./package.json', import.meta.url), 'utf8')
-)
+/**
+ * Publish the app's version as a <meta> tag, for the query cache buster in
+ * src/main.jsx to read at runtime.
+ *
+ * It cannot go back to being a `define`. As __APP_VERSION__ it was inlined into
+ * the module graph, and because src/main.jsx lands in the chunk every route
+ * imports, each new version renamed that chunk, rewrote the import path inside
+ * ~270 route chunks, and changed their hashes too - 9.79 MB of output churning
+ * on a release with no source change at all, which a delta OTA then made every
+ * user download.
+ *
+ * index.html is the one place a per-release value costs nothing: no JavaScript
+ * imports it, so nothing can be renamed by it changing, and it already differs
+ * on every release anyway because it names the hashed entry chunk.
+ *
+ * Read inside the hook rather than at module load so a long-lived dev server
+ * does not serve a version from whenever it started. Note this is the version
+ * *at build time*, one behind what the bundle publishes as - deploy-ota.cjs
+ * builds first and bumps afterwards. That is fine for a buster, which only has
+ * to differ between releases rather than name one.
+ */
+function appVersionMeta() {
+  return {
+    name: 'app-version-meta',
+    transformIndexHtml() {
+      const { version } = JSON.parse(
+        readFileSync(new URL('./package.json', import.meta.url), 'utf8')
+      )
+      return [{ tag: 'meta', attrs: { name: 'app-version', content: version }, injectTo: 'head' }]
+    },
+  }
+}
 
 // Buffers Vite's own console output (startup/HMR/build-error messages) and
 // serves it at /__console-logs on the dev server's own origin, so the React
@@ -58,10 +77,7 @@ function consoleBufferPlugin() {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [mobileOverrides({ verbose: true }), react(), consoleBufferPlugin()],
-  define: {
-    __APP_VERSION__: JSON.stringify(appVersion),
-  },
+  plugins: [mobileOverrides({ verbose: true }), react(), consoleBufferPlugin(), appVersionMeta()],
   build: {
     // Writes dist/.vite/manifest.json: every chunk with the chunks it pulls in.
     // Kept on so the cost of a route can be measured rather than guessed at —

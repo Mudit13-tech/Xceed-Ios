@@ -39,17 +39,39 @@ const queryClient = new QueryClient({
  * staleTime is 0 - nothing restored is ever treated as fresh, it is shown while
  * the refetch runs behind it.
  *
- * buster: keyed to the build's version, so an OTA update starts from an empty
- * cache instead of rehydrating one written by the previous bundle into
- * components that may no longer read that shape. __APP_VERSION__ is defined in
- * vite.config.js (and mirrored in vitest.config.js); it is the version at build
- * time, one behind the version the bundle publishes as, which does not matter
- * to a buster that only has to change between releases.
+ * buster: the release version, so an OTA update starts from an empty cache
+ * rather than rehydrating one written by the previous bundle into components
+ * that may no longer read that shape.
+ *
+ * Read from a <meta> tag rather than inlined at build time, and that detail is
+ * the whole point. As a `define` it was baked into this module, which lands in
+ * the chunk every route imports — so each new version renamed that chunk,
+ * rewrote the import path inside all ~270 route chunks and changed their hashes
+ * too. Measured across two publishes with no source change at all: 270 chunks,
+ * 9.79 MB, rebuilt for nothing, and a delta OTA made every user download it.
+ * index.html is imported by no JavaScript, so the same value there renames
+ * nothing, and it already changes every release because it names the hashed
+ * entry chunk.
+ *
+ * Deliberately not a hand-maintained constant. Most of this app arrives by
+ * sync from AMS, so a response shape can change without anyone here reviewing
+ * it — a "bump this when the shape changes" rule has nobody to enforce it and
+ * would be wrong exactly when it mattered. Costing a cold first load per update
+ * is the cheaper mistake.
+ *
+ * The fallback covers the dev server before the tag exists and jsdom under
+ * test, where there is no index.html at all; neither persists a cache worth
+ * busting.
  */
+const bundleVersion =
+  (typeof document !== 'undefined' &&
+    document.querySelector('meta[name="app-version"]')?.content) ||
+  'dev';
+
 const persistOptions = {
   persister: queryPersister,
   maxAge: Infinity,
-  buster: __APP_VERSION__,
+  buster: bundleVersion,
 };
 
 const helmetContext = {};
