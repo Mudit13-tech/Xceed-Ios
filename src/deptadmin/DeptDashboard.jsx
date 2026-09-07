@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Clock3, ScanFace, Users } from 'lucide-react';
 import getEnvironment from '../getenvironment';
 import { styles, theme } from '../attendancemodule/config';
@@ -61,18 +62,26 @@ function ReportRows({ reports }) {
 
 export default function DeptDashboard() {
     const [state, setState] = useState({ stats: null, loading: true, error: '' });
+    const [searchParams] = useSearchParams();
+    // Only honoured server-side for a full-access (iams-admin) caller — see
+    // deptAdminController.getTodayAttendanceStats — so an actual dept admin
+    // opening this URL still only ever sees their own department. Lets an
+    // institute admin open a specific dept admin's dashboard from
+    // /attendance/dept-admins without impersonating the account.
+    const overrideDepartment = searchParams.get('department') || '';
 
     const loadStats = useCallback(async () => {
         setState((current) => ({ ...current, loading: true, error: '' }));
         try {
-            const response = await fetch(`${apiUrl}/attendancemodule/dept-admin/stats/today`, { credentials: 'include' });
+            const query = overrideDepartment ? `?department=${encodeURIComponent(overrideDepartment)}` : '';
+            const response = await fetch(`${apiUrl}/attendancemodule/dept-admin/stats/today${query}`, { credentials: 'include' });
             const data = await response.json();
             if (!response.ok) throw new Error(data.message || 'Failed to load department statistics.');
             setState({ stats: data, loading: false, error: '' });
         } catch (error) {
             setState({ stats: null, loading: false, error: error.message });
         }
-    }, []);
+    }, [overrideDepartment]);
 
     useEffect(() => { loadStats(); }, [loadStats]);
 
@@ -93,11 +102,20 @@ export default function DeptDashboard() {
 
     return (
         <div style={{ padding: '24px 32px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, marginBottom: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, marginBottom: 22, flexWrap: 'wrap' }}>
                 <div>
                     <div style={styles.heading}>{stats.department} Attendance</div>
                     <div style={styles.subheading}>Today, {stats.date}</div>
                 </div>
+                {overrideDepartment && stats.fullAccess && (
+                    <div style={{
+                        padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                        background: theme.accentDim || `${theme.accent}18`, color: theme.accent,
+                        border: `1px solid ${theme.accent}30`,
+                    }}>
+                        Viewing as admin — {stats.department}
+                    </div>
+                )}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14 }}>
@@ -111,11 +129,11 @@ export default function DeptDashboard() {
                 schedulerController.liveStatus. Placed above the day's
                 summaries because it is the only part of this page that
                 changes minute to minute. */}
-            <LiveRoomCards title="Live classrooms" />
+            <LiveRoomCards title="Live classrooms" department={overrideDepartment} />
 
-            <PendingActionsCard />
+            <PendingActionsCard initialDepartment={overrideDepartment} />
 
-            <DashboardProgress title="Acquisition and Roll Assignment Progress" compact />
+            <DashboardProgress title="Acquisition and Roll Assignment Progress" compact initialDepartment={overrideDepartment} />
 
             <section style={{ ...styles.card, marginTop: 18 }}>
                 <div

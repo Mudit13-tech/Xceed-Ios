@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Bar,
     BarChart,
@@ -365,9 +365,13 @@ function getDepartmentOptions(data) {
     }, []).sort((a, b) => a.label.localeCompare(b.label));
 }
 
-export default function DashboardProgress({ title = 'Dashboard Progress', compact = false }) {
+const normalizeDeptKey = (value) => String(value || '').trim().replace(/[\s_-]+/g, '').toUpperCase();
+
+export default function DashboardProgress({ title = 'Dashboard Progress', compact = false, initialDepartment = '' }) {
     const [state, setState] = useState({ data: null, loading: true, refreshing: false, error: '' });
     const [selectedDepartment, setSelectedDepartment] = useState('');
+    // Applied at most once — after that the dropdown is the user's to drive.
+    const appliedInitial = useRef(false);
 
     const loadProgress = useCallback(async (refreshing = false) => {
         setState((current) => ({
@@ -408,9 +412,17 @@ export default function DashboardProgress({ title = 'Dashboard Progress', compac
             setSelectedDepartment('');
             return;
         }
-        setSelectedDepartment((current) =>
-            departments.some((department) => department.key === current) ? current : departments[0].key);
-    }, [departments]);
+        setSelectedDepartment((current) => {
+            if (current && departments.some((department) => department.key === current)) return current;
+            if (!appliedInitial.current && initialDepartment) {
+                appliedInitial.current = true;
+                const initialKey = normalizeDeptKey(initialDepartment);
+                const match = departments.find((department) => department.key === initialKey);
+                if (match) return match.key;
+            }
+            return departments[0].key;
+        });
+    }, [departments, initialDepartment]);
 
     if (state.loading && !state.data) {
         return (

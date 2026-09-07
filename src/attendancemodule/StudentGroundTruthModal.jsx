@@ -67,7 +67,11 @@ const GROUPS = {
     },
 };
 
-export default function StudentGroundTruthModal({ batch, rollNo, student, onClose }) {
+// `student` is the attendance row this was opened from — optional, because the
+// modal is also opened from places with no session in hand (the ERP student
+// list), where the facts strip below has nothing to say and is left out.
+// `onSaved` lets such a caller refresh whatever photo counts it is showing.
+export default function StudentGroundTruthModal({ batch, rollNo, student, onSaved, onClose }) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -157,6 +161,7 @@ export default function StudentGroundTruthModal({ batch, rollNo, student, onClos
             setNotice(
                 `Ground truth updated — embedding rebuilt from ${embeddingFiles.length} photo${embeddingFiles.length === 1 ? '' : 's'}.`,
             );
+            onSaved?.();
         } catch (err) {
             setError(err.message || 'Could not update ground truth');
         } finally {
@@ -177,6 +182,7 @@ export default function StudentGroundTruthModal({ batch, rollNo, student, onClos
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Could not delete photo');
             setNotice(`Deleted ${filename}.`);
+            onSaved?.();
             // Removing from state
             setPhotos((current) => current.filter((p) => p.filename !== filename));
             setDirty(true);
@@ -190,7 +196,7 @@ export default function StudentGroundTruthModal({ batch, rollNo, student, onClos
     const photoUrl = (filename) =>
         `${GT_BASE}/photo/${encodeURIComponent(batch)}/${encodeURIComponent(rollNo)}/${encodeURIComponent(filename)}`;
 
-    const allPhotos = [...(student.embeddingFiles || []), ...(student.backupFiles || []), ...(student.untrackedFiles || [])];
+    const allPhotos = [...(student?.embeddingFiles || []), ...(student?.backupFiles || []), ...(student?.untrackedFiles || [])];
     let maxAddedAt = 0;
     allPhotos.forEach(p => {
         if (p.addedAt) {
@@ -341,7 +347,7 @@ export default function StudentGroundTruthModal({ batch, rollNo, student, onClos
         );
     }
 
-    const attendanceFacts = [
+    const attendanceFacts = !student ? [] : [
         ['ML status', student?.status || '—'],
         ['Final', student?.finalStatus || '—'],
         [
@@ -406,7 +412,7 @@ export default function StudentGroundTruthModal({ batch, rollNo, student, onClos
 
                     <div style={{
                         display: 'flex', flexWrap: 'wrap', gap: 8,
-                        margin: '14px 0 18px',
+                        margin: attendanceFacts.length ? '14px 0 18px' : '0 0 18px',
                     }}>
                         {attendanceFacts.map(([label, value]) => (
                             <span

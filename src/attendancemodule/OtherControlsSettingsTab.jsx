@@ -1,8 +1,9 @@
 // client/src/attendancemodule/OtherControlsSettingsTab.jsx
 //
 // "Other Controls" settings tab — miscellaneous admin toggles.
-// Currently two on/off switches (both default OFF) that restrict
-// Ground Truth acquisition and Attendance runs to 08:30–17:30 IST.
+// Two on/off switches (both default OFF) that restrict Ground Truth
+// acquisition and Attendance runs to 08:30–17:30 IST, and one (default ON)
+// that governs whether students may re-pick their own ground-truth photos.
 // Mirrors FrameCleanupSettingsTab.jsx's toggle pattern and styling.
 
 import { useState, useEffect } from 'react';
@@ -15,6 +16,9 @@ const BASE = `${apiUrl}/attendancemodule/settings/other-controls`;
 // isn't a time-window policy flag), but its control belongs here beside the
 // other admin switches rather than in a tab of its own.
 const DD_BASE = `${apiUrl}/attendancemodule/settings/detection-debug-cleanup`;
+// Unknown-face crop retention — same shape as detection-debug above (its own
+// settings document, surfaced here rather than in a tab of its own).
+const UF_BASE = `${apiUrl}/attendancemodule/settings/unknown-face-cleanup`;
 
 function formatDate(d) {
   if (!d) return 'never';
@@ -28,6 +32,9 @@ function formatDate(d) {
 export default function OtherControlsSettingsTab() {
   const [gtEnabled, setGtEnabled] = useState(false);
   const [runEnabled, setRunEnabled] = useState(false);
+  // Default ON, matching the server: students may re-pick their own photos
+  // once a week unless this is switched off.
+  const [studentUpdates, setStudentUpdates] = useState(true);
   const [windowStart, setWindowStart] = useState('08:30');
   const [windowEnd, setWindowEnd] = useState('17:30');
   const [loading, setLoading] = useState(true);
@@ -41,6 +48,15 @@ export default function OtherControlsSettingsTab() {
   const [ddLastRunStats, setDdLastRunStats] = useState(null);
   const [ddRunning, setDdRunning] = useState(false);
 
+  // Unknown-face cluster retention
+  const [ufEnabled, setUfEnabled] = useState(true);
+  const [ufRetention, setUfRetention] = useState(3);
+  const [ufRetentionInput, setUfRetentionInput] = useState('3');
+  const [ufPreserveReviewed, setUfPreserveReviewed] = useState(true);
+  const [ufLastRunAt, setUfLastRunAt] = useState(null);
+  const [ufLastRunStats, setUfLastRunStats] = useState(null);
+  const [ufRunning, setUfRunning] = useState(false);
+
   const showMsg = (text, type = 'success') => {
     setMessage({ text, type });
     setTimeout(() => setMessage({ text: '', type: '' }), 3000);
@@ -49,6 +65,9 @@ export default function OtherControlsSettingsTab() {
   const applySettings = (s) => {
     setGtEnabled(!!s?.groundTruthTimeWindowEnabled);
     setRunEnabled(!!s?.attendanceRunTimeWindowEnabled);
+    // `!== false` rather than `!!`: an older settings document written before
+    // this field existed has no value at all, and that means on.
+    setStudentUpdates(s?.studentPhotoUpdatesEnabled !== false);
     setWindowStart(s?.windowStart || '08:30');
     setWindowEnd(s?.windowEnd || '17:30');
   };
@@ -80,6 +99,24 @@ export default function OtherControlsSettingsTab() {
       .then((d) => applyDdSettings(d.settings))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetch(`${UF_BASE}/`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => applyUfSettings(d.settings))
+      .catch(() => {});
+  }, []);
+
+  const applyUfSettings = (s) => {
+    setUfEnabled(!!s?.enabled);
+    const days = s?.retentionDays ?? 3;
+    setUfRetention(days);
+    setUfRetentionInput(String(days));
+    // `!== false` rather than `!!`: absent means on, matching the schema default.
+    setUfPreserveReviewed(s?.preserveReviewed !== false);
+    setUfLastRunAt(s?.lastRunAt || null);
+    setUfLastRunStats(s?.lastRunStats || null);
+  };
 
   const saveDd = async (patch, revert) => {
     try {
@@ -113,6 +150,42 @@ export default function OtherControlsSettingsTab() {
       showMsg('Error: ' + err.message, 'error');
     } finally {
       setDdRunning(false);
+    }
+  };
+
+  const saveUf = async (patch, revert) => {
+    try {
+      const res = await fetch(`${UF_BASE}/`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update');
+      applyUfSettings(data.settings);
+    } catch (err) {
+      if (revert) revert();
+      showMsg('Error: ' + err.message, 'error');
+    }
+  };
+
+  const handleUfRunNow = async () => {
+    setUfRunning(true);
+    try {
+      const res = await fetch(`${UF_BASE}/run-now`, { method: 'POST', credentials: 'include' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to run cleanup');
+      applyUfSettings(data.settings);
+      showMsg(
+        `Cleanup complete — scanned ${data.stats.scanned} cluster(s), removed `
+        + `${data.stats.deleted} (${data.stats.filesDeleted} crop(s)), kept `
+        + `${data.stats.preserved} reviewed.`
+      );
+    } catch (err) {
+      showMsg('Error: ' + err.message, 'error');
+    } finally {
+      setUfRunning(false);
     }
   };
 
@@ -257,6 +330,19 @@ export default function OtherControlsSettingsTab() {
       />
 
       <ToggleCard
+        enabled={studentUpdates}
+        title={`Students may update their own ground truth photos ${studentUpdates ? '— once a week' : '— off'}`}
+        description={
+          studentUpdates
+            ? 'A student can re-pick the photos the cameras match them against once every 7 days, from their own dashboard in the learning module. Every save rebuilds the embeddings of every subject they are enrolled in, which is what the weekly wait is for.'
+            : 'Students see their photos but cannot change them, and the save is refused. A window opened for one student from the ERP Student List still works — that is an admin deciding one student needs an update now, and it is unaffected by this switch.'
+        }
+        onToggle={() =>
+          saveToggle('studentPhotoUpdatesEnabled', !studentUpdates, setStudentUpdates, studentUpdates)
+        }
+      />
+
+      <ToggleCard
         enabled={ddEnabled}
         title={`Automatic detection-debug crop cleanup ${ddEnabled ? 'enabled' : 'disabled'}`}
         description={
@@ -364,6 +450,142 @@ export default function OtherControlsSettingsTab() {
                 Crops deleted
                 <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
                   {ddLastRunStats.filesDeleted ?? 0}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <ToggleCard
+        enabled={ufEnabled}
+        title={`Automatic unknown-face cleanup ${ufEnabled ? 'enabled' : 'disabled'}`}
+        description={
+          ufEnabled
+            ? `Runs nightly at 02:35. Cluster folders under ml-data/unknown_faces/ older than ${ufRetention} day(s) are removed. Browse them under Attendance → Unknown Faces.`
+            : 'The job is paused — crops of unidentified faces will be kept indefinitely until this is re-enabled or a manual run is triggered below. These are photographs of people the system could not identify; keeping them longer than the review needs is what this switch is for.'
+        }
+        onToggle={() => {
+          const prev = ufEnabled;
+          setUfEnabled(!prev);
+          saveUf({ enabled: !prev }, () => setUfEnabled(prev));
+        }}
+      />
+
+      <ToggleCard
+        enabled={ufPreserveReviewed}
+        title={`Keep clusters marked Reviewed ${ufPreserveReviewed ? '— exempt from cleanup' : '— deleted like any other'}`}
+        description={
+          ufPreserveReviewed
+            ? 'A cluster an admin marked Reviewed is one somebody deliberately held on to — usually as evidence for a disputed attendance record — so it survives the retention window. New and Archived clusters expire normally.'
+            : 'Every cluster expires on age alone, including the ones marked Reviewed. Download anything you need to keep before the next run.'
+        }
+        onToggle={() => {
+          const prev = ufPreserveReviewed;
+          setUfPreserveReviewed(!prev);
+          saveUf({ preserveReviewed: !prev }, () => setUfPreserveReviewed(prev));
+        }}
+      />
+
+      <div className="oc-card">
+        <div className="oc-card-body">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+              marginBottom: 10,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
+                Keep unknown faces for
+              </span>
+              <input
+                type="number"
+                min={1}
+                max={90}
+                value={ufRetentionInput}
+                onChange={(e) => setUfRetentionInput(e.target.value)}
+                onBlur={() => {
+                  const n = Number.parseInt(ufRetentionInput, 10);
+                  if (!Number.isInteger(n) || n < 1 || n > 90) {
+                    setUfRetentionInput(String(ufRetention));
+                    showMsg('Retention must be a whole number of days, 1–90', 'error');
+                    return;
+                  }
+                  if (n !== ufRetention) saveUf({ retentionDays: n });
+                }}
+                style={{
+                  width: 70,
+                  padding: '5px 8px',
+                  fontSize: 13,
+                  borderRadius: 6,
+                  border: `1px solid ${T.border}`,
+                  background: T.surface || '#fff',
+                  color: T.text,
+                }}
+              />
+              <span style={{ fontSize: 12, color: T.textMuted }}>day(s), 1–90</span>
+            </div>
+            <button
+              onClick={handleUfRunNow}
+              disabled={ufRunning}
+              style={{
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 600,
+                borderRadius: 6,
+                border: 'none',
+                cursor: ufRunning ? 'not-allowed' : 'pointer',
+                background: T.accent,
+                color: '#fff',
+                opacity: ufRunning ? 0.6 : 1,
+              }}
+              title="Deletes expired unknown-face clusters immediately, regardless of the toggle above."
+            >
+              {ufRunning ? 'Running…' : 'Run now'}
+            </button>
+          </div>
+
+          <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 10 }}>
+            Last run: {formatDate(ufLastRunAt)}
+          </div>
+
+          {ufLastRunStats && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                gap: 10,
+                fontSize: 12,
+                color: T.textMuted,
+              }}
+            >
+              <div>
+                Clusters scanned
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+                  {ufLastRunStats.scanned ?? 0}
+                </div>
+              </div>
+              <div>
+                Clusters removed
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+                  {ufLastRunStats.deleted ?? 0}
+                </div>
+              </div>
+              <div>
+                Crops deleted
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+                  {ufLastRunStats.filesDeleted ?? 0}
+                </div>
+              </div>
+              <div>
+                Reviewed kept
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+                  {ufLastRunStats.preserved ?? 0}
                 </div>
               </div>
             </div>

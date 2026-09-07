@@ -90,7 +90,7 @@ function RoomCard({ room }) {
     );
 }
 
-export default function LiveRoomCards({ title = 'Live classrooms' }) {
+export default function LiveRoomCards({ title = 'Live classrooms', department = '' }) {
     const { slotLabel } = usePeriods();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -102,7 +102,11 @@ export default function LiveRoomCards({ title = 'Live classrooms' }) {
 
     const load = useCallback(async () => {
         try {
-            const response = await fetch(LIVE_STATUS_API, { credentials: 'include' });
+            // `department` only narrows the campus-wide view a full-access admin
+            // otherwise gets — a real dept admin is already scoped server-side
+            // and this is ignored for them. See schedulerController.liveStatus.
+            const query = department ? `?department=${encodeURIComponent(department)}` : '';
+            const response = await fetch(`${LIVE_STATUS_API}${query}`, { credentials: 'include' });
             const body = await response.json();
             if (!alive.current) return;
             if (!response.ok) throw new Error(body.error || 'Could not load live status.');
@@ -116,7 +120,7 @@ export default function LiveRoomCards({ title = 'Live classrooms' }) {
         } finally {
             if (alive.current) setLoading(false);
         }
-    }, []);
+    }, [department]);
 
     useEffect(() => {
         alive.current = true;
