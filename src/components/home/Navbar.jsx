@@ -50,6 +50,44 @@ function SunIcon({ size = 18 }) {
    it is not a dependency of the effect that reads it. */
 const LEARNING_MANUAL_PATH = /^\/learning\/[a-z]*manual$/;
 
+const PUBLIC_PATHS = [
+  '/',
+  // The two module introduction pages linked from the top of the home hero.
+  // They introduce XCEED Learning and iLEED to people who have not been given
+  // an account yet, so bouncing them to /login would hide the pages from the
+  // exact audience they were written for. Neither reads any authenticated
+  // data — the module itself, behind their call-to-action, still does.
+  '/xceed-learning',
+  '/ileed',
+  // Public: it is onboarding documentation someone needs before they have an
+  // account, and GET /api/v1/guide is unauthenticated to match. Editing it
+  // still requires an administrator. This entry and the server route have to
+  // agree — listing it here while the API refuses anonymous readers would
+  // render the page as a load error instead of a login redirect.
+  '/guide',
+  // The help desk. Public by necessity: the people it serves are the ones who
+  // cannot sign in, so a redirect to /login here would bounce its whole
+  // audience away from the page that exists to explain why they are stuck.
+  // The page carries a gate of its own — an OTP mailed to the address being
+  // asked about (a visitor who *is* signed in skips it), and every answer is
+  // scoped to that address. See modules/helpdeskModule on the server.
+  '/help',
+  '/privacy',
+  '/forgot-password',
+  '/nirf',
+  '/ams-manual',
+  '/tt-manual',
+  '/certificate-manual',
+  '/conference-manual',
+  '/login',
+  '/classrooms',
+  '/timetable',
+  '/tt/masterdata',
+  '/tt/commonslot',
+  '/404',
+  '/ml/t1',
+];
+
 export default function Navbar() {
   const { colorMode, toggleColorMode } = useColorMode();
   const [navbarOpen, setNavbarOpen] = useState(false);
@@ -82,7 +120,14 @@ export default function Navbar() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const isAuthenticated = !!userDetails;
+  // A refetch that fails leaves the *last successful* `data` in place — that is
+  // deliberate on TanStack Query's part (a blip should not blank the screen),
+  // but it means `userDetails` still describes a session the server has since
+  // rejected. Reading the error alongside it is what makes a signed-out or
+  // expired session register as such; without it the navbar goes on showing the
+  // previous user, which is the bug this pair of lines exists to fix.
+  const isUnauthorized = isError && error?.message === 'Unauthorized';
+  const isAuthenticated = !!userDetails && !isUnauthorized;
 
   // isPending is true ONLY when there is no cached data AND no cached error (true initial load)
   const isInitialLoad = isPending;
@@ -139,47 +184,9 @@ export default function Navbar() {
     }
   };
 
-  const publicPaths = [
-    '/',
-    // The two module introduction pages linked from the top of the home hero.
-    // They introduce XCEED Learning and iLEED to people who have not been given
-    // an account yet, so bouncing them to /login would hide the pages from the
-    // exact audience they were written for. Neither reads any authenticated
-    // data — the module itself, behind their call-to-action, still does.
-    '/xceed-learning',
-    '/ileed',
-    // Public: it is onboarding documentation someone needs before they have an
-    // account, and GET /api/v1/guide is unauthenticated to match. Editing it
-    // still requires an administrator. This entry and the server route have to
-    // agree — listing it here while the API refuses anonymous readers would
-    // render the page as a load error instead of a login redirect.
-    '/guide',
-    // The help desk. Public by necessity: the people it serves are the ones who
-    // cannot sign in, so a redirect to /login here would bounce its whole
-    // audience away from the page that exists to explain why they are stuck.
-    // The page carries a gate of its own — an OTP mailed to the address being
-    // asked about (a visitor who *is* signed in skips it), and every answer is
-    // scoped to that address. See modules/helpdeskModule on the server.
-    '/help',
-    '/privacy',
-    '/forgot-password',
-    '/nirf',
-    '/ams-manual',
-    '/tt-manual',
-    '/certificate-manual',
-    '/conference-manual',
-    '/login',
-    '/classrooms',
-    '/timetable',
-    '/tt/masterdata',
-    '/tt/commonslot',
-    '/404',
-    '/ml/t1',
-  ];
-
   useEffect(() => {
     const isPublicPath =
-      publicPaths.includes(location.pathname) ||
+      PUBLIC_PATHS.includes(location.pathname) ||
       location.pathname.startsWith('/services/') ||
       location.pathname.startsWith('/cm/c/') ||
       location.pathname.startsWith('/timetable/faculty/') ||

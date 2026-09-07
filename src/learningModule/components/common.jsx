@@ -446,7 +446,7 @@ export function DeadlineCountdown({ dueDate, prefix = 'Due in', size = 'sm', ...
   );
 }
 
-export function DueBadge({ dueDate }) {
+export function DueBadge({ dueDate, isTeacher = false }) {
   if (!dueDate) {
     return (
       <Text fontSize="xs" color="lmFg.muted">
@@ -454,7 +454,9 @@ export function DueBadge({ dueDate }) {
       </Text>
     );
   }
-  const overdue = new Date(dueDate) < new Date();
+  // A teacher owns the assignment, not a submission for it, so a passed
+  // deadline is never "overdue" for them the way it is for a student.
+  const overdue = !isTeacher && new Date(dueDate) < new Date();
   return (
     <Tooltip label={formatDateTime(dueDate)}>
       <Text fontSize="xs" color={overdue ? 'red.500' : 'lmFg.subtle'} fontWeight={overdue ? '600' : '400'}>

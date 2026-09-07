@@ -158,6 +158,22 @@ export default function Forms() {
                     >
                       Responses
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      colorScheme="red"
+                      onClick={async () => {
+                        if (!window.confirm(`Delete "${form.title}"? This cannot be undone.`)) return;
+                        try {
+                          await lmApi.deleteForm(classId, form._id);
+                          load();
+                        } catch (err) {
+                          window.alert(err.message);
+                        }
+                      }}
+                    >
+                      Delete
+                    </Button>
                   </>
                 ) : (
                   <Button

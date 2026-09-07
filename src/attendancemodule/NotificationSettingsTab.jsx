@@ -166,6 +166,7 @@ export default function NotificationSettingsTab() {
     onPresent: true,
     onAbsent: true,
     allowDispute: true,
+    onDisputeOutcome: false,
   });
   const [savingStudent, setSavingStudent] = useState(false);
   const [studentSampleEmail, setStudentSampleEmail] = useState('');
@@ -1106,6 +1107,54 @@ export default function NotificationSettingsTab() {
               />
             </div>
           </div>
+
+          {/* Deliberately outside the block below, which only renders when the
+              per-class mail is on. Mailing a dispute outcome is the opposite
+              kind of message — one reply to one student who asked — and the
+              common setting is exactly the combination the old, shared switch
+              could not express: per-class mail off, dispute replies on. */}
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 10,
+              padding: '10px 14px',
+              borderRadius: 8,
+              border: `1px solid ${studentConfig.onDisputeOutcome ? T.accent : T.border}`,
+              background: studentConfig.onDisputeOutcome ? T.accentDim : 'transparent',
+              cursor: savingStudent ? 'not-allowed' : 'pointer',
+              marginBottom: 16,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={!!studentConfig.onDisputeOutcome}
+              disabled={savingStudent}
+              onChange={() =>
+                handleStudentConfigChange({
+                  onDisputeOutcome: !studentConfig.onDisputeOutcome,
+                })
+              }
+              style={{ margin: '2px 0 0 0' }}
+            />
+            <span>
+              <span
+                style={{
+                  display: 'block',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  color: studentConfig.onDisputeOutcome ? T.accent : T.textMuted,
+                }}
+              >
+                Email the outcome when a dispute is decided
+              </span>
+              <span style={{ display: 'block', fontSize: 11, color: T.textMuted, marginTop: 3 }}>
+                One message to one student, answering a dispute they raised.
+                Independent of the per-class mail above — leave this on to keep
+                replying to disputes while sending no attendance mail at all.
+              </span>
+            </span>
+          </label>
 
           {studentConfig.enabled && (
             <>

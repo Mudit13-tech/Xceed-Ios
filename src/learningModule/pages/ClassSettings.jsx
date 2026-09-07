@@ -224,17 +224,18 @@ export default function ClassSettings() {
 };
 
   const destroy = async () => {
-    // eslint-disable-next-line no-alert
-    const typed = window.prompt(`This permanently deletes "${klass.name}" with all its posts, work, grades and generated material. Type the class name to confirm.`);
-    if (typed !== klass.name) return;
-    try {
-      await lmApi.deleteClass(classId);
-      toast({ status: 'success', title: 'Class deleted' });
-      navigate('/learning');
-    } catch (error) {
-      toast({ status: 'error', title: error.message });
-    }
-  };
+  const typed = window.prompt(
+    `The class will be hidden from your view and a deletion request will be sent to the admin. Data will not be deleted until the admin approves.\n\nType the class name "${klass.name}" to confirm.`
+  );
+  if (typed !== klass.name) return;
+  try {
+    await lmApi.requestClassDeletion(classId);
+    toast({ status: 'success', title: 'Deletion request sent to admin' });
+    navigate('/learning');
+  } catch (error) {
+    toast({ status: 'error', title: error.message });
+  }
+};
 
   return (
     <Box maxW="820px">
@@ -487,14 +488,14 @@ export default function ClassSettings() {
             <Flex justify="space-between" align="center" gap={3} wrap="wrap" py={2}>
               <Box>
                 <Text fontSize="sm" fontWeight="600" color="red.600">
-                  Delete this class
+                  Request class deletion
                 </Text>
                 <Text fontSize="xs" color="lmFg.muted">
-                  Removes every post, assignment, submission, grade, quiz and generated lecture artefact.
+                  Sends a deletion request to the admin. The class is hidden from your view but data stays until the admin approves permanent deletion.
                 </Text>
               </Box>
-              <Button size="sm" colorScheme="red" onClick={destroy}>
-                Delete permanently
+              <Button size="sm" colorScheme="red" variant="outline" onClick={destroy}>
+                Request deletion
               </Button>
             </Flex>
           </>

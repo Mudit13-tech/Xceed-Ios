@@ -64,7 +64,7 @@ function WorkRow({ entry, showStudent }) {
             {entry.class?.name}
             {entry.class?.section ? ` · ${entry.class.section}` : ''}
           </Text>
-          <DueBadge dueDate={entry.dueDate} />
+          <DueBadge dueDate={entry.dueDate} isTeacher={showStudent} />
           {showStudent && (
             <Badge colorScheme="blue" fontSize="0.65rem">
               {entry.studentName}

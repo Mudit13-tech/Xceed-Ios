@@ -23,6 +23,7 @@ const PROTOCOLS = [
 const STATUS_OPTIONS = [
     { value: 'online', label: 'Online' },
     { value: 'offline', label: 'Offline' },
+    { value: 'in_use', label: 'In use' },
     { value: 'maintenance', label: 'Maintenance' },
 ];
 
@@ -56,9 +57,16 @@ const CAMERA_CSV_TEMPLATE = [
 
 const statusColor = (status) => {
     if (status === 'online') return 'success';
-    if (status === 'maintenance') return 'warning';
+    // "in_use" is not a fault: the server declined to probe a camera another
+    // feature is holding, because probing it would fight the holder for the
+    // camera's one RTSP slot. Amber, not red — red said "broken" about a
+    // camera that is up and streaming.
+    if (status === 'maintenance' || status === 'in_use') return 'warning';
     return 'danger';
 };
+
+// The wire value is snake_case for the query string; a badge should not be.
+const statusLabel = (status) => (status === 'in_use' ? 'in use' : status || 'offline');
 
 const formatDateTime = (value) => {
     if (!value) return 'Not recorded';
@@ -106,7 +114,7 @@ function Toast({ toast }) {
 }
 
 function StatusBadge({ status }) {
-    return <span style={styles.badge(statusColor(status))}>{status || 'offline'}</span>;
+    return <span style={styles.badge(statusColor(status))}>{statusLabel(status)}</span>;
 }
 
 function duplicateMessage(details) {

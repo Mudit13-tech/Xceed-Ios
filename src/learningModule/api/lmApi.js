@@ -308,6 +308,7 @@ const lmApi = {
   completeClass: (classId, complete) => request(`/classes/${classId}/complete`, { method: 'POST', body: { complete } }),
   regenerateCode: (classId) => request(`/classes/${classId}/code/regenerate`, { method: 'POST', body: {} }),
   deleteClass: (classId) => request(`/classes/${classId}`, { method: 'DELETE' }),
+  requestClassDeletion: (classId) => request(`/classes/${classId}/request-deletion`, { method: 'POST' }),
   joinByCode: (code) => request('/join', { method: 'POST', body: { code } }),
   previewCode: (code) => request(`/preview/${encodeURIComponent(code)}`),
   leaveClass: (classId) => request(`/classes/${classId}/leave`, { method: 'POST', body: {} }),

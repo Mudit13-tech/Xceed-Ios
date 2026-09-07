@@ -333,7 +333,7 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
   );
 }
 
-function CourseworkStreamCard({ item, classId }) {
+function CourseworkStreamCard({ item, classId, isTeacher }) {
   const meta = courseworkMeta(item);
   return (
     <Box
@@ -374,7 +374,7 @@ function CourseworkStreamCard({ item, classId }) {
             <Text fontSize="xs" color="lmFg.muted" flexShrink={0}>
               {relativeTime(item.publishedAt)}
             </Text>
-            {item.workType !== 'material' && <DueBadge dueDate={item.dueDate} />}
+            {item.workType !== 'material' && <DueBadge dueDate={item.dueDate} isTeacher={isTeacher} />}
             {item.mySubmission && <StateBadge state={item.mySubmission.state} late={item.mySubmission.late} />}
             {item.submissionStats && (
               <Badge colorScheme="gray" flexShrink={0}>
@@ -541,7 +541,7 @@ export default function Stream() {
                 onChanged={load}
               />
             ) : (
-              <CourseworkStreamCard key={item._id} item={item} classId={classId} />
+              <CourseworkStreamCard key={item._id} item={item} classId={classId} isTeacher={isTeacher} />
             ),
           )
         )}

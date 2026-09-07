@@ -25,6 +25,7 @@ import {
   Tr,
   VStack,
 } from '@chakra-ui/react';
+import SketchEditor from './SketchEditor';
 import { symbolFor } from './symbols';
 import { deviceSummary, eng, phase, QUANTITY_COLOR } from './format';
 
@@ -215,7 +216,7 @@ function NumberField({ field, value, disabled, onCommit }) {
  * transistor's reverse beta is real and occasionally wanted, and hiding it behind a
  * toggle would mean nobody ever finds it.
  */
-export function PartInspector({ component, part, onChange, onDelete, onRotate, readOnly }) {
+export function PartInspector({ component, part, onChange, onDelete, onRotate, readOnly, sketchError }) {
   if (!component) {
     return (
       <Text fontSize="sm" color="lmFg.muted">
@@ -336,6 +337,23 @@ export function PartInspector({ component, part, onChange, onDelete, onRotate, r
                 onChange={(event) => setValue(field.key, event.target.checked)}
               />
             </Flex>
+          );
+        }
+
+        /* Code, which is a field only in the sense that it is stored on the
+           component. Everything about editing it is different enough to be its
+           own file — see SketchEditor. */
+        if (field.type === 'code') {
+          return (
+            <SketchEditor
+              key={`${component.id}:${field.key}`}
+              value={typeof value === 'string' ? value : ''}
+              // Narrowed to this component before it gets here: a bench with two
+              // boards on it must not show one board's mistake against the other.
+              error={sketchError?.component === component.id ? sketchError : null}
+              readOnly={readOnly}
+              onChange={(next) => setValue(field.key, next)}
+            />
           );
         }
 
@@ -581,6 +599,91 @@ export function InstrumentReadings({ result }) {
     </VStack>
   );
 }
+
+/* ───────────────────────────── the sketch's pins ──────────────────────────── */
+
+/**
+ * What each microcontroller's pins were doing when the run ended.
+ *
+ * The one panel here that reports something the solver did not compute. A pin's
+ * *voltage* is in the device table like anything else; what is not anywhere else
+ * is whether the sketch made that pin an output at all — and that is the first
+ * thing to check when a circuit does nothing, because a `pinMode` left out of
+ * `setup()` looks exactly like a wire that is not connected.
+ *
+ * A fault is shown here rather than as a run error because the run is not one: a
+ * sketch that divided by zero on its four-hundredth pass still produced the four
+ * hundred passes before it, and those are on the scope and worth looking at.
+ */
+export function ChipReadings({ result }) {
+  const chips = result?.ok ? result.chips : null;
+  if (!chips || !chips.length) return null;
+
+  return (
+    <VStack align="stretch" spacing={3}>
+      {chips.map((chip) => (
+        <Box key={chip.id}>
+          {chips.length > 1 && (
+            <Text fontSize="xs" fontWeight="700" mb={1}>
+              {chip.id}
+            </Text>
+          )}
+          {chip.fault && (
+            <Text fontSize="xs" color="lmHue.red700" mb={1}>
+              The sketch stopped
+              {chip.fault.line ? ` on line ${chip.fault.line}` : ''}: {chip.fault.message}
+            </Text>
+          )}
+          <Table size="sm" variant="simple">
+            <Thead>
+              <Tr>
+                <Th px={1}>Pin</Th>
+                <Th px={1}>Mode</Th>
+                <Th px={1} isNumeric>Wrote</Th>
+                <Th px={1} isNumeric color={QUANTITY_COLOR.voltage}>V</Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              {chip.pins.map((pin) => (
+                <Tr key={pin.pin}>
+                  <Td px={1} fontSize="xs" fontWeight="600">{pin.label}</Td>
+                  <Td px={1} fontSize="xs" color={PIN_MODE_COLOR[pin.mode] || 'lmFg.muted'}>
+                    {PIN_MODE_LABEL[pin.mode] || pin.mode}
+                  </Td>
+                  <Td px={1} isNumeric fontSize="xs" color={pin.level === null ? 'lmFg.muted' : 'lmFg.body'}>
+                    {/* A level is a fraction because analogWrite writes one; 0 and
+                        1 are shown as the words a student typed rather than as
+                        numbers they did not. */}
+                    {pin.level === null ? '—' : pin.level === 1 ? 'HIGH' : pin.level === 0 ? 'LOW' : `${Math.round(pin.level * 100)}%`}
+                  </Td>
+                  <Td px={1} isNumeric fontSize="xs" color={QUANTITY_COLOR.voltage} fontWeight="600">
+                    {eng(pin.volts, 'V')}
+                  </Td>
+                </Tr>
+              ))}
+            </Tbody>
+          </Table>
+        </Box>
+      ))}
+      {result.analysis !== 'transient' && (
+        <Text fontSize="xs" color="lmFg.muted">
+          This is the instant after setup() and the first pass through loop(). Run a transient
+          (scope) analysis to watch the pins change.
+        </Text>
+      )}
+    </VStack>
+  );
+}
+
+/* An output is doing something to the circuit, an input is only watching it, and
+   a pull-up is quietly doing both — three states worth telling apart at a glance
+   on a panel a student reads while a circuit is not working. */
+const PIN_MODE_LABEL = { output: 'output', input: 'input', pullup: 'input ⭡' };
+const PIN_MODE_COLOR = {
+  output: 'lmHue.green700',
+  input: 'lmFg.muted',
+  pullup: 'lmHue.blue700',
+};
 
 /* ────────────────────────── every component's numbers ─────────────────────── */
 

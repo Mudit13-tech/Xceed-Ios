@@ -67,6 +67,7 @@ const GT_LABELS = {
     embed_n:                { label: 'Embedding images',       unit: 'images',  hint: 'Of the images kept per person, how many are used to compute the mean embedding. Cannot exceed "Target images / person".' },
     gt_camera_switch_sec:   { label: 'Camera switch interval', unit: 'sec',     hint: 'Combined/Room acquisition only: how long to capture from each camera before cycling to the next. Each switch ends a sub-run, so keep it in minutes. Live attendance runs have their own interval below.' },
     max_imgs_per_run:       { label: 'Max images per person per run', unit: 'images', hint: 'Stop collecting for a person in a single camera run once this many are saved. 0 = unlimited.' },
+    gt_max_zoom:            { label: 'Deepest zoom level',     unit: 'x',       hint: 'How far into the frame each acquisition frame is tiled. Every level adds a detector pass per frame, serialised across the whole ML service, and the deep levels accept far smaller and blurrier faces to reach the back of a room (at 7x, a face 5 pixels wide). An enrolment crop becomes the gallery every later match is scored against, so a poor one degrades that student from then on — raise this only if you genuinely need to enrol someone at the back. Attendance is unaffected: it sizes its own passes by class size.' },
 };
 
 const ATTEND_OPTIONS = {
@@ -85,6 +86,10 @@ const ATTEND_OPTIONS = {
     auto_enroll_threshold:  [0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95],
     alert_confidence:       [0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70],
     camera_switch_sec:      [5, 10, 15, 20, 30, 45, 60, 90, 120, 180],
+    // 0 = off (every camera keeps its full dwell). The rest are face counts —
+    // set it just under the smallest number of students expected on the busy
+    // side of the room.
+    sparse_view_faces:      [0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20],
 };
 
 const ATTEND_LABELS = {
@@ -95,12 +100,13 @@ const ATTEND_LABELS = {
     auto_enroll_threshold:  { label: 'Auto-enroll threshold',    unit: '',       hint: 'Confidence required to auto-add a new face to the ground-truth dataset.' },
     alert_confidence:       { label: 'Low-confidence alert',     unit: '',       hint: 'Students with average confidence below this trigger a low-confidence notification.' },
     camera_switch_sec:      { label: 'Camera switch interval',   unit: 'sec',    hint: 'Dual-camera rooms only: how long each attendance run captures from one camera before switching. Separate from the GT Acquisition interval above, which is measured in minutes.' },
+    sparse_view_faces:      { label: 'Early-switch face count',   unit: 'faces',  hint: 'Dual-camera rooms only: when the busiest frame from a camera since it came round shows fewer than this many faces, it is treated as pointed at an empty part of the room and the run moves on after HALF the switch interval. Applies to every camera equally. Set it below the smallest number of students you expect on one side; Off gives every camera its full dwell.' },
 };
 
 const ATTEND_DEFAULTS = {
     threshold: 0.45, auto_present_threshold: 0.60, review_threshold: 0.40,
     min_detections: 3, auto_enroll_threshold: 0.75, alert_confidence: 0.60,
-    camera_switch_sec: 30,
+    camera_switch_sec: 30, sparse_view_faces: 5,
 };
 
 // FAISS Recognition — live tracked-attendance matching pipeline
@@ -964,9 +970,20 @@ export default function MLFineTuning() {
                             Session Parameters
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
-                            {['frame_skip', 'target_imgs_per_person', 'max_imgs_per_run', 'cluster_threshold', 'min_samples', 'det_size'].map(key => {
+                            {['frame_skip', 'target_imgs_per_person', 'max_imgs_per_run', 'cluster_threshold', 'min_samples', 'det_size', 'gt_max_zoom'].map(key => {
                                 const meta = GT_LABELS[key];
                                 const opts = GT_OPTIONS[key];
+                                // Was an inline ternary chain ending in a bare
+                                // 320 for det_size. That default has since moved
+                                // to 640 (to match live attendance, so the two do
+                                // not rebuild the shared detector past each
+                                // other) and the chain still said 320, marking
+                                // the wrong option. A lookup, like the two groups
+                                // below already use, cannot drift that way.
+                                const defaults = {
+                                    frame_skip: 10, target_imgs_per_person: 10, max_imgs_per_run: 0,
+                                    cluster_threshold: 0.45, min_samples: 3, det_size: 640, gt_max_zoom: 3,
+                                };
                                 return (
                                     <div key={key}>
                                         <label style={styles.label}>{meta.label}{meta.unit ? ` (${meta.unit})` : ''}</label>
@@ -988,7 +1005,7 @@ export default function MLFineTuning() {
                                         >
                                             {opts.map(v => (
                                                 <option key={v} value={v}>
-                                                    {v}{v === (key === 'frame_skip' ? 10 : key === 'target_imgs_per_person' ? 10 : key === 'max_imgs_per_run' ? 0 : key === 'cluster_threshold' ? 0.45 : key === 'min_samples' ? 3 : 320) ? ' (default)' : ''}{key === 'max_imgs_per_run' && v === 0 ? ' (Unlimited)' : ''}
+                                                    {v}{v === defaults[key] ? ' (default)' : ''}{key === 'max_imgs_per_run' && v === 0 ? ' (Unlimited)' : ''}
                                                 </option>
                                             ))}
                                         </select>
@@ -1143,7 +1160,7 @@ export default function MLFineTuning() {
                             Capture
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-                            {['camera_switch_sec'].map(key => {
+                            {['camera_switch_sec', 'sparse_view_faces'].map(key => {
                                 const meta = ATTEND_LABELS[key];
                                 const opts = ATTEND_OPTIONS[key];
                                 return (
@@ -1157,7 +1174,11 @@ export default function MLFineTuning() {
                                         >
                                             {opts.map(v => (
                                                 <option key={v} value={v}>
-                                                    {v}{v === ATTEND_DEFAULTS[key] ? ' (default)' : ''}
+                                                    {/* Only sparse_view_faces offers 0, and there it
+                                                        means "never switch early" rather than a
+                                                        zero-face setting. */}
+                                                    {v === 0 ? 'Off' : v}
+                                                    {v === ATTEND_DEFAULTS[key] ? ' (default)' : ''}
                                                 </option>
                                             ))}
                                         </select>

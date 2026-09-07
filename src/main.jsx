@@ -9,7 +9,7 @@ import axios from 'axios';
 import getEnvironment from './getenvironment';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { queryPersister } from './utils/queryPersister';
+import { queryPersister, shouldPersistQuery } from './utils/queryPersister';
 import { learningModuleTheme } from './learningModule/theme';
 
 const queryClient = new QueryClient({
@@ -77,7 +77,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <HelmetProvider context={helmetContext}>
       <ChakraProvider theme={appTheme}>
         <RecoilRoot>
-          <PersistQueryClientProvider client={queryClient} persistOptions={{ persister: queryPersister }}>
+          <PersistQueryClientProvider
+            client={queryClient}
+            persistOptions={{
+              persister: queryPersister,
+              // Keeps the signed-in user off disk; see queryPersister.js.
+              dehydrateOptions: { shouldDehydrateQuery: shouldPersistQuery },
+            }}
+          >
             <App />
           </PersistQueryClientProvider>
         </RecoilRoot>

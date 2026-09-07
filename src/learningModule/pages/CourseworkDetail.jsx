@@ -235,7 +235,7 @@ export default function CourseworkDetail() {
                   </Text>
                   <Badge colorScheme={meta.colorScheme}>{meta.label}</Badge>
                   {item.points > 0 && <Text fontSize="sm" color="lmFg.subtle">{item.points} points</Text>}
-                  <DueBadge dueDate={item.dueDate} />
+                  <DueBadge dueDate={item.dueDate} isTeacher={isTeacher} />
                   {item.topicName && <Badge colorScheme="gray">{item.topicName}</Badge>}
                   {item.aiSourceSessionId && (
                     <Badge colorScheme="purple" display="inline-flex" alignItems="center" gap={1}>
