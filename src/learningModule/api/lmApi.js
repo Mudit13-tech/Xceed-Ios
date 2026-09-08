@@ -1037,6 +1037,10 @@ const lmApi = {
   adminStudentImportStatus: (batchId) => request(`/admin/students/import-status/${batchId}`),
   /* Editing a student's name/email/dept from the directory. */
   adminUpdateStudent: (studentId, body) => request(`/admin/students/${studentId}`, { method: 'PATCH', body }),
+  /* Folds every student's dept to the timetable's own casing, merging
+     duplicates ("Computer Science..." / "COMPUTER SCIENCE...") left over from
+     before that fold applied to every write — the distribution's "fix" button. */
+  adminNormalizeStudentDepartments: () => request('/admin/students/normalize-departments', { method: 'POST' }),
 
   /* ---- discussion forum ---- */
   listDiscussions: (classId) => request(`/classes/${classId}/discussions`),

@@ -89,21 +89,51 @@ function CommonSlot() {
         fetchSessions();
     }, []);
 
+    /**
+     * Resolve the timetable code for the chosen session and department.
+     *
+     * Same two guards as mastersearch.jsx, for the same reason: this fired on
+     * mount with nothing selected and asked for `/getcode/undefined/...`, and
+     * it stored a failed response's error object as the code, after which every
+     * URL built from it read `/alldetails/[object Object]`.
+     */
     useEffect(() => {
+        const session = selectedSession?.session;
+        if (!session || !selectedDept) {
+            setCurrentCode('');
+            return;
+        }
+
+        let cancelled = false;
+
         const fetchCode = async (session, dept) => {
             try {
                 const response = await fetch(
-                    `${apiUrl}/timetablemodule/timetable/getcode/${session?.session}/${dept}`,
+                    `${apiUrl}/timetablemodule/timetable/getcode/${encodeURIComponent(session)}/${encodeURIComponent(dept)}`,
                     { credentials: "include" }
                 );
+                if (cancelled) return;
+
+                if (!response.ok) {
+                    // 404 means no timetable has been created for this
+                    // department and session yet — not an error to report.
+                    setCurrentCode('');
+                    return;
+                }
+
                 const data1 = await response.json();
-                setCurrentCode(data1)
+                if (cancelled) return;
+                setCurrentCode(typeof data1 === 'string' ? data1 : '');
             } catch (error) {
-                console.error("Error fetching existing timetable data:", error);
-                return {};
+                if (!cancelled) {
+                    console.error("Error fetching existing timetable data:", error);
+                    setCurrentCode('');
+                }
             }
         }
+
         fetchCode(selectedSession, selectedDept);
+        return () => { cancelled = true; };
     }, [selectedSession, selectedDept])
 
 
@@ -199,14 +229,18 @@ function CommonSlot() {
 
    
     const fetchTTData = async (currentCode) => {
+        if (!currentCode) return;
         try {
-            const response = await fetch(`${apiUrl}/timetablemodule/timetable/alldetails/${currentCode}`, {
+            const response = await fetch(`${apiUrl}/timetablemodule/timetable/alldetails/${encodeURIComponent(currentCode)}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 credentials: 'include'
             });
+
+            // A failed response's body is an error object, not a timetable.
+            if (!response.ok) return;
 
             const data = await response.json();
             setTTData(data);
@@ -316,15 +350,28 @@ function CommonSlot() {
     const [TTData, setTTData] = useState([]);
 
     useEffect(() => {
+        // Nothing to fetch until a code has been resolved — see the mount-time
+        // `/subjectdetails/` and `/alldetails/` requests this used to send.
+        if (!currentCode) {
+            setSubjectData([]);
+            setTTData([]);
+            return;
+        }
+
         const fetchSubjectData = async (currentCode) => {
             try {
-                const response = await fetch(`${apiUrl}/timetablemodule/subject/subjectdetails/${currentCode}`,
+                const response = await fetch(`${apiUrl}/timetablemodule/subject/subjectdetails/${encodeURIComponent(currentCode)}`,
                     { credentials: "include" }
                 );
+                if (!response.ok) {
+                    setSubjectData([]);
+                    return;
+                }
                 const data = await response.json();
-                setSubjectData(data);
+                setSubjectData(Array.isArray(data) ? data : []);
             } catch (error) {
                 console.error('Error fetching subject data:', error);
+                setSubjectData([]);
             }
         };
 

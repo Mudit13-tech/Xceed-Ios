@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import jsPDF from 'jspdf';
-import { useNavigate, useLocation, Form, Link } from 'react-router-dom';
+import { useNavigate, useLocation, useParams, Form, Link } from 'react-router-dom';
 import getEnvironment from '../getenvironment';
 import ViewTimetable from './viewtt';
 import TimetableSummary from './ttsummary';
@@ -58,9 +58,25 @@ function MasterView({ autofill = false }) {
   const [commonLoad, setCommonLoad] = useState();
 
   const apiUrl = getEnvironment();
-  const currentURL = window.location.pathname;
-  const parts = currentURL.split('/');
-  const autofillid = parts[parts.length - 1];
+
+  /**
+   * The faculty id to pre-select, taken from the route rather than the path.
+   *
+   * This used to be the last path segment, whatever it happened to be. The same
+   * component is mounted both at `/timetable/faculty/:facultyname` (where that
+   * segment is a faculty id, sent in the timetable notification emails) and as
+   * the index route of `/timetable` — where the last segment is the word
+   * "timetable". So opening the plain timetable page fired
+   * `GET /faculty/id/timetable`, which failed to cast to an ObjectId and came
+   * back a 500, once per render.
+   *
+   * Reading the router's own param, and only when this instance was mounted
+   * with `autofill`, means the request happens exactly when there is an id to
+   * look up. (The param is named `facultyname` for historical reasons; the
+   * value has always been the master-list record's id.)
+   */
+  const routeParams = useParams();
+  const autofillid = autofill ? routeParams.facultyname : undefined;
 
   const [availableSems, setAvailableSems] = useState([]);
   const [availableRooms, setAvailableRooms] = useState([]);
@@ -131,22 +147,58 @@ function MasterView({ autofill = false }) {
     fetchSessions();
   }, []);
 
+  /**
+   * Resolve the timetable code for the chosen session and department.
+   *
+   * The two guards below are the whole point of this effect, and both were
+   * missing. Without the first, the effect fired on mount with both values
+   * still empty and asked for `/getcode//`. Without the second, a failed
+   * response's JSON *body* — an error object — was stored as the code, and
+   * every URL built from it afterwards read `/alldetails/[object Object]`;
+   * that single mistake accounted for well over a thousand 500s in the server
+   * console, because the effect re-runs and the page keeps asking.
+   *
+   * A code is always a plain string, so anything else is a failure by
+   * definition and clears the code rather than poisoning it.
+   */
   useEffect(() => {
+    if (!selectedSession || !selectedDept) {
+      setCurrentCode('');
+      return;
+    }
+
+    let cancelled = false;
+
     const fetchCode = async (session, dept) => {
       try {
         const response = await fetch(
-          `${apiUrl}/timetablemodule/timetable/getcode/${session}/${dept}`,
+          `${apiUrl}/timetablemodule/timetable/getcode/${encodeURIComponent(session)}/${encodeURIComponent(dept)}`,
           { credentials: 'include' }
         );
+        if (cancelled) return;
+
+        if (!response.ok) {
+          // 404 here is ordinary: nobody has created a timetable for this
+          // department and session yet.
+          setCurrentCode('');
+          return;
+        }
+
         const data1 = await response.json();
-        console.log('received code:', data1);
-        setCurrentCode(data1);
+        if (cancelled) return;
+        setCurrentCode(typeof data1 === 'string' ? data1 : '');
       } catch (error) {
-        console.error('Error fetching existing timetable data:', error);
-        return {};
+        if (!cancelled) {
+          console.error('Error fetching existing timetable data:', error);
+          setCurrentCode('');
+        }
       }
     };
+
     fetchCode(selectedSession, selectedDept);
+    return () => {
+      cancelled = true;
+    };
   }, [selectedSession, selectedDept]);
 
   useEffect(() => {
@@ -382,9 +434,10 @@ function MasterView({ autofill = false }) {
   }, [apiUrl, currentCode, selectedSemester, selectedFaculty, selectedRoom]);
 
   const fetchTTData = async (currentCode) => {
+    if (!currentCode) return;
     try {
       const response = await fetch(
-        `${apiUrl}/timetablemodule/timetable/alldetails/${currentCode}`,
+        `${apiUrl}/timetablemodule/timetable/alldetails/${encodeURIComponent(currentCode)}`,
         {
           method: 'GET',
           headers: {
@@ -394,8 +447,11 @@ function MasterView({ autofill = false }) {
         }
       );
 
+      // A failed response's body is an error object, not a timetable. Storing
+      // it was how the page came to hold `[object Object]` as its own state.
+      if (!response.ok) return;
+
       const data = await response.json();
-      console.log('ttdata---recent', data);
       setTTData(data);
       return data;
     } catch (error) {
@@ -547,16 +603,32 @@ function MasterView({ autofill = false }) {
   const [TTData, setTTData] = useState([]);
 
   useEffect(() => {
+    // Nothing to fetch until a code has been resolved. Without this the effect
+    // ran on mount with `currentCode` still '' and asked for
+    // `/subject/subjectdetails/` and `/timetable/alldetails/` — paths whose
+    // trailing slash Express matches against `/:id`, so "subjectdetails" was
+    // read as a document id and the request came back a 500.
+    if (!currentCode) {
+      setSubjectData([]);
+      setTTData([]);
+      return;
+    }
+
     const fetchSubjectData = async (currentCode) => {
       try {
         const response = await fetch(
-          `${apiUrl}/timetablemodule/subject/subjectdetails/${currentCode}`,
+          `${apiUrl}/timetablemodule/subject/subjectdetails/${encodeURIComponent(currentCode)}`,
           { credentials: 'include' }
         );
+        if (!response.ok) {
+          setSubjectData([]);
+          return;
+        }
         const data = await response.json();
-        setSubjectData(data);
+        setSubjectData(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error('Error fetching subject data:', error);
+        setSubjectData([]);
       }
     };
 
@@ -677,14 +749,18 @@ function MasterView({ autofill = false }) {
     const fetchAndAutofill = async () => {
       try {
         const id = decodeURIComponent(autofillid || '').trim();
-        if (id) {
-          const response = await fetch(`${apiUrl}/timetablemodule/faculty/id/${id}`, { credentials: 'include' });
-          if (response.ok) {
-            const faculty = await response.json();
-            handleFacultyClick({ name: faculty.name, dept: faculty.dept });
-          } else {
-            console.error('Failed to fetch faculty by ID');
-          }
+        // 24 hex characters is the only shape this endpoint accepts; anything
+        // else is a stale or hand-edited link, and asking anyway just produced
+        // a 500. Checked here so a bad link is silently ignored rather than
+        // turning into server-side noise.
+        if (!/^[0-9a-fA-F]{24}$/.test(id)) return;
+
+        const response = await fetch(`${apiUrl}/timetablemodule/faculty/id/${id}`, { credentials: 'include' });
+        if (response.ok) {
+          const faculty = await response.json();
+          handleFacultyClick({ name: faculty.name, dept: faculty.dept });
+        } else {
+          console.error('Failed to fetch faculty by ID');
         }
       } catch (e) {
         console.error('Error in autofill:', e);

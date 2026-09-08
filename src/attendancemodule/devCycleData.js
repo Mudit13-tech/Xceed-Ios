@@ -1,13 +1,137 @@
 // client/src/attendancemodule/devCycleData.js
 // CURATED from `git log origin/main --since=2026-03-01 --no-merges`
-// (generated 2026-07-19). Scoped to the Attendance Management System (IAMS)
+// (last updated 2026-09-08). Scoped to the Attendance Management System (IAMS)
 // ONLY — changes to other XCEED modules (timetable, certificates, conference,
 // review, guide, …) are deliberately excluded, as are internal refactors,
 // merge fixes, package chores and reverts. Each item is a plain-language
 // FEATURE description a non-developer can understand. Weekly buckets run
-// Monday–Sunday, newest week first. Authors are the commit usernames.
+// Monday–Sunday, newest week first. Authors are the commit usernames, with
+// the alias `doesmukalcode` normalised to `CodewithMukal` (same author) so the
+// GitHub link resolves.
 
 const DEV_CYCLE = [
+  {
+    "week": "Sep 07 – Sep 13, 2026",
+    "items": [
+      { "author": "guptakaran0720", "subject": "Live preview no longer keeps showing old frames after a camera stops sending" },
+      { "author": "Gulshan-heap", "subject": "Department dashboard view added, with activity tracking for department admins" },
+      { "author": "Javin Chutani", "subject": "ERP sync status table now shows a present/absent summary and links to the reports" },
+      { "author": "harimurugan1989", "subject": "Student ERP page reworked — students can review and correct their own identity details" },
+      { "author": "guptakaran0720", "subject": "ERP student list is now built from ground-truth records, and student deletion is blocked" },
+      { "author": "harimurugan1989", "subject": "Camera status, preview and health checks made more reliable" },
+      { "author": "harimurugan1989", "subject": "Recognition and capture improvements across fine tuning, scheduler and reports" },
+      { "author": "guptakaran0720", "subject": "Server console now names which requests are failing, not just how many" },
+      { "author": "guptakaran0720", "subject": "Emailed photo-update link removed in favour of the in-app update page" }
+    ]
+  },
+  {
+    "week": "Aug 31 – Sep 06, 2026",
+    "items": [
+      { "author": "guptakaran0720", "subject": "Students are emailed a reminder to refresh their ground-truth photo, with a one-week rule between updates" },
+      { "author": "guptakaran0720", "subject": "Students can now see their own attendance and ground-truth photos from the learning pages" },
+      { "author": "Javin Chutani", "subject": "Faculty are mailed when an attendance run never completes successfully" },
+      { "author": "Javin Chutani", "subject": "Cameras can be added in bulk from a CSV file in the camera registry" },
+      { "author": "Claude", "subject": "Live classroom cards added to the department dashboard" },
+      { "author": "Claude", "subject": "Camera locking, retry order and stream timeouts added so rooms no longer clash over a camera" },
+      { "author": "Claude", "subject": "Attendance runs start staggered across rooms and zoom passes scale to class size, so large classes finish faster" },
+      { "author": "Gulshan-heap", "subject": "Department names normalised across attendance and embedding charts" },
+      { "author": "guptakaran0720", "subject": "Roll assignment shows one Approved card per student instead of one per old record" },
+      { "author": "harimurugan1989", "subject": "HOD dashboard and notification settings improved" },
+      { "author": "guptakaran0720", "subject": "Live server and GPU metrics shown, including when the per-process VRAM split is unavailable" },
+      { "author": "Claude", "subject": "Critical and high severity security issues patched across the attendance services" }
+    ]
+  },
+  {
+    "week": "Aug 24 – Aug 30, 2026",
+    "items": [
+      { "author": "guptakaran0720", "subject": "Backup ground-truth images restored correctly when a photo is replaced" },
+      { "author": "Gulshan-heap", "subject": "Image Count tab now shows its tables" },
+      { "author": "Gulshan-heap", "subject": "Help & Manual pages made usable on small screens" },
+      { "author": "guptakaran0720", "subject": "Server errors surfaced in the in-app console" },
+      { "author": "Claude", "subject": "Dashboard and report pages made faster — slow repeated database lookups and blocking file reads removed" }
+    ]
+  },
+  {
+    "week": "Aug 17 – Aug 23, 2026",
+    "items": [
+      { "author": "harimurugan1989", "subject": "Attendance disputes — students can raise a dispute and departments can review it" },
+      { "author": "Gulshan-heap", "subject": "Attendance charts redesigned with a horizontal layout and readable labels" },
+      { "author": "harimurugan1989", "subject": "GPU metrics collection and reporting expanded" },
+      { "author": "guptakaran0720", "subject": "Ground-truth photos now show the date they were captured" },
+      { "author": "Gulshan-heap", "subject": "Extra class tab improved" },
+      { "author": "guptakaran0720", "subject": "Database and ML data folders can be downloaded from the admin page" },
+      { "author": "Claude", "subject": "Bandwidth and load shown on the server console" },
+      { "author": "Gulshan-heap", "subject": "Faculty names shown correctly in the dropdown" },
+      { "author": "guptakaran0720", "subject": "Embeddings update automatically when a ground-truth photo changes" }
+    ]
+  },
+  {
+    "week": "Aug 10 – Aug 16, 2026",
+    "items": [
+      { "author": "guptakaran0720", "subject": "In-app and push notifications added for attendance updates" },
+      { "author": "Javin Chutani", "subject": "Extra class notifications completed end to end" },
+      { "author": "Javin Chutani", "subject": "Extra classes are checked against the current timetable and clashing entries are shown" },
+      { "author": "Javin Chutani", "subject": "Semester embedding lists can be exported as CSV" },
+      { "author": "Javin Chutani", "subject": "Every subtab can now be opened in its own tab" },
+      { "author": "guptakaran0720", "subject": "ERP photo and ground-truth photo shown side by side, with new photos highlighted only when there is an older one to compare" },
+      { "author": "harimurugan1989", "subject": "Subject-wise embedding emails and automatic recovery mails added" },
+      { "author": "harimurugan1989", "subject": "Frame verification, unknown faces and report tabs improved, with embedding skips for already-built students" },
+      { "author": "harimurugan1989", "subject": "Live attendance thresholds tuned and duplicate subject creation stopped" },
+      { "author": "Gulshan-heap", "subject": "Attendance runs restricted so department admins cannot start them" },
+      { "author": "CodewithMukal", "subject": "Saved reports open on today's date by default" },
+      { "author": "guptakaran0720", "subject": "Ground-truth image replacement fixed and newly approved photos highlighted" }
+    ]
+  },
+  {
+    "week": "Aug 03 – Aug 09, 2026",
+    "items": [
+      { "author": "amit837-design", "subject": "Student photo swap — students are emailed a secure link to a page where they can update their photo" },
+      { "author": "Claude", "subject": "Student rosters are fetched directly from the NITJ ERP portal, with real error reporting" },
+      { "author": "harimurugan1989", "subject": "Per-class email notifications to faculty" },
+      { "author": "harimurugan1989", "subject": "Automatic scheduler improved, with live progress shown on the frontend" },
+      { "author": "harimurugan1989", "subject": "Bug reporting added for department admins" },
+      { "author": "harimurugan1989", "subject": "ERP health indicator and uptime digest improved" },
+      { "author": "Javin Chutani", "subject": "Saved reports can be deleted, but only by an IAMS admin" },
+      { "author": "Javin Chutani", "subject": "Attendance pages made responsive, with sidebar and content scrolling separately" },
+      { "author": "Gulshan-heap", "subject": "Room is picked from a dropdown of registered cameras in Attendance Report and Frame Verification" },
+      { "author": "guptakaran0720", "subject": "Scheduler recording history added, with audio and download problems fixed" },
+      { "author": "harimurugan1989", "subject": "ERP embedding generation fixed" },
+      { "author": "Gulshan-heap", "subject": "Dashboard pending actions and ERP summary counts corrected" }
+    ]
+  },
+  {
+    "week": "Jul 27 – Aug 02, 2026",
+    "items": [
+      { "author": "Javin Chutani", "subject": "GPU metrics are collected continuously in the background" },
+      { "author": "Javin Chutani", "subject": "Ground truth and roll assignment can be handled across multiple departments" },
+      { "author": "Javin Chutani", "subject": "ERP summary shows embedding progress, failed roll numbers and a workflow to retry them" },
+      { "author": "Gulshan-heap", "subject": "Pending actions card and summary tab added to roll assignment" },
+      { "author": "guptakaran0720", "subject": "Existing ground-truth embeddings shown for comparison while verifying a student" },
+      { "author": "guptakaran0720", "subject": "Only embedded images are listed in a cluster, and single images can be deleted" },
+      { "author": "guptakaran0720", "subject": "Corrupted photo records clean themselves up and re-sync with what is on disk" },
+      { "author": "amit837-design", "subject": "Camera status is kept in sync with the database by a background health check" },
+      { "author": "guptakaran0720", "subject": "Recording from the server fixed, along with black camera preview boxes" },
+      { "author": "harimurugan1989", "subject": "ERP embedding switching fixed and approved folders now appear in the frontend" },
+      { "author": "Gulshan-heap", "subject": "Subject embedding dropdown fixed" },
+      { "author": "guptakaran0720", "subject": "Repeated service-down emails stopped" }
+    ]
+  },
+  {
+    "week": "Jul 20 – Jul 26, 2026",
+    "items": [
+      { "author": "amit837-design", "subject": "Rejected face samples can be reviewed per period, with an on/off toggle, a run-now button and a 7-day automatic cleanup" },
+      { "author": "harimurugan1989", "subject": "The module is now branded iLEED across all attendance pages" },
+      { "author": "harimurugan1989", "subject": "Ground-truth capture thresholds are adjustable from the frontend" },
+      { "author": "CodewithMukal", "subject": "Recordings can be filtered by date and deleted" },
+      { "author": "harimurugan1989", "subject": "ERP attendance sync improved, with a backfill for older records" },
+      { "author": "guptakaran0720", "subject": "Ground truth can be re-acquired for a student without starting over" },
+      { "author": "amit837-design", "subject": "Delete-all-photos option added to the Manage tab, and acquisition fields hidden from department admins" },
+      { "author": "CodewithMukal", "subject": "Camera online status and refresh corrected" },
+      { "author": "harimurugan1989", "subject": "Attendance email templates redesigned" },
+      { "author": "guptakaran0720", "subject": "Camera and server previews fixed, and the schedule-email toggle added" },
+      { "author": "harimurugan1989", "subject": "Attendance sidebar and page layout rearranged" }
+    ]
+  },
   {
     "week": "Jul 13 – Jul 19, 2026",
     "items": [

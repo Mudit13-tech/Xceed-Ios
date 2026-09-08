@@ -34,7 +34,7 @@ const RESPONSIVE_CSS = `
   .report-grid-3 > *, .report-grid-2 > *, .report-run-grid > * { min-width: 0; }
   .report-stat-grid { display: grid; gap: 12px; margin-bottom: 16px; }
   .report-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
-  .report-history-table { min-width: 860px; }
+  .report-history-table { min-width: 990px; }
   .report-attendance-table { min-width: 920px; }
 
   @media (max-width: 900px) {
@@ -232,6 +232,10 @@ export default function AttendanceReport() {
   const [canDeleteReports, setCanDeleteReports] = useState(false);
   const [isDeptAdminOnly, setIsDeptAdminOnly] = useState(false);
   const [deletingReportId, setDeletingReportId] = useState(null);
+  // Which row's faculty summary is mid-send. The end-of-class mail is off by
+  // default, so "not sent" is the ordinary state of a report — this is how the
+  // summary actually goes out, for today's classes and for older ones alike.
+  const [mailingReportId, setMailingReportId] = useState(null);
 
   // ── Detail ────────────────────────────────────────────────────
   const [detailReport, setDetailReport] = useState(null);
@@ -879,6 +883,43 @@ export default function AttendanceReport() {
       showToast(error.message || 'Delete failed', 'error');
     } finally {
       setDeletingReportId(null);
+    }
+  };
+
+  // Mail the end-of-class summary for one report on demand. Nothing here needs
+  // the period to be live, so a class from last week sends exactly like today's.
+  const sendFacultyMail = async (report) => {
+    const sentAt = report.facultyEmail?.sentAt;
+    if (sentAt && !window.confirm(
+      `This summary already went to ${report.facultyEmail?.toAddress || 'the faculty'} on `
+      + `${new Date(sentAt).toLocaleString()}. Send it again?`,
+    )) return;
+
+    setMailingReportId(report._id);
+    try {
+      const response = await fetch(`${REPORT_API}/${report._id}/faculty-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        // Only a deliberate resend may mail the faculty a second time; without
+        // this the server refuses a report it has already sent.
+        body: JSON.stringify({ resend: !!sentAt }),
+      });
+      const data = await response.json();
+      // A refused send still carries the report's mail state — the server
+      // records why on the report — so the row is updated either way and the
+      // reason stays readable after the toast has gone.
+      if (data.facultyEmail) {
+        setReports((current) => current.map((item) => (
+          item._id === report._id ? { ...item, facultyEmail: data.facultyEmail } : item
+        )));
+      }
+      if (!response.ok) throw new Error(data.error || 'Send failed');
+      showToast(data.message || 'Summary sent to the faculty');
+    } catch (error) {
+      showToast(error.message || 'Send failed', 'error');
+    } finally {
+      setMailingReportId(null);
     }
   };
 
@@ -2007,6 +2048,7 @@ export default function AttendanceReport() {
                           'A',
                           '%',
                           'Status',
+                          'Faculty Mail',
                           'Action',
                         ].map((h) => (
                           <th key={h}>{h}</th>
@@ -2084,6 +2126,18 @@ export default function AttendanceReport() {
                             >
                               {r.status === 'live' ? 'Running' : 'Completed'}
                             </span>
+                          </td>
+                          <td
+                            style={{ padding: '11px 14px' }}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <FacultyMailCell
+                              report={r}
+                              sending={mailingReportId === r._id}
+                              onSend={() => sendFacultyMail(r)}
+                              theme={theme}
+                              styles={styles}
+                            />
                           </td>
                           <td
                             style={{
@@ -2416,6 +2470,69 @@ export default function AttendanceReport() {
 // Roll number as an affordance into that student's ground truth. Falls back
 // to plain text when no handler is wired, so both tables render the same
 // whether or not the ground-truth lookup is available.
+// Whether the end-of-class summary ever reached the faculty, and the control
+// that sends it if it did not. The automatic send at the end of a class is off
+// by default, so an untouched report reads "Not sent" — that is the expected
+// state and not a fault, which is why the failure line below appears only once
+// an attempt has actually failed.
+function FacultyMailCell({ report, sending, onSend, theme, styles }) {
+  const mail = report.facultyEmail || {};
+  const sentAt = mail.sentAt ? new Date(mail.sentAt) : null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 118 }}>
+      <span
+        style={{
+          ...styles.badge(sentAt ? 'success' : 'warning'),
+          display: 'inline-block',
+          padding: '4px 8px',
+          textAlign: 'center',
+        }}
+        title={
+          sentAt
+            ? `Sent ${sentAt.toLocaleString()}${mail.toAddress ? ` to ${mail.toAddress}` : ''}`
+            : 'The faculty has not been mailed this class summary'
+        }
+      >
+        {sentAt ? `Sent ${sentAt.toLocaleDateString()}` : 'Not sent'}
+      </span>
+      <button
+        type="button"
+        onClick={onSend}
+        disabled={sending}
+        style={{
+          ...(sentAt ? styles.btnGhost : styles.btnPrimary),
+          padding: '6px 10px',
+          fontSize: 11,
+          opacity: sending ? 0.6 : 1,
+          cursor: sending ? 'wait' : 'pointer',
+        }}
+      >
+        {sending ? 'Sending…' : sentAt ? 'Resend' : 'Send now'}
+      </button>
+      {!sentAt && mail.lastError && (
+        <span
+          title={mail.lastError}
+          style={{
+            fontSize: 10,
+            lineHeight: 1.35,
+            color: theme.danger,
+            // The reason can be a whole SMTP sentence; two lines is enough to
+            // recognise it, and the full text stays on the tooltip.
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            maxWidth: 180,
+          }}
+        >
+          {mail.lastError}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function RollNoCell({ rollNo, student, onOpenGroundTruth, theme }) {
   if (!onOpenGroundTruth) return rollNo;
 

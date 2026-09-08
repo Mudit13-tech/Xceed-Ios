@@ -53,10 +53,18 @@ function Toast({ toast }) {
   );
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, reason }) {
   return (
     <span
-      style={{ ...styles.badge(statusColor(status)), display: 'inline-block' }}
+      // What the availability probe made of this camera, and why. The badge has
+      // room for one word; the reason is the part that tells an operator whether
+      // to check the camera, the network, the credentials — or nothing at all.
+      title={reason || undefined}
+      style={{
+        ...styles.badge(statusColor(status)),
+        display: 'inline-block',
+        cursor: reason ? 'help' : 'default',
+      }}
     >
       {statusLabel(status)}
     </span>
@@ -74,6 +82,13 @@ const AUTO_RETRY_DELAY_MS = 3000;
 // camera sooner — so reaching zero means "try now", and if the camera is still
 // held the next refusal just restarts the countdown with the new expiry.
 const BUSY_RECHECK_MS = 3000;
+
+// How often to ask the server whether a feed already on screen is still live.
+// An <img> holding an MJPEG stream keeps the last frame it received when the
+// stream closes and fires no error doing it, so a camera that stopped answering
+// looked exactly like one that was streaming — a still of an empty room sitting
+// next to the "offline" badge that was telling the truth about it.
+const STATUS_POLL_MS = 4000;
 
 // Single camera feed panel
 function FeedPanel({ camera, quality, scale, refreshKey, onError }) {
@@ -104,6 +119,11 @@ function FeedPanel({ camera, quality, scale, refreshKey, onError }) {
 
   const startFeed = useCallback(() => {
     if (!camera?._id) return;
+
+    // This call may be a retry timer firing. That timer is done, so the ref
+    // must stop pointing at it — the unmount cleanup and the drop handler both
+    // read it as "a reconnect is already scheduled".
+    retryTimerRef.current = null;
 
     // Always attempt the connection — the offline status comes from a periodic
     // probe that can be stale or wrong; the preview start below is the real test.
@@ -189,6 +209,61 @@ function FeedPanel({ camera, quality, scale, refreshKey, onError }) {
         }).catch(() => {});
     };
 }, [camera?._id, refreshKey]);
+
+  // A feed that was working and then stopped: the stream closed, the <img>
+  // errored, or the status poll found the frames had gone stale. Recovery is
+  // the same as a failed start — a couple of automatic retries, then say so —
+  // but the frame on screen goes first, because leaving the camera's last
+  // frame up is precisely what made a dead feed look like a live one.
+  const handleStreamDrop = useCallback(
+    (reason) => {
+      if (retryTimerRef.current) return; // a reconnect is already scheduled
+      if (retryCountRef.current < MAX_AUTO_RETRIES) {
+        retryCountRef.current += 1;
+        setRetryAttempt(retryCountRef.current);
+        setStarting(true);
+        setStreamUrl(null);
+        retryTimerRef.current = setTimeout(startFeed, AUTO_RETRY_DELAY_MS);
+        return;
+      }
+      setStarting(false);
+      setStreamUrl(null);
+      setFailed(true);
+      setFailReason(reason || 'The camera stopped sending frames.');
+      onError?.(
+        `Feed stopped for ${camera?.cameraId}: ${reason || 'the camera stopped sending frames'}`,
+      );
+    },
+    [startFeed, camera?.cameraId, onError],
+  );
+
+  // Nothing in the browser reports an MJPEG stream that ends after its first
+  // frame, so the server is the only place that knows whether these pixels are
+  // still arriving. Poll it for as long as a feed is being displayed.
+  useEffect(() => {
+    if (!streamUrl || failed || busy || starting) return undefined;
+    let cancelled = false;
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `${CAMERA_API}/preview/status?jobId=${encodeURIComponent(
+            jobIdRef.current || '',
+          )}`,
+        );
+        const data = await res.json().catch(() => null);
+        if (cancelled || !data || data.alive !== false) return;
+        clearInterval(timer);
+        handleStreamDrop(data.lastError);
+      } catch (_) {
+        // A poll that fails says nothing about the camera — the network hiccup
+        // is here, not there. Leave the feed alone and ask again next tick.
+      }
+    }, STATUS_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [streamUrl, failed, busy, starting, handleStreamDrop]);
 
   // Countdown while another holder owns the camera, then reconnect by itself.
   // One timer per tick rather than a single interval, so the unmount cleanup
@@ -277,7 +352,7 @@ function FeedPanel({ camera, quality, scale, refreshKey, onError }) {
                 : 'Connecting...'}
             </span>
           ) : null}
-          <StatusBadge status={camera?.status} />
+          <StatusBadge status={camera?.status} reason={camera?.statusReason} />
         </div>
       </div>
 
@@ -383,18 +458,9 @@ function FeedPanel({ camera, quality, scale, refreshKey, onError }) {
             src={streamUrl}
             alt={`${camera?.cameraId} live feed`}
             style={{ width: '100%', display: 'block', objectFit: 'contain' }}
-            onError={() => {
-              if (retryCountRef.current < MAX_AUTO_RETRIES) {
-                retryCountRef.current += 1;
-                setRetryAttempt(retryCountRef.current);
-                setStarting(true);
-                setStreamUrl(null);
-                retryTimerRef.current = setTimeout(startFeed, AUTO_RETRY_DELAY_MS);
-                return;
-              }
-              setFailed(true);
-              onError?.(`Stream error on ${camera?.cameraId}. Check RTSP URL.`);
-            }}
+            onError={() =>
+              handleStreamDrop('Stream error — check the RTSP URL and camera.')
+            }
           />
         ) : null}
       </div>
@@ -669,7 +735,10 @@ export default function CameraPreview() {
               <span style={{ color: theme.text, fontWeight: 600 }}>
                 {roomCameras.left.cameraId}
               </span>
-              <StatusBadge status={roomCameras.left.status} />
+              <StatusBadge
+                status={roomCameras.left.status}
+                reason={roomCameras.left.statusReason}
+              />
             </>
           )}
           {roomCameras.right && (
@@ -678,7 +747,10 @@ export default function CameraPreview() {
               <span style={{ color: theme.text, fontWeight: 600 }}>
                 {roomCameras.right.cameraId}
               </span>
-              <StatusBadge status={roomCameras.right.status} />
+              <StatusBadge
+                status={roomCameras.right.status}
+                reason={roomCameras.right.statusReason}
+              />
             </>
           )}
         </div>

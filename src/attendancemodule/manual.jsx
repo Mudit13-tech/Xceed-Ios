@@ -82,6 +82,30 @@ function Note({ type = 'info', children }) {
     );
 }
 
+// The Developers and Development Cycle panels replace the step navigator, so
+// each offers an explicit way back to the guide — at the top and at the bottom,
+// since the panels are long enough to scroll past the header.
+function BackToManualButton({ onClick }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '7px 14px', borderRadius: 8, cursor: 'pointer',
+                fontSize: 12, fontWeight: 700,
+                background: '#f5f3ff', color: '#6366f1',
+                border: '1.5px solid #c4b5fd',
+                transition: 'all .15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#ede9fe'}
+            onMouseLeave={e => e.currentTarget.style.background = '#f5f3ff'}
+        >
+            ← Back to Manual
+        </button>
+    );
+}
+
 function SectionTitle({ children }) {
     return (
         <div style={{
@@ -174,13 +198,13 @@ function TabOverview({ setTab }) {
                 <Arrow />
                 <FlowCard n={2} icon="📹" title="RTSP Capture" sub="Dept incharge — live environment" accent="#0ea5e9" wide />
                 <Arrow />
-                <FlowCard n={3} icon="🖼️" title="ERP Verification" sub="Dept incharge — verify & edit photos" accent="#f472b6" wide />
+                <FlowCard n={3} icon="🖼️" title="ERP Photos" sub="Dept incharge — upload & verify photos" accent="#f472b6" wide />
                 <Arrow />
                 <FlowCard n={4} icon="🏷️" title="Roll Assignment" sub="Auto-match + incharge verification" accent="#10b981" wide />
                 <Arrow />
                 <FlowCard n={5} icon="🧠" title="Subject Embeddings" sub="Dept incharge — map students per subject" accent="#f59e0b" wide />
                 <Arrow />
-                <FlowCard n={6} icon="✅" title="Attendance" sub="Live recognition" accent="#14b8a6" />
+                <FlowCard n={6} icon="✅" title="Attendance" sub="Runs automatically" accent="#14b8a6" />
             </div>
 
             {/* role cards */}
@@ -192,7 +216,8 @@ function TabOverview({ setTab }) {
                         items: [
                             'Configure batches, cameras, and session dates',
                             'Configure capture settings (target images, frame skip, detection size)',
-                            'Run attendance and review reports',
+                            'Configure the attendance scheduler — periods, rooms, and working days',
+                            'Review automated attendance reports and correct any wrong calls',
                             'System-level access to all modules',
                         ],
                     },
@@ -200,6 +225,7 @@ function TabOverview({ setTab }) {
                         icon: '🏢', title: 'Dept. Incharge', color: '#10b981',
                         items: [
                             'Run RTSP ground truth capture for their department',
+                            'Request ERP photos from webmaster@nitj.ac.in and upload the ZIP per batch',
                             'Verify and manage ERP photos in Manage Photos tab',
                             'Perform roll assignment — map clusters to roll numbers',
                             'Approve assignments for the department',
@@ -226,10 +252,10 @@ function TabOverview({ setTab }) {
             <div className="manual-responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                 {[
                     { tab: 'groundtruth', icon: '📹', title: 'Ground Truth Capture',  color: '#0ea5e9', desc: 'Live RTSP stream capture from classroom cameras' },
-                    { tab: 'erp',         icon: '🖼️', title: 'ERP Photo Upload',      color: '#f472b6', desc: 'Upload official student photos as identification reference' },
+                    { tab: 'erp',         icon: '🖼️', title: 'ERP Photo Upload',      color: '#f472b6', desc: 'Dept incharges request photos from the webmaster and upload the batch ZIP' },
                     { tab: 'rollassign',  icon: '🏷️', title: 'Roll Assignment',       color: '#10b981', desc: 'Dept incharges map face clusters to roll numbers' },
                     { tab: 'embeddings',  icon: '🧠', title: 'Subject Embeddings',     color: '#f59e0b', desc: 'Dept incharge maps registered students per subject to enable targeted recognition' },
-                    { tab: 'attendance',  icon: '✅', title: 'Running Attendance',    color: '#14b8a6', desc: 'Live recognition, session reports, frame verification' },
+                    { tab: 'attendance',  icon: '✅', title: 'Running Attendance',    color: '#14b8a6', desc: 'Automatic scheduled runs, saved reports, frame verification' },
                 ].map(m => (
                     <div key={m.tab} style={{
                         background: '#fff', border: '1px solid #e4e8f5', borderRadius: 10,
@@ -376,7 +402,7 @@ function TabGroundTruth() {
             <SectionTitle>After Capture — What's Next?</SectionTitle>
             <div className="manual-flow">
                 {[
-                    { n: 'A', label: 'Upload ERP Photos', desc: 'Upload official student photos for the batch so the dept incharge can use them as visual reference when assigning roll numbers to clusters.', color: '#f472b6' },
+                    { n: 'A', label: 'Upload ERP Photos', desc: 'The dept incharge requests the batch photos from webmaster@nitj.ac.in and uploads the ZIP received, giving them a visual reference when assigning roll numbers to clusters.', color: '#f472b6' },
                     { n: 'B', label: 'Roll Assignment', desc: 'Dept incharge compares each cluster against ERP reference photos to identify the student and assigns the roll number.', color: '#10b981' },
                     { n: 'C', label: 'Subject Embeddings', desc: 'Once roll assignment is complete, register each student\'s roll number per subject to reduce matching effort during attendance.', color: '#f59e0b' },
                 ].map(s => (
@@ -404,6 +430,13 @@ function TabGroundTruth() {
 function TabERP() {
     return (
         <div>
+            <Note type="dept">
+                <strong>Who performs this step?</strong> Department Incharges (also referred to as Department
+                Coordinators) — they request the official student photos for their batch from the institute
+                webmaster, upload the ZIP received in reply, and then verify the uploaded photos in the
+                <strong>Manage Photos</strong> tab before roll assignment.
+            </Note>
+
             <Note type="info">
                 <strong>ERP photos are reference photos, not ground truth.</strong> They are uploaded so that department
                 incharges can visually identify which face cluster belongs to which student during the roll assignment step.
@@ -438,21 +471,54 @@ function TabERP() {
                 </div>
             </div>
 
-            <SectionTitle>Step-by-Step — Uploading ERP Photos</SectionTitle>
+            <SectionTitle>Where Do the ERP Photos Come From?</SectionTitle>
 
-            <Step n={1} title="Navigate to ERP Image Upload">
+            <p style={{ fontSize: 13.5, color: '#444c6e', lineHeight: 1.7, marginTop: 0, marginBottom: 20 }}>
+                The photos are not collected by the department. They are the official student photographs held in
+                the institute ERP, and the <strong>webmaster</strong> issues them on request. The dept incharge
+                mails a request for the batch, receives a ZIP in reply, and uploads that ZIP as it is — no
+                renaming, re-packaging, or per-student editing is required.
+            </p>
+
+            <SectionTitle>Step-by-Step — Requesting and Uploading ERP Photos</SectionTitle>
+
+            <Step n={1} title="Mail the Webmaster Requesting the Batch Photos">
+                Send a mail to <strong><a href="mailto:webmaster@nitj.ac.in" style={{ color: T.accent }}>webmaster@nitj.ac.in</a></strong> requesting
+                the ERP photos of the batch you need. State the batch clearly — degree, department, and admission
+                year — so the correct set is issued. For example:
+                <div style={{
+                    background: '#f8f9ff', border: '1px solid #e4e8f5', borderRadius: 8,
+                    padding: '14px 18px', fontSize: 12.5, color: '#444c6e',
+                    marginTop: 10, lineHeight: 1.8,
+                }}>
+                    <strong>To:</strong> webmaster@nitj.ac.in<br />
+                    <strong>Subject:</strong> Request for ERP student photographs — B.Tech CSE 2021 batch<br /><br />
+                    Kindly provide the ERP photographs of the students of the B.Tech Computer Science and
+                    Engineering 2021 batch, as a ZIP file with each photo named by the student&apos;s roll number.
+                    The photos are required for the attendance management system.
+                </div>
+            </Step>
+
+            <Step n={2} title="Receive the ZIP File in Reply">
+                The webmaster replies with a <strong>ZIP file containing the photos of every student in the
+                requested batch</strong>, each file named with that student&apos;s roll number. This is exactly the
+                format the ERP upload menu expects, so keep the ZIP as received — do not extract, rename, or
+                re-zip it.
+            </Step>
+
+            <Step n={3} title="Navigate to ERP Image Upload">
                 In the sidebar, click <strong>ERP Image Upload</strong>. You will see a <strong>Summary</strong> tab and
                 an <strong>Upload</strong> tab.
             </Step>
 
-            <Step n={2} title="Select the Batch">
+            <Step n={4} title="Select the Batch">
                 Choose the batch (Degree / Department / Year) for which you are uploading photos.
                 Upload must be done per batch.
             </Step>
 
-            <Step n={3} title="Upload via ZIP (Recommended for bulk upload)">
-                Prepare a ZIP file where each photo is named after the student's roll number. The folder
-                inside the ZIP should contain flat photo files — one file per student — named with the roll number:
+            <Step n={5} title="Upload the ZIP Received from the Webmaster">
+                Upload the same ZIP file the webmaster sent — it already carries one flat photo file per
+                student, named with that student&apos;s roll number:
                 <div style={{
                     background: '#0f172a', color: '#e2e8f0', borderRadius: 8,
                     padding: '14px 18px', fontFamily: 'monospace', fontSize: 12,
@@ -463,15 +529,17 @@ function TabERP() {
                     &nbsp;&nbsp;21CS002.jpg<br />
                     &nbsp;&nbsp;21CS003.jpg
                 </div>
-                Click <strong>Upload ZIP</strong>, select the file, and confirm. The system extracts and stores the photos, using the filename as the roll number.
+                Click <strong>Upload ZIP</strong>, select the file, and confirm. The system extracts and stores
+                the photos, using the filename as the roll number. If you are preparing a ZIP yourself rather than
+                using the webmaster&apos;s, it must follow this same flat, roll-number-named layout.
             </Step>
 
-            <Step n={4} title="Or Upload Individual Photos">
+            <Step n={6} title="Or Upload Individual Photos">
                 Use <strong>Upload Single Photo</strong> to add or replace one student's photo at a time.
                 Enter the roll number, select the image, and confirm.
             </Step>
 
-            <Step n={5} title="Verify Photos in Manage Photos Tab (Mandatory)">
+            <Step n={7} title="Verify Photos in Manage Photos Tab (Mandatory)">
                 <Note type="warning" style={{ margin: '6px 0 10px 0' }}>
                     This step is <strong>mandatory</strong> before proceeding to Roll Assignment.
                 </Note>
@@ -487,7 +555,7 @@ function TabERP() {
                 being correct — a missing or misnamed photo means the incharge cannot identify that student's cluster.
             </Step>
 
-            <Step n={6} title="Review the Summary Tab">
+            <Step n={8} title="Review the Summary Tab">
                 Switch to the <strong>Summary</strong> tab to see all batches grouped by department with photo counts
                 and embedding status. The <strong>Regenerate</strong> button forces a full rebuild of ERP embeddings
                 for a batch — use this only when matching is not working correctly for many students, not as a routine action.
@@ -589,7 +657,9 @@ function TabRollAssign() {
 
             <Note type="tip">
                 After all matches are approved, the dept incharge should proceed to the <strong>Subject Embeddings</strong> tab
-                to generate embeddings for their subjects. Attendance cannot be run until embeddings reflect the approved assignments.
+                to generate embeddings for their subjects. Once roll assignment is complete for every student in the
+                batch and those embeddings are in place, attendance for the batch starts automatically — there is
+                nothing to launch by hand.
             </Note>
         </div>
     );
@@ -719,9 +789,10 @@ function TabEmbeddings() {
             </Note>
 
             <Note type="warning">
-                Subject embeddings must be set up for each subject before running attendance for that subject.
-                If a student is missing from the subject embedding, they will not be recognised during attendance
-                even if their ground truth was captured correctly.
+                Subject embeddings must be set up for each subject before the scheduler will mark attendance for
+                that subject — a period whose embeddings are missing is skipped. If a student is missing from the
+                subject embedding, they will not be recognised during attendance even if their ground truth was
+                captured correctly.
             </Note>
         </div>
     );
@@ -730,60 +801,205 @@ function TabEmbeddings() {
 function TabAttendance() {
     return (
         <div>
-            <Note type="info">
-                Before running attendance, confirm: ground truth captured ✓, ERP photos uploaded ✓,
-                roll assignments approved ✓, embeddings generated ✓, and session dates configured ✓.
+            <Note type="key">
+                <strong>Attendance runs by itself — there is no live attendance to start.</strong> Once roll
+                assignment is complete for every student in a batch and its subject embeddings are generated, the
+                scheduler picks the batch up and marks attendance automatically for each timetabled period.
             </Note>
 
-            <SectionTitle>Step 1 — Configure Session Dates</SectionTitle>
+            <Note type="info">
+                For a batch to be covered, confirm: ground truth captured ✓, ERP photos uploaded ✓,
+                roll assignments approved for all students ✓, and embeddings generated ✓. A batch missing any of
+                these is skipped until it is complete. Session dates and time slots are set centrally by the
+                admin — see Step 1.
+            </Note>
+
+            <SectionTitle>Step 1 — Configure Session Dates (Admin Only)</SectionTitle>
+
+            <Note type="key">
+                <strong>This step is for the admin only.</strong> Departments do not configure session dates —
+                the dates from the <strong>academic calendar are already loaded into the system</strong>, so
+                attendance runs only on teaching days. Institute holidays and other non-teaching days are skipped
+                on their own: no attendance is marked, and no faculty mail or student notification goes out for
+                them.
+            </Note>
+
+            <Note type="info">
+                <strong>Faculty can see the same calendar.</strong> It is available to them in
+                <strong> XCEED Learning → Calendar</strong>, where teaching days, institute holidays, and other
+                non-teaching days are shown exactly as the attendance system reads them.
+            </Note>
 
             <Step n={1} title="Open Session Setup">
                 From the Dashboard, click the <strong>Session Setup</strong> quick-action card.
             </Step>
             <Step n={2} title="Set Semester Dates for Each Batch">
                 For each batch, enter the semester start and end dates. The system uses these to validate
-                which dates are valid for attendance marking.
+                which dates are valid for attendance marking, on top of the academic calendar already loaded.
             </Step>
             <Step n={3} title="Configure Time Slots">
                 Define the daily time slots (periods) — e.g., Slot 1: 09:00–10:00, Slot 2: 10:00–11:00.
-                These slots are linked to the timetable for automatic subject/faculty lookup when running attendance.
+                These slots are linked to the timetable so the scheduler can look up the subject and faculty
+                for each period on its own.
             </Step>
 
 
             <div style={{ borderTop: '1px solid #e4e8f5', margin: '28px 0' }} />
-            <SectionTitle>Step 2 — Run Live Attendance</SectionTitle>
+            <SectionTitle>Step 2 — Attendance Runs Automatically</SectionTitle>
 
-            <Step n={1} title="Navigate to Attendance Reports">
-                Click <strong>Attendance Reports</strong> in the sidebar.
+            <p style={{ fontSize: 13.5, color: '#444c6e', lineHeight: 1.7, marginTop: 0, marginBottom: 20 }}>
+                Nobody starts a session. The scheduler wakes every minute, and for each enabled room it works
+                through the same checks before marking attendance:
+            </p>
+
+            <Step n={1} title="Is Today a Teaching Day?">
+                The academic calendar loaded by the admin decides this. On an institute holiday or other
+                non-teaching day, on a stop day, or with the scheduler toggled off, nothing runs. A period can
+                also be stopped just for today from the <strong>Scheduler</strong> page.
             </Step>
-            <Step n={2} title="Select Room, Date, and Time Slot">
-                Choose the <strong>Room</strong> (links to an RTSP camera), the <strong>Date</strong>, and the
-                <strong> Time Slot</strong>. The system auto-looks up the timetable to identify the batch,
-                subject, and faculty for that slot.
+            <Step n={2} title="Which Class Is in This Room, This Period?">
+                The system resolves the timetable slot to a batch, subject, and faculty. Extra classes and
+                faculty alterations recorded on the Scheduler page override the regular timetable.
             </Step>
-            <Step n={3} title="Run Attendance">
-                Click <strong>Run Attendance</strong>. The system pulls frames from the room's RTSP feed,
-                detects faces, compares them against the batch's stored embeddings, and assigns each student
-                a status: <strong>P</strong> (Present), <strong>A</strong> (Absent), or <strong>R</strong> (Review).
+            <Step n={3} title="Are the Subject Embeddings Ready?">
+                If roll assignment or subject embeddings are incomplete for that class, the period is skipped and
+                the reason is logged. This is why attendance only begins for a batch once roll assignment is
+                finished for <strong>all</strong> its students.
             </Step>
-            <Step n={4} title="Monitor Live Progress">
-                A stats panel shows live counts of Present / Absent / Review as frames are processed.
-                The run can be stopped at any time and restarted — each run is saved separately.
+            <Step n={4} title="Acquire and Match">
+                The system pulls frames from the room&apos;s RTSP cameras for the configured run duration, detects
+                faces, and matches them against the subject&apos;s embeddings. A period is sampled several times
+                — a student must be detected in at least the configured minimum number of runs to be marked
+                <strong> Present</strong>. All enabled rooms are processed in parallel.
             </Step>
-            <Step n={5} title="Review and Override">
-                When the run completes, a student table shows each roll number with ML status, confidence score,
-                first-seen timestamp, and final status. Use the <strong>P / A / R</strong> override buttons
-                to manually correct misclassifications before finalising.
+            <Step n={5} title="Report Saved Automatically">
+                Each period&apos;s result is written as a saved report, and the configured follow-ups fire on their
+                own — faculty summary mails, student notifications, and the ERP attendance push.
             </Step>
 
+            <Note type="dept">
+                Run cadence — period timings, runs per period, run duration, the gap between runs, and the
+                minimum runs needed for Present — is configured once on the <strong>Scheduler</strong> page
+                (Acquisition Control) by the admin, per period or globally.
+            </Note>
+
+            <div style={{ borderTop: '1px solid #e4e8f5', margin: '28px 0' }} />
+            <SectionTitle>Step 3 — Review the Saved Reports</SectionTitle>
+
+            <Step n={1} title="Open Attendance Reports">
+                Click <strong>Attendance Reports</strong> in the sidebar and go to <strong>Saved Reports</strong>.
+                Filter by room, date, and time slot to find the period you want.
+            </Step>
+            <Step n={2} title="Check the Run in Report Detail">
+                <strong>Report Detail</strong> shows each roll number with its ML status, confidence percentage,
+                first-seen timestamp, and final status.
+            </Step>
+
+            <Note type="warning">
+                <strong>A percentage shown in yellow means that student&apos;s ground truth needs to be
+                checked.</strong> The student was matched, but not confidently — the reference images the system
+                holds for them are weak, outdated, or too few. Green means the match was confident. Open the
+                student&apos;s ground truth from the roll number, review the photos behind the embedding, and
+                re-capture or re-assign them; left alone, a yellow student is the one who will eventually be
+                marked wrongly.
+            </Note>
+            <Step n={3} title="Override Where Needed">
+                Use the <strong>P / A</strong> override buttons to correct a misclassification. The override is
+                recorded against the report, so a wrong call also feeds back into improving recognition.
+            </Step>
+
+            <Note type="warning">
+                The <strong>Run Attendance (Developers Only)</strong> tab on the Attendance Reports page is a
+                diagnostic tool for triggering a run by hand while testing. It is <em>not</em> the normal way to
+                mark attendance — routine attendance needs no manual trigger at all.
+            </Note>
+
+
+            <div style={{ borderTop: '1px solid #e4e8f5', margin: '28px 0' }} />
+            <SectionTitle>Rescheduled Classes — Extra Classes & Alterations</SectionTitle>
+
+            <Note type="dept">
+                <strong>Faculty must inform the department coordinator.</strong> A class moved to another time or
+                room, or taken by someone else, is recorded automatically only if it has been entered in the
+                system. The faculty tells the department coordinator (dept incharge), who adds it — faculty do
+                not have to enter it themselves.
+            </Note>
+
+            <p style={{ fontSize: 13.5, color: '#444c6e', lineHeight: 1.7, marginTop: 0, marginBottom: 20 }}>
+                The scheduler follows the timetable. A class held outside it is invisible to the system unless it
+                is entered, and a class that did not happen at its usual slot will otherwise be captured as an
+                empty room. Two sidebar pages cover the two cases:
+            </p>
+
+            <div className="manual-responsive-grid" style={{
+                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24,
+            }}>
+                <div style={{
+                    background: '#fff', border: '1px solid #f59e0b33', borderLeft: '4px solid #f59e0b',
+                    borderRadius: 10, padding: '16px 18px',
+                }}>
+                    <div style={{ fontSize: 20, marginBottom: 6 }}>📅</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 8 }}>
+                        Extra Classes
+                    </div>
+                    <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
+                        For a class held <strong>outside the normal timetable</strong> — a class rescheduled to
+                        another time or room, a make-up class, or an extra session. Record the date, period, room,
+                        batch, subject, and faculty; start and end times can be overridden for a slot that does not
+                        line up with a regular period.
+                    </div>
+                </div>
+                <div style={{
+                    background: '#fff', border: '1px solid #d946ef33', borderLeft: '4px solid #d946ef',
+                    borderRadius: 10, padding: '16px 18px',
+                }}>
+                    <div style={{ fontSize: 20, marginBottom: 6 }}>🔁</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 8 }}>
+                        Altering Classes
+                    </div>
+                    <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
+                        For a <strong>one-time swap</strong> where the slot itself does not move — another faculty
+                        takes the class, or a different subject is taught in the scheduled period. The original
+                        subject and faculty are kept alongside the swap, so the record shows what changed.
+                    </div>
+                </div>
+            </div>
+
+            <Step n={1} title="Faculty Informs the Department Coordinator">
+                As soon as a class is rescheduled or swapped, the faculty tells the department coordinator — with
+                the date, the new time and room, the batch, and the subject.
+            </Step>
+            <Step n={2} title="Coordinator Adds It in the Sidebar">
+                Open <strong>Extra Classes</strong> for a class that has moved, or <strong>Altering Classes</strong>
+                for a faculty or subject swap. Fill the form and click <strong>Add Class</strong> /
+                <strong> Add Alteration</strong>.
+            </Step>
+            <Step n={3} title="Resolve Any Clash">
+                If the chosen room and slot are already booked, the system says so and offers to change the room or
+                to replace the regular class. Nothing is entered until that is settled.
+            </Step>
+            <Step n={4} title="Attendance Records Itself">
+                Once the entry is saved, the scheduler treats that room and slot as a real class: it acquires,
+                matches against the subject&apos;s embeddings, and saves the report exactly as it does for a timetabled
+                period — including the end-of-period faculty mail and the student notifications.
+            </Step>
+
+            <Note type="warning">
+                Enter the class <strong>before it is held</strong>. The scheduler acts in real time on what the
+                configuration says at that moment — an extra class added after the period has passed cannot
+                recover the attendance, because the cameras were never asked to look.
+            </Note>
 
             <div style={{ borderTop: '1px solid #e4e8f5', margin: '28px 0' }} />
             <SectionTitle>Attendance Status Reference</SectionTitle>
-            <div className="manual-responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <Note type="info">
+                A student is either <strong>Present</strong> or <strong>Absent</strong> — there is no third,
+                pending state. Every period ends with a final status against every roll number.
+            </Note>
+            <div className="manual-responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {[
-                    { status: 'P — Present', desc: 'Face detected and matched with high confidence against stored embeddings.', color: T.success, bg: '#f0fdf4' },
+                    { status: 'P — Present', desc: 'Face detected and matched against the stored embeddings during the period.', color: T.success, bg: '#f0fdf4' },
                     { status: 'A — Absent', desc: 'No matching face detected for this student across the entire session.', color: T.danger, bg: '#fef2f2' },
-                    { status: 'R — Review', desc: 'Face detected but confidence is below threshold. Requires manual verification before finalising.', color: T.warning, bg: '#fffbeb' },
                 ].map(s => (
                     <div key={s.status} style={{
                         background: s.bg, border: `1px solid ${s.color}33`,
@@ -802,9 +1018,93 @@ function TabOther() {
     return (
         <div>
             <Note type="info">
-                These tools are available in the sidebar for auditing and monitoring purposes.
-                They are independent of the core attendance workflow.
+                What follows sits alongside the core workflow — what goes out automatically at the end of a
+                period, what students and faculty see, and the sidebar tools kept for auditing and monitoring.
             </Note>
+
+            <SectionTitle>End of Every Period — What Goes Out Automatically</SectionTitle>
+            <div className="manual-responsive-grid" style={{
+                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24,
+            }}>
+                <div style={{
+                    background: '#fff', border: '1px solid #14b8a633', borderLeft: '4px solid #14b8a6',
+                    borderRadius: 10, padding: '16px 18px',
+                }}>
+                    <div style={{ fontSize: 20, marginBottom: 6 }}>✉️</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 8 }}>
+                        Faculty Attendance Mail
+                    </div>
+                    <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
+                        At the end of each period, the attendance summary for that class is mailed to the faculty
+                        who taught it, with the department admin in copy. The mail carries the classroom frames
+                        captured during the period, so the marks can be checked against the room without signing
+                        in anywhere.
+                    </div>
+                </div>
+                <div style={{
+                    background: '#fff', border: '1px solid #6366f133', borderLeft: '4px solid #6366f1',
+                    borderRadius: 10, padding: '16px 18px',
+                }}>
+                    <div style={{ fontSize: 20, marginBottom: 6 }}>📱</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 8 }}>
+                        Student Notification in XCEED
+                    </div>
+                    <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
+                        Every student in the class is notified of the attendance marked for that period in the
+                        <strong> XCEED app</strong>, at the end of the period. Nobody has to wait for the register
+                        to know how they were marked.
+                    </div>
+                </div>
+            </div>
+
+            <SectionTitle>The XCEED App — Instruct Students to Install It</SectionTitle>
+            <Note type="key">
+                <strong>Every student must install the XCEED app from the Google Play Store.</strong> Departments
+                should pass this instruction on to their students at the start of the semester — a student without
+                the app misses both of the things below.
+            </Note>
+            <div style={{
+                background: '#f8f9ff', border: '1px solid #e4e8f5',
+                borderRadius: 10, padding: '16px 20px', marginBottom: 20,
+            }}>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#374151', lineHeight: 1.9 }}>
+                    <li><strong>Updating their ground truth</strong> — students keep their own reference photos
+                    current through the app. Recognition works off these, so a student whose appearance has
+                    changed can refresh their own images rather than wait for another capture drive.</li>
+                    <li><strong>End-of-period attendance notification</strong> — the status marked for each period
+                    reaches the student as soon as the period ends, so a wrong mark is noticed the same day rather
+                    than at the end of the month.</li>
+                </ul>
+            </div>
+
+            <SectionTitle>ERP Integration — In Progress</SectionTitle>
+            <div style={{
+                background: '#f8f9ff', border: '1px solid #e4e8f5',
+                borderRadius: 10, padding: '16px 20px', marginBottom: 20,
+            }}>
+                <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, marginBottom: 12 }}>
+                    Attendance is in the process of being merged with the ERP, so that the attendance marked by
+                    the system is <strong>already there when the faculty opens the ERP</strong> — no separate
+                    portal, no re-entry.
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#374151', lineHeight: 1.9 }}>
+                    <li><strong>Nothing else changes on the faculty side.</strong> No other change to how faculty
+                    work in the ERP is being made at present — the same screens, the same actions.</li>
+                    <li><strong>Faculty may change the attendance directly</strong>, for any reason, exactly as
+                    they do today. The system does not block or question an edit.</li>
+                    <li><strong>Every such change is tracked.</strong> Overrides are recorded and reviewed so that
+                    recognition can be improved where it went wrong — the tracking exists to improve the system,
+                    not to audit the faculty.</li>
+                </ul>
+            </div>
+
+            <Note type="tip">
+                Department incharges can see these corrections under <strong>ERP Overrides</strong> in the sidebar,
+                which lists every period containing an overridden student and links through to the frames captured
+                for that class.
+            </Note>
+
+            <div style={{ borderTop: '1px solid #e4e8f5', margin: '28px 0' }} />
 
             <SectionTitle>Frame Verification</SectionTitle>
             <div style={{
@@ -1043,6 +1343,12 @@ export default function Manual({ standalone = false }) {
     const [showDevs, setShowDevs] = useState(false);
     const [showDevCycle, setShowDevCycle] = useState(false);
 
+    const backToManual = () => {
+        setShowDevs(false);
+        setShowDevCycle(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     useEffect(() => {
         if (!standalone) return;
         fetch(`${getEnvironment()}/user/getuser/`, { credentials: 'include' })
@@ -1153,7 +1459,16 @@ export default function Manual({ standalone = false }) {
                         padding: '28px 32px',
                         boxShadow: '0 1px 6px rgba(26,31,60,0.05)',
                     }}>
+                        <div style={{ marginBottom: 20 }}>
+                            <BackToManualButton onClick={backToManual} />
+                        </div>
                         {showDevs ? <TabDevelopers /> : <TabDevCycle />}
+                        <div style={{
+                            marginTop: 24, paddingTop: 18,
+                            borderTop: '1px solid #e4e8f5',
+                        }}>
+                            <BackToManualButton onClick={backToManual} />
+                        </div>
                     </div>
                 ) : (<>
 
