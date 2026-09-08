@@ -1,5 +1,6 @@
 $ErrorActionPreference = "Stop"
 $AmsPath = "../IAMS/AMS-with-TimeTable"
+$AmsBranch = "main"
 $AppPath = $PWD.Path
 
 Write-Host "Starting safe sync from AMS-with-TimeTable..." -ForegroundColor Cyan
@@ -66,10 +67,47 @@ if (git rev-parse --verify --quiet origin/ams-update) {
 }
 
 # 3. Archive from AMS and Extract here
-Write-Host "Exporting client code from AMS..." -ForegroundColor Yellow
-Set-Location $AmsPath
-git archive HEAD:client -o "$AppPath/client_export.tar"
-Set-Location $AppPath
+#
+# From origin/$AmsBranch, never HEAD. `git archive HEAD:client` exports whatever
+# that clone happens to have checked out, which is only as current as the last
+# time somebody pulled it by hand - on 08/09/2026 it was four commits behind
+# origin/main and sitting on an unrelated feature branch.
+#
+# Stale is the lesser half of it. What gets extracted here is committed to
+# ams-update as "Automated AMS Sync", i.e. recorded as what AMS looks like
+# *now*, and step 6's three-way merge treats that as authoritative. Exporting an
+# old snapshot therefore tells the merge that upstream has *deleted* everything
+# added since, so files the Action legitimately synced are backed out of main -
+# and because it reads as AMS's own change, no conflict is raised to say so.
+#
+# The workflow cannot drift this way: actions/checkout clones AMS fresh and gets
+# its current default branch every run. Fetching here is what keeps this half in
+# agreement with that one, which is the premise .gitattributes and step 5a are
+# both written against.
+#
+# `git -C` rather than Set-Location so an early exit cannot leave the caller's
+# shell inside the AMS clone.
+Write-Host "Fetching AMS so the export is of upstream's current $AmsBranch..." -ForegroundColor Yellow
+git -C $AmsPath fetch origin
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "Could not fetch from AMS. Not syncing." -ForegroundColor Red
+    Write-Host "Exporting from a stale clone would record an old AMS snapshot as the" -ForegroundColor Yellow
+    Write-Host "current one, and the next merge would read upstream's newer files as" -ForegroundColor Yellow
+    Write-Host "deletions to apply. Reconnect and re-run." -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host "Exporting client code from AMS (origin/$AmsBranch)..." -ForegroundColor Yellow
+git -C $AmsPath archive "origin/${AmsBranch}:client" -o "$AppPath/client_export.tar"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "Could not export client/ from AMS origin/$AmsBranch. Not syncing." -ForegroundColor Red
+    Write-Host "If AMS renamed its default branch, update `$AmsBranch at the top of this" -ForegroundColor Yellow
+    Write-Host "script - the sync workflow follows AMS's default branch automatically," -ForegroundColor Yellow
+    Write-Host "so this copy is the only one that has to be told." -ForegroundColor Yellow
+    exit 1
+}
 
 Write-Host "Extracting into learning-module-app..." -ForegroundColor Yellow
 tar -xf client_export.tar
