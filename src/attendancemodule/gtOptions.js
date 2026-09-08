@@ -35,7 +35,11 @@ export const GT_OPTIONS = {
     // serialised across the whole ML service, and the deep levels buy their
     // reach by relaxing what they will accept (by 7x, a face at 5 pixels).
     // That trade is right for attendance and wrong for enrolment, where the
-    // crop becomes the gallery every later match is scored against.
+    // crop becomes the gallery every later match is scored against — which is
+    // why enrolment defaults to 5x (14 passes) rather than the full 7x: levels
+    // are centred higher as they deepen, so 5x is what carries acquisition to
+    // the top of the frame, and 6x/7x are the ones whose thresholds are too
+    // loose to enrol from.
     gt_max_zoom:            [1, 2, 3, 4, 5, 6, 7],
 };
 

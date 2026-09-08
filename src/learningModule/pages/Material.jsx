@@ -10,7 +10,6 @@ import {
   HStack,
   Heading,
   IconButton,
-  Input,
   Menu,
   MenuButton,
   MenuItem,
@@ -22,139 +21,9 @@ import {
 import lmApi from '../api/lmApi';
 import { AttachmentList } from '../components/Attachments';
 import MaterialModal from '../components/MaterialModal';
-import { EmptyState, ErrorState, Loading, buttonTextStyles } from '../components/common';
+import { EmptyState, ErrorState, Loading, TopicManager, buttonTextStyles, groupByTopic } from '../components/common';
 import { formatDate } from '../format';
 import { LmIcon } from '../components/Icon';
-
-function TopicManager({ classId, topics, onChanged }) {
-  const [name, setName] = useState('');
-  const [editingTopicId, setEditingTopicId] = useState(null);
-  const [editingName, setEditingName] = useState('');
-  const toast = useToast();
-
-  const add = async () => {
-    if (!name.trim()) return;
-    try {
-      await lmApi.createTopic(classId, name.trim());
-      setName('');
-      onChanged();
-    } catch (error) {
-      toast({ status: 'error', title: error.message });
-    }
-  };
-
-  const saveEdit = async (topicId) => {
-    const trimmed = editingName.trim();
-    if (!trimmed) {
-      toast({ status: 'error', title: 'Topic name is required.' });
-      return;
-    }
-    try {
-      await lmApi.updateTopic(classId, topicId, { name: trimmed });
-      setEditingTopicId(null);
-      setEditingName('');
-      onChanged();
-    } catch (error) {
-      toast({ status: 'error', title: error.message });
-    }
-  };
-
-  const remove = async (topicId) => {
-    const topic = topics.find((entry) => entry._id === topicId);
-    if (!topic) return;
-    // eslint-disable-next-line no-alert
-    if (!window.confirm(`Delete topic "${topic.name}"? Material in it will move to Other.`)) return;
-    try {
-      await lmApi.deleteTopic(classId, topicId);
-      setEditingTopicId(null);
-      setEditingName('');
-      onChanged();
-    } catch (error) {
-      toast({ status: 'error', title: error.message });
-    }
-  };
-
-  const startEdit = (topic) => {
-    setEditingTopicId(topic._id);
-    setEditingName(topic.name);
-  };
-
-  return (
-    <Box bg="lmBg.surface" borderWidth="1px" borderColor="lmBorder.base" borderRadius="lg" p={4}>
-      <Heading size="xs" mb={3} color="lmFg.body">
-        Topics
-      </Heading>
-      {topics.length === 0 && (
-        <Text fontSize="sm" color="lmFg.muted" mb={3}>
-          Group material into units, chapters or weeks.
-        </Text>
-      )}
-      {topics.map((topic) => {
-        const isEditing = editingTopicId === topic._id;
-        return (
-          <Flex key={topic._id} align="center" justify="space-between" py={1} gap={2}>
-            {isEditing ? (
-              <>
-                <Input
-                  size="sm"
-                  value={editingName}
-                  onChange={(e) => setEditingName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') saveEdit(topic._id);
-                    if (e.key === 'Escape') {
-                      setEditingTopicId(null);
-                      setEditingName('');
-                    }
-                  }}
-                />
-                <HStack spacing={1}>
-                  <Button size="xs" onClick={() => saveEdit(topic._id)}>
-                    Save
-                  </Button>
-                  <Button size="xs" variant="ghost" onClick={() => {
-                    setEditingTopicId(null);
-                    setEditingName('');
-                  }}>
-                    Cancel
-                  </Button>
-                </HStack>
-              </>
-            ) : (
-              <>
-                <Text fontSize="sm" flex="1" minW={0} noOfLines={1}>
-                  {topic.name}
-                </Text>
-                <Menu>
-                  <MenuButton as={IconButton} size="xs" variant="ghost" icon={<span>⋮</span>} aria-label={`Topic actions for ${topic.name}`} />
-                  <MenuList>
-                    <MenuItem {...buttonTextStyles} onClick={() => startEdit(topic)}>
-                      Edit
-                    </MenuItem>
-                    <MenuItem color="red.600" onClick={() => remove(topic._id)}>
-                      Delete
-                    </MenuItem>
-                  </MenuList>
-                </Menu>
-              </>
-            )}
-          </Flex>
-        );
-      })}
-      <Flex gap={2} mt={3}>
-        <Input
-          size="sm"
-          placeholder="New topic"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && add()}
-        />
-        <Button size="sm" onClick={add} isDisabled={!name.trim()}>
-          Add
-        </Button>
-      </Flex>
-    </Box>
-  );
-}
 
 function MaterialRow({ item, classId, isTeacher, onChanged, onEdit }) {
   const toast = useToast();
@@ -270,10 +139,7 @@ export default function Material() {
     reloadClass();
   };
 
-  const grouped = topics
-    .map((topic) => ({ topic, items: items.filter((i) => String(i.topicId) === String(topic._id)) }))
-    .filter((group) => group.items.length);
-  const untopiced = items.filter((i) => !i.topicId);
+  const { grouped, untopiced } = groupByTopic(items, topics);
 
   if (loading) return <Loading label="Loading material…" />;
 

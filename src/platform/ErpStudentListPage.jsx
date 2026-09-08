@@ -101,6 +101,11 @@ export default function ErpStudentListPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [q, setQ] = useState('');
+  // What the last request actually asked for. The search box is the only
+  // filter that changes with every keystroke, so it is the only one worth
+  // waiting on — a branch, a year or a page is one deliberate click, and
+  // holding those for a quarter of a second just makes the page feel slow.
+  const [searchedQ, setSearchedQ] = useState('');
   const [branch, setBranch] = useState('');
   const [batchYear, setBatchYear] = useState('');
   const [loading, setLoading] = useState(true);
@@ -127,36 +132,52 @@ export default function ErpStudentListPage() {
     } catch (_) { /* the table below is the page; a missing summary is cosmetic */ }
   }, []);
 
-  const loadStudents = useCallback(async () => {
+  const loadStudents = useCallback(async (signal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-      if (q.trim().length >= 2) params.set('q', q.trim());
+      if (searchedQ.trim().length >= 2) params.set('q', searchedQ.trim());
       if (branch) params.set('branch', branch);
       if (batchYear) params.set('batchYear', batchYear);
-      const response = await fetch(`${ROSTER_BASE}?${params}`, { credentials: 'include' });
+      const response = await fetch(`${ROSTER_BASE}?${params}`, { credentials: 'include', signal });
       const data = await response.json().catch(() => ({}));
       setStudents(data.students || []);
       setTotal(data.total || 0);
       setOpenCount(data.openCount || 0);
       setUnmatchedCount(data.unmatchedCount || 0);
-    } finally {
       setLoading(false);
+    } catch (err) {
+      // An aborted request is one a later keystroke replaced. Its answer is
+      // for a search nobody is running any more, so it must not land in the
+      // table — and the request that replaced it owns the spinner now, so the
+      // spinner is left alone too.
+      if (err.name !== 'AbortError') setLoading(false);
     }
-  }, [page, q, branch, batchYear]);
+  }, [page, searchedQ, branch, batchYear]);
 
   useEffect(() => { loadSummary(); }, [loadSummary]);
+
   useEffect(() => {
-    // Debounced so typing in the search box is not one request per keystroke.
-    const timer = setTimeout(loadStudents, 250);
+    if (q === searchedQ) return undefined;
+    const timer = setTimeout(() => setSearchedQ(q), 250);
     return () => clearTimeout(timer);
+  }, [q, searchedQ]);
+
+  useEffect(() => {
+    // Superseded requests are cancelled rather than raced. Without this, eight
+    // keystrokes left eight requests in flight against one table, and whichever
+    // came back last won — so the list could settle on the answer to a query
+    // two letters ago.
+    const controller = new AbortController();
+    loadStudents(controller.signal);
+    return () => controller.abort();
   }, [loadStudents]);
 
   const pages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total]);
 
   // Everything the update-window bar says about "now", derived from the same
   // filtered counts the buttons act on.
-  const filtered = q.trim().length >= 2 || Boolean(branch) || Boolean(batchYear);
+  const filtered = searchedQ.trim().length >= 2 || Boolean(branch) || Boolean(batchYear);
   const scopeNoun = filtered ? 'matching students' : 'students';
   const someOpen = openCount > 0;
   const allOpen = total > 0 && openCount === total;
@@ -228,7 +249,10 @@ export default function ErpStudentListPage() {
     try {
       const result = await patch('/photo-updates', {
         open,
-        q: q.trim().length >= 2 ? q.trim() : '',
+        // The searched text, not what is in the box: these buttons promise to
+        // act on the rows the table is showing, and a letter typed a moment ago
+        // has not reached the table yet.
+        q: searchedQ.trim().length >= 2 ? searchedQ.trim() : '',
         branch,
         batchYear,
       });

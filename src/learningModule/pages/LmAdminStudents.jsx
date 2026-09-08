@@ -619,6 +619,8 @@ export default function LmAdminStudents() {
   const [error, setError] = useState(null);
   const [editingStudent, setEditingStudent] = useState(null);
   const editModal = useDisclosure();
+  const [normalizing, setNormalizing] = useState(false);
+  const toast = useToast();
 
   const load = useCallback(async (q, dept) => {
     setError(null);
@@ -641,6 +643,27 @@ export default function LmAdminStudents() {
 
   const { totals, students, truncated } = data;
   const departments = totals?.departments || [];
+
+  const fixDepartmentCasing = async () => {
+    setNormalizing(true);
+    try {
+      const result = await lmApi.adminNormalizeStudentDepartments();
+      toast({
+        status: 'success',
+        title: result.updated ? 'Department names merged' : 'Nothing to merge',
+        description: result.updated
+          ? `Corrected ${result.updated} of ${result.checked} student accounts.`
+          : 'Every student account already matches the timetable’s spelling.',
+        duration: 6000,
+        isClosable: true,
+      });
+      await load(search, selectedDept);
+    } catch (err) {
+      toast({ status: 'error', title: 'Could not merge departments', description: err.message, duration: 6000, isClosable: true });
+    } finally {
+      setNormalizing(false);
+    }
+  };
 
   return (
     <VStack align="stretch" spacing={6}>
@@ -672,6 +695,11 @@ export default function LmAdminStudents() {
         <SectionCard
           title="Department-wise distribution"
           subtitle="Click on any department to quickly filter the student roster below."
+          action={
+            <Button size="xs" variant="outline" isLoading={normalizing} onClick={fixDepartmentCasing}>
+              Merge duplicate departments
+            </Button>
+          }
         >
           <Wrap spacing={2}>
             <WrapItem>

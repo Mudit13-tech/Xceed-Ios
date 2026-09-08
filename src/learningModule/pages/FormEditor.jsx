@@ -297,7 +297,8 @@ function ShareLink({ form, classId }) {
 }
 
 export default function FormEditor() {
-  const { classId } = useOutletContext();
+  const { classId, klass } = useOutletContext();
+  const topics = klass?.topics || [];
   const { formId } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
@@ -352,6 +353,7 @@ export default function FormEditor() {
       const updated = await lmApi.updateForm(classId, formId, {
         title: form.title,
         description: form.description,
+        topicId: form.topicId || null,
         settings: form.settings,
         questions: questions.map((question, order) => ({ ...question, _key: undefined, order })),
       });
@@ -435,6 +437,21 @@ export default function FormEditor() {
               placeholder="Shown at the top of the form."
               onChange={(event) => setForm({ ...form, description: event.target.value })}
             />
+          </FormControl>
+
+          <FormControl maxW="320px">
+            <FormLabel fontSize="sm">Topic</FormLabel>
+            <Select
+              value={form.topicId || ''}
+              onChange={(event) => setForm({ ...form, topicId: event.target.value })}
+            >
+              <option value="">No topic</option>
+              {topics.map((topic) => (
+                <option key={topic._id} value={topic._id}>
+                  {topic.name}
+                </option>
+              ))}
+            </Select>
           </FormControl>
 
           <Divider />

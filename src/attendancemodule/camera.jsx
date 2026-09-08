@@ -928,6 +928,21 @@ export default function Camera() {
                                         <div style={{ color: theme.textMuted, fontSize: 11, marginTop: 6 }}>
                                             {camera.isActive ? 'Active' : 'Inactive'} · {formatDateTime(camera.lastHeartbeat)}
                                         </div>
+                                        {/* Why, not just what. "offline" covers a camera that is switched
+                                            off, one on an unroutable subnet, one whose password changed and
+                                            one already streaming to its only allowed viewer — and the fix
+                                            is different for each. This is what the probe actually said. */}
+                                        {camera.statusReason && (
+                                            <div
+                                                title={camera.statusReason}
+                                                style={{
+                                                    marginTop: 4, fontSize: 11, lineHeight: 1.45,
+                                                    color: theme.textMuted, maxWidth: 260,
+                                                }}
+                                            >
+                                                {camera.statusReason}
+                                            </div>
+                                        )}
                                         {camera.inUseBy && (
                                             <div
                                                 title={`Holding this camera's connection since ${formatDateTime(camera.inUseSince)}`}
