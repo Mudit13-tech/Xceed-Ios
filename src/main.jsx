@@ -11,6 +11,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { queryPersister, shouldPersistQuery } from './utils/queryPersister';
 import { learningModuleTheme } from './learningModule/theme';
+import './utils/favicon';
 import {
   APP_NAME,
   credentialsFor,

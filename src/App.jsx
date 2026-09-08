@@ -204,8 +204,6 @@ const RecordStream = lazyWithPreload(() => import('./attendancemodule/RecordStre
 const ErpOverrides = lazyWithPreload(() => import('./attendancemodule/ErpOverrides'));
 const AttendanceDisputes = lazyWithPreload(() => import('./attendancemodule/AttendanceDisputes'));
 const ErpOverrideAnalysis = lazyWithPreload(() => import('./attendancemodule/ErpOverrideAnalysis'));
-const StudentPhotoUpdate = lazyWithPreload(() => import('./attendancemodule/StudentPhotoUpdate'));
-const PhotoSwapBatchSendPage = lazyWithPreload(() => import('./platform/PhotoSwapBatchSendPage'));
 const ErpStudentListPage = lazyWithPreload(() => import('./platform/ErpStudentListPage'));
 
 const AMSDashboard = lazyWithPreload(() => import('./attendancemodule/AMSDashboard'));
@@ -570,7 +568,6 @@ const APP_ROUTES = (
           <Route path="/conference-manual" element={<ConfManual standalone />} />
 
           {/* ─── Student Photo Update — public, token-authed via ?token= ── */}
-          <Route path="/photo-update" element={<StudentPhotoUpdate />} />
 
           {/* ─── Attendance Module Routes ──────────────────────────── */}
           <Route
@@ -593,7 +590,6 @@ const APP_ROUTES = (
             <Route path="institute-identification" element={<InstituteIdentification />} />
             <Route path="record-stream" element={<RecordStream />} />
             <Route path="embeddings" element={<EmbeddingGeneration />} />
-            <Route path="photo-swap-batch-send" element={<PhotoSwapBatchSendPage />} />
             <Route path="erp-student-list" element={<ErpStudentListPage />} />
             <Route path="erp-sync" element={<ERPSync />} />
             <Route path="report" element={<Attendancedoc />} />
@@ -677,7 +673,7 @@ function App() {
       {/* <div className="app"> */}
 
       {/* <h1>XCEED-Timetable Module</h1>  */}
-      {!window.location.pathname.startsWith('/photo-update') && <Navbar />}
+      <Navbar />
 
       {/* One boundary around the whole table rather than per route: a lazy
           element with no Suspense above it throws, and a single boundary here
