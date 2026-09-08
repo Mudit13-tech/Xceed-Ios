@@ -30,9 +30,10 @@ import { formatDate, relativeTime } from '../format';
  * embedding attendance actually matches against, and the rest sit in backup,
  * topped up daily by the active-learning loop each time the cameras recognise
  * them. Which five are in use was, until now, decided either by the
- * upload order or by an administrator mailing a one-time link. A student who
- * knew perfectly well that one of their five was a bad frame had no way to say
- * so.
+ * upload order or by an administrator mailing a one-time link — a flow that no
+ * longer exists, leaving this page as the only way the choice can be made. A
+ * student who knew perfectly well that one of their five was a bad frame had no
+ * way to say so.
  *
  * So: swap between the two groups, and nothing else. There is no delete and no
  * upload here, and not because the buttons are missing — the server accepts a
@@ -446,8 +447,8 @@ export default function MyGroundTruthPhotos() {
   return (
     <VStack align="stretch" spacing={5}>
       <SectionCard
-        title="Your ERP photo"
-        subtitle="The official photo on your ERP record. Shown for reference — it is not changed from here."
+        title="Refrence photo"
+        subtitle="Shown for reference — it is not changed from here."
       >
         <HStack align="start" spacing={5} flexWrap="wrap">
           <Box width="140px" flexShrink={0}>
@@ -466,7 +467,7 @@ export default function MyGroundTruthPhotos() {
                 textAlign="center"
                 p={2}
               >
-                No ERP photo on file
+                No reference photo on file
               </Flex>
             )}
           </Box>

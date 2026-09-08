@@ -124,18 +124,28 @@ describe('iLEED introduction', () => {
 
 describe('the introduction pages stay public', () => {
   /**
-   * Read rather than rendered: reaching publicPaths through Navbar means
+   * Read rather than rendered: reaching PUBLIC_PATHS through Navbar means
    * standing up Chakra, react-query and an auth fetch to assert one array
    * literal. The list is the contract, so the list is what is checked.
+   *
+   * Scraping source has one trap, and this test fell into it: the declaration
+   * was renamed publicPaths -> PUBLIC_PATHS, indexOf returned -1, and the
+   * slice quietly produced an empty string. The toContain assertions then
+   * failed with "expected '' to contain ..." — which reads like the paths were
+   * removed, when they were never looked at. A negative assertion would have
+   * passed for the same reason and gone on passing forever. So the marker is
+   * now asserted to exist before anything is read from it.
    */
-  it('lists both paths in Navbar publicPaths', () => {
+  it('lists both paths in Navbar PUBLIC_PATHS', () => {
     // Relative to the client root, the way darkMode.test.jsx reads sources.
     const navbar = readFileSync('src/components/home/Navbar.jsx', 'utf8');
-    const block = navbar.slice(
-      navbar.indexOf('const publicPaths = ['),
-      navbar.indexOf('];', navbar.indexOf('const publicPaths = ['))
-    );
 
+    const start = navbar.indexOf('const PUBLIC_PATHS = [');
+    expect(start).toBeGreaterThan(-1);
+    const end = navbar.indexOf('];', start);
+    expect(end).toBeGreaterThan(start);
+
+    const block = navbar.slice(start, end);
     expect(block).toContain("'/xceed-learning'");
     expect(block).toContain("'/ileed'");
   });

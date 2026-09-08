@@ -1,22 +1,26 @@
 // client/src/platform/ErpStudentListPage.jsx
 //
-// The institute admin's sync of the ERP student list.
+// Everyone the attendance cameras have face photos for, and which account may
+// open them.
 //
-// The list is one roster with one job: pair every roll number with the
-// official email address the institute holds for it. That pairing is what
-// lets a student open their own attendance photos from the learning module
-// and nobody else's — the resolution deliberately never trusts the roll
-// number a student types into their own profile, which they can edit.
+// A roll number is on this list because there is a ground_truth folder for it
+// on disk — nothing else puts it there. The name, official address and branch
+// beside it come from the student account the learning module's ERP roster
+// import maintains, joined on the roll number. That pairing is what lets a
+// student open their own attendance photos and nobody else's.
 //
-// The pairing is pulled straight from the Student collection (name, rollNo,
-// dept, mailID) rather than an uploaded file — that collection is already the
-// institute's authoritative student list, so re-typing it into a spreadsheet
-// every time it changes would just be a second, driftable copy of the same
-// data. /erp-roster/from-students/* on the server does the fetch and the same
-// classification pass a file upload would.
+// There is nothing to sync and nothing to upload. Both used to be here: a
+// spreadsheet paste, and a "Sync N students" button that copied the same
+// columns across from the account records. Either way the list was a third
+// copy of data the platform already held, and only as fresh as the last press
+// of the button. The server now recomputes the join on read.
 //
-// Institute-level rather than per-department because the source data carries
-// every student's address; the route enforces the same
+// A row with no name or address is a folder whose roll number matches no
+// student account — photos on disk that nobody can claim. Those are shown
+// rather than hidden, because they are the rows worth acting on.
+//
+// Institute-level rather than per-department because the list carries every
+// student's address; the route enforces the same
 // (erpStudentRosterRoutes.js).
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -72,25 +76,6 @@ const CSS = `
   @media (max-width: 900px) { .er-stats, .er-stats.er-stats-5 { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 `;
 
-const OUTCOME = {
-  new:       { label: 'New', cls: 'ok' },
-  update:    { label: 'Updates existing', cls: 'warn' },
-  invalid:   { label: 'Invalid', cls: 'bad' },
-  duplicate: { label: 'Duplicate', cls: 'bad' },
-};
-
-async function post(path, body) {
-  const response = await fetch(`${ROSTER_BASE}${path}`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.message || 'Request failed');
-  return data;
-}
-
 async function patch(path, body) {
   const response = await fetch(`${ROSTER_BASE}${path}`, {
     method: 'PATCH',
@@ -110,222 +95,6 @@ async function get(path) {
   return data;
 }
 
-/**
- * Keeps the roster level with the student database, by itself.
- *
- * It used to be a button. The button was there because `User.rollNumber` was
- * self-declared and somebody had to vouch for it before it became the pairing
- * that decides whose face photos a student may open — so an admin looked at a
- * preview and pressed Sync.
- *
- * That is no longer what the field is. An administrator's roll number is
- * stamped (`rollNumberSetByAdminAt`) and neither the identity gate nor the
- * one-time correction will change it afterwards, and the sync reads only rows
- * whose roll number is the institute's own. There is nothing left for a human
- * to vouch for, and a button nobody needs to think about is a button that is
- * eventually not pressed — which is a roster quietly going stale.
- *
- * So the pass runs on load: preview first (it writes nothing), and only if it
- * finds rows that would actually change does the import follow. The card then
- * reports what happened rather than asking for permission to do it.
- *
- * Two things still stop and wait for a person, and both leave the button:
- *
- *   - a conflict the server would not resolve (409 EMAIL_CLAIMED) — one
- *     address claimed by two live roll numbers is not something to retry into
- *   - any other failure, where a retry is the obvious next move
- */
-function SyncCard({ onImported, lastUploadAt, lastUploadFrom }) {
-  const [preview, setPreview] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
-  // What the automatic pass did, so the card can say so plainly. Null until it
-  // has run and found something worth writing.
-  const [autoSynced, setAutoSynced] = useState(null);
-  // One automatic attempt per visit. A failed or conflicted import leaves rows
-  // still classified as writable, and without this the effect that reacts to
-  // that count would go straight back round.
-  const attempted = useRef(false);
-
-  const loadPreview = useCallback(async () => {
-    setLoading(true); setError(null);
-    try {
-      // Preview writes nothing: it is the import's own classification pass, so
-      // what the card reports is what the sync did.
-      const next = await get('/from-students/preview');
-      setPreview(next);
-      return next;
-    } catch (err) {
-      setError(err.message);
-      setPreview(null);
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Held in a ref so the automatic pass below can depend on nothing: the
-  // parent passes a fresh arrow every render, and an effect that re-ran on
-  // that would re-import on every keystroke in the search box.
-  const onImportedRef = useRef(onImported);
-  onImportedRef.current = onImported;
-
-  const runSync = useCallback(async () => {
-    setBusy(true); setError(null);
-    try {
-      const result = await post('/from-students/import', {});
-      setAutoSynced(result);
-      onImportedRef.current?.(result);
-      await loadPreview();
-      return true;
-    } catch (err) {
-      setError(err.message);
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }, [loadPreview]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const first = await loadPreview();
-      if (cancelled || !first) return;
-      const counts = first.summary || {};
-      if ((counts.new || 0) + (counts.update || 0) === 0) return;
-      if (attempted.current) return;
-      attempted.current = true;
-      await runSync();
-    })();
-    return () => { cancelled = true; };
-  }, [loadPreview, runSync]);
-
-  const summary = preview?.summary || {};
-  const writable = (summary.new || 0) + (summary.update || 0);
-
-  return (
-    <div className="er-card">
-      <div className="er-card-header">
-        <span>ERP student list · synced from the database</span>
-        <button type="button" className="er-btn er-btn-ghost" onClick={loadPreview} disabled={loading || busy}>
-          {loading || busy ? 'Checking…' : 'Re-check'}
-        </button>
-      </div>
-      <div className="er-card-body">
-        <div className="er-hint">
-          Read from the student accounts the learning module&apos;s ERP roster import maintains —{' '}
-          <strong>Name</strong>, <strong>Roll No.</strong>, <strong>Department</strong>,{' '}
-          <strong>Official Email</strong>. Upload the ERP export there and it appears here on
-          your next visit — this page syncs itself, updating the students the database names and
-          leaving everyone else alone.
-        </div>
-        {preview?.selfCorrected > 0 && (
-          <div className="er-hint">
-            {preview.selfCorrected} student{preview.selfCorrected === 1 ? '' : 's'} changed{' '}
-            {preview.selfCorrected === 1 ? 'their' : 'their'} own roll number after the import and{' '}
-            {preview.selfCorrected === 1 ? 'was' : 'were'} left out — that roll number was typed by
-            the student, not uploaded, so it is not the ERP&apos;s answer. Re-running the roster
-            import overwrites it, locks it, and brings them back.
-          </div>
-        )}
-        <div className="er-hint">
-          Last write to the list: {lastUploadAt ? new Date(lastUploadAt).toLocaleString() : 'never'}
-          {lastUploadFrom && (
-            <> — from <strong>{lastUploadFrom === 'Student database sync' ? 'the database sync' : `file "${lastUploadFrom}"`}</strong></>
-          )}
-          . Any row still showing a file name in its Source column below hasn&apos;t matched a roll
-          number in the student database yet.
-        </div>
-
-        {error && (
-          <div className="er-hint" style={{ color: T.danger, fontWeight: 600 }}>{error}</div>
-        )}
-
-        {loading && !preview && (
-          <div className="er-hint">Checking the student database…</div>
-        )}
-
-        {preview && (
-          <>
-            <div className="er-stats" style={{ marginTop: 16 }}>
-              {['new', 'update', 'invalid', 'duplicate'].map((key) => (
-                <div className="er-stat" key={key}>
-                  <div className="er-stat-n">{summary[key] || 0}</div>
-                  <div className="er-stat-l">{OUTCOME[key].label}</div>
-                </div>
-              ))}
-            </div>
-
-            {writable === 0 ? (
-              <div className="er-hint" style={{ marginTop: 10 }}>
-                {autoSynced
-                  ? autoSynced.message
-                  : 'Level with the student database — nothing to sync.'}
-              </div>
-            ) : (
-              <>
-                <div className="er-table-scroll" style={{ maxHeight: 320, overflowY: 'auto' }}>
-                  <table className="ams-table">
-                    <thead>
-                      <tr>
-                        <th>Roll No.</th><th>Name</th><th>Branch</th><th>Official email</th><th>Outcome</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {preview.rows.filter((row) => row.outcome === 'new' || row.outcome === 'update')
-                        .slice(0, 200).map((row, index) => (
-                        <tr key={`${row.rollNo}-${index}`}>
-                          <td className="er-mono">{row.rollNo || '—'}</td>
-                          <td>{row.name || '—'}</td>
-                          <td>{row.branch || '—'}</td>
-                          <td className="er-mono">{row.email || '—'}</td>
-                          <td>
-                            <span className={`er-pill ${OUTCOME[row.outcome]?.cls || 'none'}`}>
-                              {OUTCOME[row.outcome]?.label || row.outcome}
-                            </span>
-                            {row.emailChangedFrom && (
-                              <div className="er-hint">Address changes from {row.emailChangedFrom}</div>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {writable > 200 && (
-                  <div className="er-hint">Showing the first 200 of {writable} rows.</div>
-                )}
-              </>
-            )}
-
-            {/* The rows above are what the automatic pass could not write, so
-                the button is the retry — it appears only when there is one to
-                make. A clean sync leaves nothing here to press. */}
-            {writable > 0 && (
-              <div style={{ display: 'flex', gap: 10, marginTop: 14, alignItems: 'center' }}>
-                <button
-                  type="button"
-                  className="er-btn er-btn-primary"
-                  onClick={runSync}
-                  disabled={busy || loading}
-                >
-                  {busy ? 'Syncing…' : `Sync ${writable} student${writable === 1 ? '' : 's'}`}
-                </button>
-                <span className="er-hint" style={{ marginTop: 0 }}>
-                  {error
-                    ? 'The automatic sync could not finish. Try again, or sort the rows above out first.'
-                    : 'Left over from the automatic sync — these rows need a person.'}
-                </span>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function ErpStudentListPage() {
   const [summary, setSummary] = useState(null);
   const [students, setStudents] = useState([]);
@@ -335,14 +104,15 @@ export default function ErpStudentListPage() {
   const [branch, setBranch] = useState('');
   const [batchYear, setBatchYear] = useState('');
   const [loading, setLoading] = useState(true);
-  const [notice, setNotice] = useState(null);
+  const [unmatchedCount, setUnmatchedCount] = useState(0);
   // Which row's update window is mid-flight. One at a time is enough: this is a
   // button an admin presses for one student who has asked.
   const [togglingRoll, setTogglingRoll] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [openCount, setOpenCount] = useState(0);
-  // Feedback for the update-window actions specifically, shown beside them
-  // rather than in the page-top notice the sync card uses.
+  // Feedback for the update-window actions, shown beside them rather than at
+  // the top of the page — a row action's result three screens up is a result
+  // nobody sees.
   const [windowNotice, setWindowNotice] = useState(null);
   // The roster row whose ground-truth photos are open, or null. Only rows with
   // a batch can be opened — the photos live under it.
@@ -369,6 +139,7 @@ export default function ErpStudentListPage() {
       setStudents(data.students || []);
       setTotal(data.total || 0);
       setOpenCount(data.openCount || 0);
+      setUnmatchedCount(data.unmatchedCount || 0);
     } finally {
       setLoading(false);
     }
@@ -477,32 +248,53 @@ export default function ErpStudentListPage() {
 
       <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>ERP Student List</h1>
       <p style={{ fontSize: 13, color: T.textMuted, marginBottom: 18, maxWidth: 760, lineHeight: 1.6 }}>
-        The roll-number-to-official-address pairing, fetched from the student database. It is what
-        lets a student open their own attendance photos from the learning module — and only their
-        own. Syncing it changes nothing about attendance itself.
+        Everyone the cameras have face photos for. A roll number appears here because there is a
+        ground truth folder for it on disk; the name and official address beside it come from that
+        student&apos;s account. Nothing here changes attendance itself.
       </p>
 
-      {notice && (
-        <div className="er-card" style={{ borderColor: notice.ok === false ? T.danger : T.success }}>
-          <div className="er-card-body" style={{ fontSize: 13 }}>{notice.text}</div>
+      <div className="er-card">
+        <div className="er-card-header">
+          <span>How this list is built</span>
+          {summary?.lastRefreshedAt && (
+            <span style={{ textTransform: 'none', letterSpacing: 0 }}>
+              Identities last changed {new Date(summary.lastRefreshedAt).toLocaleString()}
+            </span>
+          )}
         </div>
-      )}
-
-      <SyncCard
-        lastUploadAt={summary?.lastUploadAt}
-        lastUploadFrom={summary?.lastUploadFrom}
-        onImported={(result) => {
-          setNotice({ text: result.message, ok: true });
-          loadSummary();
-          loadStudents();
-        }}
-      />
+        <div className="er-card-body">
+          <div className="er-hint" style={{ marginTop: 0 }}>
+            The ground truth folders on disk, joined to the student accounts the learning
+            module&apos;s ERP roster import maintains — <strong>Name</strong>, <strong>Roll No.</strong>,{' '}
+            <strong>Department</strong>, <strong>Official Email</strong>. The join is recomputed
+            whenever this page loads, so there is nothing to sync and nothing to upload. Upload the
+            ERP export on the learning module&apos;s Students page and it appears here.
+          </div>
+          {unmatchedCount > 0 && (
+            <div className="er-hint">
+              <strong>{unmatchedCount}</strong> folder{unmatchedCount === 1 ? '' : 's'} in this view
+              {unmatchedCount === 1 ? ' matches' : ' match'} no student account, so nobody can open
+              {unmatchedCount === 1 ? ' it' : ' them'} and no update window can be given. They are
+              listed with no name or address.
+            </div>
+          )}
+          {summary?.selfCorrected > 0 && (
+            <div className="er-hint">
+              {summary.selfCorrected} student account{summary.selfCorrected === 1 ? '' : 's'}{' '}
+              changed their own roll number and {summary.selfCorrected === 1 ? 'is' : 'are'} not
+              read — a self-typed roll number is not the ERP&apos;s answer, and keying on one would
+              hand a student whichever classmate&apos;s roll number they typed. Re-running the ERP
+              roster import overwrites it and brings them back.
+            </div>
+          )}
+        </div>
+      </div>
 
       {summary && (
         <div className="er-stats er-stats-5">
           <div className="er-stat">
             <div className="er-stat-n">{summary.total}</div>
-            <div className="er-stat-l">On the list</div>
+            <div className="er-stat-l">With attendance photos</div>
           </div>
           <div className="er-stat">
             <div className="er-stat-n">{summary.selfUpdated}</div>
@@ -513,12 +305,12 @@ export default function ErpStudentListPage() {
             <div className="er-stat-l">Update windows open</div>
           </div>
           <div className="er-stat">
-            <div className="er-stat-n">{summary.branches.length}</div>
-            <div className="er-stat-l">Branches</div>
+            <div className="er-stat-n">{summary.unmatched ?? 0}</div>
+            <div className="er-stat-l">No student account</div>
           </div>
           <div className="er-stat">
-            <div className="er-stat-n">{summary.batchYears.length}</div>
-            <div className="er-stat-l">Admission years</div>
+            <div className="er-stat-n">{summary.branches.length}</div>
+            <div className="er-stat-l">Branches</div>
           </div>
         </div>
       )}
@@ -647,7 +439,7 @@ export default function ErpStudentListPage() {
                   <th>Attendance photos</th>
                   <th>Changed by student</th>
                   <th>Ground truth updates</th>
-                  <th>Source</th>
+                  <th>Student account</th>
                 </tr>
               </thead>
               <tbody>
@@ -657,48 +449,59 @@ export default function ErpStudentListPage() {
                 {!loading && students.length === 0 && (
                   <tr>
                     <td colSpan={9} style={{ color: T.textMuted }}>
-                      Nothing here yet. Sync from the student database above.
+                      No ground truth folders on disk match this view. Photograph a batch, or clear
+                      the filters above.
                     </td>
                   </tr>
                 )}
                 {students.map((student) => (
                   <tr key={student.rollNo}>
                     <td className="er-mono">
-                      {student.batch ? (
-                        <button
-                          type="button"
-                          className="er-linkbtn"
-                          title="View this student's ground truth photos"
-                          onClick={() => setGtTarget({ rollNo: student.rollNo, batch: student.batch })}
-                        >
-                          {student.rollNo}
-                        </button>
-                      ) : student.rollNo}
+                      <button
+                        type="button"
+                        className="er-linkbtn"
+                        title="View this student's ground truth photos"
+                        onClick={() => setGtTarget({ rollNo: student.rollNo, batch: student.batch })}
+                      >
+                        {student.rollNo}
+                      </button>
                     </td>
-                    <td>{student.name || '—'}</td>
+                    <td>
+                      {student.name || <span style={{ color: T.textMuted }}>—</span>}
+                    </td>
                     <td>
                       {student.branch || '—'}
                       {student.batchYear && <div className="er-hint">{student.batchYear}</div>}
+                      {/* The branch above is the batch folder the photos are
+                          filed in. When the account says something else, show
+                          both rather than picking one — a transfer and a data
+                          error look identical from here, and only the office
+                          can tell them apart. */}
+                      {student.accountBranch
+                        && student.accountBranch !== student.branch && (
+                        <div className="er-hint" style={{ color: '#b45309' }}>
+                          Account says {student.accountBranch}
+                        </div>
+                      )}
                     </td>
-                    <td className="er-mono">{student.email}</td>
+                    <td className="er-mono">
+                      {student.email || <span style={{ color: T.textMuted }}>—</span>}
+                    </td>
                     <td>
                       <span className={`er-pill ${student.hasErpPhoto ? 'ok' : 'none'}`}>
                         {student.hasErpPhoto ? 'On file' : 'None'}
                       </span>
                     </td>
+                    {/* Being on this list means having a folder on disk, so
+                        there is no "not photographed" case left to render —
+                        a student with no photos is simply not a row. */}
                     <td>
-                      {student.batch ? (
-                        <>
-                          <span className={`er-pill ${student.embeddingCount >= 3 ? 'ok' : 'warn'}`}>
-                            {student.embeddingCount} in use
-                          </span>
-                          <div className="er-hint">
-                            {student.backupCount} in reserve · {student.batch}
-                          </div>
-                        </>
-                      ) : (
-                        <span className="er-pill none">Not photographed</span>
-                      )}
+                      <span className={`er-pill ${student.embeddingCount >= 3 ? 'ok' : 'warn'}`}>
+                        {student.embeddingCount} in use
+                      </span>
+                      <div className="er-hint">
+                        {student.backupCount} in reserve · {student.batch}
+                      </div>
                     </td>
                     <td>
                       {student.lastPhotoUpdateAt ? (
@@ -718,6 +521,14 @@ export default function ErpStudentListPage() {
                       )}
                     </td>
                     <td>
+                      {/* No account, no window. The control is not rendered
+                          rather than rendered disabled: there is no student
+                          here to grant an update to, and the server answers a
+                          PATCH for this roll number with a 404 saying so. */}
+                      {student.unmatched ? (
+                        <span className="er-pill none">No account</span>
+                      ) : (
+                        <>
                       <span className={`er-pill ${student.photoUpdatesOpen ? 'ok' : 'none'}`}>
                         {student.photoUpdatesOpen ? 'Open · one update' : 'Once a week'}
                       </span>
@@ -746,13 +557,21 @@ export default function ErpStudentListPage() {
                           Window used {new Date(student.photoUpdatesUsedAt).toLocaleDateString()}
                         </div>
                       )}
+                        </>
+                      )}
                     </td>
                     <td>
-                      <span className={`er-pill ${student.uploadedFrom === 'Student database sync' ? 'ok' : 'warn'}`}>
-                        {student.uploadedFrom === 'Student database sync' ? 'DB sync' : (student.uploadedFrom || 'Unknown')}
+                      <span className={`er-pill ${student.unmatched ? 'warn' : 'ok'}`}>
+                        {student.unmatched ? 'Not matched' : 'Matched'}
                       </span>
-                      {student.updatedAt && (
-                        <div className="er-hint">{new Date(student.updatedAt).toLocaleDateString()}</div>
+                      {student.unmatched ? (
+                        <div className="er-hint">
+                          No account carries this roll number
+                        </div>
+                      ) : (
+                        student.updatedAt && (
+                          <div className="er-hint">{new Date(student.updatedAt).toLocaleDateString()}</div>
+                        )
                       )}
                     </td>
                   </tr>

@@ -414,17 +414,52 @@ async function handleSchedulerSubmit() {
     setSchedSubmitting(false);
 }
 
+    function saveBlob(blob, suggestedName) {
+        const href = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = href;
+        a.download = suggestedName || '';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(href);
+    }
+
     async function handleDownload(url, suggestedName, type) {
         showToast(type === 'audio' ? 'Preparing audio download…' : 'Starting video download…', 'info');
+
+        // Video is streamed straight off disk and can run to gigabytes, so let the
+        // browser handle it. Audio is transcoded on demand and can fail (truncated
+        // recording, no audio track), so fetch it and surface the server's error
+        // instead of silently saving whatever the response body turned out to be.
+        if (type !== 'audio') {
+            try {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = suggestedName || '';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } catch {
+                showToast('Download failed', 'error');
+            }
+            return;
+        }
+
         try {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = suggestedName || '';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            const res = await apiFetch(url);
+            if (!res.ok) {
+                let errMsg = `Audio download failed (${res.status})`;
+                try {
+                    const d = await res.json();
+                    errMsg = d.error || d.detail || errMsg;
+                } catch {}
+                showToast(errMsg, 'error');
+                return;
+            }
+            saveBlob(await res.blob(), suggestedName);
         } catch {
-            showToast('Download failed', 'error');
+            showToast('Audio download failed — check server connection', 'error');
         }
     }
 

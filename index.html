@@ -3,25 +3,16 @@
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" id="favicon" type="image/svg+xml" href="logo-mark-white.svg" />
+  <!-- Root-relative: a bare "logo-mark-white.svg" resolves against the current
+       path, so on a deep route like /learning/attendance the browser asked for
+       /learning/logo-mark-white.svg and got the SPA fallback instead of an icon. -->
+  <link rel="icon" id="favicon" type="image/svg+xml" href="/logo-mark-white.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>XCEED NITJ</title>
-  <script>
-    function setFavicon() {
-      const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const favicon = document.getElementById('favicon');
-
-      if (darkModeMediaQuery.matches) {
-        favicon.href = 'logo-mark-white.svg';
-      } else {
-        favicon.href = 'logo-mark-black.svg';
-      }
-    }
-
-    setFavicon();
-
-    window.matchMedia('(prefers-color-scheme: dark)').addListener(e => setFavicon());
-  </script>
+  <!-- The favicon is swapped for the browser's colour scheme in
+       src/utils/favicon.js, not by an inline script here: script-src 'self'
+       blocks inline script, so the block that used to live here never ran in
+       production. -->
 </head>
 
 <body>
