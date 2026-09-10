@@ -61,7 +61,9 @@ function ClassCard({ klass, onOpen }) {
   const cardBorder = useColorModeValue('gray.200', 'gray.700');
   const ownerColor = useColorModeValue('gray.600', 'gray.300');
   const metaColor = useColorModeValue('gray.500', 'gray.400');
-  const todayBorder = useColorModeValue('green.500', 'green.300');
+  const todayBorder = 'blue.500';
+  const todayBg = 'white';
+  const todayColor = 'blue.700';
 
   const isTeacher = ['teacher', 'co-teacher'].includes(klass.myRole);
   const todayName = WEEKDAY_NAMES[new Date().getDay()];
@@ -159,8 +161,8 @@ function ClassCard({ klass, onOpen }) {
         )}
 
         {/* Timetable schedule display — the slot(s) falling on today get a
-            green border so a student/teacher can spot "am I in this class
-            today" at a glance without opening the class. */}
+            blue border and a white background so a student/teacher can spot
+            "am I in this class today" at a glance without opening the class. */}
         {klass.schedule && klass.schedule.length > 0 && (
           <Wrap mt={3} spacing={1} align="center">
             <WrapItem>
@@ -175,6 +177,9 @@ function ClassCard({ klass, onOpen }) {
                     fontSize="0.7rem"
                     colorScheme="gray"
                     variant="subtle"
+                    bg={isToday ? todayBg : undefined}
+                    color={isToday ? todayColor : undefined}
+                    fontWeight={isToday ? 'bold' : 'normal'}
                     borderWidth={isToday ? '2px' : '1px'}
                     borderColor={isToday ? todayBorder : 'transparent'}
                   >

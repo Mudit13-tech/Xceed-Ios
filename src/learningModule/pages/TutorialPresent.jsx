@@ -24,6 +24,7 @@ import lmApi from '../api/lmApi';
 import useShortStream from '../hooks/useShortStream';
 import { ErrorState, Loading, SectionCard } from '../components/common';
 import RichText from '../components/RichText';
+import QuestionTypeBadge from '../components/QuestionTypeBadge';
 import { decimalPlacesHint } from '../format';
 import { LmIcon } from '../components/Icon';
 
@@ -61,6 +62,18 @@ function QuestionDetail({ question }) {
   return (
     <Box mt={2} p={3} bg="lmBg.sunken" borderRadius="md">
       <RichText fontSize="sm">{question.prompt}</RichText>
+
+      {/* The options of an MCQ/MSQ, lettered to match the answer key below. */}
+      {(question.options || []).length > 0 && (
+        <Box mt={2}>
+          {question.options.map((option, optionIndex) => (
+            <Flex key={optionIndex} gap={2} fontSize="sm" align="baseline">
+              <Text fontWeight="700">{String.fromCharCode(65 + optionIndex)}.</Text>
+              <RichText fontSize="sm">{option}</RichText>
+            </Flex>
+          ))}
+        </Box>
+      )}
 
       {(question.parts || []).map((part, partIndex) => (
         <Box key={partIndex} mt={3} pl={3} borderLeftWidth="2px" borderColor="lmHue.purple200">
@@ -278,6 +291,7 @@ export default function TutorialPresent() {
               <Badge colorScheme={open ? 'green' : 'gray'} minW="34px" textAlign="center">
                 Q{index + 1}
               </Badge>
+              <QuestionTypeBadge type={question.type} flexShrink={0} />
               <Box flex="1" minW={0}>
                 <Text fontSize="sm" noOfLines={1}>
                   {previewText(question.prompt) || <em>(no preview)</em>}

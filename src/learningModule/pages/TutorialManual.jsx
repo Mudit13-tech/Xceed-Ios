@@ -85,11 +85,33 @@ function Shot({ src, alt, caption }) {
     );
 }
 
+// The same four colours the editor, the student's paper and the results use
+// (Chakra's subtle badge: colour.100 ground, colour.800 text), so the manual
+// shows a teacher exactly what they will see.
+const TYPE_CHIPS = {
+    parametric: { label: 'Numerical with random variables', short: 'RANDOM', bg: '#E9D8FD', color: '#44337A' },
+    mcq:        { label: 'Multiple choice',                 short: 'MCQ',    bg: '#BEE3F8', color: '#2A4365' },
+    msq:        { label: 'Multiple answers',                short: 'MSQ',    bg: '#FED7E2', color: '#702459' },
+    numerical:  { label: 'Numerical',                       short: 'NUM',    bg: '#FEEBC8', color: '#7B341E' },
+};
+
+function TypeChip({ type, short = false }) {
+    const chip = TYPE_CHIPS[type];
+    return (
+        <span style={{
+            display: 'inline-block', background: chip.bg, color: chip.color,
+            fontSize: 11, fontWeight: 700, borderRadius: 4, padding: '1px 7px',
+            whiteSpace: 'nowrap', verticalAlign: 'middle',
+        }}>{short ? chip.short : chip.label}</span>
+    );
+}
+
 // ── tabs ──────────────────────────────────────────────────────────────────────
 
 const TABS = [
     { id: 'overview', label: 'Overview',        icon: 'tutorial' },
     { id: 'create',   label: 'Create & Author',  icon: 'edit' },
+    { id: 'types',    label: 'Question Types',   icon: 'quiz' },
     { id: 'settings', label: 'Settings',         icon: 'settings' },
     { id: 'import',   label: 'Import a Paper',   icon: 'assignment' },
     { id: 'student',  label: 'What Students See',icon: 'preview' },
@@ -107,6 +129,8 @@ function TabOverview() {
                 You write one question with algebraic variables and an answer formula; each student is
                 handed a fresh, randomly-drawn set of values, and their typed answer is checked by evaluating
                 your formula against their own numbers — not by comparing to one shared answer key.
+                A tutorial can also hold <strong>multiple-choice, multiple-answer and plain numerical</strong> questions
+                alongside those — see the Question Types tab.
             </Note>
 
             <Shot src={shotList} alt="Tutorials list for a class"
@@ -126,8 +150,8 @@ function TabOverview() {
 
             <SectionTitle>Workflow at a Glance</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9 }}>
-                Create (from scratch, or from an uploaded paper) → author questions with variables and
-                formulas → set retry/feedback settings → publish → students each sit their own numbers →
+                Create (from scratch, or from an uploaded paper) → pick each question&apos;s type and author it
+                (variables and formulas, or options and a key) → set retry/feedback settings → publish → students each sit their own numbers →
                 you read the Method-analysis table and adjust individual scores where needed.
             </div>
         </div>
@@ -169,8 +193,9 @@ function TabCreate() {
             <SectionTitle>One Question at a Time</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 Questions sit on their own tabs across the top of the editor, so you work on one at a time
-                rather than scrolling a wall of forms. <strong>+ Add question</strong> lives in the tab strip
-                and takes you straight to the new tab. Each question carries its own <strong>Save</strong>
+                rather than scrolling a wall of forms. <strong>+ Add question</strong> lives in the tab strip;
+                it asks for the question&apos;s type first (see Question Types) and takes you straight to the new
+                tab. Each question carries its own <strong>Save</strong>
                 button at the bottom, after the worked solution.
             </div>
 
@@ -199,6 +224,130 @@ function TabCreate() {
                 and no student work comes with them. This is separate from importing from a scanned paper —
                 see the Import a Paper tab.
             </div>
+        </div>
+    );
+}
+
+function TabTypes() {
+    const cell = { padding: '8px 10px', borderBottom: `1px solid ${T.border}`, verticalAlign: 'top' };
+    const rows = [
+        ['parametric', 'Types a number — or an expression like 2*pi*3 — worked from their own drawn values', 'Your formula, evaluated on their values, within Tol % / Tol ±', 'No — every student has different numbers'],
+        ['mcq', 'Picks one option (radio buttons)', 'Right only if the option picked is the one you ticked', 'Yes'],
+        ['msq', 'Ticks every option that applies (checkboxes)', 'Right only if the ticked set matches yours exactly — no part marks', 'Yes'],
+        ['numerical', 'Types one number (an expression is fine)', 'Within the looser of Tolerance % and Tolerance ±; exact if both are 0', 'Yes'],
+    ];
+    return (
+        <div>
+            <Note type="key">
+                Every question in a tutorial has a <strong>type</strong>, and you choose it first. The original
+                kind, <TypeChip type="parametric" />, is still the default and works exactly as described under
+                Create &amp; Author. Alongside it a tutorial can hold three fixed-answer types, written the way
+                a quiz question is written and marked by the quiz&apos;s own marker: <TypeChip type="mcq" />,{' '}
+                <TypeChip type="msq" /> and <TypeChip type="numerical" />. One tutorial can mix all four.
+            </Note>
+
+            <SectionTitle>The Four Types at a Glance</SectionTitle>
+            <div style={{ overflowX: 'auto', marginBottom: 8 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, color: '#374151', lineHeight: 1.6 }}>
+                    <thead>
+                        <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
+                            {['Type', 'The student…', 'Marked right when…', 'Different per student?'].map((h) => (
+                                <th key={h} style={{ ...cell, fontWeight: 700 }}>{h}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map(([type, does, marked, differs]) => (
+                            <tr key={type}>
+                                <td style={cell}><TypeChip type={type} /></td>
+                                <td style={cell}>{does}</td>
+                                <td style={cell}>{marked}</td>
+                                <td style={cell}>{differs}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            <SectionTitle>Choosing the Type</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    <li><strong>+ Add question</strong>, in the tab strip, opens a menu of the four types, each with a one-line description. Pick one and the new question opens on its own tab, already laid out for that type.</li>
+                    <li>To change an existing question, use the <strong>type dropdown</strong> in the question&apos;s header, beside Difficulty. Changing type resets the answer section just as the quiz editor does: MCQ and MSQ start with four blank options and nothing ticked, Numerical with a blank correct value. Switching back to random variables gives you a starter variable and answer if the question has none.</li>
+                    <li>Variables and formulas stay in the editor until you save, so switching away and straight back loses nothing — but <strong>saving</strong> a question as MCQ, MSQ or Numerical discards them for good.</li>
+                </ul>
+            </div>
+
+            <SectionTitle>Writing a Multiple-choice or Multiple-answers Question</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    <li><strong>Question</strong> — the same rich-text box as any prompt: formatting, sub/superscripts and images all work.</li>
+                    <li><strong>Options</strong> — each is its own small rich-text box. <strong>+ Add option</strong> adds one; the bin icon removes one (never below two). Removing an option moves the ticks below it up with their options, so the key stays right.</li>
+                    <li><strong>Tick the correct answer</strong> in the box to the left of each option — exactly one for multiple choice, every correct one for multiple answers.</li>
+                    <li>An option that repeats another (ignoring formatting and case) is <strong>outlined red</strong> as you type: a student could otherwise be right and wrong at once.</li>
+                    <li><strong>Marks</strong> — what the whole question is worth.</li>
+                </ul>
+            </div>
+            <Note type="info">
+                Save refuses a choice question with fewer than two options, a blank option, a repeated option,
+                nothing ticked, or two ticks on a multiple-choice question — each reported with its question
+                number, the same rules the quiz editor enforces.
+            </Note>
+
+            <SectionTitle>Writing a Numerical Question</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    <li><strong>Correct value</strong> — the key, and it must be a number.</li>
+                    <li><strong>Tolerance %</strong> and <strong>Tolerance ±</strong> — whichever allows more applies. Both default to 0, which means an exact match, as in a quiz; the absolute allowance is the one that matters when the answer is near zero.</li>
+                    <li><strong>Marks</strong> — what the question is worth.</li>
+                    <li>Students may type an expression (<code>9.8*1.5</code>); it is worked out first, and the resulting number is judged exactly as a quiz judges it.</li>
+                </ul>
+            </div>
+
+            <SectionTitle>What the Fixed-answer Types Leave Out</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, marginBottom: 8 }}>
+                Nothing is drawn per student, so MCQ, MSQ and Numerical questions have no Variables, answer
+                formulas, Sub-questions, Constraints, Tables or Roll samples — the editor hides them. A{' '}
+                <code>{'{{R}}'}</code> placeholder or a table in the question, an option, the hint or the
+                explanation is refused on save, since it would reach students as literal braces. The
+                <strong> Hint</strong> stays, and the Worked solution is relabelled <strong>Explanation</strong>,
+                shown after submitting on the same setting.
+            </div>
+
+            <SectionTitle>Telling Types Apart — the Colour Badges</SectionTitle>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                {Object.keys(TYPE_CHIPS).map((type) => <TypeChip key={type} type={type} />)}
+            </div>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                Each type has its own colour, and its badge appears wherever a question is named:
+                <ul style={{ margin: '6px 0 0 0', paddingLeft: 18 }}>
+                    <li><strong>Editor</strong> — the full name beside each question&apos;s heading, and a short tag on every tab in the strip (<TypeChip type="parametric" short /> <TypeChip type="mcq" short /> <TypeChip type="msq" short /> <TypeChip type="numerical" short />), so a paper&apos;s mix reads at a glance without opening each question.</li>
+                    <li><strong>The student&apos;s paper</strong> — beside &quot;Question n&quot;, which also tells them whether to tick one option or several.</li>
+                    <li><strong>Results</strong> — beside each question in a student&apos;s attempt.</li>
+                    <li><strong>Live presenter board</strong> — beside each question in the list, with the options lettered A, B, C to match the answer key.</li>
+                </ul>
+            </div>
+
+            <SectionTitle>Marking and Changing a Key</SectionTitle>
+            <Note type="tip">
+                MCQ, MSQ and Numerical questions are marked by the same code that marks quizzes, so the same
+                answer scores the same in a quiz, a tutorial or an assignment. A multiple-answers question has
+                <strong> no partial credit</strong>: one missed or one extra tick scores zero, as in a quiz.
+            </Note>
+            <Note type="warning">
+                A <strong>Check</strong> on a choice question gives a lot away — with four options, three wrong
+                checks leave only the answer. If instant feedback is on for a tutorial with MCQs, keep
+                <strong> Checks allowed per answer</strong> at 1, or accept that those questions are practice
+                rather than measurement. A live session allows unlimited checks, so there a choice question
+                eventually turns green for everyone.
+            </Note>
+            <Note type="info">
+                A student&apos;s paper is fixed when they first open it. If you change a key, add a question, or
+                turn a question into an MCQ afterwards, their copy still holds the old version. Save, then
+                press <strong>Re-evaluate</strong> in the editor: every issued paper takes the saved questions —
+                new type and options included — each student keeps their own numbers and answers, and submitted
+                papers are re-marked.
+            </Note>
         </div>
     );
 }
@@ -266,8 +415,11 @@ function TabStudent() {
                 caption="A student's paper. Their values (R = 45, I = 1.5) are theirs alone — a classmate sees the same question with different numbers." />
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    <li>Students see their own drawn <strong>Your values</strong> under the prompt, and may type an unevaluated expression as an answer (e.g. <code>2*pi*3</code>) instead of computing a decimal themselves.</li>
-                    <li>A standing note reminds them that comparing <em>final answers</em> with a classmate is useless — everyone's numbers differ — but comparing <em>method</em> is exactly the point.</li>
+                    <li>Every question is labelled with its <strong>type</strong>, in that type&apos;s colour — so a student knows before reading on whether to tick one option or several.</li>
+                    <li>On a random-variable question, students see their own drawn <strong>Your values</strong> under the prompt, and may type an unevaluated expression as an answer (e.g. <code>2*pi*3</code>) instead of computing a decimal themselves.</li>
+                    <li>A <strong>multiple-choice</strong> question shows its options lettered A, B, C… with radio buttons, so a second pick replaces the first; a <strong>multiple-answers</strong> question uses checkboxes. Clicking anywhere on an option picks it. Ticks are kept by <em>Save progress</em> and come back on reload.</li>
+                    <li>After submitting — with <em>Show the worked solution after submitting</em> on — the right options are outlined green and marked <strong>correct</strong>, and a wrong pick outlined red, so the student sees both what they chose and what they should have. In a live session this waits until you have moved on to the next question.</li>
+                    <li>A standing note reminds them that comparing <em>final answers</em> with a classmate is useless — everyone's numbers differ — but comparing <em>method</em> is exactly the point. It appears only when the paper has random-variable questions: an all-MCQ tutorial does not claim everyone&apos;s numbers differ.</li>
                     <li>Submitting is immediate and marks right away; there's no separate "release grades" step gating what a student can see once they submit.</li>
                     <li>If attempts remain, a <strong>Start attempt {'{n+1}'}</strong> button appears after submitting.</li>
                 </ul>
@@ -290,10 +442,56 @@ function TabResults() {
                 revisiting in the next class.
             </div>
 
+            <SectionTitle>Choice and Numerical Questions in Results</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, marginBottom: 8 }}>
+                In each attempt&apos;s breakdown, every question carries its type badge. For a multiple-choice or
+                multiple-answers question the <strong>Expected</strong> column shows the right options as letters
+                (<code>B, D</code>) and <strong>Given</strong> shows the letters the student ticked; a numerical
+                question shows its fixed value. In Method analysis these questions have one row each, with the
+                key (<code>Option B</code>, or <code>9.81 (±1%)</code>) where a formula would be — and since
+                everyone answered the same question, that row is a plain per-question success rate.
+            </div>
+
+            <SectionTitle>Re-evaluating Papers Already Issued</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, marginBottom: 10 }}>
+                A student&apos;s paper is fixed the moment they first open it — the questions, options, keys and
+                expected answers are copied onto it — so a later edit in the editor never silently changes what
+                someone is sitting or has already been marked against. That protects students, but it also
+                strands them behind a mistake. <strong>Re-evaluate</strong> is the deliberate way to push a
+                correction through to everyone.
+            </div>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <strong>Using it</strong>
+                <ol style={{ margin: '4px 0 10px 0', paddingLeft: 18 }}>
+                    <li>Fix the question in the editor — a formula typo, the wrong option ticked, a tolerance that was too tight, a question switched to MCQ.</li>
+                    <li>Press <strong><LmIcon name="reuse" size={13} /> Re-evaluate</strong> in the toolbar at the top of the editor, between Import questions and Save. It asks you to confirm, then <strong>saves your edits first</strong> — re-working the papers against unsaved changes would re-mark them against the very mistake you were fixing.</li>
+                    <li>A summary appears when it finishes: how many papers were re-worked, how many re-marked, how many scores changed, and any warnings.</li>
+                </ol>
+                <strong>What it changes</strong>
+                <ul style={{ margin: '4px 0 0 0', paddingLeft: 18 }}>
+                    <li><strong>Kept:</strong> each student&apos;s drawn numbers and everything they typed or ticked — nobody&apos;s question changes under them.</li>
+                    <li><strong>Recomputed from the saved questions:</strong> the expected answers, the prompt, sub-questions, hint and worked solution — and, for a question whose type you changed, the type and its options.</li>
+                    <li><strong>Submitted papers are re-marked</strong> against the current tolerances. Scores can go up or down, and the gradebook takes each student&apos;s new best score. Papers still in progress are updated but not submitted, so nobody loses what they have typed.</li>
+                    <li>A question you have <strong>deleted</strong> from the tutorial stays on existing papers exactly as it was, and is counted in the summary, rather than being removed from work a student has already answered.</li>
+                </ul>
+            </div>
+            <Note type="warning">
+                Re-marking recalculates each score from the answers alone, so an <strong>Adjust marks (+/−)</strong>
+                you applied earlier is <strong>not added back</strong> — the attempt keeps its &quot;adjusted&quot;
+                badge, but the score no longer includes it. Re-apply the adjustment after re-evaluating.
+            </Note>
+            <Note type="info">
+                It never runs on its own, and it covers the whole tutorial: every issued paper is re-worked
+                against every saved question. Check the corrected question with <em>Roll samples</em> or
+                <em> Work it out for values you choose</em> before you press it.
+            </Note>
+
             <SectionTitle>Fixing a Score by Hand</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, marginBottom: 8 }}>
-                There is no bulk regrade tool here (unlike quizzes, which can re-mark an entire cohort after
-                an answer-key fix). Instead, expand any attempt and use <strong>Adjust marks (+/−)</strong>
+                A wrong formula or answer key is fixed for everyone at once: correct it in the editor, save,
+                and press <strong>Re-evaluate</strong> — every issued paper is re-worked against the saved
+                questions (each student keeps their own numbers) and submitted ones are re-marked. For one
+                student, expand their attempt and use <strong>Adjust marks (+/−)</strong>
                 with an optional <strong>Feedback</strong> note — the adjustment is additive/subtractive on
                 top of the auto-computed score, and your feedback text shows up on the student's own paper
                 as "Teacher feedback." Use this when the Method-analysis table reveals a question that was
@@ -320,11 +518,17 @@ function TabGotchas() {
         'Import verification badges are advisory, not a gate: nothing stops you from merging (and later publishing) a question whose derived answer never matched the paper.',
         'Preview — in both the editor and the import screen — always rolls against the saved server copy, never unsaved edits in front of you.',
         'Assignments use the exact same engine under a different name for a different purpose — see the separate Assignment manual if you want this mechanic to count toward a grade.',
+        'Only "Numerical with random variables" gives each student different numbers. MCQ, MSQ and plain Numerical questions are the same for the whole class, so an answer passed along works for them.',
+        'A multiple-answers question has no partial credit: one missed or one extra tick scores zero, exactly as in a quiz.',
+        'A paper is fixed when a student first opens it. Questions added, re-keyed or changed to another type afterwards reach existing papers only through Re-evaluate, or on a new attempt.',
+        'With instant feedback on, each Check on an MCQ rules an option out — keep Checks allowed per answer low, or leave feedback off, for choice questions that should measure something.',
+        'Negative marking and shuffled options or question order, available in quizzes, are not available in tutorials.',
+        'Re-evaluate recalculates scores from the answers alone: an earlier Adjust marks drops out of the score (the "adjusted" badge stays) — re-apply it afterwards.',
     ];
     return (
         <div>
             <Note type="warning">
-                Ten things worth knowing before you build your first tutorial.
+                {items.length} things worth knowing before you build your first tutorial.
             </Note>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {items.map((text, i) => (
@@ -359,6 +563,7 @@ export default function TutorialManual({ standalone = false }) {
     const TAB_CONTENT = {
         overview: <TabOverview />,
         create:   <TabCreate />,
+        types:    <TabTypes />,
         settings: <TabSettings />,
         import:   <TabImport />,
         student:  <TabStudent />,

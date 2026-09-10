@@ -196,6 +196,19 @@ export default function HealthDashboard() {
     ? MODEL_LABELS.map(([key, label]) => `${mlModels[key] ? '●' : '○'} ${label}${mlModels[key] ? '' : ' — not loaded'}`)
     : [];
 
+  // Why the H100 is red, when it is. "H100 unreachable" was true of a dead PBS
+  // job, a job that landed on another node, a blocked port and a 500 alike —
+  // four different machines to go and look at, and the pill said the same
+  // thing for all of them. The server classifies the connection error now
+  // (mlServiceClient.classifyReachabilityError) and these are its two lines.
+  const mlError = healthData?.services?.ml?.error || null;
+  const h100Lines = svc.tunnel === 'online'
+    ? ['H100 reachable']
+    : [
+        mlError ? `Unreachable — ${mlError.reason}` : 'H100 unreachable',
+        mlError?.hint || null,
+      ];
+
   // ERP — the status comes from a real POST to the roster API the ERP
   // Embedding Generation page fetches through, so the server can say WHY it is
   // whatever it is ("Roster API answering", "Non-JSON response (HTTP 502)…").
@@ -289,12 +302,12 @@ export default function HealthDashboard() {
       <ServiceButton
         label="H100"
         status={svc.tunnel}
+        dropWidth={340}
         details={[
           mlTarget?.display ? `Target: ${mlTarget.display}` : null,
-          mlTarget?.kind === 'h100'
-            ? (svc.tunnel === 'online' ? 'H100 reachable' : 'H100 unreachable')
-            : 'Not configured; using local ML service',
-          ...(mlTarget?.kind === 'h100' ? modelLines : []),
+          ...(mlTarget?.kind === 'h100'
+            ? [...h100Lines, ...modelLines]
+            : ['Not configured; using local ML service']),
         ]}
         action={{ label: 'View Metrics', onClick: () => navigate('/attendance/gpu') }}
       />

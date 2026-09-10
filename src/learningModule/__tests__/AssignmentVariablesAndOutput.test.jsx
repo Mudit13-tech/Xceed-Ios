@@ -283,7 +283,9 @@ describe('adding a question', () => {
     await waitFor(() => expect(screen.getByRole('tab', { name: 'Question 1' })).toBeInTheDocument());
     expect(screen.getByRole('tab', { name: 'Question 1' })).toHaveAttribute('aria-selected', 'true');
 
+    // The type is chosen first, from the menu the button opens.
     await userEvent.click(screen.getByRole('button', { name: /\+ Add question/i }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: /random variables/i }));
 
     const added = await screen.findByRole('tab', { name: 'Question 2' });
     await waitFor(() => expect(added).toHaveAttribute('aria-selected', 'true'));
