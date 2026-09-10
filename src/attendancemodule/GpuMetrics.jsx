@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { theme } from './config';
 import ServiceConsole from './ServiceConsole';
+import GpuInventory from './GpuInventory';
 
 const HISTORY_LIMIT = 5000;
 const HISTORY_MAX_POINTS = 2000;
@@ -93,6 +94,12 @@ function normalizeSample(sample) {
     gpuIndex: asNumber(sample.gpuIndex),
     gpuName: sample.gpuName || '',
     gpuUuid: sample.gpuUuid || '',
+    // Present only when the service is pinned to a MIG slice. Everything above
+    // is then the slice's PARENT BOARD, because nvidia-smi publishes memory,
+    // temperature and power per board and not per slice — so the header has to
+    // name the slice or the page reads as if we owned the whole card.
+    migInstanceUuid: sample.migInstanceUuid || '',
+    migProfile: sample.migProfile || '',
     // Older samples predate the flag — infer so they do not all read "N/A".
     utilAvailable: sample.utilAvailable !== undefined && sample.utilAvailable !== null
       ? sample.utilAvailable !== false
@@ -108,7 +115,14 @@ function describeGpu(sample) {
   const index = asNumber(sample.gpuIndex);
   if (index === null && !sample.gpuName) return '';
   const label = index === null ? sample.gpuName : `GPU ${index}`;
-  return sample.gpuName && index !== null ? `${label} — ${sample.gpuName}` : label;
+  const board = sample.gpuName && index !== null ? `${label} — ${sample.gpuName}` : label;
+  // On a slice, say so and say which: the figures on this page are the parent
+  // board's, so "GPU 3 — NVIDIA H100 PCIe" on its own would claim a card that
+  // is only partly ours.
+  if (sample.migProfile) {
+    return `${board} · MIG ${sample.migProfile} (this service holds one slice; card-wide figures below)`;
+  }
+  return board;
 }
 
 export default function GpuMetrics() {
@@ -473,6 +487,12 @@ export default function GpuMetrics() {
         logsUrl={LOGS_URL}
         defaultLoggerLabel="ml_service"
       />
+
+      {/* The panel above is this service's own card. Everything below is
+          the rest of the box — which cards are free, who else is on them,
+          and the move onto a safer one. Kept last because it is the
+          planning view, consulted when something has gone wrong. */}
+      <GpuInventory />
     </main>
   );
 }

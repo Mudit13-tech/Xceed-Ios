@@ -28,33 +28,43 @@ const ALL_MENUS = [
     { key: 'helpManual',        label: 'Help & Manual',         desc: 'Documentation and user guide',           color: '#64748b' },
 ];
 
-export default function DeptMenuConfig() {
-    const [menus, setMenus]     = useState(null);
-    const [saving, setSaving]   = useState(false);
-    const [toast, setToast]     = useState(null); // { msg, ok }
-
-    useEffect(() => {
-        fetch(`${apiUrl}/attendancemodule/settings/batches/dept-menus`, { credentials: 'include' })
-            .then(r => r.json())
-            .then(d => setMenus(d.deptMenus))
-            .catch(() => showToast('Failed to load menu config.', false));
-    }, []);
+/**
+ * One toggle set: loads it, saves each change immediately, reverts on failure.
+ *
+ * Parameterised rather than duplicated because the HOD set below is the same
+ * screen against a different field, and two copies would drift the moment
+ * either was edited. What must NOT be shared is the data: separate endpoints,
+ * separate documents, separate defaults — see Batch.hodMenus.
+ */
+function MenuSection({ title, subtitle, endpoint, payloadKey, accent }) {
+    const [menus, setMenus]   = useState(null);
+    const [saving, setSaving] = useState(false);
+    const [toast, setToast]   = useState(null); // { msg, ok }
 
     const showToast = (msg, ok = true) => {
         setToast({ msg, ok });
         setTimeout(() => setToast(null), 3000);
     };
 
-    // Persists the given menu state immediately and reverts on failure —
-    // every toggle/bulk action saves itself, there's no separate Save button.
+    useEffect(() => {
+        let cancelled = false;
+        fetch(`${apiUrl}${endpoint}`, { credentials: 'include' })
+            .then(r => r.json())
+            .then(d => { if (!cancelled) setMenus(d[payloadKey] || {}); })
+            .catch(() => { if (!cancelled) showToast('Failed to load menu config.', false); });
+        return () => { cancelled = true; };
+    }, [endpoint, payloadKey]);
+
+    // Persists immediately and reverts on failure — every toggle saves itself,
+    // there is no separate Save button.
     const persist = async (next, prev) => {
         setSaving(true);
         try {
-            const res  = await fetch(`${apiUrl}/attendancemodule/settings/batches/dept-menus`, {
+            const res  = await fetch(`${apiUrl}${endpoint}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ deptMenus: next }),
+                body: JSON.stringify({ [payloadKey]: next }),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Save failed');
@@ -67,91 +77,111 @@ export default function DeptMenuConfig() {
         }
     };
 
+    // Written against ALL_MENUS, not against the keys already stored, so a menu
+    // added to the master list is togglable on a document saved before it
+    // existed instead of silently missing from "Enable all".
+    const setAll = (value) => setMenus(prev => {
+        const next = Object.fromEntries(ALL_MENUS.map(m => [m.key, value]));
+        persist(next, prev);
+        return next;
+    });
+
     const toggle = (key) => setMenus(prev => {
         const next = { ...prev, [key]: !prev[key] };
         persist(next, prev);
         return next;
     });
 
-    const enableAll = () => setMenus(prev => {
-        const next = Object.fromEntries(Object.keys(prev).map(k => [k, true]));
-        persist(next, prev);
-        return next;
-    });
+    const enabledCount = menus ? ALL_MENUS.filter(m => menus[m.key]).length : 0;
 
-    const disableAll = () => setMenus(prev => {
-        const next = Object.fromEntries(Object.keys(prev).map(k => [k, false]));
-        persist(next, prev);
-        return next;
-    });
+    return (
+        <section style={{ marginBottom: 30 }}>
+            <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>{title}</div>
+                <div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 2 }}>{subtitle}</div>
+            </div>
 
-    const enabledCount = menus ? Object.values(menus).filter(Boolean).length : 0;
+            <div className="dmc-header" style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="dmc-bulk-btn" onClick={() => setAll(true)}>Enable all</button>
+                    <button className="dmc-bulk-btn" onClick={() => setAll(false)}>Disable all</button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {saving && <span style={{ fontSize: 12.5, color: theme.textMuted }}>Saving…</span>}
+                    <span style={{
+                        alignSelf: 'flex-start', marginTop: 2,
+                        padding: '3px 10px', borderRadius: 20,
+                        background: `${accent}18`, color: accent,
+                        fontSize: 12.5, fontWeight: 700,
+                    }}>
+                        {menus ? `${enabledCount} / ${ALL_MENUS.length} enabled` : '…'}
+                    </span>
+                </div>
+            </div>
 
+            {!menus ? (
+                <div style={{ color: theme.textMuted, fontSize: 12.5, padding: '24px 0' }}>Loading…</div>
+            ) : (
+                <div className="dmc-grid">
+                    {ALL_MENUS.map(({ key, label, desc, color }) => {
+                        const on = !!menus[key];
+                        return (
+                            <label key={key} className={`dmc-row ${on ? 'dmc-row--on' : ''}`}
+                                style={{ '--c': color }}>
+                                <div className="dmc-dot" />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 12.5, fontWeight: 600, color: theme.text }}>{label}</div>
+                                    <div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 0 }}>{desc}</div>
+                                </div>
+                                <div className={`dmc-toggle ${on ? 'dmc-toggle--on' : ''}`}
+                                    style={{ '--c': color }}>
+                                    <div className="dmc-thumb" />
+                                </div>
+                                <input type="checkbox" checked={on} onChange={() => toggle(key)}
+                                    style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} />
+                            </label>
+                        );
+                    })}
+                </div>
+            )}
+
+            {toast && (
+                <div style={{
+                    marginTop: 12, padding: '8px 14px', borderRadius: 7, fontSize: 12.5,
+                    background: toast.ok ? theme.successDim : theme.dangerDim,
+                    color: toast.ok ? theme.success : theme.danger,
+                    border: `1px solid ${toast.ok ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                }}>
+                    {toast.msg}
+                </div>
+            )}
+        </section>
+    );
+}
+
+export default function DeptMenuConfig() {
     return (
         <>
             <style>{cssReset}{EXTRA_CSS}</style>
 
             <div style={{ padding: 'clamp(12px,2vw,20px)', maxWidth: 1000, fontFamily: theme.fontBody }}>
+                <MenuSection
+                    title="Department Admin menus"
+                    subtitle="What the people who run a department's attendance can reach."
+                    endpoint="/attendancemodule/settings/batches/dept-menus"
+                    payloadKey="deptMenus"
+                    accent={theme.accent}
+                />
 
-                {/* Bulk actions + status */}
-                <div className="dmc-header" style={{ marginBottom: 14 }}>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                        <button className="dmc-bulk-btn" onClick={enableAll}>Enable all</button>
-                        <button className="dmc-bulk-btn" onClick={disableAll}>Disable all</button>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {saving && (
-                            <span style={{ fontSize: 12.5, color: theme.textMuted }}>Saving…</span>
-                        )}
-                        <span style={{
-                            alignSelf: 'flex-start', marginTop: 2,
-                            padding: '3px 10px', borderRadius: 20,
-                            background: theme.accentDim, color: theme.accent,
-                            fontSize: 12.5, fontWeight: 700,
-                        }}>
-                            {menus ? `${enabledCount} / ${ALL_MENUS.length} enabled` : '…'}
-                        </span>
-                    </div>
-                </div>
+                <div style={{ height: 1, background: theme.border, margin: '0 0 22px' }} />
 
-                {/* Menu rows */}
-                {!menus ? (
-                    <div style={{ color: theme.textMuted, fontSize: 12.5, padding: '24px 0' }}>Loading…</div>
-                ) : (
-                    <div className="dmc-grid">
-                        {ALL_MENUS.map(({ key, label, desc, color }) => {
-                            const on = !!menus[key];
-                            return (
-                                <label key={key} className={`dmc-row ${on ? 'dmc-row--on' : ''}`}
-                                    style={{ '--c': color }}>
-                                    <div className="dmc-dot" />
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontSize: 12.5, fontWeight: 600, color: theme.text }}>{label}</div>
-                                        <div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 0 }}>{desc}</div>
-                                    </div>
-                                    <div className={`dmc-toggle ${on ? 'dmc-toggle--on' : ''}`}
-                                        style={{ '--c': color }}>
-                                        <div className="dmc-thumb" />
-                                    </div>
-                                    <input type="checkbox" checked={on} onChange={() => toggle(key)}
-                                        style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} />
-                                </label>
-                            );
-                        })}
-                    </div>
-                )}
-
-                {/* Toast */}
-                {toast && (
-                    <div style={{
-                        marginTop: 12, padding: '8px 14px', borderRadius: 7, fontSize: 12.5,
-                        background: toast.ok ? theme.successDim : theme.dangerDim,
-                        color: toast.ok ? theme.success : theme.danger,
-                        border: `1px solid ${toast.ok ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-                    }}>
-                        {toast.msg}
-                    </div>
-                )}
+                <MenuSection
+                    title="Head of Department menus"
+                    subtitle="What a head of department can LOOK AT. This view is read-only whatever is enabled here — the server refuses any non-GET from an HOD — so a toggle grants visibility, never the ability to change anything."
+                    endpoint="/attendancemodule/settings/batches/hod-menus"
+                    payloadKey="hodMenus"
+                    accent="#0ea5e9"
+                />
             </div>
         </>
     );

@@ -290,7 +290,7 @@ export default function AssignmentResults() {
                                 <Tr key={expected.key}>
                                   <Td>{expected.label}</Td>
                                   <Td>
-                                    {`${formatAnswerValue(expected.value, expected.decimals)} ${expected.unit}`}
+                                    {`${formatAnswerValue(expected.value, expected.decimals, expected.valueIm)} ${expected.unit}`}
                                     {/* The precision the student was told to give,
                                         so a near-miss can be read as rounding
                                         rather than a wrong method. */}

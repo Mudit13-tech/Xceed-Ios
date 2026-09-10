@@ -223,6 +223,8 @@ const ConfManual = lazyWithPreload(() => import('./conferencemodule/ConfManual')
 // ─── Department Admin Module Imports ────────────────────────────
 const DeptAdminLayout = lazyWithPreload(() => import('./deptadmin/DeptAdminLayout'));
 const DeptDashboard = lazyWithPreload(() => import('./deptadmin/DeptDashboard'));
+const HodLayout = lazyWithPreload(() => import('./hodadmin/HodLayout'));
+const HodDashboard = lazyWithPreload(() => import('./hodadmin/HodDashboard'));
 const DeptReports = lazyWithPreload(() => import('./deptadmin/DeptReports'));
 const DeptBugReports = lazyWithPreload(() => import('./deptadmin/DeptBugReports'));
 const DeptDisputes = lazyWithPreload(() => import('./deptadmin/DeptDisputes'));
@@ -313,6 +315,10 @@ const APP_ROUTES = (
             <Route path="mail" element={<MailConsole />} />
             {/* The department → head mapping every module reads. Platform-wide,
                 so it sits here rather than inside any one module. */}
+            {/* Heads of department, the Dean (Academic), and what each of
+                their dashboards shows — one screen, because they are one
+                subject. The dean panel lives at /superadmin/hods too rather
+                than on a route of its own. */}
             <Route path="hods" element={<HodAssignPage />} />
           </Route>
           <Route path="/usermanagement" element={<RequireAdmin />}>
@@ -551,6 +557,14 @@ const APP_ROUTES = (
           {/* ─── AMS Manual — public, no auth required ─────────────── */}
           <Route path="/ams-manual" element={<AMSManual standalone />} />
 
+          {/* The module was called iAMS before it became iLEED, and that name
+              is still what people type and what older links point at. Same
+              treatment as /iams-admin below: send it to the canonical path
+              rather than serving the manual from two URLs. Navbar lists it as
+              public too — its redirect runs before this one and would bounce an
+              anonymous reader to /login on the way through. */}
+          <Route path="/iams-manual" element={<Navigate to="/ams-manual" replace />} />
+
           {/* ─── TT Manual — public, no auth required ──────────────── */}
           <Route path="/tt-manual" element={<TTManual standalone />} />
 
@@ -610,6 +624,15 @@ const APP_ROUTES = (
           </Route>
 
           {/* ─── Department Admin Routes ────────────────────────────── */}
+          {/* ─── iLEED Head of Department (read-only) ───────────────── */}
+          <Route path="/ileed-hod" element={<HodLayout />}>
+            <Route index element={<HodDashboard />} />
+            <Route path="dashboard" element={<HodDashboard />} />
+            <Route path="reports" element={<DeptAttendanceReport />} />
+            <Route path="confidence" element={<DeptConfidenceMonitor />} />
+            <Route path="verification" element={<DeptClassVerification />} />
+          </Route>
+
           <Route path="/dept-admin" element={<DeptAdminLayout />}>
             <Route index element={<DeptDashboard />} />
             <Route path="dashboard" element={<DeptDashboard />} />

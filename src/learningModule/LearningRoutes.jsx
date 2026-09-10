@@ -14,6 +14,7 @@ import RequireTeacher from './components/RequireTeacher';
 // later chunk would let the page it guards paint first.
 import RequireLmAdmin from './components/RequireLmAdmin';
 import RequireHod from './components/RequireHod';
+import RequireDean from './components/RequireDean';
 import ClassLayout from './pages/ClassLayout';
 const SebExit = lazyWithPreload(() => import('./pages/SebExit'));
 const Dashboard = lazyWithPreload(() => import('./pages/Dashboard'));
@@ -83,6 +84,8 @@ const LmAdminStudents = lazyWithPreload(() => import('./pages/LmAdminStudents'))
 const LmAdminFacultyClasses = lazyWithPreload(() => import('./pages/LmAdminFacultyClasses'));
 const LmAdminHodDashboard = lazyWithPreload(() => import('./pages/LmAdminHodDashboard'));
 const LmHodSubjects = lazyWithPreload(() => import('./pages/LmHodSubjects'));
+const LmDeanDashboard = lazyWithPreload(() => import('./pages/LmDeanDashboard'));
+const LmDeanSubjects = lazyWithPreload(() => import('./pages/LmDeanSubjects'));
 const QuizManual = lazyWithPreload(() => import('./pages/QuizManual'));
 const ShortsManual = lazyWithPreload(() => import('./pages/ShortsManual'));
 const AssignmentManual = lazyWithPreload(() => import('./pages/AssignmentManual'));
@@ -171,6 +174,14 @@ const LEARNING_ROUTES = (
           <Route path="lm-admin/faculty/:facultyId/classes" element={<LmAdminFacultyClasses />} />
           <Route path="lm-admin/students" element={<LmAdminStudents />} />
           <Route path="lm-admin/hod-dashboard" element={<LmAdminHodDashboard />} />
+          {/* The dean's screen, reached from the console. An administrator is
+              not the Dean (Academic) and holds no DEAN role, so the rail's dean
+              items are not offered to them — but the institute-wide view is the
+              one an admin needs to check what a dean is being shown, and both
+              gates already admit them. Same page and same endpoint as
+              /learning/dean-dashboard, which stays where the dean's own rail
+              points. */}
+          <Route path="lm-admin/dean-dashboard" element={<LmDeanDashboard />} />
         </Route>
 
         {/* The same dashboard, for the people it is named after. An HOD is not
@@ -183,6 +194,17 @@ const LEARNING_ROUTES = (
           {/* What the timetable allocates to the department’s faculty. Same
               guard and the same department mapping as the dashboard. */}
           <Route path="hod-subjects" element={<LmHodSubjects />} />
+        </Route>
+
+        {/* The same two screens read across every department, for the Dean
+            (Academic). Their own gate rather than a widened RequireHod: a head
+            of department reaching these paths is turned away here rather than
+            shown their own department under an institute-wide heading, and the
+            dean — who is a platform admin nowhere — is kept out of the lm-admin
+            console the same way. The server scopes both, and refuses both. */}
+        <Route element={<RequireDean />}>
+          <Route path="dean-dashboard" element={<LmDeanDashboard />} />
+          <Route path="dean-subjects" element={<LmDeanSubjects />} />
         </Route>
 
         <Route path="class/:classId" element={<ClassLayout />}>

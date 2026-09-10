@@ -664,6 +664,20 @@ export default function LmAdmin() {
         </Text>
       </SectionCard>
 
+      <SectionCard
+        title="Dean (Academic) Dashboard"
+        subtitle="The same screen widened to the whole institute: every department side by side, then any one of them semester by semester."
+        action={
+          <RouterLinkStyle as={RouterLink} to="/learning/lm-admin/dean-dashboard" fontSize="sm" color="purple.600" fontWeight="600">
+            Open Dean Dashboard →
+          </RouterLinkStyle>
+        }
+      >
+        <Text fontSize="sm" color="lmFg.muted">
+          Here so an administrator can see what the dean sees without being appointed one — the dean’s own rail item is not offered to admin accounts.
+        </Text>
+      </SectionCard>
+
       <SharedSebCard />
 
       <SebInstallerCard />

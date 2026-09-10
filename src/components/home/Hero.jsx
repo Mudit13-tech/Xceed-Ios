@@ -31,7 +31,7 @@ function HeroBadge({ to, tag, tagBg, label, external }) {
   );
 }
 
-/** The two newest modules — given their own line above the rail. */
+/** The newest modules — given their own line above the rail. */
 const NEW_BADGES = [
   {
     to: '/xceed-learning',
@@ -45,6 +45,12 @@ const NEW_BADGES = [
     tagBg: 'tw-bg-teal-500',
     label: 'iLEED — Attendance',
   },
+  {
+    to: '/timetable',
+    tag: 'Launched in 2024',
+    tagBg: 'tw-bg-violet-600',
+    label: 'Timetable',
+  },
 ];
 
 /** Newest first; the rail scrolls, so the list can keep growing. */
@@ -57,7 +63,6 @@ const RAIL_BADGES = [
   { to: 'https://amsdt2025.com/', tag: 'Sold!', tagBg: 'tw-bg-blue-500', label: 'AMSDT-2025', external: true },
   { to: 'https://eaic2025.netlify.app/', tag: 'Sold!', tagBg: 'tw-bg-violet-400', label: 'EAIC-2025', external: true },
   { to: 'https://chemcon2024.com/', tag: 'Sold!', tagBg: 'tw-bg-orange-500', label: 'Chemcon-2024', external: true },
-  { to: '/timetable', tag: 'Module', tagBg: 'tw-bg-violet-600', label: 'Timetable' },
 ];
 function AnimatedBadge({ newBg, soldBg }) {
   const words = ['NEW', 'SOLD!']
@@ -120,9 +125,9 @@ const Hero = () => {
     <StarryBackgroundAnimation/>
     <section id="home" >
       <div className="tw-py-8 tw-px-4 tw-mx-auto tw-max-w-screen-xl tw-text-center lg:tw-py-14 lg:tw-px-12">
-        {/* The two newest modules, on a line of their own above the rail so
-            they are not lost among the conference links. Each goes to its
-            public introduction page rather than straight into the module — the
+        {/* The modules, on a line of their own above the rail so they are not
+            lost among the conference links. The two newest go to their public
+            introduction pages rather than straight into the module — the
             people these are aimed at usually do not have an account yet. */}
         <div className="tw-mb-10 tw-flex tw-flex-wrap tw-justify-center tw-gap-3">
           {NEW_BADGES.map((badge) => (

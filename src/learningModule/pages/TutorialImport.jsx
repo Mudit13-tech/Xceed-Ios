@@ -435,7 +435,7 @@ function PreviewPanel({ classId, draftId, questionIds }) {
                 {(question.expected || []).map((slot, slotIndex) => (
                   <Text key={slotIndex} fontSize="xs" color={slot.error ? 'red.600' : 'lmHue.green800'}>
                     {slot.partLabel ? `${slot.partLabel} ` : ''}{slot.label}:{' '}
-                    <b>{slot.error ? `not markable — ${slot.error}` : `${formatAnswerValue(slot.value, slot.decimals)} ${slot.unit || ''}`}</b>
+                    <b>{slot.error ? `not markable — ${slot.error}` : `${formatAnswerValue(slot.value, slot.decimals, slot.valueIm)} ${slot.unit || ''}`}</b>
                     {' '}({slot.marks} mark{slot.marks === 1 ? '' : 's'})
                   </Text>
                 ))}

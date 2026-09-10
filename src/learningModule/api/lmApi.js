@@ -335,11 +335,6 @@ const lmApi = {
       },
     }),
   inviteStatus: (classId, batchId) => request(`/classes/${classId}/members/invite-status/${batchId}`),
-  // The Attendance module's roster for this class's subject, already resolved
-  // from roll numbers to addresses and flagged against the current roster —
-  // see memberController.previewErpImport. Read-only: it fills the invite box,
-  // it does not enrol anybody.
-  previewErpImport: (classId) => request(`/classes/${classId}/members/erp-preview`),
   decideJoinRequest: (classId, membershipId, approve) =>
     request(`/classes/${classId}/members/${membershipId}/decide`, { method: 'POST', body: { approve } }),
   updateMember: (classId, membershipId, body) =>
@@ -1024,6 +1019,27 @@ const lmApi = {
      session at a time — `dept` and `session` both default to the server's
      choice (the account's own department, the session in progress). */
   getHodSubjects: (params = {}) => request(`/hod/subjects${qs(params)}`),
+  /* The same two reads, for the Dean (Academic) — the head of department's
+     screens with the department filter left off, so the totals, charts and
+     tables cover the institute. Same shapes, same filters: `dept` narrows to
+     one department rather than being clamped to the ones the caller heads.
+
+     Separate paths rather than a flag on the two above, because they are a
+     different gate: `requireDean` admits DEAN and platform admins, and refuses
+     a head of department outright rather than quietly handing back their own
+     department under an institute-wide heading. */
+  getDeanDashboard: (params = {}) => request(`/dean/dashboard${qs(params)}`),
+  getDeanSubjects: (params = {}) => request(`/dean/subjects${qs(params)}`),
+  /* Which panels the signed-in reader's own leadership dashboard shows — the
+     flags only, none of the data. The navigation rail asks so it can decide
+     whether to offer the Subjects item, whose screen refuses the request when
+     that panel is off.
+
+     Its own call rather than another field on `/me`, because `/me` is resolved
+     by middleware on every request in this module — the quiz heartbeat
+     included — and this is a database read the handful of accounts with a
+     dashboard should pay for, not every student sitting a paper. */
+  getMyDashboardSections: () => request('/dashboard-sections'),
   /* Bulk import from an ERP roster export (.xlsx: name, roll no, branch,
      email), parsed client-side — the server only ever sees plain rows of
      `{ name, rollNumber, dept, email }`. `preview` classifies each row

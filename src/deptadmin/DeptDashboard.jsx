@@ -60,7 +60,16 @@ function ReportRows({ reports }) {
     );
 }
 
-export default function DeptDashboard() {
+/**
+ * The department's attendance day.
+ *
+ * Serves two audiences from one component, which is the point: the department
+ * admin who runs the system, and — via `readOnly` — the head of department who
+ * reads what it produced. Every endpoint it calls is already scoped to the
+ * caller's own department server-side, so the two differ only in what is worth
+ * showing, never in what is fetched.
+ */
+export default function DeptDashboard({ readOnly = false }) {
     const [state, setState] = useState({ stats: null, loading: true, error: '' });
     const [searchParams] = useSearchParams();
     // Only honoured server-side for a full-access (iams-admin) caller — see
@@ -131,7 +140,10 @@ export default function DeptDashboard() {
                 changes minute to minute. */}
             <LiveRoomCards title="Live classrooms" department={overrideDepartment} />
 
-            <PendingActionsCard initialDepartment={overrideDepartment} />
+            {/* Every item on this card is something to go and DO — approve a
+                cluster, resolve a dispute. A head of department can reach none
+                of them, so offering the list would be a page of dead ends. */}
+            {!readOnly && <PendingActionsCard initialDepartment={overrideDepartment} />}
 
             <DashboardProgress title="Acquisition and Roll Assignment Progress" compact initialDepartment={overrideDepartment} />
 

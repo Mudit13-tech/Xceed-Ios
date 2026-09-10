@@ -58,7 +58,32 @@ function CountCell({ value }) {
   );
 }
 
-export default function LmHodSubjects() {
+/**
+ * The two audiences, and the only things that differ — same table as
+ * `LmAdminHodDashboard`'s VARIANTS, and the same reasoning: one screen, because
+ * the dean's question is the head of department's question with the department
+ * left open.
+ *
+ * It stays one department at a time for both. A timetable belongs to a
+ * department, and merging two of them produces a list in which "Sem 3" names two
+ * different cohorts — so what the dean gains here is every department in the
+ * dropdown, not all of them at once.
+ */
+const VARIANTS = {
+  hod: {
+    fetch: (params) => lmApi.getHodSubjects(params),
+    dashboardPath: '/learning/hod-dashboard',
+    dashboardLabel: '← HOD dashboard',
+  },
+  dean: {
+    fetch: (params) => lmApi.getDeanSubjects(params),
+    dashboardPath: '/learning/dean-dashboard',
+    dashboardLabel: '← Dean dashboard',
+  },
+};
+
+export default function LmHodSubjects({ variant = 'hod' }) {
+  const config = VARIANTS[variant] || VARIANTS.hod;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -72,13 +97,13 @@ export default function LmHodSubjects() {
     setLoading(true);
     setError(null);
     try {
-      setData(await lmApi.getHodSubjects({ dept: deptValue, session: sessionValue }));
+      setData(await config.fetch({ dept: deptValue, session: sessionValue }));
     } catch (err) {
       setError(err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [config]);
 
   useEffect(() => {
     load(dept, session);
@@ -166,8 +191,8 @@ export default function LmHodSubjects() {
               which of it has a classroom in the learning module.
             </Text>
           </Box>
-          <RouterLinkStyle as={RouterLink} to="/learning/hod-dashboard" fontSize="sm" color="blue.600">
-            ← HOD dashboard
+          <RouterLinkStyle as={RouterLink} to={config.dashboardPath} fontSize="sm" color="blue.600">
+            {config.dashboardLabel}
           </RouterLinkStyle>
         </Flex>
       </Box>

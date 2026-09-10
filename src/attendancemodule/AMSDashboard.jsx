@@ -401,12 +401,31 @@ export default function AMSDashboard() {
 
     setShowML(prev => !prev);
   };
-  useEffect(() => {
-    fetch(CAM_API, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : [])
-      .then(d => setCameras(Array.isArray(d) ? d : []))
-      .catch(() => setCameras([]))
-      .finally(() => setCamLoad(false));
+  // Polled rather than fetched once. Camera.status is written by a background
+  // health job on its own 30s cycle, so a one-shot read at mount left a
+  // dashboard that stays open on a wall screen showing whatever the fleet looked
+  // like at page load — an "offline" badge sat there unchallenged long after the
+  // camera came back, and only a manual reload cleared it.
+  const fetchCameras = useCallback(async () => {
+    try {
+      // Cache-busted like the live status below: a cached 200 would defeat the
+      // polling entirely and put us back where we started.
+      const res = await fetch(`${CAM_API}?_t=${Date.now()}`, {
+        cache: 'no-store',
+        credentials: 'include',
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setCameras(Array.isArray(data) ? data : []);
+    } catch {
+      // A poll that fails says nothing about the cameras — the hiccup is here,
+      // not there. Keep the last known list on screen instead of blanking the
+      // panel to "No cameras registered", which reads as a fleet-wide fault.
+    } finally {
+      // Only ever cleared, never set back: the spinner belongs to the first
+      // load, and re-raising it every 15s would flicker the panel.
+      setCamLoad(false);
+    }
   }, []);
 
   const fetchLiveStatus = useCallback(async () => {
@@ -419,11 +438,18 @@ export default function AMSDashboard() {
     } catch { /* keep the dashboard alive if live-status hiccups */ }
   }, []);
 
+  // One tick drives both. The camera list and the live rooms are two views of
+  // the same moment, and separate timers would let the panels drift apart on
+  // screen — a room shown as running next to a camera still badged offline.
   useEffect(() => {
-    fetchLiveStatus();
-    const id = setInterval(fetchLiveStatus, 15000);
+    const poll = () => {
+      fetchLiveStatus();
+      fetchCameras();
+    };
+    poll();
+    const id = setInterval(poll, 15000);
     return () => clearInterval(id);
-  }, [fetchLiveStatus]);
+  }, [fetchLiveStatus, fetchCameras]);
 
   useEffect(() => {
     fetch(NOTIF_API, { credentials: 'include' })

@@ -70,6 +70,22 @@ describe('Navbar auth redirect', () => {
     await waitFor(() => expect(where()).toBe(path));
   });
 
+  // Every standalone module manual is public by design; /iams-manual is the
+  // module's old name, forwarded to /ams-manual by App.jsx — a forward this
+  // gate pre-empts unless the path counts as public here.
+  const STANDALONE_MANUALS = [
+    '/ams-manual',
+    '/iams-manual',
+    '/tt-manual',
+    '/certificate-manual',
+    '/conference-manual',
+  ];
+
+  it.each(STANDALONE_MANUALS)('leaves a signed-out reader on %s', async (path) => {
+    const where = await landingPathFor(path);
+    await waitFor(() => expect(where()).toBe(path));
+  });
+
   it('still sends a signed-out visitor away from a real learning page', async () => {
     const where = await landingPathFor('/learning/class/abc/quizzes');
     await waitFor(() => expect(where()).not.toBe('/learning/class/abc/quizzes'));

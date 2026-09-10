@@ -28,7 +28,7 @@ import CommentThread from '../components/CommentThread';
 import RichText from '../components/RichText';
 import RichTextEditor from '../components/RichTextEditor';
 import { isRichTextEmpty } from '../richTextUtils';
-import { DueBadge, EmptyState, ErrorState, Loading, StateBadge, buttonTextStyles } from '../components/common';
+import { AnnouncementStreamSkeleton, DueBadge, EmptyState, ErrorState, Loading, StateBadge, buttonTextStyles } from '../components/common';
 import { courseworkLink, courseworkMeta, relativeTime } from '../format';
 import { LmIcon } from '../components/Icon';
 
@@ -431,7 +431,7 @@ export default function Stream() {
     placeholderData: (previousData) => previousData,
   });
 
-  if (loading && !data) return <Loading label="Loading the stream…" />;
+  if (loading && !data) return <AnnouncementStreamSkeleton />;
 
   return (
     <Flex gap={{ base: 4, lg: 6 }} align="flex-start" direction={{ base: 'column', lg: 'row' }} w="100%">

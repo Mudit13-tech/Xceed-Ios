@@ -209,3 +209,151 @@ describe('LmAdminHodDashboard', () => {
     expect(within(classRow).getByText('8')).toBeInTheDocument();
   });
 });
+
+/**
+ * The anonymous feedback panel.
+ *
+ * Every other panel on this screen is arithmetic; this one is a student's own
+ * words about a named colleague, reaching somebody senior to that colleague.
+ * What is pinned here is the part of it that is a promise rather than a
+ * feature — that nothing in the response can put an author on screen, and that
+ * an institute which switched the panel off gets no notes at all rather than
+ * notes it merely declines to draw.
+ */
+const feedbackData = (over = {}) => ({
+  ...sampleData,
+  feedback: {
+    total: 3,
+    unread: 1,
+    actioned: 0,
+    answered: 1,
+    answeredRate: 33.3,
+    bySentiment: { praise: 1, suggestion: 1, concern: 1 },
+    byCategory: { pace: 2, teaching: 1 },
+    truncated: false,
+    limit: 100,
+    items: [
+      {
+        _id: 'fb1',
+        category: 'pace',
+        sentiment: 'concern',
+        text: 'The lab moves faster than the lecture it follows.',
+        status: 'new',
+        response: '',
+        created_at: '2026-08-14T00:00:00.000Z',
+        classId: 'c1',
+        className: 'Data Structures',
+        subject: 'Data Structures',
+        semester: '3',
+        dept: 'CSE',
+        facultyName: 'Dr A',
+      },
+      {
+        _id: 'fb2',
+        category: 'teaching',
+        sentiment: 'praise',
+        text: 'The worked examples in class are the reason I keep up.',
+        status: 'read',
+        response: 'Thank you — we will keep them.',
+        respondedByName: 'Dr A',
+        created_at: '2026-08-02T00:00:00.000Z',
+        classId: 'c1',
+        className: 'Data Structures',
+        semester: '3',
+        dept: 'CSE',
+        facultyName: 'Dr A',
+      },
+    ],
+    ...over,
+  },
+});
+
+describe('anonymous student feedback panel', () => {
+  it('shows what students wrote, and which class it was about', async () => {
+    getHodDashboard.mockResolvedValue(feedbackData());
+    await renderPage();
+
+    expect(await screen.findByText('Anonymous student feedback')).toBeInTheDocument();
+    expect(screen.getByText(/lab moves faster than the lecture/)).toBeInTheDocument();
+    // The classroom and the colleague who runs it — without which a note is
+    // not actionable by a head of department at all.
+    expect(screen.getAllByText(/Dr A/).length).toBeGreaterThan(0);
+  });
+
+  it('counts concerns apart from praise without sorting them to the top', async () => {
+    getHodDashboard.mockResolvedValue(feedbackData());
+    await renderPage();
+
+    await screen.findByText('Anonymous student feedback');
+    expect(screen.getByText('Concerns')).toBeInTheDocument();
+    expect(screen.getByText('1 praise · 1 suggestion')).toBeInTheDocument();
+
+    // The order on screen is the order they were written, newest first — the
+    // concern happens to be first here because it is the newer note, not
+    // because it is a concern.
+    const texts = screen.getAllByText(/lab moves faster|worked examples/);
+    expect(texts[0].textContent).toMatch(/lab moves faster/);
+  });
+
+  it('shows the reply a member of staff already gave', async () => {
+    getHodDashboard.mockResolvedValue(feedbackData());
+    await renderPage();
+    expect(await screen.findByText(/Replied by Dr A/)).toBeInTheDocument();
+    expect(screen.getByText(/we will keep them/)).toBeInTheDocument();
+  });
+
+  it('draws nothing when the panel is switched off for this audience', async () => {
+    /* Both halves of "off": the flag the superadmin screen writes, and the
+       null the server sends because it did not read the collection. */
+    getHodDashboard.mockResolvedValue({
+      ...sampleData,
+      sections: { feedback: false },
+      feedback: null,
+    });
+    await renderPage();
+
+    expect(screen.queryByText('Anonymous student feedback')).not.toBeInTheDocument();
+    expect(screen.queryByText(/lab moves faster/)).not.toBeInTheDocument();
+  });
+
+  it('draws nothing when the flag is on but the server sent no feedback', async () => {
+    // A response from a server that predates the panel. The screen must not
+    // fall over reading `items` off nothing.
+    getHodDashboard.mockResolvedValue({ ...sampleData, sections: { feedback: true } });
+    await renderPage();
+    expect(screen.queryByText('Anonymous student feedback')).not.toBeInTheDocument();
+  });
+
+  it('says the box is open when a department has written nothing', async () => {
+    getHodDashboard.mockResolvedValue(
+      feedbackData({ total: 0, unread: 0, answered: 0, answeredRate: null, items: [] }),
+    );
+    await renderPage();
+    expect(await screen.findByText('No feedback yet')).toBeInTheDocument();
+  });
+
+  it('holds the list back to ten, and says how many more there are', async () => {
+    const many = Array.from({ length: 14 }, (_, i) => ({
+      _id: `fb${i}`,
+      category: 'pace',
+      sentiment: 'suggestion',
+      text: `Note number ${i}`,
+      status: 'read',
+      response: '',
+      created_at: '2026-08-14T00:00:00.000Z',
+      classId: 'c1',
+      className: 'Data Structures',
+      semester: '3',
+      dept: 'CSE',
+      facultyName: 'Dr A',
+    }));
+    getHodDashboard.mockResolvedValue(feedbackData({ total: 14, items: many }));
+    await renderPage();
+
+    expect(await screen.findByText('Note number 0')).toBeInTheDocument();
+    expect(screen.queryByText('Note number 12')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Show all 14 notes/ }));
+    await waitFor(() => expect(screen.getByText('Note number 12')).toBeInTheDocument());
+  });
+});

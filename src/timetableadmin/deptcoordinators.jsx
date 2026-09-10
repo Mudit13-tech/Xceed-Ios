@@ -149,8 +149,14 @@ const DeptCoordinators = () => {
       }
       toast({
         title: `${name} is no longer a coordinator for ${dept}`,
+        // Taking the role back is reported for the same reason granting it is:
+        // it is the part of this that changes what the account can do beyond
+        // the department just withdrawn.
+        description: data.roleRevoked
+          ? `The Department Time Table Coordinator role (DTTI) has been taken off their account — it was their last appointment.`
+          : undefined,
         status: "success",
-        duration: 4000,
+        duration: data.roleRevoked ? 8000 : 4000,
         isClosable: true,
       });
       await fetchDepartments();
@@ -280,9 +286,11 @@ const DeptCoordinators = () => {
                 Table Coordinator role (DTTI) if it does not already have one,
                 and emails them to say so. Somebody who is signed in at the time
                 must sign out and back in before the new role takes effect.
-                Withdrawing an appointment does not take the role back — it only removes the department, and an
-                account left with none falls back to the department recorded on
-                it. Remove the role itself under User Management.
+                Withdrawing their last appointment takes that role back again,
+                so the coordinator card disappears from their roles page —
+                unless the account already held a timetable role before it was
+                appointed, which is not this page's to remove. Withdrawing one
+                of several appointments only removes that department.
               </AlertDescription>
             </Alert>
 

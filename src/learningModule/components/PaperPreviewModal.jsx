@@ -130,7 +130,7 @@ export default function PaperPreviewModal({ isOpen, onClose, classId, kind = 'tu
                             {expected.label}:{' '}
                             {expected.error
                               ? 'failed'
-                              : `${formatAnswerValue(expected.value, expected.decimals)} ${expected.unit}`}
+                              : `${formatAnswerValue(expected.value, expected.decimals, expected.valueIm)} ${expected.unit}`}
                           </Badge>
                         ))}
                     </HStack>
@@ -164,7 +164,7 @@ export default function PaperPreviewModal({ isOpen, onClose, classId, kind = 'tu
                                 {expected.label}:{' '}
                                 {expected.error
                                   ? 'failed'
-                                  : `${formatAnswerValue(expected.value, expected.decimals)} ${expected.unit}`}
+                                  : `${formatAnswerValue(expected.value, expected.decimals, expected.valueIm)} ${expected.unit}`}
                               </Badge>
                             ))}
                         </HStack>

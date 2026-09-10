@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -11,6 +11,7 @@ import {
   Spinner,
   Text,
   useColorModeValue,
+  useToast,
 } from '@chakra-ui/react';
 import {
   FiAward,
@@ -79,17 +80,39 @@ const ROLE_META = {
     icon: FiUserCheck,
     accent: 'cyan',
   },
+  // Synthetic, like the two learning-* entries below: an HOD holds one platform
+  // role but has two dashboards, and the HOD card already points at the
+  // Learning module's. Appended for anyone with the HOD role so the attendance
+  // view is reachable without a second stored role.
+  'ileed-hod': {
+    name: 'iLEED Dashboard',
+    description: "Your department's attendance, live classrooms and reports",
+    icon: FiUserCheck,
+    accent: 'cyan',
+  },
   STUDENT: {
     name: 'Student',
     description: 'Your classes, coursework and tutorials',
     icon: FiBookOpen,
     accent: 'teal',
   },
+  // Named for the module, not the post. Every other card here names a role
+  // because the role is what distinguishes it, but a head holds exactly one
+  // card per module they can reach — so "Head of Department" told them their
+  // own job title and not where the card goes. The Dean card below is left
+  // naming the post: the dean's card is institute-wide and has no module of
+  // its own to name.
   HOD: {
-    name: 'Head of Department',
+    name: 'Xceed Learning',
     description: "Your department's classrooms, faculty and student counts",
     icon: FiUsers,
     accent: 'blue',
+  },
+  DEAN: {
+    name: 'Dean (Academic)',
+    description: 'Every department: classrooms, faculty, coursework and student activity',
+    icon: FiUsers,
+    accent: 'purple',
   },
   'lm-admin': {
     name: 'Learning Module Admin',
@@ -198,8 +221,11 @@ const RoleItem = ({ role, index, onOpen, descriptionOverride }) => {
 
 const AllocatedRolesPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const toast = useToast();
   const [allocatedRoles, setAllocatedRoles] = useState([]);
   const [learningCards, setLearningCards] = useState([]);
+  const [extraCards, setExtraCards] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -293,6 +319,19 @@ const AllocatedRolesPage = () => {
         } catch {
           // The learning module being unreachable must not blank the roles page.
         }
+
+        // The iLEED dashboard card for heads of department. Derived from the
+        // platform role rather than fetched, so it does not depend on the
+        // attendance module being reachable — and kept out of `allocatedRoles`
+        // for the same reason the learning cards are: it must not turn a
+        // single-role account into a two-role one and suppress the redirect.
+        try {
+          if (platformRoles.some((r) => String(r).toUpperCase() === 'HOD')) {
+            setExtraCards([{ role: 'ileed-hod' }]);
+          }
+        } catch {
+          // An unexpected role shape must not cost the user their other cards.
+        }
       } catch (error) {
         console.error('Error fetching allocated roles:', error.message);
       } finally {
@@ -300,6 +339,25 @@ const AllocatedRolesPage = () => {
       }
     })();
   }, []);
+
+  // A module that turned the user away sent them back here. Without this the
+  // return trip is silent and indistinguishable from the card doing nothing —
+  // see the redirect in attendancemodule/AMSLayout.
+  useEffect(() => {
+    const { deniedModule, deniedReason } = location.state || {};
+    if (!deniedModule) return;
+    toast({
+      title: `${deniedModule} is not open to this account`,
+      description:
+        deniedReason ||
+        'Your account does not have access to that module. If the role was granted just now, sign out and in again.',
+      status: 'warning',
+      duration: 8000,
+      isClosable: true,
+    });
+    // Cleared so a reload, or coming back here later, does not repeat it.
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location, navigate, toast]);
 
   // Single-role users skip the picker and land on their dashboard directly.
   //
@@ -329,7 +387,7 @@ const AllocatedRolesPage = () => {
 
   const email = Array.isArray(user?.email) ? user.email[0] : user?.email;
   const displayName = user?.name || email || 'there';
-  const roleCount = allocatedRoles.length + learningCards.length;
+  const roleCount = allocatedRoles.length + learningCards.length + extraCards.length;
 
   return (
     <Box bg={pageBg} minH="100vh" py={{ base: 8, md: 16 }}>
@@ -389,6 +447,15 @@ const AllocatedRolesPage = () => {
                 key={card.role}
                 role={card.role}
                 index={allocatedRoles.length + index}
+                descriptionOverride={card.description}
+                onOpen={() => navigate(singleRoleTarget(card.role, user))}
+              />
+            ))}
+            {extraCards.map((card, index) => (
+              <RoleItem
+                key={card.role}
+                role={card.role}
+                index={allocatedRoles.length + learningCards.length + index}
                 descriptionOverride={card.description}
                 onOpen={() => navigate(singleRoleTarget(card.role, user))}
               />

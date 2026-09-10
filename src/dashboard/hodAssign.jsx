@@ -27,11 +27,27 @@ import {
 import { FiArrowLeft, FiTrash2, FiUserCheck, FiUserPlus } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import getEnvironment from '../getenvironment';
+import DeanAssignPanel from './deanAssign';
+import DashboardSectionsPanel from './dashboardSections';
+import EditableName from './editableName';
 
 const apiUrl = getEnvironment();
 
 /**
- * Heads of department — the platform's department → person mapping.
+ * Academic leadership: who reads which department, and what they are shown.
+ *
+ * Three panels, in the order the decisions are made — heads of department, the
+ * Dean (Academic), and then what each of their dashboards carries. They sit on
+ * one screen because they are one subject: the dean's appointment is the HOD's
+ * at a wider scope, and the panel settings are meaningless without knowing who
+ * is reading them. Kept apart, the second and third were things an
+ * administrator had to remember existed.
+ *
+ * The first panel is below; the other two are `deanAssign` and
+ * `dashboardSections`, each owning its own reads and writes so a failure in one
+ * cannot take the screen down with it.
+ *
+ * ── Heads of department — the platform's department → person mapping.
  *
  * The HOD role and a `dept` on an account answered "is this person a head of
  * department?" but never "who is the head of ECE?", which is the question every
@@ -46,6 +62,14 @@ const apiUrl = getEnvironment();
  * Assigning also puts the HOD role on the account and sets its department, and
  * removing takes the role away again — unless the same person still heads
  * another department, in which case the role stays and this screen says so.
+ *
+ * No name is asked for. The person being appointed is not the person filling in
+ * this form, so any name typed here is a guess at somebody else's spelling, and
+ * an administrator working through a round of appointments should not have to
+ * make six of them. A created account is named for the post instead —
+ * `Head-CSE` — which is the one thing the appointment already knows for certain
+ * and reads correctly wherever a name is shown. The name column below is
+ * editable in place, permanently, for when the real one is learned.
  */
 
 const departmentKey = (value) =>
@@ -170,6 +194,39 @@ const HodAssignPage = () => {
     }
   };
 
+  // Renaming is open for the life of the appointment, not only just after it is
+  // made: the address is known on day one and the name very often is not. It
+  // rethrows so the cell can stay open on what was typed.
+  const handleRename = async (head, name) => {
+    try {
+      const res = await fetch(`${apiUrl}/user/getuser/rename-hod`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ dept: head.dept, name }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to rename');
+      toast({
+        title: 'Name updated',
+        description: `The head of ${head.dept} is now shown as ${name}.`,
+        status: 'success',
+        duration: 4000,
+        isClosable: true,
+      });
+      fetchHeads();
+    } catch (err) {
+      toast({
+        title: 'Could not rename',
+        description: err.message,
+        status: 'error',
+        duration: 6000,
+        isClosable: true,
+      });
+      throw err;
+    }
+  };
+
   const handleRemove = async (head) => {
     setRemoving(head.dept);
     try {
@@ -213,11 +270,11 @@ const HodAssignPage = () => {
           </Flex>
           <Box>
             <Heading as="h1" size="lg">
-              Heads of Department
+              Academic Leadership
             </Heading>
             <Text color={subColor}>
-              One account per department. Every module that needs to reach a head of
-              department reads this mapping.
+              Who heads each department, who is Dean (Academic), and what each of their
+              dashboards shows.
             </Text>
           </Box>
           <Button leftIcon={<FiArrowLeft />} variant="outline" size="sm" ml="auto" onClick={goBack}>
@@ -245,7 +302,8 @@ const HodAssignPage = () => {
                 onChange={(e) => setEmail(e.target.value)}
               />
               <FormHelperText>
-                An address with no account gets one, claimed through the usual OTP flow.
+                An address with no account gets one, named for the post (Head-{dept || 'CSE'})
+                and claimed through the usual OTP flow. The name is editable below.
               </FormHelperText>
             </FormControl>
             <FormControl isRequired isInvalid={chosenIsTaken}>
@@ -273,12 +331,15 @@ const HodAssignPage = () => {
               flexShrink={0}
               mt={{ base: 0, md: 8 }}
             >
-              Assign
+              {/* Named for what it assigns, not just "Assign": the dean panel
+                  below has its own, and two buttons reading the same word on
+                  one page is a coin flip for anyone navigating by label. */}
+              Assign head
             </Button>
           </Flex>
         </Box>
 
-        <Box bg={cardBg} borderWidth="1px" borderColor={border} borderRadius="xl" p={6}>
+        <Box bg={cardBg} borderWidth="1px" borderColor={border} borderRadius="xl" p={6} mb={8}>
           <Flex justify="space-between" align="center" gap={3} wrap="wrap" mb={4}>
             <Heading as="h2" size="md">
               Current Heads of Department
@@ -313,10 +374,19 @@ const HodAssignPage = () => {
                           {head.dept}
                         </Badge>
                       </Td>
-                      {/* An account created for an address it has never signed
-                          into carries the address as its name, so the two
-                          columns read the same until somebody sets a name. */}
-                      <Td>{head.name && head.name !== head.email ? head.name : '—'}</Td>
+                      {/* Editable in place. An account opened by this screen is
+                          named for the post it holds, `Head-CSE`, because no
+                          name was asked for — this is where that becomes a
+                          person's name, whenever it is learned. Accounts that
+                          predate the post naming carry the address as their
+                          name, which is not one, so the cell shows nothing. */}
+                      <Td>
+                        <EditableName
+                          value={head.name && head.name !== head.email ? head.name : ''}
+                          label={`the head of ${head.dept}`}
+                          onSave={(name) => handleRename(head, name)}
+                        />
+                      </Td>
                       <Td>{head.email || '—'}</Td>
                       <Td>{formatDate(head.assignedAt)}</Td>
                       <Td>
@@ -337,6 +407,13 @@ const HodAssignPage = () => {
             </Box>
           )}
         </Box>
+
+        {/* The same decision at institute scope. Its own panel with its own
+            reads, so a failure fetching deans cannot blank the mapping above. */}
+        <DeanAssignPanel />
+
+        {/* And what the two dashboards those appointments open actually carry. */}
+        <DashboardSectionsPanel />
       </Container>
     </Box>
   );

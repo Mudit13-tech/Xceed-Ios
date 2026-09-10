@@ -495,7 +495,13 @@ export default function MyGroundTruthPhotos() {
           {data.rebuild?.pending > 0 && (
             <Alert status="info" borderRadius="md" fontSize="sm">
               <AlertIcon />
-              A change you made is queued — attendance will start using your new selection shortly.
+              {/* Subject rebuilds either drain within the minute or wait for the
+                  nightly pass, depending on an admin switch. Promising
+                  "shortly" under the nightly setting is the one wording that
+                  brings a student back asking why nothing happened. */}
+              {data.rebuild?.nightly
+                ? 'A change you made is queued — attendance starts using your new selection after tonight’s rebuild.'
+                : 'A change you made is queued — attendance will start using your new selection shortly.'}
             </Alert>
           )}
 

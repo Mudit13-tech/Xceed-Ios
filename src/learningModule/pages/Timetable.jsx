@@ -12,6 +12,8 @@ import {
   Heading,
   ListItem,
   Select,
+  SimpleGrid,
+  Skeleton,
   Spinner,
   Stack,
   Text,
@@ -21,7 +23,7 @@ import {
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import getEnvironment from '../../getenvironment';
-import { SectionCard } from '../components/common';
+import { SectionCard, TimetableSkeleton } from '../components/common';
 import ViewTimetable from '../../timetableadmin/viewtt';
 import TimetableSummary from '../../timetableadmin/ttsummary';
 import { generateInitialTimetableData } from '../../timetableadmin/timetableDataHelpers';
@@ -409,14 +411,7 @@ export default function Timetable() {
 
   // Loading state while user profile is in flight
   if (!me) {
-    return (
-      <Box py={12} textAlign="center">
-        <Spinner size="xl" color="purple.500" />
-        <Text mt={3} color="lmFg.muted" fontSize="sm">
-          Loading timetable...
-        </Text>
-      </Box>
-    );
+    return <TimetableSkeleton />;
   }
 
   /* `isStudent` stays in the condition rather than leaning on the effect that
@@ -523,7 +518,7 @@ export default function Timetable() {
             <Button
               size="sm"
               onClick={loadTimetable}
-              isLoading={loadingTT}
+              isDisabled={loadingTT || loadingOptions}
               variant="outline"
               colorScheme="purple"
               leftIcon={<LmIcon name="refresh" size={15} />}
@@ -577,12 +572,15 @@ export default function Timetable() {
         }
       >
         {loadingOptions || loadingTT ? (
-          <VStack py={8} spacing={3}>
-            <Spinner size="lg" color="purple.500" />
-            <Text color="lmFg.muted" fontSize="sm">
-              Loading timetable…
-            </Text>
-          </VStack>
+          <SimpleGrid columns={{ base: 1, md: 5 }} spacing={4} mt={2} data-testid="timetable-skeleton-grid">
+            {Array.from({ length: 5 }).map((_, colIndex) => (
+              <Box key={colIndex} p={3} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md">
+                <Skeleton height="16px" width="70%" borderRadius="sm" mb={3} />
+                <Skeleton height="60px" width="100%" borderRadius="md" mb={2} />
+                <Skeleton height="60px" width="100%" borderRadius="md" />
+              </Box>
+            ))}
+          </SimpleGrid>
         ) : error ? (
           <Alert status="error" borderRadius="md" fontSize="sm">
             <AlertIcon />
@@ -651,12 +649,11 @@ export default function Timetable() {
                   notes={semNotes}
                 />
               ) : (
-                <Flex justify="center" align="center" p={4}>
-                  <Spinner size="md" color="purple.500" mr={2} />
-                  <Text color="lmFg.subtle" fontWeight="bold">
-                    Loading Timetable Summary...
-                  </Text>
-                </Flex>
+                <Box p={4} data-testid="timetable-summary-skeleton">
+                  <Skeleton height="20px" width="40%" borderRadius="sm" mb={3} />
+                  <Skeleton height="14px" width="80%" borderRadius="sm" mb={2} />
+                  <Skeleton height="14px" width="60%" borderRadius="sm" />
+                </Box>
               )}
             </SafeChild>
 

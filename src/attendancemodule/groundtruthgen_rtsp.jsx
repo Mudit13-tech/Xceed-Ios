@@ -338,6 +338,37 @@ function extractSSEEvents(buffer) {
     return { events, remaining };
 }
 
+// ─── "My" acquisitions ────────────────────────────────────────────────────────
+// The server happily runs several acquisitions at once (one job per
+// acquisitionId; only the CAMERA is exclusive, via cameraLockManager). This
+// page, though, used to auto-attach to whatever running job was newest — so
+// the moment one user started an acquisition, every other page that polled
+// the status endpoint latched onto that job, went "running", and greyed out
+// its own Start button. Admins saw it worst: they can list every department's
+// jobs, so any acquisition anywhere blocked them.
+//
+// The ids this browser started are remembered here, so the page can tell its
+// own job from someone else's: only a job of mine auto-attaches, drives the
+// busy state, or can be stopped from this page. Another user's job is still
+// visible under "Active Acquisitions" and can be opened read-only with View.
+const OWNED_JOBS_KEY = 'gtOwnedAcquisitions';
+const OWNED_JOBS_MAX = 20;
+
+function readOwnedJobs() {
+    try {
+        const v = JSON.parse(localStorage.getItem(OWNED_JOBS_KEY) || '[]');
+        return Array.isArray(v) ? v.filter(x => typeof x === 'string') : [];
+    } catch {
+        return [];   // private mode / corrupt value — behave as "own nothing"
+    }
+}
+
+function rememberOwnedJob(id) {
+    const next = [id, ...readOwnedJobs().filter(x => x !== id)].slice(0, OWNED_JOBS_MAX);
+    try { localStorage.setItem(OWNED_JOBS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+    return next;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function GroundTruthRTSP({
     fixedDepartment = '',
@@ -375,6 +406,9 @@ export default function GroundTruthRTSP({
     // ── All active/recent jobs the user may see (for reopen + multi-user) ────
     const [activeJobs,    setActiveJobs]    = useState([]);
 
+    // Acquisitions started from this browser — see readOwnedJobs() above.
+    const [ownedJobIds,   setOwnedJobIds]   = useState(readOwnedJobs);
+
     // Optional 08:30–17:30 IST acquisition window (admin toggle, default off).
     const [gtWindow, setGtWindow] = useState({ enabled: false, start: '08:30', end: '17:30' });
     const [nowMin, setNowMin] = useState(nowMinIST());
@@ -390,6 +424,11 @@ export default function GroundTruthRTSP({
     const logRef        = useRef(null);
     const streamAbort   = useRef(null);   // AbortController for the attached SSE feed
     const attachedIdRef = useRef(null);
+    // Mirrors ownedJobIds for the polling callback, which must not list it as a
+    // dependency — that would tear down and restart the 8s interval on every
+    // start.
+    const ownedIdsRef   = useRef(ownedJobIds);
+    ownedIdsRef.current = ownedJobIds;
 
     const fetchDegrees = async () => {
         const url = `${_apiUrl}/attendancemodule/settings/batches/degrees`
@@ -636,10 +675,15 @@ export default function GroundTruthRTSP({
             setActiveJobs(jobs);
 
             // On first load with nothing attached, auto-attach to the newest
-            // running job so a reopened page immediately shows live progress.
+            // running job THIS BROWSER STARTED, so a reopened page immediately
+            // shows live progress. Never auto-attach to another user's job:
+            // that made this page think it was busy and disabled its Start
+            // button whenever anyone, anywhere, was acquiring.
             if (!attachedIdRef.current) {
-                const running = jobs.find(j => j.status === 'running' || j.status === 'stopping');
-                if (running) attachToJob(running.acquisitionId);
+                const mine = jobs.find(j =>
+                    (j.status === 'running' || j.status === 'stopping')
+                    && ownedIdsRef.current.includes(j.acquisitionId));
+                if (mine) attachToJob(mine.acquisitionId);
             }
         } catch { /* ignore */ }
     }, [attachToJob]);
@@ -700,6 +744,11 @@ export default function GroundTruthRTSP({
                 return;
             }
             setStartedAt(Date.now());
+            // Claim it before attaching: everything that gates Start/Stop keys
+            // off this list, and the 8s poll can land in between.
+            const owned = rememberOwnedJob(data.acquisitionId);
+            ownedIdsRef.current = owned;
+            setOwnedJobIds(owned);
             attachToJob(data.acquisitionId);
             refreshActiveJobs();
         } catch (err) {
@@ -708,6 +757,17 @@ export default function GroundTruthRTSP({
             showToast(err.message || 'Failed to start acquisition', 'error');
         }
     }, [batchName, detSize, frameSkip, targetImgs, minSamples, clusterThr, attachToJob, refreshActiveJobs]);
+
+    // Detach without touching the job — used to leave another user's run.
+    const detachFromJob = useCallback(() => {
+        if (streamAbort.current) { streamAbort.current.abort(); streamAbort.current = null; }
+        attachedIdRef.current = null;
+        setAcquisitionId(null);
+        setStatus('idle'); setMode(null); setSummary(null);
+        setPersons({}); setLog([]);
+        setStartedAt(null); setElapsedSec(0);
+        setActiveCameraLabel('');
+    }, []);
 
     const handleStart = useCallback(() => {
         if (selectedRoom && roomCameras.length > 0) startJob('room', roomCameras);
@@ -720,6 +780,12 @@ export default function GroundTruthRTSP({
 
     const handleStop = useCallback(async () => {
         if (!acquisitionId) return;
+        // Never stop a run this browser did not start — the page can be
+        // attached to another user's job in read-only mode.
+        if (!ownedIdsRef.current.includes(acquisitionId)) {
+            showToast('That acquisition was started by another user — only they can stop it.', 'error');
+            return;
+        }
         setStatus('stopping');
         addLog('⏹ Sending stop signal — waiting for final save…', theme.textMuted);
         try {
@@ -736,10 +802,27 @@ export default function GroundTruthRTSP({
     const isStopping  = status === 'stopping';
     const isDone      = status === 'done';
     const isIdle      = status === 'idle';
-    const isBusy      = isRunning || isStopping;
 
-    const combinedMode = mode === 'combined' && isBusy;
-    const roomMode     = mode === 'room' && isBusy;
+    // Only MY acquisition makes this page busy. Watching someone else's run
+    // (auto-attached on reopen, or opened with View) is read-only observation
+    // and must leave Start enabled — the server runs jobs in parallel and only
+    // rejects a camera that is genuinely already in use.
+    const attachedJob    = activeJobs.find(j => j.acquisitionId === acquisitionId) || null;
+    const attachedIsMine = Boolean(acquisitionId) && ownedJobIds.includes(acquisitionId);
+    const liveAttached   = isRunning || isStopping;
+    // Mine may also be running while this page is looking at another job; the
+    // poll list is the only place that shows up.
+    const myRunningJob   = activeJobs.find(j =>
+        (j.status === 'running' || j.status === 'stopping')
+        && ownedJobIds.includes(j.acquisitionId));
+    const isBusy         = (liveAttached && attachedIsMine) || Boolean(myRunningJob);
+    // Stop acts on the attached job, so it may only be offered for my own.
+    const canStop        = liveAttached && attachedIsMine;
+    const viewingOther   = liveAttached && !attachedIsMine;
+
+    // Camera-cycling chrome describes the ATTACHED job, mine or not.
+    const combinedMode = mode === 'combined' && liveAttached;
+    const roomMode     = mode === 'room' && liveAttached;
 
     const totalPersons       = Object.keys(persons).length;
     const donePersons        = Object.values(persons).filter(p => p.done).length;
@@ -774,6 +857,7 @@ export default function GroundTruthRTSP({
                         {activeJobs.map(j => {
                             const attached = j.acquisitionId === acquisitionId;
                             const live = j.status === 'running' || j.status === 'stopping';
+                            const mine = ownedJobIds.includes(j.acquisitionId);
                             return (
                                 <div key={j.acquisitionId} className="gt-active-job" style={{
                                     display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
@@ -790,6 +874,7 @@ export default function GroundTruthRTSP({
                                             {MODE_LABEL[j.mode] || j.mode}
                                             {j.activeCameraLabel ? ` · ${j.activeCameraLabel}` : ''}
                                             {j.startedByName ? ` · ${j.startedByName}` : ''}
+                                            {mine ? ' · you' : ''}
                                         </div>
                                     </div>
                                     <div className="gt-active-job-actions" style={{ display: 'flex', gap: 8, marginLeft: 'auto', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -922,7 +1007,9 @@ export default function GroundTruthRTSP({
                                 <span style={{ color: theme.textMuted }}>Loading cameras…</span>
                             ) : roomCameras.length > 0 ? (
                                 <span style={{ color: '#0ea5e9' }}>
-                                    <strong>{roomCameras.length}</strong> camera{roomCameras.length > 1 ? 's' : ''} routed — the server switches between them automatically
+                                    <strong>{roomCameras.length}</strong> camera{roomCameras.length > 1 ? 's' : ''} routed — {roomCameras.length > 1
+                                        ? 'the server switches between them automatically'
+                                        : 'the server captures from it continuously (no switching with one camera)'}
                                 </span>
                             ) : (
                                 <span style={{ color: theme.danger }}>No cameras registered for room "{selectedRoom}"</span>
@@ -1059,6 +1146,37 @@ export default function GroundTruthRTSP({
                 </div>
             )}
 
+            {viewingOther && (
+                <div style={{
+                    marginBottom: 16,
+                    padding: '10px 16px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+                    background: theme.accentDim,
+                    color: theme.accent,
+                    border: `1px solid ${theme.accent}`,
+                }}>
+                    <span>
+                        👁 Viewing an acquisition started by
+                        {attachedJob?.startedByName ? ` ${attachedJob.startedByName}` : ' another user'} —
+                        read-only. You can still start your own on a different camera.
+                    </span>
+                    <button
+                        onClick={detachFromJob}
+                        style={{
+                            marginLeft: 'auto',
+                            fontSize: '12px', fontWeight: 700, padding: '5px 14px',
+                            borderRadius: 6, cursor: 'pointer',
+                            border: `1px solid ${theme.accent}`,
+                            background: 'transparent', color: theme.accent,
+                        }}
+                    >
+                        Stop viewing
+                    </button>
+                </div>
+            )}
+
             <div className="gt-action-row">
                 <button
                     onClick={handleStart}
@@ -1115,21 +1233,22 @@ export default function GroundTruthRTSP({
 
                 <button
                     onClick={handleStop}
-                    disabled={!isBusy}
+                    disabled={!canStop}
+                    title={viewingOther ? 'This acquisition was started by another user' : undefined}
                     className="gt-action-button"
                     style={{
                         padding: '10px 24px', borderRadius: 8,
-                        cursor: isBusy ? 'pointer' : 'default',
+                        cursor: canStop ? 'pointer' : 'default',
                         fontSize: '14px', fontWeight: 700, border: 'none',
-                        background: isBusy ? '#ef4444' : '#fca5a5',
+                        background: canStop ? '#ef4444' : '#fca5a5',
                         color: '#ffffff',
-                        boxShadow: isBusy ? '0 2px 8px rgba(239,68,68,0.4)' : 'none',
+                        boxShadow: canStop ? '0 2px 8px rgba(239,68,68,0.4)' : 'none',
                         transition: 'all 0.15s',
-                        opacity: isBusy ? 1 : 0.45,
+                        opacity: canStop ? 1 : 0.45,
                         minWidth: 120,
                     }}
                 >
-                    {isStopping ? '⏳ Stopping…' : '⏹ Stop'}
+                    {isStopping && canStop ? '⏳ Stopping…' : '⏹ Stop'}
                 </button>
             </div>
 
@@ -1279,7 +1398,12 @@ export default function GroundTruthRTSP({
                         onClick={() => {
                             setStatus('idle'); setSummary(null); setPersons({}); setLog([]);
                             setAcquisitionId(null); attachedIdRef.current = null; setMode(null);
-                            setStartedAt(null); setElapsedSec(0); setPythonJobId(null);
+                            // No setPythonJobId here: the preview follows the
+                            // acquisitionId now, and calling the setter that
+                            // state used to have threw a ReferenceError that
+                            // aborted the whole reset — leaving the page stuck
+                            // on the completion screen, unable to start again.
+                            setStartedAt(null); setElapsedSec(0);
                             if (streamAbort.current) { streamAbort.current.abort(); streamAbort.current = null; }
                             refreshActiveJobs();
                         }}

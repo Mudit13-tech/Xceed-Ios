@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import getEnvironment from '../getenvironment';
 import { styles, theme, cssReset } from '../attendancemodule/config';
+import MlDeployCard from './MlDeployCard';
 
 const apiUrl = getEnvironment();
 const DEPLOY_URL = `${apiUrl}/api/v1/deploy`;
@@ -129,7 +130,7 @@ export default function DeployConsole() {
             <p style={styles.subheading}>
                 Merge a pull request, pull {status?.branch || 'main'}, rebuild the React bundle and
                 restart the Node server{status?.repo ? ` · ${status.repo}` : ''}
-                {' · '}the ML service on the H100 is not touched
+                {' · '}the ML service on the GPU box has its own button below
             </p>
 
             {status && !status.enabled && (
@@ -302,6 +303,11 @@ export default function DeployConsole() {
                     </pre>
                 </div>
             )}
+
+            {/* Deliberately last and deliberately its own button: the deploy above
+                runs for a frontend typo, and this one cycles a GPU service holding
+                model weights and open cameras. */}
+            <MlDeployCard />
         </div>
     );
 }

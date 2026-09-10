@@ -36,7 +36,7 @@ import { useChartTheme } from '../chartTheme';
 /**
  * HOD Dashboard — what a department looks like right now, and how it got here.
  *
- * Four questions, in the order a head of department asks them:
+ * Five questions, in the order a head of department asks them:
  *
  *  1. How big is the department, and how much of it is actually running? —
  *     the headline tiles and the coverage bars.
@@ -45,6 +45,12 @@ import { useChartTheme } from '../chartTheme';
  *  3. Where is it going? — six months of publishing against six months of
  *     students doing the work.
  *  4. Which classroom is which? — the per-class table, unchanged in spirit.
+ *  5. What do the students say? — anonymous feedback over the same classes,
+ *     last because it is the only panel made of words rather than counts, and
+ *     it reads differently once you know what you are looking at.
+ *
+ * Every panel above is configurable per audience from the superadmin screen,
+ * and a panel that is off is simply absent — see `show` below.
  *
  * Deliberately not a ranking. It used to sort classes by a weighted "activity
  * score" and hang medals off the top three, which reads as a league table of the
@@ -97,7 +103,202 @@ function ChartCard({ title, subtitle, children }) {
   );
 }
 
-export default function LmAdminHodDashboard() {
+const SENTIMENT_STYLE = {
+  praise: { colorScheme: 'green', label: 'Praise' },
+  suggestion: { colorScheme: 'blue', label: 'Suggestion' },
+  concern: { colorScheme: 'orange', label: 'Concern' },
+};
+
+/** The day a note was written. The server sends nothing finer — see below. */
+const feedbackDay = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? ''
+    : date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+/**
+ * Anonymous student feedback, over the classes in view.
+ *
+ * The one panel on this screen made of somebody's own words rather than counts,
+ * which is why it is built differently from the rest of the file:
+ *
+ *  - **The author is never here to be shown.** The server strips the student's
+ *    id, name, email and roll number before this component ever sees a note,
+ *    and blunts the timestamp to the day, because "17:42, four minutes after
+ *    the lab" identifies a student in a class of thirty no matter what fields
+ *    were dropped. There is deliberately nothing in this component that could
+ *    render an author, so a future field on the response cannot leak one by
+ *    being spread into a row.
+ *  - **No CSV.** Every other table here downloads, and this one does not: a
+ *    spreadsheet of students' unattributed complaints about named colleagues is
+ *    a file that gets forwarded, and the counts above the list are what a report
+ *    actually needs. Reading them is what this panel is for.
+ *  - **Concerns are not sorted to the top.** They are counted separately and
+ *    the list stays in the order they were written, because a screen that
+ *    promotes complaints teaches a department to read only complaints.
+ *
+ * Ten notes to begin with. A department's semester runs to hundreds, and a wall
+ * of them is a panel nobody scrolls; the button says how many more there are.
+ */
+function FeedbackPanel({ feedback, scopeLabel, showDept }) {
+  const [expanded, setExpanded] = useState(false);
+  const items = feedback.items || [];
+  const shown = expanded ? items : items.slice(0, 10);
+  const sentiment = feedback.bySentiment || {};
+
+  return (
+    <SectionCard
+      title="Anonymous student feedback"
+      subtitle={`What students wrote about ${scopeLabel === 'institute' ? 'the institute’s' : 'the department’s'} classes. Never attributed — the author is not sent to this screen, and the date is the day only.`}
+    >
+      <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4} mb={5}>
+        <StatTile label="Notes" value={feedback.total ?? 0} accent="purple.500" />
+        <StatTile
+          label="Concerns"
+          value={sentiment.concern ?? 0}
+          hint={`${sentiment.praise ?? 0} praise · ${sentiment.suggestion ?? 0} suggestion${sentiment.suggestion === 1 ? '' : 's'}`}
+          accent="orange.500"
+        />
+        <StatTile
+          label="Unread by staff"
+          value={feedback.unread ?? 0}
+          hint="never opened by the class's teacher"
+          accent="red.500"
+        />
+        <StatTile
+          label="Answered"
+          value={feedback.answeredRate == null ? '—' : `${feedback.answeredRate}%`}
+          hint={`${feedback.answered ?? 0} of ${feedback.total ?? 0} got a reply`}
+          accent="teal.500"
+        />
+      </SimpleGrid>
+
+      {items.length === 0 ? (
+        <EmptyState
+          icon="insights"
+          title="No feedback yet"
+          description="Students have not written anything about the classes in view. The box is open in every classroom — nothing here means nothing sent."
+        />
+      ) : (
+        <VStack align="stretch" spacing={3}>
+          {shown.map((note) => {
+            const tone = SENTIMENT_STYLE[note.sentiment] || { colorScheme: 'gray', label: note.sentiment };
+            return (
+              <Box
+                key={note._id}
+                borderWidth="1px"
+                borderColor="lmBorder.base"
+                borderRadius="md"
+                p={4}
+              >
+                <Flex justify="space-between" align="flex-start" gap={3} wrap="wrap" mb={2}>
+                  <Flex gap={2} align="center" wrap="wrap">
+                    <Badge colorScheme={tone.colorScheme} borderRadius="full" px={2} fontSize="xs">
+                      {tone.label}
+                    </Badge>
+                    <Badge colorScheme="gray" borderRadius="full" px={2} fontSize="xs" textTransform="capitalize">
+                      {note.category}
+                    </Badge>
+                    {note.status === 'new' && (
+                      <Badge colorScheme="red" variant="outline" borderRadius="full" px={2} fontSize="xs">
+                        Unread
+                      </Badge>
+                    )}
+                  </Flex>
+                  <Text fontSize="xs" color="lmFg.subtle">
+                    {feedbackDay(note.created_at)}
+                  </Text>
+                </Flex>
+
+                <Text fontSize="sm" color="lmFg.body" whiteSpace="pre-wrap">
+                  {note.text}
+                </Text>
+
+                <Text fontSize="xs" color="lmFg.muted" mt={2}>
+                  {note.className ? (
+                    <RouterLinkStyle as={RouterLink} to={`/learning/class/${note.classId}`} color="blue.600">
+                      {note.className}
+                    </RouterLinkStyle>
+                  ) : (
+                    'Class removed'
+                  )}
+                  {note.semester ? ` · Sem ${note.semester}` : ''}
+                  {showDept && note.dept ? ` · ${note.dept}` : ''}
+                  {note.facultyName ? ` · ${note.facultyName}` : ''}
+                </Text>
+
+                {note.response && (
+                  <Box mt={3} pl={3} borderLeftWidth="2px" borderColor="lmBorder.base">
+                    <Text fontSize="xs" color="lmFg.subtle" mb={1}>
+                      Replied{note.respondedByName ? ` by ${note.respondedByName}` : ''}
+                    </Text>
+                    <Text fontSize="sm" color="lmFg.muted" whiteSpace="pre-wrap">
+                      {note.response}
+                    </Text>
+                  </Box>
+                )}
+              </Box>
+            );
+          })}
+
+          {items.length > shown.length && (
+            <Button size="sm" variant="outline" alignSelf="flex-start" onClick={() => setExpanded(true)}>
+              Show all {items.length} notes
+            </Button>
+          )}
+
+          {feedback.truncated && expanded && (
+            <Text fontSize="xs" color="lmFg.subtle">
+              The {feedback.limit} most recent of {feedback.total}. The counts above cover all of them.
+            </Text>
+          )}
+        </VStack>
+      )}
+    </SectionCard>
+  );
+}
+
+/**
+ * The two audiences this screen serves, and the only things that differ.
+ *
+ * A dean's question is a head of department's question asked of every
+ * department at once — the same tiles, the same charts, the same tables, over a
+ * wider set of classes. So it is one screen rather than two: a second copy
+ * would be a second set of arithmetic free to drift, and the first bug would be
+ * a figure that meant one thing on one screen and something else on the other.
+ *
+ * What varies is the endpoint (a different gate, and the server leaves the
+ * department filter off for a dean), the wording, and where "Subjects" points.
+ * Everything below reads this table rather than testing the variant inline, so
+ * adding a third audience is a row here and not a hunt through the file.
+ */
+const VARIANTS = {
+  hod: {
+    title: 'HOD Dashboard',
+    blurb:
+      'the department at a glance: who is in it, what is being taught, what students are doing with it, semester by semester.',
+    loadingLabel: 'Loading HOD dashboard…',
+    subjectsPath: '/learning/hod-subjects',
+    fetch: (params) => lmApi.getHodDashboard(params),
+    // What the downloaded filenames are stamped with when no single department
+    // is in view. An HOD is always in one, so this is only ever the dean's.
+    scopeLabel: 'department',
+  },
+  dean: {
+    title: 'Dean (Academic) Dashboard',
+    blurb:
+      'the institute at a glance: every department, what is being taught in it, and what students are doing with it — department by department and semester by semester.',
+    loadingLabel: 'Loading institute dashboard…',
+    subjectsPath: '/learning/dean-subjects',
+    fetch: (params) => lmApi.getDeanDashboard(params),
+    scopeLabel: 'institute',
+  },
+};
+
+export default function LmAdminHodDashboard({ variant = 'hod' }) {
+  const config = VARIANTS[variant] || VARIANTS.hod;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -110,13 +311,13 @@ export default function LmAdminHodDashboard() {
     setLoading(true);
     setError(null);
     try {
-      setData(await lmApi.getHodDashboard({ dept: deptValue, semester: sem, session: sess }));
+      setData(await config.fetch({ dept: deptValue, semester: sem, session: sess }));
     } catch (err) {
       setError(err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [config]);
 
   useEffect(() => {
     load(dept, semester, session);
@@ -159,10 +360,10 @@ export default function LmAdminHodDashboard() {
       <VStack align="stretch" spacing={6}>
         <Box>
           <Text fontSize="xl" fontWeight="700" color="lmFg.heading">
-            HOD Activity Dashboard
+            {config.title}
           </Text>
           <Text fontSize="sm" color="lmFg.muted">
-            Semester-wise class activity ranked by engagement.
+            {config.blurb}
           </Text>
         </Box>
         <SimpleGrid columns={{ base: 3, md: 6 }} spacing={3}>
@@ -173,13 +374,34 @@ export default function LmAdminHodDashboard() {
           <StatTileSkeleton />
           <StatTileSkeleton />
         </SimpleGrid>
-        <Loading label="Loading HOD dashboard…" minH="120px" />
+        <Loading label={config.loadingLabel} minH="120px" />
       </VStack>
     );
   }
   if (error) return <ErrorState error={error} onRetry={() => load(dept, semester, session)} />;
 
-  const { filters, scope = {}, semesters = [], trend = [] } = data;
+  const {
+    filters,
+    scope = {},
+    semesters = [],
+    trend = [],
+    // Non-empty only when the view spans more than one department, which is the
+    // dean's ordinary case and never a head of department's. Rendered on that
+    // fact rather than on the variant, so an admin who lands on either path
+    // gets the breakdown whenever there is one to give.
+    departments: deptRollup = [],
+    /* Which panels this dashboard is configured to draw, chosen per audience
+       from the superadmin screen. An absent flag means "show it": a response
+       from a server that predates a panel, or a panel nobody has an opinion
+       about, must not blank part of the screen. `show` states that rule once so
+       no panel below has to remember it. */
+    sections = {},
+    /* Null whenever the panel is off for this audience: the server does not
+       read the collection at all in that case, so there is nothing to draw and
+       no student's words in the response either. */
+    feedback = null,
+  } = data;
+  const show = (key) => sections[key] !== false;
   /* An HOD cannot widen the scope, so a head of one department is shown that
      department as a fact rather than offered a dropdown that would silently
      ignore every other option. A head of two — which happens during a vacancy —
@@ -198,7 +420,7 @@ export default function LmAdminHodDashboard() {
      up in a folder together. */
   const exportSemesters = () => {
     exportCsv(
-      csvFilename('semesters', scope.dept, semester && `sem-${semester}`, session),
+      csvFilename('semesters', scope.dept || config.scopeLabel, semester && `sem-${semester}`, session),
       [
         'Semester', 'Classes', 'Faculty', 'Enrolled', `Active (${windowDays}d)`,
         'Engaged %', 'Content items', 'Classwork', 'Handed in', 'On time %',
@@ -223,9 +445,38 @@ export default function LmAdminHodDashboard() {
     );
   };
 
+  /* The department breakdown, same rule as the other two: exactly what is on
+     screen, in the order it is on screen, under the filters in force. */
+  const exportDepartments = () => {
+    exportCsv(
+      csvFilename('departments', config.scopeLabel, semester && `sem-${semester}`, session),
+      [
+        'Department', 'Classes', 'Faculty', 'Enrolled', `Active (${windowDays}d)`,
+        'Engaged %', 'Content items', 'Classwork', 'Handed in', 'On time %',
+        'Marked %', 'Quiz attempts', 'Avg quiz %', 'Pass rate %',
+      ],
+      deptRollup.map((d) => [
+        d.label,
+        d.classes,
+        d.faculty,
+        d.enrolments,
+        d.activeStudents,
+        d.engagementRate ?? '',
+        d.content,
+        d.coursework,
+        d.submissions.turnedIn,
+        d.submissions.onTimeRate ?? '',
+        d.submissions.gradedRate ?? '',
+        d.quiz.attempts,
+        d.quiz.avgPercent ?? '',
+        d.quiz.passRate ?? '',
+      ]),
+    );
+  };
+
   const exportClasses = () => {
     exportCsv(
-      csvFilename('classrooms', scope.dept, semester && `sem-${semester}`, session),
+      csvFilename('classrooms', scope.dept || config.scopeLabel, semester && `sem-${semester}`, session),
       [
         'Class', 'Subject', 'Subject code', 'Section', 'Faculty', 'Faculty email',
         'Department', 'Semester', 'Session', 'Status', 'Students',
@@ -328,21 +579,26 @@ export default function LmAdminHodDashboard() {
         <Flex justify="space-between" align="flex-start" gap={3} wrap="wrap">
           <Box>
             <Text fontSize="xl" fontWeight="700" color="lmFg.heading">
-              HOD Dashboard
+              {config.title}
             </Text>
             <Text fontSize="sm" color="lmFg.muted">
               {scope.dept ? `${scope.dept} — ` : ''}
-              the department at a glance: who is in it, what is being taught, what
-              students are doing with it, semester by semester.
+              {config.blurb}
             </Text>
           </Box>
           <Flex gap={4} align="center" wrap="wrap">
-            <RouterLinkStyle as={RouterLink} to="/learning/hod-subjects" fontSize="sm" color="blue.600">
-              Subjects &amp; faculty →
-            </RouterLinkStyle>
+            {/* Hidden with the panel, because the screen it points at refuses
+                the request when the panel is off — a link that 403s is worse
+                than no link. */}
+            {show('subjects') && (
+              <RouterLinkStyle as={RouterLink} to={config.subjectsPath} fontSize="sm" color="blue.600">
+                Subjects &amp; faculty →
+              </RouterLinkStyle>
+            )}
             {/* The faculty directory is behind the lm-admin gate, so offering it
-                to a head of department is offering them a 403. */}
-            {!deptLocked && (
+                to a head of department is offering them a 403 — and to the dean
+                too, who is scoped to every department but administers none. */}
+            {variant !== 'dean' && !deptLocked && (
               <RouterLinkStyle as={RouterLink} to="/learning/lm-admin/faculty" fontSize="sm" color="blue.600">
                 ← Faculty directory
               </RouterLinkStyle>
@@ -367,12 +623,13 @@ export default function LmAdminHodDashboard() {
         <Text fontSize="sm" color="lmFg.subtle">
           {filtered
             ? `Filtered view · ${classes.length} class${classes.length !== 1 ? 'es' : ''}`
-            : `Whole department · ${classes.length} class${classes.length !== 1 ? 'es' : ''}`}
+            : `Whole ${config.scopeLabel} · ${classes.length} class${classes.length !== 1 ? 'es' : ''}`}
         </Text>
         {filterBar}
       </Flex>
 
       {/* People and classrooms. */}
+      {show('people') && (
       <SimpleGrid columns={{ base: 2, md: 4 }} spacing={3}>
         <StatTile
           label="Faculty"
@@ -399,8 +656,10 @@ export default function LmAdminHodDashboard() {
           accent="cyan.500"
         />
       </SimpleGrid>
+      )}
 
       {/* Teaching and learning. */}
+      {show('teaching') && (
       <SimpleGrid columns={{ base: 2, md: 4 }} spacing={3}>
         <StatTile
           label="Classwork set"
@@ -437,8 +696,10 @@ export default function LmAdminHodDashboard() {
           accent="red.500"
         />
       </SimpleGrid>
+      )}
 
       {/* ── semester-wise analysis ─────────────────────────────────────────── */}
+      {show('semesterCharts') && (
       <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={4}>
         <ChartCard
           title="Cohort size by semester"
@@ -468,14 +729,18 @@ export default function LmAdminHodDashboard() {
           <SemesterEngagementChart semesters={semesters} />
         </ChartCard>
       </SimpleGrid>
+      )}
 
+      {show('trend') && (
       <ChartCard
         title="The last six months"
         subtitle="What the department published each month, against what students did with it. Two lines drifting apart is the thing to look at."
       >
         <ActivityTrendChart trend={trend} />
       </ChartCard>
+      )}
 
+      {show('mix') && (
       <SimpleGrid columns={{ base: 1, lg: 3 }} spacing={4}>
         <ChartCard title="Content mix" subtitle="Every item the department's classrooms carry.">
           <DonutChart data={contentMix} emptyMessage="No content has been created yet." />
@@ -519,9 +784,120 @@ export default function LmAdminHodDashboard() {
           </VStack>
         </SectionCard>
       </SimpleGrid>
+      )}
+
+      {/* ── department by department ───────────────────────────────────────
+          The institute's own breakdown — the dean's equivalent of the semester
+          rollup below, and the one grouping that answers "which department is
+          this working in?". Absent whenever the view covers a single department,
+          because a one-row table restating the tiles above it is noise.
+
+          Deliberately not ranked, for the same reason nothing else here is:
+          these are counts and rates that name their own units, in the
+          institute's own alphabetical order. A department at the top of this
+          table is at the top of the alphabet. */}
+      {show('departments') && deptRollup.length > 0 && (
+        <>
+          <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={4}>
+            <ChartCard
+              title="Cohort size by department"
+              subtitle={`Enrolled seats against the students who did something in the last ${windowDays} days. The gap is the cohort the department is not reaching.`}
+            >
+              <SemesterCohortChart semesters={deptRollup} windowDays={windowDays} />
+            </ChartCard>
+
+            <ChartCard
+              title="Student engagement by department"
+              subtitle={`Share of each department's enrolments active in the last ${windowDays} days.`}
+            >
+              <SemesterEngagementChart semesters={deptRollup} />
+            </ChartCard>
+          </SimpleGrid>
+
+          <SectionCard
+            title="Department analysis"
+            subtitle="Every figure the charts plot, per department."
+            action={
+              <Button size="sm" variant="outline" onClick={exportDepartments}>
+                Download CSV
+              </Button>
+            }
+          >
+            <Box overflowX="auto">
+              <Table size="sm">
+                <Thead>
+                  <Tr>
+                    <Th>Department</Th>
+                    <Th isNumeric>Classes</Th>
+                    <Th isNumeric>Faculty</Th>
+                    <Th isNumeric>Enrolled</Th>
+                    <Tooltip label={`Distinct students active in the last ${windowDays} days`} placement="top">
+                      <Th isNumeric cursor="help">Active</Th>
+                    </Tooltip>
+                    <Th isNumeric>Engaged</Th>
+                    <Tooltip label="Posts, shorts, quizzes, coding and forms" placement="top">
+                      <Th isNumeric cursor="help">Content</Th>
+                    </Tooltip>
+                    <Th isNumeric>Classwork</Th>
+                    <Th isNumeric>Handed in</Th>
+                    <Th isNumeric>On time</Th>
+                    <Th isNumeric>Marked</Th>
+                    <Th isNumeric>Quiz attempts</Th>
+                    <Th isNumeric>Avg score</Th>
+                    <Th isNumeric>Pass rate</Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {deptRollup.map((d) => (
+                    <Tr key={d.dept || 'unassigned'} _hover={{ bg: 'lmBg.hover' }}>
+                      <Td>
+                        {/* Clicking the name filters the whole page to that
+                            department — the drill-down the dean actually wants,
+                            and the same filter the dropdown above sets, so the
+                            two can never disagree about what is in view. */}
+                        {d.dept ? (
+                          <Button
+                            variant="link"
+                            size="sm"
+                            fontWeight="600"
+                            colorScheme="blue"
+                            onClick={() => setDept(d.dept)}
+                          >
+                            {d.label}
+                          </Button>
+                        ) : (
+                          <Tooltip label="Classrooms with no department recorded against them" placement="top">
+                            <Text fontSize="sm" fontWeight="600" color="lmFg.subtle" cursor="help">
+                              {d.label}
+                            </Text>
+                          </Tooltip>
+                        )}
+                      </Td>
+                      <Td isNumeric><CountCell value={d.classes} /></Td>
+                      <Td isNumeric><CountCell value={d.faculty} /></Td>
+                      <Td isNumeric><CountCell value={d.enrolments} /></Td>
+                      <Td isNumeric><CountCell value={d.activeStudents} /></Td>
+                      <Td isNumeric><RateCell value={d.engagementRate} /></Td>
+                      <Td isNumeric><CountCell value={d.content} /></Td>
+                      <Td isNumeric><CountCell value={d.coursework} /></Td>
+                      <Td isNumeric><CountCell value={d.submissions.turnedIn} /></Td>
+                      <Td isNumeric><RateCell value={d.submissions.onTimeRate} /></Td>
+                      <Td isNumeric><RateCell value={d.submissions.gradedRate} /></Td>
+                      <Td isNumeric><CountCell value={d.quiz.attempts} /></Td>
+                      <Td isNumeric><RateCell value={d.quiz.avgPercent} /></Td>
+                      <Td isNumeric><RateCell value={d.quiz.passRate} /></Td>
+                    </Tr>
+                  ))}
+                </Tbody>
+              </Table>
+            </Box>
+          </SectionCard>
+        </>
+      )}
 
       {/* The charts above in numbers — also the readable fallback for anyone
           who cannot separate the lighter series colours by eye. */}
+      {show('semesterTable') && (
       <SectionCard
         title="Semester analysis"
         subtitle="Every figure the charts plot, per semester."
@@ -590,8 +966,10 @@ export default function LmAdminHodDashboard() {
           </Box>
         )}
       </SectionCard>
+      )}
 
       {/* ── the classrooms themselves ──────────────────────────────────────── */}
+      {show('classrooms') && (
       <SectionCard
         title="Classrooms"
         subtitle={
@@ -732,6 +1110,19 @@ export default function LmAdminHodDashboard() {
           </Box>
         )}
       </SectionCard>
+      )}
+
+      {/* ── what students said ─────────────────────────────────────────────
+          Last on the screen on purpose. Everything above is counts, and this is
+          the department in its own students' words — the thing you read after
+          you know what you are looking at, not the thing that frames it. */}
+      {show('feedback') && feedback && (
+        <FeedbackPanel
+          feedback={feedback}
+          scopeLabel={config.scopeLabel}
+          showDept={!deptLocked}
+        />
+      )}
 
       <Box>
         <Text fontSize="xs" color="lmFg.subtle">
