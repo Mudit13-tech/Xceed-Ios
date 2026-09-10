@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { theme } from './config';
+import getEnvironment from '../getenvironment';
 
 // Every card on the ML host, not just the one this service holds.
 //
@@ -15,9 +16,15 @@ import { theme } from './config';
 // refresh — unlike the rolling window behind the chart above. That is fine for
 // "is this card occupied", which is what it is for, and is why the panel says
 // so at the bottom rather than implying these are averages.
-const INVENTORY_URL = '/api/v1/ml/gpu-metrics/inventory';
-const SELECT_URL = '/api/v1/ml/gpu-metrics/select';
-const HEALTH_URL = '/api/v1/ml/health';
+// Absolute, via getEnvironment() — not a bare '/api/...' path. On the web the
+// two are equivalent because the app and the API share an origin, but inside
+// the Capacitor shell the page is served from the local asset origin
+// (xceed.learning.app), so a relative path never leaves the device: it returns
+// the SPA's index.html and the panel shows no cards at all.
+const apiUrl = getEnvironment();
+const INVENTORY_URL = `${apiUrl}/api/v1/ml/gpu-metrics/inventory`;
+const SELECT_URL = `${apiUrl}/api/v1/ml/gpu-metrics/select`;
+const HEALTH_URL = `${apiUrl}/api/v1/ml/health`;
 // Slower than the 3s metric poll: each refresh shells out to nvidia-smi
 // several times on a box that other tenants are also driving.
 const AUTO_REFRESH_MS = 15000;
