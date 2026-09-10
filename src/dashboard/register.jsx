@@ -58,6 +58,13 @@ const ROLE_GROUPS = [
       // form's Department field is required alongside it — the server refuses
       // the role without one.
       { value: 'HOD', label: 'Head of Department' },
+      /* The institute-wide counterpart: the same screens read across every
+         department. Deliberately *not* department-scoped, so unlike HOD above
+         it needs no Department field — there is nothing to scope it to. The
+         dedicated screen at /superadmin/deans is the usual way to grant it;
+         this is here so the role is not invisible on the path that creates an
+         account with its roles in one go. */
+      { value: 'DEAN', label: 'Dean (Academic)' },
     ],
   },
   {

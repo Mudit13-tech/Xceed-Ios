@@ -19,6 +19,9 @@ const DD_BASE = `${apiUrl}/attendancemodule/settings/detection-debug-cleanup`;
 // Unknown-face crop retention — same shape as detection-debug above (its own
 // settings document, surfaced here rather than in a tab of its own).
 const UF_BASE = `${apiUrl}/attendancemodule/settings/unknown-face-cleanup`;
+// Nightly subject-embedding rebuild — again its own settings document, because
+// it carries run state rather than a policy flag.
+const NE_BASE = `${apiUrl}/attendancemodule/settings/nightly-embedding-rebuild`;
 
 function formatDate(d) {
   if (!d) return 'never';
@@ -56,6 +59,15 @@ export default function OtherControlsSettingsTab() {
   const [ufLastRunAt, setUfLastRunAt] = useState(null);
   const [ufLastRunStats, setUfLastRunStats] = useState(null);
   const [ufRunning, setUfRunning] = useState(false);
+
+  // Nightly subject-embedding rebuild
+  const [neEnabled, setNeEnabled] = useState(false);
+  const [nePending, setNePending] = useState(0);
+  const [neOldestDirtyAt, setNeOldestDirtyAt] = useState(null);
+  const [neLastRunAt, setNeLastRunAt] = useState(null);
+  const [neLastRunStats, setNeLastRunStats] = useState(null);
+  const [neLastError, setNeLastError] = useState(null);
+  const [neRunning, setNeRunning] = useState(false);
 
   const showMsg = (text, type = 'success') => {
     setMessage({ text, type });
@@ -107,6 +119,13 @@ export default function OtherControlsSettingsTab() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    fetch(`${NE_BASE}/`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => applyNeSettings(d.settings, d.queue))
+      .catch(() => {});
+  }, []);
+
   const applyUfSettings = (s) => {
     setUfEnabled(!!s?.enabled);
     const days = s?.retentionDays ?? 3;
@@ -116,6 +135,61 @@ export default function OtherControlsSettingsTab() {
     setUfPreserveReviewed(s?.preserveReviewed !== false);
     setUfLastRunAt(s?.lastRunAt || null);
     setUfLastRunStats(s?.lastRunStats || null);
+  };
+
+  const applyNeSettings = (s, queue) => {
+    setNeEnabled(!!s?.enabled);
+    setNeLastRunAt(s?.lastRunAt || null);
+    setNeLastRunStats(s?.lastRunStats || null);
+    setNeLastError(s?.lastError || null);
+    if (queue) {
+      setNePending(queue.pending ?? 0);
+      setNeOldestDirtyAt(queue.oldestDirtyAt || null);
+    }
+  };
+
+  const saveNe = async (patch, revert) => {
+    try {
+      const res = await fetch(`${NE_BASE}/`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update');
+      applyNeSettings(data.settings, data.queue);
+    } catch (err) {
+      if (revert) revert();
+      showMsg('Error: ' + err.message, 'error');
+    }
+  };
+
+  // The drain is held open for the whole run, which for a day's backlog is
+  // minutes rather than seconds — hence no timeout here and a button that
+  // stays disabled until the server answers.
+  const handleNeRunNow = async () => {
+    setNeRunning(true);
+    try {
+      const res = await fetch(`${NE_BASE}/run-now`, { method: 'POST', credentials: 'include' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to run rebuild');
+      applyNeSettings(data.settings, data.queue);
+      if (data.stats?.skipped) {
+        showMsg('A rebuild run is already in progress — nothing started.', 'error');
+      } else {
+        showMsg(
+          `Rebuild complete — ${data.stats.rebuilt} subject file(s) rebuilt of `
+          + `${data.stats.queued} owed`
+          + (data.stats.failed ? `, ${data.stats.failed} failed (retried tonight)` : '')
+          + '.'
+        );
+      }
+    } catch (err) {
+      showMsg('Error: ' + err.message, 'error');
+    } finally {
+      setNeRunning(false);
+    }
   };
 
   const saveDd = async (patch, revert) => {
@@ -341,6 +415,116 @@ export default function OtherControlsSettingsTab() {
           saveToggle('studentPhotoUpdatesEnabled', !studentUpdates, setStudentUpdates, studentUpdates)
         }
       />
+
+      <ToggleCard
+        enabled={neEnabled}
+        title={`Rebuild subject embeddings nightly ${neEnabled ? '— 23:00 IST' : '— off (continuous)'}`}
+        description={
+          neEnabled
+            ? 'Subject .pkl files owed by student photo changes are held and rebuilt at 23:00 IST, '
+              + 'one subject at a time. Only subjects whose students actually changed something are '
+              + 'rebuilt — untouched subjects are left alone. A student’s own face vector is still '
+              + 'written during their save, so nothing about their photos waits; only the shared '
+              + 'subject files do. Keeps whole-batch GPU builds out of class hours.'
+            : 'Subject .pkl files are rebuilt continuously — a background worker picks up each owed '
+              + 'rebuild within a minute of the student saving. Turn on to hold them for a single '
+              + '23:00 IST pass instead.'
+        }
+        onToggle={() => {
+          const prev = neEnabled;
+          setNeEnabled(!prev);
+          saveNe({ enabled: !prev }, () => setNeEnabled(prev));
+        }}
+      />
+
+      <div className="oc-card">
+        <div className="oc-card-body">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+              marginBottom: 10,
+            }}
+          >
+            <div style={{ fontSize: 13, color: T.textMuted }}>
+              <span style={{ fontWeight: 600, color: T.text }}>
+                {nePending} subject file(s) awaiting rebuild
+              </span>
+              {nePending > 0 && neOldestDirtyAt && (
+                <span> — oldest queued {formatDate(neOldestDirtyAt)}</span>
+              )}
+            </div>
+            <button
+              onClick={handleNeRunNow}
+              disabled={neRunning}
+              style={{
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 600,
+                borderRadius: 6,
+                border: 'none',
+                cursor: neRunning ? 'not-allowed' : 'pointer',
+                background: T.accent,
+                color: '#fff',
+                opacity: neRunning ? 0.6 : 1,
+              }}
+              title="Rebuilds every owed subject file now, regardless of the toggle above. Can take several minutes."
+            >
+              {neRunning ? 'Rebuilding…' : 'Run now'}
+            </button>
+          </div>
+
+          <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 10 }}>
+            Last run: {formatDate(neLastRunAt)}
+          </div>
+
+          {neLastRunStats && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                gap: 10,
+                fontSize: 12,
+                color: T.textMuted,
+              }}
+            >
+              <div>
+                Owed at start
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+                  {neLastRunStats.queued ?? 0}
+                </div>
+              </div>
+              <div>
+                Rebuilt
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+                  {neLastRunStats.rebuilt ?? 0}
+                </div>
+              </div>
+              <div>
+                Failed
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+                  {neLastRunStats.failed ?? 0}
+                </div>
+              </div>
+              <div>
+                Took
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+                  {Math.round((neLastRunStats.durationMs ?? 0) / 1000)}s
+                </div>
+              </div>
+            </div>
+          )}
+
+          {neLastError && (
+            <div style={{ fontSize: 12, color: T.danger, marginTop: 10 }}>
+              Last run reported: {neLastError}
+            </div>
+          )}
+        </div>
+      </div>
 
       <ToggleCard
         enabled={ddEnabled}

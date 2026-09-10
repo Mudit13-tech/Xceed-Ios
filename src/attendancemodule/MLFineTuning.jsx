@@ -67,7 +67,7 @@ const GT_LABELS = {
     embed_n:                { label: 'Embedding images',       unit: 'images',  hint: 'Of the images kept per person, how many are used to compute the mean embedding. Cannot exceed "Target images / person".' },
     gt_camera_switch_sec:   { label: 'Camera switch interval', unit: 'sec',     hint: 'Combined/Room acquisition only: how long to capture from each camera before cycling to the next. Each switch ends a sub-run, so keep it in minutes. Live attendance runs have their own interval below.' },
     max_imgs_per_run:       { label: 'Max images per person per run', unit: 'images', hint: 'Stop collecting for a person in a single camera run once this many are saved. 0 = unlimited.' },
-    gt_max_zoom:            { label: 'Deepest zoom level',     unit: 'x',       hint: 'How far into the frame each acquisition frame is tiled. Levels are centred higher as they deepen, because the back of a room sits at the top of the frame — the default of 5x tiles down to that band (14 detector passes a frame), so back rows are enrolled at depth rather than only by the single 1x pass. Going deeper still buys reach by accepting far smaller and blurrier faces (at 7x, a face 5 pixels wide); an enrolment crop becomes the gallery every later match is scored against, so a poor one degrades that student from then on. Every level also costs a detector pass serialised across the whole ML service. Attendance is unaffected: it sizes its own passes by class size.' },
+    gt_max_zoom:            { label: 'Deepest zoom level',     unit: 'x',       hint: 'How far into the frame each acquisition frame is tiled. 1x, 2x and 3x are complete grids, so the whole frame — top and bottom rows included — is already examined at three scales; 4x and deeper add a full-width row flush with the top edge, where the back of a room sits. The default of 4x is 18 detector passes a frame. Going deeper buys reach by accepting far smaller and blurrier faces (at 7x, a face 5 pixels wide); an enrolment crop becomes the gallery every later match is scored against, so a poor one degrades that student from then on. Every level also costs a detector pass serialised across the whole ML service. Attendance is unaffected: it sizes its own passes by class size.' },
 };
 
 const ATTEND_OPTIONS = {
@@ -982,7 +982,7 @@ export default function MLFineTuning() {
                                 // below already use, cannot drift that way.
                                 const defaults = {
                                     frame_skip: 10, target_imgs_per_person: 10, max_imgs_per_run: 0,
-                                    cluster_threshold: 0.45, min_samples: 3, det_size: 640, gt_max_zoom: 5,
+                                    cluster_threshold: 0.45, min_samples: 3, det_size: 640, gt_max_zoom: 4,
                                 };
                                 return (
                                     <div key={key}>

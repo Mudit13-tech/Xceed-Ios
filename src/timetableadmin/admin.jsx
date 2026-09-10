@@ -49,6 +49,7 @@ import {
   FiFileText,
   FiList,
   FiHelpCircle,
+  FiDownload,
 } from 'react-icons/fi';
 import getEnvironment from '../getenvironment';
 import Header from '../components/header';
@@ -65,6 +66,8 @@ const AdminPage = () => {
   const [sessions, setSessions] = useState([]);
   const [currentSessionName, setCurrentSessionName] = useState('');
   const [selectedSession, setSelectedSession] = useState('');
+  const [downloadingAttendanceData, setDownloadingAttendanceData] =
+    useState(false);
 
   const apiUrl = getEnvironment();
   const toast = useToast();
@@ -301,6 +304,78 @@ const AdminPage = () => {
     }
   };
 
+  // Downloads the attendance data zip — one CSV per department, listing every
+  // theory and tutorial slot in the current session's locked timetables with
+  // the room it runs in.
+  //
+  // Fetched rather than linked because the endpoint is role-guarded: a plain
+  // <a href> would send the browser to a bare 403 page, losing the admin page
+  // and any explanation of why. This keeps the failure on the page as a toast.
+  const handleDownloadAttendanceData = async () => {
+    setDownloadingAttendanceData(true);
+    try {
+      const response = await fetch(
+        `${apiUrl}/timetablemodule/lock/attendance-data-export`,
+        { credentials: 'include' }
+      );
+
+      if (!response.ok) {
+        // The server answers failures as JSON even though success is a zip.
+        const details = await response.json().catch(() => ({}));
+        toast({
+          title: 'Could not download attendance data',
+          description:
+            details.error ||
+            (response.status === 401 || response.status === 403
+              ? 'You need a timetable coordinator or admin role for this export.'
+              : 'Please try again.'),
+          status: 'error',
+          duration: 6000,
+          isClosable: true,
+          position: 'top',
+        });
+        return;
+      }
+
+      const blob = await response.blob();
+      // Prefer the name the server chose: it carries the session.
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const fileName =
+        disposition.match(/filename="?([^";]+)"?/)?.[1] ||
+        'attendance-data.zip';
+
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+
+      toast({
+        title: 'Attendance data downloaded',
+        description: 'One CSV per department, inside the zip.',
+        status: 'success',
+        duration: 4000,
+        isClosable: true,
+        position: 'top',
+      });
+    } catch (error) {
+      console.error('Error downloading attendance data:', error.message);
+      toast({
+        title: 'Error downloading attendance data',
+        description: error.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+        position: 'top',
+      });
+    } finally {
+      setDownloadingAttendanceData(false);
+    }
+  };
+
   const navigationItems = [
     {
       path: '/tt/mastersem',
@@ -392,11 +467,25 @@ const AdminPage = () => {
   // array is grouped by index slices.
   const downloadItems = [
     {
+      key: '/tt/admin/mergeddownload',
       path: '/tt/admin/mergeddownload',
       label: 'Institute-wide Merged PDF',
       icon: FiFileText,
       gradient: 'linear(to-br, purple.600, blue.800)',
       isNew: true,
+    },
+    // No `path`: this one fetches a file rather than navigating to a page, so
+    // the tile below renders it as a button.
+    {
+      key: 'attendance-data',
+      label: downloadingAttendanceData
+        ? 'Preparing download…'
+        : 'Attendance Data (CSV per Dept)',
+      icon: FiDownload,
+      gradient: 'linear(to-br, teal.600, cyan.800)',
+      isNew: true,
+      onClick: handleDownloadAttendanceData,
+      disabled: downloadingAttendanceData,
     },
   ];
 
@@ -627,21 +716,31 @@ const AdminPage = () => {
               Reports &amp; Downloads
             </Heading>
             <SimpleGrid columns={{ base: 2, md: 3 }} spacing={4}>
-              {downloadItems.map(({ path, label, icon, gradient, isNew }) => (
+              {downloadItems.map(
+                ({ key, path, label, icon, gradient, isNew, onClick, disabled }) => (
                 <Box
-                  key={path}
-                  as="a"
+                  key={key}
+                  as={path ? 'a' : 'button'}
                   href={path}
+                  type={path ? undefined : 'button'}
+                  onClick={onClick}
+                  disabled={disabled}
+                  width="100%"
                   bgGradient={gradient}
                   p={6}
                   borderRadius="xl"
                   transition="all 0.3s"
-                  cursor="pointer"
+                  cursor={disabled ? 'progress' : 'pointer'}
+                  opacity={disabled ? 0.7 : 1}
                   border="2px solid"
                   borderColor="whiteAlpha.300"
                   shadow="lg"
                   position="relative"
-                  _hover={{ transform: 'translateY(-8px)', shadow: '2xl' }}
+                  _hover={
+                    disabled
+                      ? undefined
+                      : { transform: 'translateY(-8px)', shadow: '2xl' }
+                  }
                 >
                   {isNew && (
                     <Badge
@@ -680,7 +779,8 @@ const AdminPage = () => {
                     </Text>
                   </VStack>
                 </Box>
-              ))}
+                )
+              )}
             </SimpleGrid>
           </VStack>
 

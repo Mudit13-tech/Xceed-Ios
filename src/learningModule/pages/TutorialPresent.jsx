@@ -52,9 +52,10 @@ const previewText = (html, max = 90) => {
  *
  * Values are not filled in and cannot be: every student in the room has their
  * own draw, so there is no single number to put on the board. What is common to
- * the class — the wording, the placeholders, the formula behind each answer and
- * the marks it carries — is exactly what a teacher talking the room through a
- * question needs, and it is what this shows.
+ * the class — the wording, the placeholders, the formula behind each answer, the
+ * marks it carries and the worked solution's explanation of how you get there —
+ * is exactly what a teacher talking the room through a question needs, and it is
+ * what this shows.
  */
 function QuestionDetail({ question }) {
   return (
@@ -111,6 +112,16 @@ function QuestionDetail({ question }) {
           </Text>
         </Flex>
       ))}
+
+      {question.solution && (
+        <>
+          <Divider my={3} />
+          <Text fontSize="xs" fontWeight="700" color="lmFg.body" mb={1}>
+            Worked solution
+          </Text>
+          <RichText fontSize="sm">{question.solution}</RichText>
+        </>
+      )}
 
       {question.hint && (
         <Text fontSize="xs" color="blue.600" mt={2}>

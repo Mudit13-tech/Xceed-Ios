@@ -359,9 +359,10 @@ export default function GettingStartedManual({ standalone = false }) {
                         where="before any of them — this is the class itself"
                     >
                         <P>
-                            Creating a class, the seven-character join code, putting a roster together by roll
-                            number or email, the settings that decide who may join and who must be approved, what
-                            a student actually does to get in, and how an invited account sets its first password.
+                            Creating a class, the seven-character join code, putting a roster together by
+                            emailing each student an invitation, the settings that decide who may join and who
+                            must be approved, what a student actually does to get in, and how an invited account
+                            sets its first password.
                             Nothing else in the module works until a class exists, so start here.
                         </P>
                         <Shot src={shotDashboard} alt="The Learning dashboard, listing the classes you teach" />

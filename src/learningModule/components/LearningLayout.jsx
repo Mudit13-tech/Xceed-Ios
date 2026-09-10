@@ -148,7 +148,21 @@ const NAV_ITEMS = [
   { to: '/learning/hod-dashboard', label: 'HOD Dashboard', icon: 'dashboard', foot: true, hodOrAdmin: true },
   // What the timetable allocates to the department’s faculty, and which of it
   // has a classroom here. Same audience and same gate as the dashboard above.
-  { to: '/learning/hod-subjects', label: 'Subjects', icon: 'subjects', foot: true, hodOrAdmin: true },
+  { to: '/learning/hod-subjects', label: 'Subjects', icon: 'subjects', foot: true, hodOrAdmin: true, section: 'subjects' },
+  // The same two screens across every department, for the Dean (Academic).
+  // A separate pair of items rather than a wider audience for the two above:
+  // an account holding DEAN is refused /learning/hod-dashboard by the server,
+  // and an HOD is refused these — so offering either the other's link would be
+  // offering them a 403. See RequireDean.
+  //
+  // `deanOnly` rather than "dean or admin", unlike the pair above. An admin
+  // already reads the whole installation through the HOD items — the server
+  // scopes those to nothing for a platform admin — so adding these would put a
+  // second "Subjects" in the rail pointing at the same numbers. An admin who
+  // wants to see the dean's own screen can still open the URL; RequireDean and
+  // requireDean both admit them.
+  { to: '/learning/dean-dashboard', label: 'Dean Dashboard', icon: 'dashboard', foot: true, deanOnly: true },
+  { to: '/learning/dean-subjects', label: 'Subjects', icon: 'subjects', foot: true, deanOnly: true, section: 'subjects' },
 ];
 
 /**
@@ -357,7 +371,17 @@ function ClassSwitcher({ classes, activeClassId, carriedTab, onNavigate }) {
   );
 }
 
-function NavItems({ onNavigate, studentOnly = false, isAdmin = false, isHod = false }) {
+function NavItems({
+  onNavigate,
+  studentOnly = false,
+  isAdmin = false,
+  isHod = false,
+  isDean = false,
+  // Panel key → shown. An absent map, or an absent key, means shown: the rail
+  // must not lose an item because a preference read is still in flight.
+  sections = null,
+}) {
+  const sectionOn = (key) => !key || !sections || sections[key] !== false;
   const navColor = useColorModeValue('gray.700', 'gray.200');
   const navBorderColor = useColorModeValue('gray.200', 'gray.700');
   const navHoverBg = useColorModeValue('gray.100', 'gray.700');
@@ -370,7 +394,12 @@ function NavItems({ onNavigate, studentOnly = false, isAdmin = false, isHod = fa
         (item) =>
           (!item.studentOnly || studentOnly)
           && (!item.adminOnly || isAdmin)
-          && (!item.hodOrAdmin || isAdmin || isHod),
+          && (!item.hodOrAdmin || isAdmin || isHod)
+          && (!item.deanOnly || isDean)
+          // The one nav item that is also a configurable panel: hidden when an
+          // administrator has switched Subjects off for this reader's
+          // dashboard, because the screen behind it then answers 403.
+          && sectionOn(item.section),
       ).map((item) => (
         <Box
           key={item.to}
@@ -420,6 +449,12 @@ export default function LearningLayout() {
   const headerSecondaryColor = useColorModeValue('gray.500', 'gray.400');
 
   const [me, setMe] = useState(null);
+  /* Which panels the reader's own leadership dashboard shows — the rail needs
+     it only to decide whether to offer "Subjects", whose screen refuses the
+     request when that panel is off. Absent means every panel, so the rail
+     behaves exactly as it did before this existed while the call is in flight
+     or for the accounts that never make it. */
+  const [dashSections, setDashSections] = useState(null);
   const [overview, setOverview] = useState(null);
   const [classes, setClasses] = useState(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -448,6 +483,22 @@ export default function LearningLayout() {
       setMe(profile);
       setOverview(summary);
       setClasses(myClasses);
+
+      /* Asked for separately, and only by the handful of accounts that have one
+         of these dashboards. It is deliberately not a field on `/me`: that is
+         resolved by middleware on every request in this module, including the
+         heartbeat a live quiz sends every 30 seconds, and a database read there
+         would be paid by every student sitting a paper.
+
+         Fired after the three above rather than beside them so it can never
+         delay the shell, and swallowed for the same reason the class list is —
+         a failed preference read costs the rail a decision, not the module. */
+      if (profile?.isHod || profile?.isDean || profile?.isAdmin) {
+        lmApi
+          .getMyDashboardSections()
+          .then((result) => setDashSections(result?.sections || null))
+          .catch(() => {});
+      }
     } catch (error) {
       // `window.location` rather than `useLocation()` so the current page isn't
       // a dependency of `load` — that would refetch the profile on every hop
@@ -649,6 +700,8 @@ export default function LearningLayout() {
               studentOnly={studentOnly}
               isAdmin={Boolean(me?.isAdmin)}
               isHod={Boolean(me?.isHod)}
+              isDean={Boolean(me?.isDean)}
+              sections={dashSections}
             />
             <ClassSwitcher
               classes={classes}
@@ -683,6 +736,8 @@ export default function LearningLayout() {
               studentOnly={studentOnly}
               isAdmin={Boolean(me?.isAdmin)}
               isHod={Boolean(me?.isHod)}
+              isDean={Boolean(me?.isDean)}
+              sections={dashSections}
             />
             <ClassSwitcher
               classes={classes}

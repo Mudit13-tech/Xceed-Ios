@@ -65,6 +65,11 @@ const ROLE_OPTIONS = [
      department, because every module that reads the role answers "which
      department?" from that field. Set the department in the same row first. */
   { value: 'HOD', label: 'Head of Department' },
+  /* Institute-wide, so unlike HOD above it needs no department — there is
+     nothing to scope it to. /superadmin/deans is the usual way to grant it and
+     shows who holds it; this row is so the role can be seen and taken away from
+     the screen that manages every other one. */
+  { value: 'DEAN', label: 'Dean (Academic)' },
 ];
 
 const userEmails = (user) =>

@@ -21,7 +21,7 @@ import {
 import lmApi from '../api/lmApi';
 import { AttachmentList } from '../components/Attachments';
 import MaterialModal from '../components/MaterialModal';
-import { EmptyState, ErrorState, Loading, TopicManager, buttonTextStyles, groupByTopic } from '../components/common';
+import { EmptyState, ErrorState, Loading, MaterialListSkeleton, TopicManager, buttonTextStyles, groupByTopic } from '../components/common';
 import { formatDate } from '../format';
 import { LmIcon } from '../components/Icon';
 
@@ -141,7 +141,7 @@ export default function Material() {
 
   const { grouped, untopiced } = groupByTopic(items, topics);
 
-  if (loading) return <Loading label="Loading material…" />;
+  if (loading) return <MaterialListSkeleton />;
 
   return (
     <Flex gap={6} align="flex-start" direction={{ base: 'column', lg: 'row' }}>

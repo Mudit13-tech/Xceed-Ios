@@ -60,6 +60,17 @@ const MONTH_NAMES = [
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+// finalStatus 'R' (review-pending — the backend hasn't settled a final P/A
+// yet) counts as absent here, same as everywhere else this map treats
+// non-present records: it is a real, recorded outcome, not a missing report.
+// "Report not available" is a distinct condition (no AttendanceReport was
+// ever saved for a scheduled class) that this component has no data to
+// detect yet — see issue tracking that follow-up.
+function classifyRecordStatus(record) {
+  if (record.finalStatus === 'P' || record.status === 'present') return 'present';
+  return 'absent';
+}
+
 export default function StudentAttendanceMap({
   history = [],
   academicSessions = [],
@@ -76,7 +87,6 @@ export default function StudentAttendanceMap({
   const selectedDayBg = useColorModeValue('gray.50', 'gray.700');
   const presentCellColor = useColorModeValue('green.400', 'green.400');
   const absentCellColor = useColorModeValue('red.400', 'red.400');
-  const partialCellColor = useColorModeValue('yellow.400', 'yellow.400');
 
   // Build the list of selectable semesters/sessions
   const sessionOptions = useMemo(() => {
@@ -237,8 +247,7 @@ export default function StudentAttendanceMap({
       }
 
       map[dStr].total += 1;
-      const isPresent = record.finalStatus === 'P' || record.status === 'present';
-      if (isPresent) {
+      if (classifyRecordStatus(record) === 'present') {
         map[dStr].present += 1;
       } else {
         map[dStr].absent += 1;
@@ -425,18 +434,26 @@ export default function StudentAttendanceMap({
     return { weeks: weekList, monthHeaders: mHeaders };
   }, [activeSessionObj, byDate, holidaysMap]);
 
-  // Determine cell color
-  const getCellBg = (day) => {
-    if (!day || !day.dateStr) return 'transparent';
-    if (day.stats && day.stats.total > 0) {
-      const ratio = day.stats.present / day.stats.total;
-      if (ratio === 1) return presentCellColor;
-      if (ratio === 0) return absentCellColor;
-      return partialCellColor; // Partial attendance
-    }
-    if (day.isHoliday) return holidayCellColor;
-    return emptyCellColor;
-  };
+  // Cell height grows with however many classes actually land on one day (some
+  // batches run 7-8 periods/day) — capped so one outlier day doesn't blow up
+  // the whole grid. Width can't flex the same way: ~22-26 week-columns have to
+  // fit across one screen, so segments are stacked as stripes (line per class)
+  // rather than side-by-side slivers.
+  const SEGMENT_SIZE = 3;
+  const SEGMENT_GAP = 1;
+  const cellHeight = useMemo(() => {
+    let maxClasses = 1;
+    weeks.forEach((week) => {
+      week.forEach((day) => {
+        if (day?.stats?.records?.length > maxClasses) maxClasses = day.stats.records.length;
+      });
+    });
+    const needed = maxClasses * SEGMENT_SIZE + (maxClasses - 1) * SEGMENT_GAP + 4;
+    return Math.min(Math.max(needed, 16), 52);
+  }, [weeks]);
+
+  // Color for a single class segment within a day cell
+  const getSegmentBg = (status) => (status === 'present' ? presentCellColor : absentCellColor);
 
   const hasAnyData = filteredHistory.length > 0 || weeks.length > 0;
 
@@ -575,12 +592,10 @@ export default function StudentAttendanceMap({
                 zIndex={1}
               >
                 {DAY_LABELS.map((dName, dIdx) => (
-                  <Box key={`lbl-${dIdx}`} h="12px" display="flex" alignItems="center">
-                    {(dIdx === 1 || dIdx === 3 || dIdx === 5) && (
-                      <Text fontSize="9px" fontWeight="600" color={mutedText} lineHeight="1">
-                        {dName}
-                      </Text>
-                    )}
+                  <Box key={`lbl-${dIdx}`} h={`${cellHeight}px`} display="flex" alignItems="center">
+                    <Text fontSize="9px" fontWeight="600" color={mutedText} lineHeight="1">
+                      {dName}
+                    </Text>
                   </Box>
                 ))}
               </VStack>
@@ -591,7 +606,7 @@ export default function StudentAttendanceMap({
                   <VStack key={`week-${wIdx}`} spacing="3px" flex="1" minW="10px" align="center">
                     {week.map((day, dIdx) => {
                       if (!day || !day.dateStr) {
-                        return <Box key={`empty-${wIdx}-${dIdx}`} w="100%" maxW="15px" h="12px" />;
+                        return <Box key={`empty-${wIdx}-${dIdx}`} w="100%" maxW="23px" h={`${cellHeight}px`} />;
                       }
 
                       const isSelected = selectedDay && selectedDay.dateStr === day.dateStr;
@@ -606,7 +621,11 @@ export default function StudentAttendanceMap({
                         const t = day.stats.total;
                         const pct = Math.round((p / t) * 100);
                         const classDetails = day.stats.records
-                          .map((r) => `${r.subject || 'Class'} (${r.timeSlot || 'Slot'}): ${r.finalStatus === 'P' ? 'Present' : 'Absent'}`)
+                          .map((r) => {
+                            const status = classifyRecordStatus(r);
+                            const label = status === 'present' ? 'Present' : 'Absent';
+                            return `${r.subject || 'Class'} (${r.timeSlot || 'Slot'}): ${label}`;
+                          })
                           .join('\n');
                         tooltipContent = `${formatFullDate(day.dateStr)}\n${p}/${t} classes attended (${pct}%)\n${classDetails}`;
                       }
@@ -621,12 +640,14 @@ export default function StudentAttendanceMap({
                           fontSize="xs"
                           p={2}
                         >
-                          <Box
+                          <Flex
+                            direction="column"
                             w="100%"
-                            maxW="15px"
-                            h="12px"
+                            maxW="23px"
+                            h={`${cellHeight}px`}
                             borderRadius="2px"
-                            bg={getCellBg(day)}
+                            overflow="hidden"
+                            gap={`${SEGMENT_GAP}px`}
                             cursor={day.stats ? 'pointer' : 'default'}
                             outline={day.isToday ? `2px solid ${todayRingColor}` : undefined}
                             outlineOffset="1px"
@@ -642,7 +663,26 @@ export default function StudentAttendanceMap({
                                 setSelectedDay(day);
                               }
                             }}
-                          />
+                          >
+                            {day.stats && day.stats.records.length > 0 ? (
+                              day.stats.records.map((r, rIdx) => {
+                                const status = classifyRecordStatus(r);
+                                return (
+                                  <Box
+                                    key={`${day.dateStr}-${rIdx}`}
+                                    data-testid="attendance-cell-segment"
+                                    data-date={day.dateStr}
+                                    data-status={status}
+                                    flex="1"
+                                    w="100%"
+                                    bg={getSegmentBg(status)}
+                                  />
+                                );
+                              })
+                            ) : (
+                              <Box w="100%" h="100%" bg={day.isHoliday ? holidayCellColor : emptyCellColor} />
+                            )}
+                          </Flex>
                         </Tooltip>
                       );
                     })}
@@ -670,10 +710,6 @@ export default function StudentAttendanceMap({
               <HStack spacing={1.5}>
                 <Box w="11px" h="11px" borderRadius="2px" bg={presentCellColor} />
                 <Text fontSize={{ base: '2xs', sm: 'xs' }} fontWeight="500">Present (100%)</Text>
-              </HStack>
-              <HStack spacing={1.5}>
-                <Box w="11px" h="11px" borderRadius="2px" bg={partialCellColor} />
-                <Text fontSize={{ base: '2xs', sm: 'xs' }} fontWeight="500">Partial (&lt; 100%)</Text>
               </HStack>
               <HStack spacing={1.5}>
                 <Box w="11px" h="11px" borderRadius="2px" bg={absentCellColor} />
@@ -754,12 +790,12 @@ export default function StudentAttendanceMap({
                       </Text>
                     </VStack>
                     <Badge
-                      colorScheme={r.finalStatus === 'P' || r.status === 'present' ? 'green' : 'red'}
+                      colorScheme={classifyRecordStatus(r) === 'present' ? 'green' : 'red'}
                       fontSize="2xs"
                       borderRadius="full"
                       px={2}
                     >
-                      {r.finalStatus === 'P' || r.status === 'present' ? 'Present' : 'Absent'}
+                      {classifyRecordStatus(r) === 'present' ? 'Present' : 'Absent'}
                     </Badge>
                   </Flex>
                 </Box>

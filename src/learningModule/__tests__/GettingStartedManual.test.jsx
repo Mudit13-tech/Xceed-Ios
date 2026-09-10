@@ -57,6 +57,14 @@ describe('learningModule <GettingStartedManual />', () => {
     expect(container.textContent).toMatch(/Google Play Store/i);
   });
 
+  /* The same rule the setup manual is held to, one level up: the index
+     describes what part 1 teaches, and roster-by-roll-number is not it. */
+  it('describes the roster as an email invitation, not a roll-number import', () => {
+    const { container } = render(<GettingStartedManual />);
+    expect(container.textContent).not.toMatch(/roll ?n(o|umber)/i);
+    expect(container.textContent).not.toMatch(/ERP/);
+  });
+
   /* The per-student variant is the thing about assignments and tutorials that
      teachers most need to know before setting one, so it is asserted rather
      than left to survive edits by luck. */
@@ -113,9 +121,21 @@ describe('learningModule <SetupManual />', () => {
   it('teaches email invitation only', () => {
     const { container } = render(<SetupManual />);
     const text = container.textContent;
-    expect(text).toMatch(/Adding students by email/);
+    expect(text).toMatch(/Adding students by individual email ID/);
     expect(text).not.toMatch(/ERP/i);
     expect(text).not.toMatch(/roll number/i);
+  });
+
+  /* Which route to use for whom. Faculty were typing sixty B.Tech addresses
+     into the invite box for students who already had accounts and could have
+     used the code, so the manual names all three cases explicitly. */
+  it('says individual student IDs only, and which route each cohort takes', () => {
+    const { container } = render(<SetupManual />);
+    const text = container.textContent;
+    expect(text).toMatch(/individual student IDs only/i);
+    expect(text).toMatch(/B\.Tech students/);
+    expect(text).toMatch(/M\.Tech, PhD and others/);
+    expect(text).toMatch(/xceed\.nitj\.ac\.in\/help/);
   });
 
   it('tells a reader with no account how to ask for one', () => {

@@ -201,13 +201,13 @@ function VariableRow({ variable, onChange, onRemove }) {
 function equationLatex(answer, formulaLatex) {
   const label = String(answer.label || '').trim();
   const unit = String(answer.unit || '').trim();
-  const lhs = label ? `\\mathrm{${latexEscape(label)}} = ` : '';
-  const rhs = unit ? `${formulaLatex}\\ \\mathrm{${latexEscape(unit)}}` : formulaLatex;
+  const lhs = label ? `\\text{${latexEscape(label)}} = ` : '';
+  const rhs = unit ? `${formulaLatex}\\ \\text{${latexEscape(unit)}}` : formulaLatex;
   return `${lhs}${rhs}`;
 }
 
 /** Labels and units are free text; keep a stray brace or backslash out of KaTeX. */
-const latexEscape = (text) => text.replace(/[\\{}$&#^_~%]/g, ' ');
+const latexEscape = (text) => text.replace(/[\\{}$&#~%]/g, ' ');
 
 function AnswerRow({ classId, answer, variableNames, onChange, onRemove }) {
   const set = (field, value) => onChange({ ...answer, [field]: value });
@@ -467,7 +467,7 @@ function QuestionPreview({ classId, assignmentId, index, dirty, variables }) {
       .map((slot) => (
         <Badge key={slot.key} colorScheme={slot.error ? 'red' : 'green'}>
           {slot.label}:{' '}
-          {slot.error ? 'failed' : `${formatAnswerValue(slot.value, slot.decimals)} ${slot.unit || ''}`}
+          {slot.error ? 'failed' : `${formatAnswerValue(slot.value, slot.decimals, slot.valueIm)} ${slot.unit || ''}`}
         </Badge>
       ));
 
@@ -506,9 +506,18 @@ function QuestionPreview({ classId, assignmentId, index, dirty, variables }) {
                   </Code>
                 ))}
               </HStack>
-              <HStack fontSize="xs" mt={2} wrap="wrap">
+                            <HStack fontSize="xs" mt={2} wrap="wrap">
                 {answerBadges(sample.expected, null)}
               </HStack>
+
+              {sample.solution && (
+                <Box mt={2} p={2} bg="lmHue.green50" borderRadius="md">
+                  <Text fontSize="xs" fontWeight="700" color="lmHue.green800" mb={1}>
+                    Worked solution
+                  </Text>
+                  <RichText fontSize="sm">{sample.solution}</RichText>
+                </Box>
+              )}
 
               {(sample.parts || []).map((part, partIndex) => (
                 <Box key={partIndex} mt={3} pl={3} borderLeftWidth="2px" borderColor="lmHue.purple200">
@@ -1434,6 +1443,15 @@ export default function AssignmentEditor() {
             Operators <Code fontSize="xs">+ - * / % ^</Code>, comparisons{' '}
             <Code fontSize="xs">== != &lt; &lt;= &gt; &gt;=</Code> and <Code fontSize="xs">&amp;&amp; ||</Code> for
             constraints. Constants: {reference.constants.map((c) => <Code key={c} fontSize="xs" mr={1}>{c}</Code>)}
+          </Text>
+          {/* Complex answers need their own line: the constants list above
+              shows i and j, but not what to do with them, and ∠ is an
+              operator so it never appears in the function list either. */}
+          <Text fontSize="sm" color="lmFg.subtle" mb={2}>
+            Complex answers: write <Code fontSize="xs">R + i*X</Code> or <Code fontSize="xs">3+4i</Code> (
+            <Code fontSize="xs">j</Code> works too), or in polar form{' '}
+            <Code fontSize="xs">polar(10, 45)</Code> / <Code fontSize="xs">10∠45</Code> — magnitude and angle in
+            degrees. Students may answer in either form.
           </Text>
           <Flex wrap="wrap" gap={1}>
             {reference.functions.map((fn) => (

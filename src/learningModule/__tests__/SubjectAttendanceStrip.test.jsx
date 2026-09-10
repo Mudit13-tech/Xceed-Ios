@@ -182,6 +182,15 @@ describe('<SubjectAttendanceStrip /> Component', () => {
 });
 
 describe('<StudentAttendanceMap /> Component', () => {
+  const academicSessions = [
+    {
+      session: '2025-2026 (Even)',
+      startingDate: '2026-01-08',
+      endingDate: '2026-06-09',
+      nonWorkingDays: [{ date: '2026-01-26', remark: 'Republic Day' }],
+    },
+  ];
+
   it('renders contribution map with accurate legend without errors', () => {
     const history = [
       {
@@ -202,15 +211,6 @@ describe('<StudentAttendanceMap /> Component', () => {
       },
     ];
 
-    const academicSessions = [
-      {
-        session: '2025-2026 (Even)',
-        startingDate: '2026-01-08',
-        endingDate: '2026-06-09',
-        nonWorkingDays: [{ date: '2026-01-26', remark: 'Republic Day' }],
-      },
-    ];
-
     render(
       <StudentAttendanceMap
         history={history}
@@ -223,9 +223,72 @@ describe('<StudentAttendanceMap /> Component', () => {
     expect(screen.getByText(/Attendance Contribution Map/i)).toBeInTheDocument();
     expect(screen.getByText(/Roll No: 22104032/i)).toBeInTheDocument();
     expect(screen.getByText(/Present \(100%\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/Partial \(< 100%\)/i)).toBeInTheDocument();
     expect(screen.getByText(/Absent \(0%\)/i)).toBeInTheDocument();
     expect(screen.getByText(/Holiday \/ Weekend/i)).toBeInTheDocument();
     expect(screen.getByText(/No Classes/i)).toBeInTheDocument();
+  });
+
+  it('renders one segment per class on a mixed day instead of a single blended color', () => {
+    const history = [
+      {
+        reportId: '1',
+        date: '2026-03-10',
+        timeSlot: '8:30-9:30',
+        subject: 'DSP',
+        finalStatus: 'P',
+        semester: '6',
+      },
+      {
+        reportId: '2',
+        date: '2026-03-10',
+        timeSlot: '10:30-11:30',
+        subject: 'VLSI',
+        finalStatus: 'A',
+        semester: '6',
+      },
+    ];
+
+    const { container } = render(
+      <StudentAttendanceMap
+        history={history}
+        academicSessions={academicSessions}
+        currentSession="2025-2026 (Even)"
+        studentRollNo="22104032"
+      />
+    );
+
+    const dayCellSegments = container.querySelectorAll(
+      '[data-testid="attendance-cell-segment"][data-date="2026-03-10"]'
+    );
+    expect(dayCellSegments).toHaveLength(2);
+    const statuses = Array.from(dayCellSegments).map((el) => el.getAttribute('data-status'));
+    expect(statuses).toContain('present');
+    expect(statuses).toContain('absent');
+  });
+
+  it('counts a class as absent when finalStatus is R (review-pending, not a missing report)', () => {
+    const history = [
+      {
+        reportId: '1',
+        date: '2026-03-10',
+        timeSlot: '8:30-9:30',
+        subject: 'DSP',
+        finalStatus: 'R',
+        semester: '6',
+      },
+    ];
+
+    const { container } = render(
+      <StudentAttendanceMap
+        history={history}
+        academicSessions={academicSessions}
+        currentSession="2025-2026 (Even)"
+        studentRollNo="22104032"
+      />
+    );
+
+    const segments = container.querySelectorAll('[data-testid="attendance-cell-segment"][data-date="2026-03-10"]');
+    expect(segments).toHaveLength(1);
+    expect(segments[0].getAttribute('data-status')).toBe('absent');
   });
 });

@@ -2,6 +2,7 @@
 // Redesigned: Room selector → auto-starts both camera feeds simultaneously. Light theme.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import getEnvironment from '../getenvironment';
 import { theme, styles, cssReset } from './config';
 
@@ -504,6 +505,15 @@ function FeedPanel({ camera, quality, scale, refreshKey, onError }) {
 }
 
 export default function CameraPreview() {
+  const [searchParams] = useSearchParams();
+  // The Camera Registry's eye icon links here with ?cameraId=... so the
+  // requested camera's room opens directly instead of forcing the operator
+  // to find and re-select it from the room dropdown. Applied once, on the
+  // first successful fetch, so switching rooms afterward (or hitting
+  // Refresh) never snaps the view back to the deep-linked camera.
+  const requestedCameraId = searchParams.get('cameraId');
+  const appliedRequestedCameraRef = useRef(false);
+
   const [cameras, setCameras] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState('');
@@ -545,7 +555,15 @@ export default function CameraPreview() {
       ].sort();
       setRooms(uniqueRooms);
 
-      if (uniqueRooms.length > 0) {
+      if (requestedCameraId && !appliedRequestedCameraRef.current) {
+        appliedRequestedCameraRef.current = true;
+        const target = list.find((c) => c.cameraId === requestedCameraId);
+        if (target?.roomId) {
+          setSelectedRoom(target.roomId);
+        } else if (uniqueRooms.length > 0) {
+          setSelectedRoom((prev) => prev || uniqueRooms[0]);
+        }
+      } else if (uniqueRooms.length > 0) {
         setSelectedRoom((prev) => prev || uniqueRooms[0]);
       }
     } catch (err) {
@@ -553,7 +571,7 @@ export default function CameraPreview() {
     } finally {
       setLoading(false);
     }
-  }, [showToast]);
+  }, [showToast, requestedCameraId]);
 
   useEffect(() => {
     fetchCameras();

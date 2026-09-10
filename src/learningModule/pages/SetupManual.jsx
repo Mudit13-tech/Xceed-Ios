@@ -200,7 +200,7 @@ const SECTIONS = [
     { id: 'accounts', icon: 'user', label: 'Accounts, roles and where to sign in' },
     { id: 'create-class', icon: 'classes', label: 'Creating a class' },
     { id: 'class-code', icon: 'key', label: 'The class code, and how to use it' },
-    { id: 'invite', icon: 'invite', label: 'Adding students by email' },
+    { id: 'invite', icon: 'invite', label: 'Adding students by individual email ID' },
     { id: 'join-settings', icon: 'settings', label: 'Join settings and approving requests' },
     { id: 'student-join', icon: 'exam', label: 'What a student does to join' },
     { id: 'password', icon: 'locked', label: 'Setting or resetting a password' },
@@ -362,7 +362,8 @@ export default function SetupManual({ standalone = false }) {
                     ]} />
                     <Note type="info">
                         Creating the class does not bring a roster in with it. Fill the roster in yourself
-                        afterwards — by email, below, or by giving out the class code.
+                        afterwards — by giving out the class code, or by inviting students individually by
+                        email, below.
                     </Note>
 
                     <Heading id="class-code">The class code, and how to use it</Heading>
@@ -394,11 +395,41 @@ export default function SetupManual({ standalone = false }) {
                         <em> require approval</em>, or switch code joining off once the roster is complete.
                     </Note>
 
-                    <Heading id="invite">Adding students by email</Heading>
+                    <Heading id="invite">Adding students by individual email ID</Heading>
                     <P>
-                        The code is the self-service route. Most of the time you will want to put the roster in
-                        yourself, from the <strong>People</strong> tab of the class, by pasting in the addresses.
+                        The code is the self-service route. When it does not cover everybody, put the rest of the
+                        roster in yourself, from the <strong>People</strong> tab of the class, by pasting in their
+                        addresses — <strong>individual student IDs only</strong>, one per person. A batch or group
+                        ID cannot be used: it is a perfectly ordinary address as far as this screen can tell, and
+                        everyone behind it ends up sharing the single account it belongs to.
                     </P>
+                    <P>
+                        Which route you need depends on who is in the class:
+                    </P>
+                    <div style={{ marginBottom: 18 }}>
+                        {[
+                            {
+                                label: 'B.Tech students',
+                                desc: 'Their accounts already exist. Share the class code and let them join themselves — there is nothing to invite.',
+                            },
+                            {
+                                label: 'M.Tech, PhD and others',
+                                desc: 'Invite them from the People tab, by their individual student IDs, one address per student.',
+                            },
+                            {
+                                label: 'Anybody you cannot invite by ID',
+                                desc: 'Somebody whose individual student ID you do not have, or who has no account and is not reachable at one: ask them to create their student account at xceed.nitj.ac.in/help, then share the class code for them to join with.',
+                            },
+                        ].map((item) => (
+                            <div key={item.label} style={{
+                                display: 'flex', gap: 10, padding: '10px 0',
+                                borderBottom: `1px solid ${T.border}`,
+                            }}>
+                                <div style={{ fontSize: 12.5, fontWeight: 700, color: T.text, minWidth: 190 }}>{item.label}</div>
+                                <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.65 }}>{item.desc}</div>
+                            </div>
+                        ))}
+                    </div>
                     <Shot
                         src={shotPeople}
                         alt="The People tab, showing teachers and the student roster"
@@ -407,8 +438,8 @@ export default function SetupManual({ standalone = false }) {
                     <Steps items={[
                         {
                             title: 'On the People tab, press “+ Invite” beside Students',
-                            body: 'The dialog opens with Role set to Student and Invite by set to Email Addresses, which is what you want.',
-                            image: { src: shotInviteEmail, alt: 'The Invite-people dialog in email mode', width: 512 },
+                            body: 'The dialog opens with Role set to Student. Individual email addresses are the only way a teacher puts somebody on the roster — the dialog repeats the three cases above, with this class\u2019s code to hand.',
+                            image: { src: shotInviteEmail, alt: 'The Invite-people dialog, asking for individual email addresses', width: 512 },
                         },
                         {
                             title: 'Paste the addresses',

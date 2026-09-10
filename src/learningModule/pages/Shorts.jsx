@@ -21,7 +21,7 @@ import {
 import { FiChevronDown } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, ShortsListSkeleton } from '../components/common';
 import StartShortModal from '../components/StartShortModal';
 import { relativeTime } from '../format';
 import { LmIcon } from '../components/Icon';
@@ -167,7 +167,7 @@ export default function Shorts() {
     }
   };
 
-  if (loading) return <Loading label="Loading shorts…" />;
+  if (loading) return <ShortsListSkeleton />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   const live = shorts.filter((short) => short.liveSession);

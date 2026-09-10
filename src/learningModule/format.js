@@ -11,10 +11,21 @@ const RELATIVE_UNITS = [
   ['minute', 60000],
 ];
 
-/** "in 3 days" / "2 hours ago" without pulling in another date library. */
+/**
+ * "in 3 days" / "2 hours ago" without pulling in another date library.
+ *
+ * `value` may be either milliseconds (a normal JS/ISO timestamp) or Unix
+ * epoch *seconds* — the recordings list (recordingService.js's disk scan,
+ * cameraController's own listing, and the ML service's in-memory registry)
+ * all report `started` in seconds, matching Python's `time.time()`. A
+ * ten-digit-or-fewer number is unambiguously seconds: a real millisecond
+ * timestamp for anything after the year 2001 is 13 digits, and this table
+ * only carries `started` values for recordings, which are never that old.
+ */
 export function relativeTime(value) {
   if (!value) return '';
-  const diff = new Date(value).getTime() - Date.now();
+  const ms = typeof value === 'number' && value < 1e12 ? value * 1000 : value;
+  const diff = new Date(ms).getTime() - Date.now();
   const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
   for (const [unit, ms] of RELATIVE_UNITS) {
     if (Math.abs(diff) >= ms) return formatter.format(Math.round(diff / ms), unit);
@@ -149,9 +160,29 @@ export const courseworkLink = (item) =>
  * it overflowed the multiply past ~9e15 and printed "Infinity". Both look like
  * the formula miscalculated when it did not.
  */
-export function formatAnswerValue(value, decimals = null) {
+export function formatAnswerValue(value, decimals = null, valueIm = null) {
+  // A complex value arrives either pre-joined as {re, im} — a live preview or
+  // reveal endpoint sending expectedFor()'s result straight through — or
+  // split across two sibling fields, the shape the attempt schema stores
+  // (`value` + `valueIm`, passed as this function's third argument). Both
+  // must render the same way, so a joined object is unpacked into the same
+  // path the split case already takes.
+  if (value && typeof value === 'object' && 'im' in value) {
+    return formatAnswerValue(value.re, decimals, value.im);
+  }
+
   const number = Number(value);
   if (value === null || value === undefined || value === '' || !Number.isFinite(number)) return '—';
+
+  // An imaginary part, when the answer is complex (e.g. impedance "R + jX").
+  // Exactly zero means the formula landed on a real value — same reason the
+  // engine itself collapses a {re, im: 0} result to a plain number.
+  const imaginary = Number(valueIm);
+  if (valueIm !== null && valueIm !== undefined && valueIm !== '' && Number.isFinite(imaginary) && imaginary !== 0) {
+    const real = formatAnswerValue(value, decimals);
+    const imagPart = formatAnswerValue(Math.abs(imaginary), decimals);
+    return `${real} ${imaginary < 0 ? '-' : '+'} ${imagPart}i`;
+  }
 
   const places = Number(decimals);
   if (decimals !== null && decimals !== undefined && decimals !== '' && Number.isFinite(places)) {

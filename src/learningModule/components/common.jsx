@@ -276,6 +276,136 @@ export function ClassCardGridSkeleton({ count = 6 }) {
   );
 }
 
+export function AnnouncementCardSkeleton() {
+  return (
+    <Box
+      bg="lmBg.surface"
+      borderWidth="1px"
+      borderColor="lmBorder.base"
+      borderRadius="lg"
+      p={5}
+      data-testid="announcement-card-skeleton"
+    >
+      <Flex gap={3} align="center" mb={4}>
+        <Skeleton width="40px" height="40px" borderRadius="full" />
+        <Box flex={1}>
+          <Skeleton height="16px" width="35%" borderRadius="sm" mb={2} />
+          <Skeleton height="12px" width="20%" borderRadius="sm" />
+        </Box>
+      </Flex>
+      <Box mb={4}>
+        <Skeleton height="14px" width="100%" borderRadius="sm" mb={2} />
+        <Skeleton height="14px" width="90%" borderRadius="sm" mb={2} />
+        <Skeleton height="14px" width="60%" borderRadius="sm" />
+      </Box>
+      <HStack spacing={3}>
+        <Skeleton height="24px" width="60px" borderRadius="full" />
+        <Skeleton height="24px" width="60px" borderRadius="full" />
+      </HStack>
+    </Box>
+  );
+}
+
+export function AnnouncementStreamSkeleton({ count = 3 }) {
+  return (
+    <Flex direction="column" gap={4} data-testid="announcement-stream-skeleton">
+      {Array.from({ length: count }).map((_, index) => (
+        <AnnouncementCardSkeleton key={index} />
+      ))}
+    </Flex>
+  );
+}
+
+export function MaterialCardSkeleton() {
+  return (
+    <Box
+      bg="lmBg.surface"
+      borderWidth="1px"
+      borderColor="lmBorder.base"
+      borderRadius="lg"
+      p={4}
+      data-testid="material-card-skeleton"
+    >
+      <Flex align="center" gap={4}>
+        <Skeleton height="40px" width="40px" borderRadius="md" flexShrink={0} />
+        <Box flex={1}>
+          <Skeleton height="16px" width="40%" borderRadius="sm" mb={2} />
+          <Skeleton height="12px" width="25%" borderRadius="sm" />
+        </Box>
+        <Skeleton height="32px" width="80px" borderRadius="md" />
+      </Flex>
+    </Box>
+  );
+}
+
+export function MaterialListSkeleton({ count = 4 }) {
+  return (
+    <Flex direction="column" gap={3} data-testid="material-list-skeleton">
+      {Array.from({ length: count }).map((_, index) => (
+        <MaterialCardSkeleton key={index} />
+      ))}
+    </Flex>
+  );
+}
+
+export function ShortCardSkeleton() {
+  return (
+    <Box
+      bg="lmBg.surface"
+      borderWidth="1px"
+      borderColor="lmBorder.base"
+      borderRadius="lg"
+      p={4}
+      data-testid="short-card-skeleton"
+    >
+      <Flex align="flex-start" justify="space-between" mb={3}>
+        <Box flex={1} mr={3}>
+          <Skeleton height="18px" width="60%" borderRadius="sm" mb={2} />
+          <Skeleton height="12px" width="30%" borderRadius="sm" />
+        </Box>
+        <Skeleton height="20px" width="50px" borderRadius="full" />
+      </Flex>
+      <Box mb={4}>
+        <Skeleton height="12px" width="100%" borderRadius="sm" mb={2} />
+        <Skeleton height="12px" width="75%" borderRadius="sm" />
+      </Box>
+      <HStack justify="space-between" align="center">
+        <Skeleton height="14px" width="80px" borderRadius="sm" />
+        <Skeleton height="28px" width="70px" borderRadius="md" />
+      </HStack>
+    </Box>
+  );
+}
+
+export function ShortsListSkeleton({ count = 3 }) {
+  return (
+    <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4} data-testid="shorts-list-skeleton">
+      {Array.from({ length: count }).map((_, index) => (
+        <ShortCardSkeleton key={index} />
+      ))}
+    </SimpleGrid>
+  );
+}
+
+export function TimetableSkeleton() {
+  return (
+    <Box data-testid="timetable-skeleton">
+      <SectionCard title={<Skeleton height="20px" width="160px" borderRadius="sm" />}>
+        <SimpleGrid columns={{ base: 1, md: 5 }} spacing={4} mt={2} data-testid="timetable-skeleton-grid">
+          {Array.from({ length: 5 }).map((_, colIndex) => (
+            <Box key={colIndex} p={3} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md">
+              <Skeleton height="16px" width="70%" borderRadius="sm" mb={3} />
+              <Skeleton height="60px" width="100%" borderRadius="md" mb={2} />
+              <Skeleton height="60px" width="100%" borderRadius="md" />
+            </Box>
+          ))}
+        </SimpleGrid>
+      </SectionCard>
+    </Box>
+  );
+}
+
+
 /**
  * Copies an in-app route as a full, shareable URL. The stored value is absolute
  * because the link is meant to leave the app — pasted into a chat, an email or

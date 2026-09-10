@@ -205,7 +205,15 @@ export default function AMSLayout() {
       })
       .catch((error) => {
         if (error.name !== 'AbortError') {
-          navigate('/userroles', { replace: true });
+          // Carry the reason back. This screen renders nothing until the check
+          // passes, so a bare redirect returns the user to the very page they
+          // clicked from with no trace that anything happened — which reads as
+          // a card that simply does not work. The roles page says what was
+          // refused instead.
+          navigate('/userroles', {
+            replace: true,
+            state: { deniedModule: 'iLEED', deniedReason: error.message },
+          });
         }
       });
     return () => controller.abort();

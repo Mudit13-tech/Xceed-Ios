@@ -73,9 +73,9 @@ const MODULES = [
     accent: 'teal',
   },
   {
-    title: 'Heads of Department',
+    title: 'Academic Leadership',
     description:
-      'Map each department to the account that heads it. Every module that needs to reach a head of department reads this one mapping.',
+      'Map each department to the account that heads it, appoint the Dean (Academic) who reads all of them, and choose what each of their dashboards shows.',
     to: '/superadmin/hods',
     icon: FiUserCheck,
     accent: 'purple',

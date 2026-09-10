@@ -77,6 +77,11 @@ const PUBLIC_PATHS = [
   '/forgot-password',
   '/nirf',
   '/ams-manual',
+  // The pre-iLEED name for the same manual, still in circulation in old
+  // links and bookmarks. App.jsx forwards it to /ams-manual, but this gate
+  // runs first: without the entry the redirect never gets to happen and the
+  // reader lands on /login instead.
+  '/iams-manual',
   '/tt-manual',
   '/certificate-manual',
   '/conference-manual',
