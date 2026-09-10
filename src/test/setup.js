@@ -38,6 +38,12 @@ if (!globalThis.ResizeObserver) {
   };
 }
 
+// Chakra's Menu scrolls its list back to the top when it closes, and jsdom has
+// no element scrolling at all — so picking a menu item in a test threw.
+if (typeof Element !== 'undefined' && !Element.prototype.scrollTo) {
+  Element.prototype.scrollTo = () => {};
+}
+
 // Every attendance-module component/hook fetches on mount; give every test a
 // safe default so an unmocked call fails loudly instead of hanging.
 global.fetch = vi.fn(() =>

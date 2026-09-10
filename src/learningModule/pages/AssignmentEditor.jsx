@@ -45,6 +45,9 @@ import TableBuilderModal from '../components/TableBuilderModal';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
 import { formatAnswerValue, toDateTimeInput } from '../format';
 import { LmIcon } from '../components/Icon';
+import { AddQuestionMenu, FixedQuestionFields } from '../components/QuestionTypeFields';
+import QuestionTypeBadge from '../components/QuestionTypeBadge';
+import { QUESTION_TYPES, isFixedType, questionMarks, withType } from '../questionTypes';
 
 // Integer by default: a question asking for "a 7 Ω resistor" is the common
 // case, and a teacher who wants decimals says so, rather than having to turn
@@ -52,6 +55,7 @@ import { LmIcon } from '../components/Icon';
 const BLANK_VARIABLE = { name: '', type: 'integer', min: 1, max: 10, step: 1, decimals: 2, values: [], unit: '' };
 const BLANK_ANSWER = { key: '', label: '', formula: '', unit: '', tolerancePercent: 1, toleranceAbs: 0, decimals: 2, marks: 1 };
 const BLANK_QUESTION = {
+  type: 'parametric',
   prompt: '',
   variables: [{ ...BLANK_VARIABLE, name: 'x' }],
   answers: [{ ...BLANK_ANSWER, label: 'Answer', formula: 'x' }],
@@ -60,6 +64,18 @@ const BLANK_QUESTION = {
   hint: '',
   solutionSteps: '',
   difficulty: 'medium',
+};
+
+/** Starting variable and answer for a question switched to the parametric type. */
+const parametricSeed = () => {
+  const { variables, answers } = JSON.parse(JSON.stringify(BLANK_QUESTION));
+  return { variables, answers };
+};
+
+/** A new question of the chosen type — the type is picked first, as in the quiz editor. */
+const blankQuestion = (type) => {
+  const blank = JSON.parse(JSON.stringify(BLANK_QUESTION));
+  return type === 'parametric' ? blank : withType({ ...blank, variables: [], answers: [] }, type);
 };
 
 /** Live formula check, debounced, so errors show while the teacher types. */
@@ -608,6 +624,8 @@ function QuestionCard({ classId, assignmentId, question, index, onChange, onRemo
    * silently dropped the table that had just been added.
    */
   const set = (field, value) => onChange((current) => ({ ...current, [field]: value }));
+  // MCQ, MSQ and plain numerical questions carry a fixed key and draw nothing.
+  const fixed = isFixedType(question);
   const variableNames = useMemo(
     () => (question.variables || []).map((variable) => variable.name).filter(Boolean),
     [question.variables],
@@ -713,7 +731,7 @@ function QuestionCard({ classId, assignmentId, question, index, onChange, onRemo
 
   useEffect(() => {
     const fresh = placeholders.filter((name) => !handled.current.has(name));
-    if (!fresh.length) return;
+    if (fixed || !fresh.length) return;
     fresh.forEach((name) => handled.current.add(name));
     declare(fresh);
     // `declare` closes over this render's question, which is the one the new
@@ -724,8 +742,26 @@ function QuestionCard({ classId, assignmentId, question, index, onChange, onRemo
   return (
     <SectionCard mb={4}>
       <Flex justify="space-between" align="center" mb={3}>
-        <Heading size="sm">Question {index + 1}</Heading>
+        <HStack spacing={2}>
+          <Heading size="sm">Question {index + 1}</Heading>
+          {/* Coloured by type, so the make-up of a paper reads at a glance. */}
+          <QuestionTypeBadge question={question} fontSize="sm" px={2} />
+        </HStack>
         <HStack>
+          {/* Changing type resets the answer section, as the quiz editor does. */}
+          <Select
+            size="sm"
+            w="auto"
+            aria-label="Question type"
+            value={question.type || 'parametric'}
+            onChange={(e) => onChange((current) => withType(current, e.target.value, parametricSeed()))}
+          >
+            {QUESTION_TYPES.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
           <Select size="sm" w="110px" value={question.difficulty} onChange={(e) => set('difficulty', e.target.value)}>
             <option value="easy">Easy</option>
             <option value="medium">Medium</option>
@@ -739,18 +775,37 @@ function QuestionCard({ classId, assignmentId, question, index, onChange, onRemo
 
       <FormControl mb={1}>
         <FormLabel fontSize="sm">
-          Prompt — type <Code fontSize="xs">{'{{R}}'}</Code> and the variable is declared for you, or
-          use the buttons below to drop an existing one at the cursor
+          {fixed ? (
+            'Question'
+          ) : (
+            <>
+              Prompt — type <Code fontSize="xs">{'{{R}}'}</Code> and the variable is declared for you, or
+              use the buttons below to drop an existing one at the cursor
+            </>
+          )}
         </FormLabel>
         <RichTextEditor
           ref={promptRef}
           value={question.prompt}
           onChange={(html) => set('prompt', html)}
-          placeholder="A resistor of {{R}} Ω carries {{I}} A. Find the power dissipated."
-          variables={variableNames}
+          placeholder={
+            fixed
+              ? 'Question text — formatting, sub/superscripts and images are supported'
+              : 'A resistor of {{R}} Ω carries {{I}} A. Find the power dissipated.'
+          }
+          variables={fixed ? [] : variableNames}
           minH="110px"
         />
       </FormControl>
+      {/* A fixed-key question is authored the way a quiz question is: options
+          with the right ones ticked, or one number with a tolerance. Nothing is
+          drawn, so none of the variable machinery below applies to it. */}
+      {fixed ? (
+        <Box mt={4}>
+          <FixedQuestionFields question={question} onChange={onChange} />
+        </Box>
+      ) : (
+        <>
       {undeclared.length > 0 && (
         <HStack fontSize="xs" color="red.600" mb={3} spacing={2} wrap="wrap">
           <Text>
@@ -1034,9 +1089,12 @@ function QuestionCard({ classId, assignmentId, question, index, onChange, onRemo
       >
         + Add sub-question
       </Button>
+        </>
+      )}
 
       <Divider my={4} />
-      <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+      <SimpleGrid columns={{ base: 1, md: fixed ? 1 : 2 }} spacing={4}>
+        {!fixed && (
         <FormControl>
           <Tooltip label="Every constraint must be true, or the values are drawn again — this is what keeps a student's numbers away from a divide-by-zero or the root of a negative">
             <FormLabel fontSize="sm">Constraints (optional)</FormLabel>
@@ -1074,6 +1132,7 @@ function QuestionCard({ classId, assignmentId, question, index, onChange, onRemo
             go in separate cells rather than joined with &amp;&amp;.
           </FormHelperText>
         </FormControl>
+        )}
         <FormControl>
           <FormLabel fontSize="sm">Hint (optional)</FormLabel>
           <RichTextEditor
@@ -1087,12 +1146,12 @@ function QuestionCard({ classId, assignmentId, question, index, onChange, onRemo
       </SimpleGrid>
 
       <FormControl mt={4}>
-        <FormLabel fontSize="sm">Worked solution — shown after submitting</FormLabel>
+        <FormLabel fontSize="sm">{fixed ? 'Explanation' : 'Worked solution'} — shown after submitting</FormLabel>
         <RichTextEditor
           value={question.solutionSteps}
           onChange={(html) => set('solutionSteps', html)}
-          placeholder="P = I²R = {{I}}² × {{R}}"
-          variables={variableNames}
+          placeholder={fixed ? 'Why the answer is what it is' : 'P = I²R = {{I}}² × {{R}}'}
+          variables={fixed ? [] : variableNames}
           minH="110px"
         />
       </FormControl>
@@ -1109,13 +1168,16 @@ function QuestionCard({ classId, assignmentId, question, index, onChange, onRemo
         </Button>
       </Flex>
 
-      <QuestionPreview
-        classId={classId}
-        assignmentId={assignmentId}
-        index={index}
-        dirty={dirty}
-        variables={question.variables}
-      />
+      {/* Rolling samples only means something where values are drawn. */}
+      {!fixed && (
+        <QuestionPreview
+          classId={classId}
+          assignmentId={assignmentId}
+          index={index}
+          dirty={dirty}
+          variables={question.variables}
+        />
+      )}
     </SectionCard>
   );
 }
@@ -1224,8 +1286,8 @@ export default function AssignmentEditor() {
     }
   };
 
-  const addQuestion = () => {
-    update({ questions: [...assignment.questions, JSON.parse(JSON.stringify(BLANK_QUESTION))] });
+  const addQuestion = (type) => {
+    update({ questions: [...assignment.questions, blankQuestion(type)] });
     // Straight onto the new tab. Adding a question and being left looking at
     // the old one is the thing the tab strip is meant to fix.
     setOpenQuestion(assignment.questions.length);
@@ -1282,10 +1344,7 @@ export default function AssignmentEditor() {
   const setSetting = (key, value) =>
     update({ settings: { ...assignment.settings, [key]: value } });
 
-  const totalMarks = (assignment.questions || []).reduce(
-    (sum, question) => sum + (question.answers || []).reduce((inner, a) => inner + (Number(a.marks) || 0), 0),
-    0,
-  );
+  const totalMarks = (assignment.questions || []).reduce((sum, question) => sum + questionMarks(question), 0);
 
   return (
     <Box>
@@ -1496,21 +1555,22 @@ export default function AssignmentEditor() {
                   _selected={{ bg: 'purple.500', color: 'white', boxShadow: 'md' }}
                 >
                   Question {index + 1}
+                  {/* Out of the tab's accessible name — the card heading already
+                      announces the type — but visible across the whole strip. */}
+                  <QuestionTypeBadge question={question} short ml={2} aria-hidden="true" />
                 </Tab>
               ))}
             </TabList>
             {/* In the tab strip, where a new tab appears — not at the bottom of
                 a question the teacher would have to scroll past first. */}
-            <Button
+            <AddQuestionMenu
               size="sm"
               colorScheme="purple"
               variant="outline"
               borderRadius="full"
               flexShrink={0}
-              onClick={addQuestion}
-            >
-              + Add question
-            </Button>
+              onAdd={addQuestion}
+            />
           </Flex>
           <TabPanels>
             {assignment.questions.map((question, index) => (
@@ -1545,9 +1605,7 @@ export default function AssignmentEditor() {
 
       {assignment.questions.length === 0 && (
         <Flex gap={2} mb={5} wrap="wrap">
-          <Button variant="outline" colorScheme="purple" onClick={addQuestion}>
-            + Add question
-          </Button>
+          <AddQuestionMenu variant="outline" colorScheme="purple" onAdd={addQuestion} />
         </Flex>
       )}
 

@@ -33,6 +33,8 @@ import { serverFileLinkProps } from '../../utils/nativeCapabilities';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile, buttonTextStyles } from '../components/common';
 import { richTextToPlain } from '../richTextUtils';
 import { decimalPlacesHint, formatAnswerValue, formatDateTime } from '../format';
+import { optionLetters } from '../questionTypes';
+import QuestionTypeBadge from '../components/QuestionTypeBadge';
 
 /**
  * Teacher's review of a parameterised assignment.
@@ -260,9 +262,12 @@ export default function AssignmentResults() {
 
                     {(attempt.questions || []).map((question, index) => (
                       <Box key={index} mb={4} borderLeftWidth="3px" borderColor="lmBorder.base" pl={3}>
-                        <Text fontSize="sm" fontWeight="500">
-                          Q{index + 1}. {richTextToPlain(question.prompt)}
-                        </Text>
+                        <Flex align="baseline" gap={2}>
+                          <Text fontSize="sm" fontWeight="500">
+                            Q{index + 1}. {richTextToPlain(question.prompt)}
+                          </Text>
+                          <QuestionTypeBadge question={question} flexShrink={0} />
+                        </Flex>
                         <HStack fontSize="xs" color="lmFg.muted" mt={1} wrap="wrap">
                           {Object.entries(question.values || {}).map(([name, value]) => (
                             <Code key={name} fontSize="xs">
@@ -290,7 +295,10 @@ export default function AssignmentResults() {
                                 <Tr key={expected.key}>
                                   <Td>{expected.label}</Td>
                                   <Td>
-                                    {`${formatAnswerValue(expected.value, expected.decimals, expected.valueIm)} ${expected.unit}`}
+                                    {/* A choice question's key is its ticked options, not a number. */}
+                                    {expected.correct?.length
+                                      ? optionLetters(expected.correct)
+                                      : `${formatAnswerValue(expected.value, expected.decimals, expected.valueIm)} ${expected.unit}`}
                                     {/* The precision the student was told to give,
                                         so a near-miss can be read as rounding
                                         rather than a wrong method. */}

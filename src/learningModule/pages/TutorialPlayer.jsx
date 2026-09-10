@@ -25,6 +25,9 @@ import useShortStream from '../hooks/useShortStream';
 import AssignmentUploads from '../components/AssignmentUploads';
 import { ErrorState, Loading, SectionCard, StatTile } from '../components/common';
 import RichText from '../components/RichText';
+import ChoiceAnswerInput from '../components/ChoiceAnswerInput';
+import QuestionTypeBadge from '../components/QuestionTypeBadge';
+import { hasAnswer, isChoiceQuestion } from '../questionTypes';
 import { decimalPlacesHint, formatAnswerValue, formatDateTime } from '../format';
 import { LmIcon } from '../components/Icon';
 
@@ -178,7 +181,10 @@ export default function TutorialPlayer() {
 
         const restored = {};
         (sitting.attempt?.responses || []).forEach((response) => {
-          restored[answerId(response.questionId, response.answerKey)] = response.raw;
+          // A choice answer comes back as the options ticked; anything else as typed.
+          restored[answerId(response.questionId, response.answerKey)] = response.selected?.length
+            ? response.selected.map(String)
+            : response.raw;
         });
         // Local edits win over the saved copy on a merge; on a fresh load the
         // saved copy is all there is.
@@ -234,15 +240,16 @@ export default function TutorialPlayer() {
   const responses = useMemo(
     () =>
       Object.entries(inputs)
-        .map(([composite, raw]) => {
+        .filter(([, value]) => hasAnswer(value))
+        .map(([composite, value]) => {
           const separator = composite.lastIndexOf(':');
           return {
             questionId: composite.slice(0, separator),
             answerKey: composite.slice(separator + 1),
-            raw,
+            // A choice question's answer is the options ticked; anything else is typed.
+            ...(Array.isArray(value) ? { selected: value } : { raw: value }),
           };
-        })
-        .filter((response) => String(response.raw ?? '').trim() !== ''),
+        }),
     [inputs],
   );
 
@@ -286,7 +293,7 @@ export default function TutorialPlayer() {
       if (!attempt?.instantFeedback || submitted) return;
       const id = answerId(question.questionId, answer.key);
       const raw = inputs[id];
-      if (!String(raw ?? '').trim()) return;
+      if (!hasAnswer(raw)) return;
       // Nothing to learn from re-checking a value already called correct, and it
       // would spend another try.
       if (verdicts[id]?.correct) return;
@@ -296,7 +303,7 @@ export default function TutorialPlayer() {
         const result = await lmApi.checkTutorialAnswer(classId, tutorialId, attempt._id, {
           questionId: question.questionId,
           answerKey: answer.key,
-          raw,
+          ...(Array.isArray(raw) ? { selected: raw } : { raw }),
         });
         setVerdicts((prev) => ({ ...prev, [id]: result }));
       } catch {
@@ -350,6 +357,9 @@ export default function TutorialPlayer() {
   }
 
   const isLive = Boolean(live);
+  // Whether any question draws its own numbers — the note about unique figures
+  // and typed expressions is only true of those.
+  const anyParametric = (attempt.questions || []).some((question) => !question.type || question.type === 'parametric');
   // Neutral when the tutorial sets no pass mark: green/red would be a verdict
   // on a test the teacher never set.
   const passAccent =
@@ -366,6 +376,19 @@ export default function TutorialPlayer() {
     isLive && !liveEnded && openQuestions.length > 0 && openQuestions.length < questionCount;
   const answeredCount = responses.length;
   const byKey = new Map((attempt.responses || []).map((r) => [answerId(r.questionId, r.answerKey), r]));
+
+  // Writing an answer clears its old verdict: a tick describes the value it was
+  // given for, not one the student has since changed.
+  const setAnswer = (id, value) => {
+    setInputs((prev) => ({ ...prev, [id]: value }));
+    if (verdicts[id]) {
+      setVerdicts((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
+  };
 
   return (
     <Box>
@@ -416,15 +439,21 @@ export default function TutorialPlayer() {
         )}
       </Flex>
 
-      <Alert status="info" borderRadius="md" mb={4} fontSize="sm">
-        <AlertIcon />
-        <Box>
-          Your figures are unique to you — comparing final answers with a classmate will not help, but
-          comparing <em>method</em> will. You may type an expression such as <Code fontSize="xs">2*pi*3</Code>{' '}
-          instead of a decimal.
-          {isLive && ' Try your answer as many times as you like — a green tick means you have it right.'}
-        </Box>
-      </Alert>
+      {(anyParametric || isLive) && (
+        <Alert status="info" borderRadius="md" mb={4} fontSize="sm">
+          <AlertIcon />
+          <Box>
+            {anyParametric && (
+              <>
+                Your figures are unique to you — comparing final answers with a classmate will not help, but
+                comparing <em>method</em> will. You may type an expression such as{' '}
+                <Code fontSize="xs">2*pi*3</Code> instead of a decimal.
+              </>
+            )}
+            {isLive && ' Try your answer as many times as you like — a green tick means you have it right.'}
+          </Box>
+        </Alert>
+      )}
 
       {attempt.allowFileUpload && (
         <AssignmentUploads
@@ -507,7 +536,10 @@ export default function TutorialPlayer() {
         return (
         <SectionCard key={question.questionId} mb={4}>
           <Flex justify="space-between" gap={3} mb={2}>
-            <Heading size="sm">Question {index + 1}</Heading>
+            <HStack spacing={2}>
+              <Heading size="sm">Question {index + 1}</Heading>
+              <QuestionTypeBadge question={question} />
+            </HStack>
             <Badge colorScheme="gray">
               {question.answers.reduce((sum, a) => sum + a.marks, 0)} marks
             </Badge>
@@ -517,14 +549,16 @@ export default function TutorialPlayer() {
             <RichText>{question.prompt}</RichText>
           </Box>
 
-          <HStack fontSize="xs" color="lmFg.muted" mb={3} wrap="wrap">
-            <Text>Your values:</Text>
-            {Object.entries(question.values).map(([name, value]) => (
-              <Code key={name} fontSize="xs">
-                {name} = {String(value)}
-              </Code>
-            ))}
-          </HStack>
+          {Object.keys(question.values || {}).length > 0 && (
+            <HStack fontSize="xs" color="lmFg.muted" mb={3} wrap="wrap">
+              <Text>Your values:</Text>
+              {Object.entries(question.values).map(([name, value]) => (
+                <Code key={name} fontSize="xs">
+                  {name} = {String(value)}
+                </Code>
+              ))}
+            </HStack>
+          )}
 
           {question.hint && !submitted && (
             <Flex fontSize="xs" color="blue.600" mb={3} gap={1}>
@@ -562,9 +596,25 @@ export default function TutorialPlayer() {
           {group.answers.map((answer) => {
             const id = answerId(question.questionId, answer.key);
             const graded = byKey.get(id);
+            const choice = isChoiceQuestion(question);
             return (
               <Box key={answer.key} mb={3}>
+                {choice && (
+                  <Box mb={2}>
+                    <ChoiceAnswerInput
+                      name={id}
+                      type={question.type}
+                      options={question.options || []}
+                      value={Array.isArray(inputs[id]) ? inputs[id] : []}
+                      readOnly={submitted}
+                      correct={submitted ? answer.correct : undefined}
+                      onChange={(next) => setAnswer(id, next)}
+                    />
+                  </Box>
+                )}
                 <Flex align="center" gap={3} wrap="wrap">
+                  {!choice && (
+                    <>
                   <Text fontSize="sm" fontWeight="500" minW="110px">
                     {answer.label}
                   </Text>
@@ -584,22 +634,12 @@ export default function TutorialPlayer() {
                                 ? 'orange.400'
                                 : undefined
                       }
-                      onChange={(event) => {
-                        setInputs((prev) => ({ ...prev, [id]: event.target.value }));
-                        // The old verdict describes the old value. Clearing it as
-                        // soon as they type stops a green tick sitting beside a
-                        // number they have since changed.
-                        if (verdicts[id]) {
-                          setVerdicts((prev) => {
-                            const next = { ...prev };
-                            delete next[id];
-                            return next;
-                          });
-                        }
-                      }}
+                      onChange={(event) => setAnswer(id, event.target.value)}
                     />
                     {answer.unit && <InputRightAddon>{answer.unit}</InputRightAddon>}
                   </InputGroup>
+                    </>
+                  )}
 
                   {/* Check, and its verdict. Present when the teacher switched
                       instant feedback on, or whenever this is running live. */}
@@ -617,7 +657,7 @@ export default function TutorialPlayer() {
                         colorScheme="blue"
                         isLoading={checking === id}
                         isDisabled={
-                          !String(inputs[id] ?? '').trim() ||
+                          !hasAnswer(inputs[id]) ||
                           Boolean(verdicts[id]?.correct) ||
                           verdicts[id]?.checkable === false
                         }
@@ -647,7 +687,8 @@ export default function TutorialPlayer() {
                     <Badge colorScheme="orange">Not markable — tell your teacher</Badge>
                   )}
                 </Flex>
-                {submitted && answer.expected !== undefined && (
+                {/* A choice question shows its key on the options themselves. */}
+                {submitted && !choice && answer.expected !== undefined && (
                   <Text fontSize="xs" color="lmFg.subtle" mt={1} ml="122px">
                     Correct answer: <b>{formatAnswerValue(answer.expected, answer.decimals)}</b> {answer.unit}
                   </Text>
