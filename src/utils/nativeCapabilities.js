@@ -5,6 +5,7 @@ import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { Browser } from '@capacitor/browser';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import getEnvironment from '../getenvironment';
+import { appToast } from './appToast';
 
 const Downloads = registerPlugin('Downloads');
 
@@ -29,6 +30,11 @@ export const downloadFileNative = async (url, fileName) => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    appToast({
+      status: 'success',
+      title: 'Downloaded successfully',
+      description: `${fileName || 'Your file'} — check your Downloads folder.`,
+    });
     return;
   }
 
@@ -69,10 +75,25 @@ export const downloadFileNative = async (url, fileName) => {
       headers.Authorization = `Bearer ${token}`;
     }
 
-    return await Downloads.download({ url: downloadUrl, fileName, headers });
+    const result = await Downloads.download({ url: downloadUrl, fileName, headers });
+
+    // DownloadManager has the file and posts its own progress notification from
+    // here, so this is the point the tap is known to have worked — the same
+    // green box the web build shows.
+    appToast({
+      status: 'success',
+      title: 'Downloaded successfully',
+      description: `${fileName || 'Your file'} — check your Downloads folder.`,
+    });
+    return result;
   } catch (error) {
     console.error('Native download failed', error);
-    alert('Could not start the download. Please try again.');
+    appToast({
+      status: 'error',
+      title: 'Download failed',
+      description: 'Could not start the download. Please try again.',
+      duration: 6000,
+    });
     throw error;
   }
 };
@@ -91,6 +112,11 @@ export const downloadBase64Native = async (base64Data, fileName, mimeType = 'app
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    appToast({
+      status: 'success',
+      title: 'Downloaded successfully',
+      description: `${fileName} — check your Downloads folder.`,
+    });
     return;
   }
 
@@ -117,7 +143,11 @@ export const downloadBase64Native = async (base64Data, fileName, mimeType = 'app
         directory: Directory.ExternalStorage,
         recursive: true
       });
-      alert(`File saved to Downloads folder as ${fileName}`);
+      appToast({
+        status: 'success',
+        title: 'Downloaded successfully',
+        description: `${fileName} — check your Downloads folder.`,
+      });
       return result;
     } catch (e) {
       console.warn('Failed writing to Download/, falling back to Documents/', e);
@@ -126,12 +156,21 @@ export const downloadBase64Native = async (base64Data, fileName, mimeType = 'app
         data: base64Data,
         directory: Directory.Documents,
       });
-      alert(`File saved to Documents folder as ${fileName}`);
+      appToast({
+        status: 'success',
+        title: 'Downloaded successfully',
+        description: `${fileName} — check your Documents folder.`,
+      });
       return fallbackResult;
     }
   } catch (error) {
     console.error('Native base64 save failed', error);
-    alert('Could not save the file. Please try again.');
+    appToast({
+      status: 'error',
+      title: 'Download failed',
+      description: 'Could not save the file. Please try again.',
+      duration: 6000,
+    });
     throw error;
   }
 };
