@@ -11,6 +11,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { queryPersister, shouldPersistQuery } from './utils/queryPersister';
 import { learningModuleTheme } from './learningModule/theme';
+import { AppToastContainer } from './utils/appToast';
 import './utils/favicon';
 import {
   APP_NAME,
@@ -148,6 +149,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           </PersistQueryClientProvider>
         </RecoilRoot>
       </ChakraProvider>
+      {/* Mounted once, outside the provider on purpose: this is the renderer for
+          toasts raised from plain modules (see utils/appToast.js), and it
+          carries its own copy of the theme. */}
+      <AppToastContainer />
     </HelmetProvider>
   </React.StrictMode>
 );
