@@ -40,6 +40,65 @@ import { formatDateTime } from '../format';
 // array every render, which trips the hook dependencies built on top of it.
 const EMPTY = [];
 
+/** The roster cell: how often a student left full screen or had a paste refused. */
+function IntegrityBadges({ row, rules }) {
+  const exits = row.fullscreenExits || 0;
+  const pastes = row.pasteBlocked || 0;
+  if (!exits && !pastes) {
+    return (
+      <Text fontSize="xs" opacity={0.5}>
+        {rules.requireFullscreen || rules.blockPaste ? 'none' : '—'}
+      </Text>
+    );
+  }
+  return (
+    <HStack spacing={1} wrap="wrap">
+      {exits > 0 && (
+        <Badge colorScheme="orange" title="Times this student left full screen while working">
+          left full screen {exits}×
+        </Badge>
+      )}
+      {pastes > 0 && (
+        <Badge colorScheme="red" title="Paste attempts into code cells that were blocked">
+          {pastes} paste {pastes === 1 ? 'attempt' : 'attempts'}
+        </Badge>
+      )}
+    </HStack>
+  );
+}
+
+const EVENT_LABEL = {
+  'fullscreen-exit': 'Left full screen',
+  'paste-blocked': 'Tried to paste into a code cell (blocked)',
+};
+
+/** When each event happened, newest first, for the attempt being read. */
+function IntegrityLog({ integrity }) {
+  const events = [...(integrity?.events || [])].reverse();
+  if (!events.length) return null;
+  return (
+    <Alert status="warning" borderRadius="md" alignItems="flex-start" fontSize="sm">
+      <AlertIcon />
+      <Box flex="1">
+        <Text fontWeight="600" mb={1}>
+          Left full screen {integrity.fullscreenExits || 0}× · {integrity.pasteBlocked || 0} blocked paste
+          {integrity.pasteBlocked === 1 ? '' : 's'}
+        </Text>
+        <Box maxH="140px" overflowY="auto" fontSize="xs">
+          {events.map((event, index) => (
+            <Text key={`${event.at}-${index}`}>
+              {formatDateTime(event.at)} — {EVENT_LABEL[event.type] || event.type}
+            </Text>
+          ))}
+        </Box>
+        <Text fontSize="xs" opacity={0.7} mt={1}>
+          Recorded from the student&apos;s browser. Worth a conversation, not proof on its own.
+        </Text>
+      </Box>
+    </Alert>
+  );
+}
+
 export default function NotebookSubmissions() {
   const { classId } = useOutletContext();
   const { notebookId } = useParams();
@@ -48,6 +107,7 @@ export default function NotebookSubmissions() {
   const [attempts, setAttempts] = useState([]);
   const [tally, setTally] = useState(null);
   const [dueDate, setDueDate] = useState(null);
+  const [rules, setRules] = useState({ requireFullscreen: false, blockPaste: false });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(null);
@@ -58,6 +118,11 @@ export default function NotebookSubmissions() {
   // student's browser recorded.
   const [runCells, setRunCells] = useState([]);
 
+  // Shown when either rule is on — or when someone has counts from a time the
+  // rule was on, so switching it off later does not hide what was recorded.
+  const showIntegrity =
+    rules.requireFullscreen || rules.blockPaste || attempts.some((row) => row.fullscreenExits || row.pasteBlocked);
+
   const load = useCallback(async () => {
     setError(null);
     try {
@@ -65,6 +130,7 @@ export default function NotebookSubmissions() {
       setAttempts(data.attempts || []);
       setTally(data.tally || null);
       setDueDate(data.dueDate || null);
+      setRules({ requireFullscreen: Boolean(data.requireFullscreen), blockPaste: Boolean(data.blockPaste) });
     } catch (err) {
       setError(err);
     } finally {
@@ -286,6 +352,7 @@ export default function NotebookSubmissions() {
                 <Th isNumeric>Cells run</Th>
                 <Th>Worked through</Th>
                 <Th>Hidden tests</Th>
+                {showIntegrity && <Th>Full screen / paste</Th>}
                 <Th isNumeric>Grade</Th>
                 <Th />
               </Tr>
@@ -336,6 +403,11 @@ export default function NotebookSubmissions() {
                       <Badge colorScheme="red">{row.passedTestCases}/{row.totalTestCases} Passed</Badge>
                     )}
                   </Td>
+                  {showIntegrity && (
+                    <Td>
+                      <IntegrityBadges row={row} rules={rules} />
+                    </Td>
+                  )}
                   <Td isNumeric>
                     {row.grade === null || row.grade === undefined
                       ? '—'
@@ -370,6 +442,8 @@ export default function NotebookSubmissions() {
           }
         >
           <VStack align="stretch" spacing={3}>
+            <IntegrityLog integrity={open.attempt.integrity} />
+
             <Flex gap={2} wrap="wrap" align="center">
               {status === 'idle' || status === 'failed' ? (
                 <Button size="xs" colorScheme="green" leftIcon={<FiPlay />} onClick={start}>

@@ -22,7 +22,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 
-import { FiUpload } from 'react-icons/fi';
+import { FiDownload, FiUpload } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
 import { DeadlineCountdown, ErrorState, Loading, SectionCard } from '../components/common';
@@ -32,6 +32,7 @@ import ImportQuestionsModal from '../components/ImportQuestionsModal';
 import { toDateTimeInput } from '../format';
 import useNotebookKernel from '../hooks/useNotebookKernel';
 import { MAX_IMPORT_CELLS, cellsFromFile } from '../notebookImport';
+import { countTestCases, downloadNotebookFile, isNotebookFile, parseNotebookFile } from '../notebookTransfer';
 import { runCellTestCases } from '../utils/testRunner';
 import { LmIcon } from '../components/Icon';
 
@@ -137,9 +138,14 @@ export default function NotebookEditor() {
     load();
   }, [load]);
 
+  /** `patch` may be a function of the current cell, as it is for test results. */
   const patchCell = (cellId, patch) =>
     setCells((current) =>
-      current.map((cell) => (String(cell._id) === String(cellId) ? { ...cell, ...patch } : cell)),
+      current.map((cell) =>
+        String(cell._id) === String(cellId)
+          ? { ...cell, ...(typeof patch === 'function' ? patch(cell) : patch) }
+          : cell,
+      ),
     );
 
   const moveCell = (index, delta) =>
@@ -268,17 +274,77 @@ export default function NotebookEditor() {
    * teacher decides what is locked, what is hidden setup and whether the split
    * came out right before any of it reaches a student.
    */
+  /**
+   * A notebook file downloaded from this platform, as opposed to a plain script.
+   *
+   * Its cells arrive whole — locked, hidden setup, sample Input and hidden test
+   * cases — and its settings and packages are applied here. The title and
+   * description only replace this notebook's when they are still the untouched
+   * defaults, so importing into a notebook the teacher has already named does
+   * not rename it. The deadline stays this notebook's own.
+   */
+  const importNotebookFile = (contents) => {
+    const { notebook: imported, cells: importedCells, truncated } = parseNotebookFile(contents);
+    const importedLabel = imported.language === 'c' ? 'C' : 'Python';
+
+    if (imported.language !== language) {
+      toast({
+        status: 'error',
+        title: `That is a ${importedLabel} notebook, and this one is ${label}.`,
+        description: `Its cells would not run here. Use "Import notebook file" on the Coding tab to add it as a new ${importedLabel} notebook instead.`,
+        duration: 9000,
+      });
+      return;
+    }
+
+    setCells((current) => [
+      ...current,
+      ...importedCells.map((cell) => ({ ...newCell(cell.type), ...cell, testCases: cell.testCases.map((tc) => ({ ...tc })) })),
+    ]);
+
+    const existing = packagesText.split(',').map((name) => name.trim()).filter(Boolean);
+    const addedPackages = imported.packages.filter((name) => !existing.includes(name));
+    if (addedPackages.length) setPackagesText([...existing, ...addedPackages].join(', '));
+
+    setNotebook((current) => ({
+      ...current,
+      title: /^Untitled( C)? notebook$/.test(current.title || '') ? imported.title : current.title,
+      description: current.description?.trim() ? current.description : imported.description,
+      colabUrl: current.colabUrl || imported.colabUrl,
+      settings: { ...current.settings, ...imported.settings },
+    }));
+
+    const tests = countTestCases(importedCells);
+    toast({
+      status: 'success',
+      title: `Imported ${importedCells.length} ${importedCells.length === 1 ? 'cell' : 'cells'} and ${tests} hidden test ${tests === 1 ? 'case' : 'cases'}`,
+      description: [
+        'Locked and hidden setup cells, sample inputs and settings came across too.',
+        addedPackages.length ? `Added ${addedPackages.join(', ')} to Packages.` : '',
+        truncated ? 'Only the first 200 cells fit.' : '',
+        'Save to keep them.',
+      ].filter(Boolean).join(' '),
+      duration: 7000,
+    });
+  };
+
   const importFile = async (file) => {
     if (!file) return;
     const isIpynb = /\.ipynb$/i.test(file.name);
 
     try {
+      const contents = await file.text();
+      if (isNotebookFile(file.name, contents)) {
+        importNotebookFile(contents);
+        return;
+      }
+
       // `fileLanguage`, not `language`: the outer one is this notebook's kernel,
       // and shadowing it here is how the mismatch check below would end up
       // comparing a value with itself.
       const { cells: imported, truncated, marked, skipped, language: fileLanguage, packages, magics } = cellsFromFile(
         file.name,
-        await file.text(),
+        contents,
       );
 
       if (!imported.length) {
@@ -663,6 +729,50 @@ export default function NotebookEditor() {
               </Text>
             </Box>
           </FormControl>
+
+          <Divider />
+
+          <FormControl display="flex" alignItems="flex-start" gap={3}>
+            <Switch
+              mt={1}
+              isChecked={Boolean(notebook.settings?.requireFullscreen)}
+              onChange={(e) => setSetting('requireFullscreen', e.target.checked)}
+            />
+            <Box>
+              <FormLabel mb={0} fontSize="sm">
+                Students write code only in full screen
+              </FormLabel>
+              <Text fontSize="xs" opacity={0.6}>
+                The notebook is covered until the student enters full screen. Every time they leave it, the notebook
+                is covered again and the exit is recorded, with the time, in Submissions.
+              </Text>
+            </Box>
+          </FormControl>
+
+          <FormControl display="flex" alignItems="flex-start" gap={3}>
+            <Switch
+              mt={1}
+              isChecked={Boolean(notebook.settings?.blockPaste)}
+              onChange={(e) => setSetting('blockPaste', e.target.checked)}
+            />
+            <Box>
+              <FormLabel mb={0} fontSize="sm">
+                Block pasting into code cells
+              </FormLabel>
+              <Text fontSize="xs" opacity={0.6}>
+                Students can&apos;t paste or drag text into a code cell, so code has to be typed. Each blocked paste is
+                counted in Submissions. The Input box still accepts pasted input data.
+              </Text>
+            </Box>
+          </FormControl>
+
+          {(notebook.settings?.requireFullscreen || notebook.settings?.blockPaste) && (
+            <Text fontSize="xs" opacity={0.6}>
+              These discourage copying rather than make it impossible: a browser always lets people leave full screen,
+              and the code runs in the student&apos;s own browser. Use the counts in Submissions as a prompt for a
+              conversation, not as proof.
+            </Text>
+          )}
         </VStack>
       </SectionCard>
 
@@ -735,7 +845,11 @@ export default function NotebookEditor() {
         <input
           ref={fileInputRef}
           type="file"
-          accept={isC ? '.c,.h,text/x-c' : '.py,.ipynb,text/x-python,application/x-ipynb+json'}
+          accept={
+            isC
+              ? '.c,.h,text/x-c,.json,application/json'
+              : '.py,.ipynb,text/x-python,application/x-ipynb+json,.json,application/json'
+          }
           hidden
           data-testid="notebook-import"
           onChange={(event) => {
@@ -747,8 +861,8 @@ export default function NotebookEditor() {
         <HintTooltip
           label={
             isC
-              ? 'A .c file. It comes in as one cell unless it is split on // %% markers — a C file is one program.'
-              : 'A Jupyter notebook, or a script split on the # %% markers VS Code, Spyder and jupytext write'
+              ? 'A notebook file downloaded from here (with its hidden test cases and settings), or a .c file, which comes in as one cell unless it is split on // %% markers.'
+              : 'A notebook file downloaded from here (with its hidden test cases and settings), a Jupyter notebook, or a script split on # %% markers'
           }
         >
           <Button
@@ -757,7 +871,21 @@ export default function NotebookEditor() {
             leftIcon={<FiUpload />}
             onClick={() => fileInputRef.current?.click()}
           >
-            {isC ? 'Import .c' : 'Import .ipynb / .py'}
+            {isC ? 'Import notebook file / .c' : 'Import notebook file / .ipynb / .py'}
+          </Button>
+        </HintTooltip>
+
+        <HintTooltip label="Save this notebook as a file, with every cell, hidden test case and setting, to import into another class or share with another teacher">
+          <Button
+            size="sm"
+            variant="outline"
+            colorScheme="purple"
+            leftIcon={<FiDownload />}
+            onClick={() =>
+              downloadNotebookFile({ ...notebook, language, packages }, cells)
+            }
+          >
+            Download notebook file
           </Button>
         </HintTooltip>
 

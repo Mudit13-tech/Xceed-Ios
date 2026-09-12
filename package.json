@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/fetch-runtimes.mjs && vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "serve": "vite preview",
@@ -15,7 +15,8 @@
     "deploy:ota": "node scripts/deploy-ota.cjs",
     "drift": "node build/amsDrift.mjs",
     "setup:git": "node build/gitMergeSetup.mjs",
-    "prepare": "node build/gitMergeSetup.mjs"
+    "prepare": "node build/gitMergeSetup.mjs",
+    "fetch:runtimes": "node scripts/fetch-runtimes.mjs --force"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

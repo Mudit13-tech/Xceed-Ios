@@ -475,10 +475,12 @@ function TabResults() {
                     <li>A question you have <strong>deleted</strong> from the tutorial stays on existing papers exactly as it was, and is counted in the summary, rather than being removed from work a student has already answered.</li>
                 </ul>
             </div>
-            <Note type="warning">
-                Re-marking recalculates each score from the answers alone, so an <strong>Adjust marks (+/−)</strong>
-                you applied earlier is <strong>not added back</strong> — the attempt keeps its &quot;adjusted&quot;
-                badge, but the score no longer includes it. Re-apply the adjustment after re-evaluating.
+            <Note type="tip">
+                An <strong>Adjust marks (+/−)</strong> you applied earlier is <strong>kept on top of the re-mark</strong>,
+                capped between zero and the paper&apos;s total just as when you applied it — re-evaluating
+                corrects the key, it does not undo a judgement you made by hand. If you had adjusted a student
+                <em> because</em> the key was wrong, remove that adjustment once the key is fixed, or they are
+                credited twice.
             </Note>
             <Note type="info">
                 It never runs on its own, and it covers the whole tutorial: every issued paper is re-worked
@@ -523,7 +525,7 @@ function TabGotchas() {
         'A paper is fixed when a student first opens it. Questions added, re-keyed or changed to another type afterwards reach existing papers only through Re-evaluate, or on a new attempt.',
         'With instant feedback on, each Check on an MCQ rules an option out — keep Checks allowed per answer low, or leave feedback off, for choice questions that should measure something.',
         'Negative marking and shuffled options or question order, available in quizzes, are not available in tutorials.',
-        'Re-evaluate recalculates scores from the answers alone: an earlier Adjust marks drops out of the score (the "adjusted" badge stays) — re-apply it afterwards.',
+        'Re-evaluate keeps an earlier Adjust marks on top of the re-mark. An adjustment you made to cover a wrong key will count twice once the key is fixed — set it back to 0 after re-evaluating.',
     ];
     return (
         <div>

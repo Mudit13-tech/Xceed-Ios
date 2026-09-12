@@ -7,6 +7,12 @@ import shotEditor from '../manualAssets/notebooks/editor.png';
 import shotPlayer from '../manualAssets/notebooks/player.png';
 import shotSubmissions from '../manualAssets/notebooks/submissions.png';
 import shotSubmissionDetail from '../manualAssets/notebooks/submission-detail.png';
+import shotEditorCell from '../manualAssets/notebooks/editor-cell.png';
+import shotEditorTransfer from '../manualAssets/notebooks/editor-transfer.png';
+import shotPlayerTests from '../manualAssets/notebooks/player-tests.png';
+import shotPlayerFullscreen from '../manualAssets/notebooks/player-fullscreen.png';
+import shotPlayerLeftFullscreen from '../manualAssets/notebooks/player-left-fullscreen.png';
+import shotSubmissionIntegrity from '../manualAssets/notebooks/submission-integrity.png';
 
 // ── design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -447,12 +453,107 @@ function VisualStudentTestMock() {
     );
 }
 
+/** Two cells side by side, as they would sit in a notebook, with what happens. */
+function TwoCellExample({ title, tone, cells, verdict }) {
+    const good = tone === 'good';
+    return (
+        <div style={{ background: '#fff', border: `1px solid ${good ? '#bbf7d0' : '#fecaca'}`, borderRadius: 8, padding: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: good ? '#166534' : '#991b1b', marginBottom: 8 }}>{title}</div>
+            {cells.map((cell) => (
+                <div key={cell.label} style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 3 }}>
+                        {cell.label}
+                    </div>
+                    <pre style={{
+                        margin: 0, padding: '8px 10px', borderRadius: 6, background: '#0f172a', color: '#f1f5f9',
+                        fontFamily: "'IBM Plex Mono', monospace", fontSize: 11.5, lineHeight: 1.55,
+                        whiteSpace: 'pre-wrap', overflowX: 'auto',
+                    }}>
+                        <code style={{ background: 'transparent', padding: 0, color: '#f1f5f9' }}>{cell.code}</code>
+                    </pre>
+                </div>
+            ))}
+            <div style={{
+                fontSize: 12, lineHeight: 1.6, padding: '6px 10px', borderRadius: 6,
+                background: good ? '#f0fdf4' : '#fef2f2', color: good ? '#166534' : '#991b1b',
+            }}>
+                {verdict}
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Whether one cell can use what another defined — the question every teacher
+ * coming from Jupyter asks, and the answer differs by language. Checked against
+ * the real kernels: Python cells share one interpreter; each C cell is compiled
+ * and linked alone, so a call into another cell fails to link.
+ */
+function CellConnectionGuide() {
+    return (
+        <div>
+            <Note type="danger">
+                <strong>In C, every code cell is a separate, individual program.</strong> Each cell is compiled on its
+                own with its own <code>main()</code>. A function, variable, <code>#define</code> or <code>struct</code>{' '}
+                written in one C cell <strong>cannot be used in any other cell</strong> — not even the cell right below
+                it, and not even after running the first cell. The only thing shared by every C cell is the{' '}
+                <strong>Hidden setup</strong> cell.
+            </Note>
+
+            <div className="cdm-grid-2" style={{ marginBottom: 14 }}>
+                <TwoCellExample
+                    title="Python — cells are connected"
+                    tone="good"
+                    cells={[
+                        { label: 'Cell 1', code: 'def square(x):\n    return x * x' },
+                        { label: 'Cell 2', code: 'print(square(4))' },
+                    ]}
+                    verdict={<>Prints <code>16</code>. All Python cells share one session, so a function works in every cell run <em>after</em> the cell that defines it.</>}
+                />
+                <TwoCellExample
+                    title="C — cells are NOT connected"
+                    tone="bad"
+                    cells={[
+                        { label: 'Cell 1', code: '#include <stdio.h>\nint square(int x) { return x * x; }\nint main(void) { printf("%d\\n", square(3)); return 0; }' },
+                        { label: 'Cell 2', code: '#include <stdio.h>\nint main(void) {\n    printf("%d\\n", square(4));\n    return 0;\n}' },
+                    ]}
+                    verdict={<>Cell 2 fails: <code>undefined symbol: square</code>. Cell 2 is its own program and has never seen Cell 1.</>}
+                />
+            </div>
+
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.8, marginBottom: 10 }}>
+                <strong>How to share code between cells</strong>
+                <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                    <li>
+                        <strong>Same cell (both languages, recommended for exercises):</strong> write the helper functions
+                        one after another in the same cell, above the code that calls them — in C, above{' '}
+                        <code>main()</code>. Hidden tests run one cell by itself, so everything the test needs must be
+                        in that cell.
+                    </li>
+                    <li>
+                        <strong>Hidden setup cell (both languages):</strong> for helpers every cell should be able to call.
+                        In C its code is pasted in front of every cell before compiling, so it must not contain{' '}
+                        <code>main()</code>. In Python it runs once before any student cell.
+                    </li>
+                    <li>
+                        <strong>Python only, with care:</strong> a function in an earlier visible cell works only if that
+                        cell was run first in the current session. After Restart or Stop it is gone until the cell is run
+                        again, and a hidden test on a later cell fails if the student hasn&apos;t run the earlier one.
+                    </li>
+                </ul>
+            </div>
+        </div>
+    );
+}
+
 // ── tabs ──────────────────────────────────────────────────────────────────────
 
 const TABS = [
     { id: 'overview',  label: 'Overview',          icon: 'coding' },
     { id: 'create',    label: 'Author a Notebook', icon: 'edit' },
     { id: 'testcases', label: 'Hidden Test Cases', icon: 'test' },
+    { id: 'share',     label: 'Download & Import', icon: 'download' },
+    { id: 'integrity', label: 'Full Screen & Paste', icon: 'fullscreen' },
     { id: 'runtime',   label: 'What Can Run',      icon: 'settings' },
     { id: 'student',   label: 'What Students See', icon: 'preview' },
     { id: 'grade',     label: 'Grading',           icon: 'success' },
@@ -471,21 +572,39 @@ function TabOverview() {
             </Note>
 
             <Shot src={shotList} alt="Coding notebooks list for a class"
-                caption="The Coding notebooks tab. Language, packages, due date and submission counts all show on the card." />
+                caption="The Coding tab. The sample notebook card sits at the top; Import notebook file and New notebook are top right; every card has Download." />
 
             <SectionTitle>Python or C — Decided at Creation</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
-                Click <strong>New notebook</strong> and pick <strong>Python notebook</strong> or
-                <strong> C notebook</strong> — each starts with a small worked example already filled in.
+                Click <strong>New notebook</strong> and pick a <strong>Blank</strong> Python or C notebook, or a{' '}
+                <strong>Sample with hidden test cases</strong>. The sample is also on the Coding tab
+                (<strong>Open Python sample</strong> / <strong>Open C sample</strong>): a worked exercise with a teacher
+                guide, starter code, a hidden setup cell, helper functions and hidden tests.
                 The language is <strong>locked in once published</strong>: switching it afterward is refused,
                 because students already have code written for that kernel.
             </div>
+
+            <Note type="warning">
+                <strong>Python cells are connected; C cells are not.</strong> In Python, a function defined in one cell
+                can be called from later cells. In C, <strong>every cell is an individual program</strong> with its own{' '}
+                <code>main()</code>, and nothing written in one cell can be used in another. See{' '}
+                <strong>Author a Notebook → Are Cells Connected?</strong>
+            </Note>
 
             <SectionTitle>Universal Hidden Test Cases & Verification</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 Every code cell can have <strong>Hidden Test Cases</strong> attached (input <code>stdin</code> and expected <code>stdout</code> pairs).
                 Students can click <strong>Run Hidden Test Case</strong> to test their solutions against confidential test cases in their browser
                 and receive instant <strong>Yes/No</strong> feedback without seeing the test inputs or expected outputs.
+            </div>
+
+            <SectionTitle>New in the Coding Tab</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    <li><strong>Sample notebook</strong> — a worked, tested exercise to learn from or copy (see <em>Hidden Test Cases</em>).</li>
+                    <li><strong>Download &amp; Import</strong> — move a notebook, with its hidden test cases and settings, to another class or teacher.</li>
+                    <li><strong>Full screen &amp; paste blocking</strong> — optional rules for work that must be done unaided, with every full-screen exit and blocked paste recorded.</li>
+                </ul>
             </div>
 
             <SectionTitle>Workflow at a Glance</SectionTitle>
@@ -502,8 +621,8 @@ function TabCreate() {
     return (
         <div>
             <SectionTitle>Notebook Settings</SectionTitle>
-            <Shot src={shotEditor} alt="Notebook editor showing settings, a locked cell and a hidden setup cell"
-                caption="The editor. Packages and the Colab link appear for Python; a C notebook shows compilation info. Locked, Hidden setup, and Test Cases sit above every code cell." />
+            <Shot src={shotEditor} alt="Notebook editor settings, including full screen and paste blocking"
+                caption="The editor's settings, shown here on the sample notebook. Packages and the Colab link appear for Python; a C notebook shows how C cells run instead." />
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                     <li><strong>Packages</strong> (Python only) — PyPI packages not already bundled with the in-browser runtime. <code>numpy</code>, <code>pandas</code>, <code>matplotlib</code>, <code>scipy</code>, <code>sympy</code> and <code>scikit-learn</code> ship for free and don't need declaring. <strong>Packages only install at kernel start</strong> — adding one to an already-running kernel does nothing until restarted.</li>
@@ -511,6 +630,8 @@ function TabCreate() {
                     <li><strong>Submission deadline</strong> — advisory only. Puts the exercise on the class calendar; late submissions are flagged.</li>
                     <li><strong>Let students add their own cells</strong> — toggle off to keep it a fixed worksheet.</li>
                     <li><strong>Show your version after they submit</strong> — your reference cell sources appear under a student's work once submitted.</li>
+                    <li><strong>Students write code only in full screen</strong> — the notebook is covered until they enter full screen, and each exit is recorded. See <em>Full Screen &amp; Paste</em>.</li>
+                    <li><strong>Block pasting into code cells</strong> — code must be typed; each blocked paste is recorded. See <em>Full Screen &amp; Paste</em>.</li>
                 </ul>
             </div>
 
@@ -520,24 +641,24 @@ function TabCreate() {
                     <li><strong>Locked</strong> — visible and runnable, but the student cannot edit the source code (its Input/stdin box remains editable).</li>
                     <li><strong>Hidden setup</strong> — never shown to the student. In Python it runs once into the kernel before their cells; in C, its source is prepended literally to every cell before compiling (must not define <code>main()</code>).</li>
                     <li><strong><LmIcon name="test" size={13} /> Test Cases (N)</strong> — opens the hidden test case authoring panel to set up secret stdin/stdout test pairs and verify your solution before publishing.</li>
-                    <li><strong>⌨️ Input (stdin)</strong> — pre-typed standard input fed to <code>input()</code> in Python or <code>scanf</code>/<code>fgets</code> in C.</li>
+                    <li><strong>⌨️ Input (stdin)</strong> — sample input for the ▶ button, fed to <code>input()</code> in Python or <code>scanf</code>/<code>fgets</code> in C. Students get a copy; hidden tests use their own Input instead.</li>
+                    <li><strong>Setup guide</strong> — explains, inside the cell, what to write versus leave for the student, how test inputs arrive, how output is checked, and where helper functions go. Opens by itself on an empty cell, which also offers <strong>Insert example</strong> (starter code, sample input and two test cases).</li>
                 </ul>
             </div>
 
+            <Shot src={shotEditorCell} alt="A code cell in the editor with the Setup guide and the Hidden Test Cases panel open"
+                caption="A tested cell from the sample: starter code on top, then the Setup guide, the sample Input, and the four hidden test cases." />
+
             <VisualTestCasesEditorMock />
 
-            <SectionTitle>C Notebooks Run Differently — No Shared State</SectionTitle>
-            <Note type="warning">
-                A C "notebook" is not a REPL. <strong>Every code cell is a whole, independent program</strong>
-                with its own <code>main()</code> — nothing carries over between cells, because C has no
-                interpreter state to share. Shared <code>#include</code>s, typedefs or helper functions go
-                in the hidden setup cell instead. Cells compile with real clang WebAssembly.
-            </Note>
+            <SectionTitle>Are Cells Connected? Python: Yes · C: No</SectionTitle>
+            <CellConnectionGuide />
 
             <SectionTitle>Importing Existing Code</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
-                <strong>Import .ipynb / .py</strong> (Python) or <strong>Import .c</strong> appends cells from
-                a file to the end of the notebook. IPython magics (<code>%matplotlib inline</code>, <code>!pip install x</code>)
+                <strong>Import notebook file / .ipynb / .py</strong> (Python) or <strong>Import notebook file / .c</strong>{' '}
+                appends cells from a file to the end of the notebook. A <strong>notebook file</strong> downloaded from here
+                brings its hidden test cases and settings too — see <em>Download &amp; Import</em>. IPython magics (<code>%matplotlib inline</code>, <code>!pip install x</code>)
                 are stripped or converted automatically into Packages. Separately,
                 <strong> <LmIcon name="import" size={13} /> Import cells</strong> pulls cells from a notebook in another class you teach.
             </div>
@@ -593,6 +714,15 @@ function TabTestCases() {
 
             <VisualTestCasesEditorMock />
 
+            <SectionTitle>Start From the Sample Notebook</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.8, marginBottom: 12 }}>
+                On the Coding tab, press <strong>Open Python sample</strong> or <strong>Open C sample</strong>. It opens as
+                a draft in your class with a teacher guide cell, a hidden setup cell holding a helper function, a locked
+                example, and two questions with starter code, sample input and four hidden tests each — the second one
+                showing helper functions written in the same cell. Press <strong>Test Cases → Test Solution on
+                Cell</strong> on either question to watch the tests run, then copy the pattern.
+            </div>
+
             <SectionTitle>Step-by-Step Guide for Teachers</SectionTitle>
 
             <Step n="1" title="Open the Test Cases Panel in the Notebook Editor">
@@ -623,8 +753,8 @@ function TabTestCases() {
             </Step>
 
             <Step n="5" title="Provide Starter Prompt / Skeleton & Publish">
-                Once you have verified that all test cases pass with your reference solution, you can replace the cell's code with starter skeleton code for students (e.g. <code># Write your solution here\n\n</code> or a function stub) and click <strong>Save</strong> or <strong>Publish</strong>.
-                Your test cases remain safely saved in the notebook!
+                Once you have verified that all test cases pass with your reference solution, replace the cell's code with the starter code students begin from — the input-reading lines, function headers and <code>TODO</code> comments — and click <strong>Save</strong> or <strong>Publish</strong>.
+                Your test cases remain saved in the notebook. <strong>Don&apos;t forget this step:</strong> whatever code is in the cell when you publish is exactly what every student receives.
             </Step>
 
             <SectionTitle>What Students Experience in the Notebook Player</SectionTitle>
@@ -633,8 +763,8 @@ function TabTestCases() {
                 When they click it, their code runs against the test cases and displays binary pass/fail indicators without exposing your confidential test values:
             </div>
 
-            <Shot src={shotPlayer} alt="Student notebook player with confidential hidden test cases feedback"
-                caption="Student player view: Live in-browser execution with confidential 'Passed (Yes - All Completed)' feedback." />
+            <Shot src={shotPlayerTests} alt="A student's cell failing all four hidden tests, with no inputs or expected outputs shown"
+                caption="A half-finished answer: 0/4 hidden tests pass. Students see Yes/No per test, never your inputs or expected outputs." />
 
             <SectionTitle>Language-Specific Execution Details</SectionTitle>
             <div className="cdm-grid-2" style={{ marginBottom: 16 }}>
@@ -647,6 +777,7 @@ function TabTestCases() {
                         <ul style={{ margin: 0, paddingLeft: 16 }}>
                             <li>Runs in Pyodide WebAssembly worker.</li>
                             <li>Hidden setup cells execute first to load libraries or helper functions into the namespace.</li>
+                            <li>A test runs only the tested cell. Functions from other visible cells exist only if the student ran those cells first, so keep helpers in the tested cell.</li>
                             <li><code>input()</code> reads line-by-line from the test case stdin string.</li>
                             <li>Standard <code>print()</code> output and expression return values are captured for stdout comparison.</li>
                         </ul>
@@ -661,6 +792,7 @@ function TabTestCases() {
                     <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.7 }}>
                         <ul style={{ margin: 0, paddingLeft: 16 }}>
                             <li>Each cell is compiled with real Clang WebAssembly with its own <code>main()</code>.</li>
+                            <li><strong>Each cell is an individual program</strong> — a test cannot call functions written in any other cell. Put helpers in the tested cell, above <code>main()</code>.</li>
                             <li>Hidden setup code is automatically prepended to the cell source before compilation.</li>
                             <li><code>scanf()</code> / <code>fgets()</code> reads from the test case stdin stream.</li>
                             <li><code>printf()</code> / <code>puts()</code> output is captured and matched.</li>
@@ -719,6 +851,113 @@ int main() {
     );
 }
 
+function TabShare() {
+    return (
+        <div>
+            <Note type="key">
+                A notebook can be saved as a <strong>notebook file</strong> (<code>.xnb.json</code>) and imported into
+                another class — yours or another teacher&apos;s — <strong>with everything in it</strong>: every cell,
+                the Locked and Hidden setup ticks, each cell&apos;s sample Input, <strong>all hidden test cases</strong>,
+                the settings (including full screen and paste blocking), the packages and the Colab link. Works the same
+                for Python and C notebooks.
+            </Note>
+
+            <SectionTitle>Download a Notebook File</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    <li>From the <strong>Coding tab</strong>: press <strong>Download</strong> on the notebook&apos;s card.</li>
+                    <li>From the <strong>editor</strong>: press <strong>Download notebook file</strong> at the bottom. This saves what is on screen, including edits you haven&apos;t saved yet.</li>
+                </ul>
+            </div>
+            <Shot src={shotEditorTransfer} alt="Editor buttons: Import notebook file, Download notebook file, Import cells"
+                caption="The foot of the editor: import a file, download this notebook as a file, or pull cells from another class." />
+
+            <SectionTitle>Import It Somewhere Else</SectionTitle>
+            <Step n="1" title="As a new notebook — Coding tab → Import notebook file">
+                Pick the <code>.xnb.json</code> file. A new <strong>draft</strong> notebook is created with the file&apos;s
+                title, language, cells, hidden test cases and settings, and the editor opens on it. Nothing reaches
+                students until you publish.
+            </Step>
+            <Step n="2" title="Into an open notebook — editor → Import notebook file / …">
+                The file&apos;s cells, with their test cases, are added to the end of this notebook, and its settings
+                and packages are applied. This notebook keeps its own title (unless it is still &ldquo;Untitled&rdquo;)
+                and its own deadline. A C file can only be imported into a C notebook, and Python into Python.
+                Press <strong>Save</strong> to keep the result.
+            </Step>
+
+            <Note type="tip">
+                <strong>The deadline:</strong> a file carries its deadline, but importing it as a new notebook keeps the
+                deadline only if it is still in the future. A date that has already passed would mark every submission
+                in the new class late, so you are asked to set a new one.
+            </Note>
+
+            <SectionTitle>What Is and Isn&apos;t in the File</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9 }}>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    <li><strong>Included:</strong> title, description, language, cells in order, Locked / Hidden setup, sample Input, hidden test cases, all settings, packages, Colab link, deadline.</li>
+                    <li><strong>Not included:</strong> students, their work, grades and submissions — those belong to the class the notebook came from.</li>
+                    <li>The file is plain JSON. Treat it like an answer key: it contains the hidden test cases.</li>
+                </ul>
+            </div>
+        </div>
+    );
+}
+
+function TabIntegrity() {
+    return (
+        <div>
+            <Note type="key">
+                Two settings in the editor, both <strong>off by default</strong>, for work you want done without outside
+                help. Both apply to <strong>students only</strong> — teachers opening the notebook are never held to
+                them — and both stop applying once the student submits.
+            </Note>
+
+            <SectionTitle>Students Write Code Only in Full Screen</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    <li>When a student opens the notebook, it is covered until they press <strong>Enter full screen</strong>.</li>
+                    <li>If they leave full screen (Esc, switching app or tab, and so on), the notebook is covered again and the exit is <strong>recorded with the time</strong>. They see how many times they have left.</li>
+                    <li>Their work is not lost — autosave keeps running — they just can&apos;t see or type until they return.</li>
+                    <li>On a browser that can&apos;t do full screen (some phones and tablets), the student sees a warning and can still work; nothing is recorded.</li>
+                </ul>
+            </div>
+            <div className="cdm-grid-2">
+                <Shot src={shotPlayerFullscreen} alt="Notebook covered until the student enters full screen"
+                    caption="On opening: the notebook is covered until the student enters full screen." />
+                <Shot src={shotPlayerLeftFullscreen} alt="Notebook covered again after the student left full screen"
+                    caption="After leaving: covered again, with the count. The exit is already recorded." />
+            </div>
+
+            <SectionTitle>Block Pasting into Code Cells</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    <li>Ctrl+V / Cmd+V, right-click → Paste and dragging text into a <strong>code cell</strong> are all refused, so code has to be typed.</li>
+                    <li>The student sees &ldquo;Pasting is turned off for this notebook&rdquo;, and a note at the top of the notebook says so.</li>
+                    <li>Each blocked attempt is <strong>counted and recorded with the time</strong>.</li>
+                    <li>The <strong>Input</strong> boxes still accept pasting — pasting a long list of input numbers is legitimate.</li>
+                </ul>
+            </div>
+
+            <SectionTitle>Where You See It</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                <strong>Submissions</strong> gets a <strong>Full screen / paste</strong> column (for example{' '}
+                <code>left full screen 5×</code>, <code>3 paste attempts</code>). Press <strong>Read</strong> on a student
+                to see every event with its time, newest first.
+            </div>
+            <Shot src={shotSubmissions} alt="Submissions table with the Full screen / paste column"
+                caption="The roster with the Full screen / paste column." />
+            <Shot src={shotSubmissionIntegrity} alt="One student's full-screen exits and blocked pastes, each with a time"
+                caption="Reading one attempt: each exit and blocked paste with the time it was recorded." />
+
+            <Note type="warning">
+                <strong>A deterrent and a record, not a lock.</strong> Browsers always let people leave full screen, and
+                the notebook runs in the student&apos;s own browser, so someone determined can get around both. Use the
+                counts as a reason for a conversation rather than as proof — a single exit is often an accidental Esc.
+            </Note>
+        </div>
+    );
+}
+
 function TabRuntime() {
     return (
         <div>
@@ -758,13 +997,15 @@ function TabRuntime() {
 function TabStudent() {
     return (
         <div>
-            <Shot src={shotPlayer} alt="Student notebook view with a locked cell's output and a code cell with an error"
-                caption="A student's notebook. The first cell is locked and already shows output; the second is theirs to write, with Run and Run Hidden Test Case buttons." />
+            <Shot src={shotPlayer} alt="Student view of the sample notebook: warm-up, a locked example, and Question 1 passing its hidden tests"
+                caption="A student's view of the sample. The locked example ran with its Input; Question 1 shows Completed and passes all four hidden tests." />
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                     <li><strong>Lazy Kernel Start</strong> — nothing downloads until the student clicks <strong>Start</strong>, so opening a notebook just to read it costs nothing.</li>
                     <li><strong>Run All</strong> — runs every code cell top to bottom in sequential order.</li>
                     <li><strong>Run Hidden Test Case</strong> — validates cell code against confidential test cases with instant Yes/No feedback.</li>
+                    <li><strong>Completed / Error</strong> — after a run, the cell toolbar shows a green tick with <strong>Completed</strong>, or a red mark with <strong>Error</strong>. A cell that only defines things prints nothing and still shows Completed.</li>
+                    <li><strong>Full screen and paste rules</strong> — if you turned them on, the notebook asks for full screen and refuses pastes into code cells. See <em>Full Screen &amp; Paste</em>.</li>
                     <li><strong>Autosave</strong> — runs automatically a couple of seconds after any edit; a badge shows saved / saving / unsaved status.</li>
                     <li><strong>Submit Confirmation</strong> — warns students that submission is final. After submitting, cells can still be run to explore, but changes are locked.</li>
                     <li><strong>Reference Solutions</strong> — if enabled in settings, your reference cell sources appear below theirs once submitted.</li>
@@ -779,7 +1020,8 @@ function TabStudent() {
 function TabGrade() {
     return (
         <div>
-            <Shot src={shotSubmissions} alt="Notebook submissions list showing status, cells run, test cases, and grade columns" />
+            <Shot src={shotSubmissions} alt="Notebook submissions list showing status, cells run, hidden tests, full screen / paste and grade columns"
+                caption="Submissions. The Full screen / paste column appears when either rule is on for the notebook." />
             <Note type="tip">
                 <strong>Automated Test Summaries + Manual Grading:</strong> The Submissions dashboard provides automated
                 test pass summaries (e.g. <code>All Passed (3/3)</code> or <code>1/3 Passed</code>) while allowing teachers
@@ -793,6 +1035,7 @@ function TabGrade() {
                     <li><strong>Status</strong> — Opened, In Progress, or Submitted (with late flags if submitted past due date).</li>
                     <li><strong>Cells Run</strong> — "every cell ran" in green, or count of errored / unrun cells in yellow.</li>
                     <li><strong>Test Cases</strong> — instant pass badge: <code>All Passed (N/N)</code> in green or <code>X/N Passed</code> in red.</li>
+                    <li><strong>Full screen / paste</strong> — how many times the student left full screen and how many pastes were blocked, when those rules are on. <strong>Read</strong> lists each one with its time.</li>
                     <li><strong>Grade</strong> — points awarded out of max score.</li>
                 </ul>
             </div>
@@ -819,16 +1062,20 @@ function TabGotchas() {
         'Stop and Restart reset kernel state in both languages — an infinite loop is killed by terminating the worker.',
         'Python packages only install when the kernel starts — adding a package to Settings requires restarting the kernel.',
         'TensorFlow, PyTorch, JAX, and GPU libraries cannot run in-browser — use the Google Colab link for deep learning assignments.',
-        'Every C code cell is an independent program with its own main() — shared headers or utilities belong in the Hidden Setup cell.',
+        'In C, every code cell is an individual program with its own main() — a function written in one C cell cannot be called from any other cell. Put helpers in the same cell above main(), or in the Hidden Setup cell to share them.',
+        'In Python, cells are connected — a function defined in one cell can be used in later cells, but only once that cell has been run. Restart or Stop clears it.',
         'Hidden setup cells in C must not define main() — doing so will cause compilation conflicts when prepended to student cells.',
         'stdin (input() in Python, scanf/fgets in C) reads pre-typed input strings or test case data; asking for more input than supplied returns EOF.',
         'Submission deadlines are advisory — assignments do not lock automatically at the deadline; late submissions are flagged.',
+        'Full screen and paste blocking discourage copying but cannot make it impossible — a browser always lets people leave full screen. Treat the recorded counts as a prompt for a conversation, not proof.',
+        'Whatever code is in a cell when you publish is what every student starts with — after testing your solution, put the starter code back.',
+        'A notebook file (.xnb.json) contains the hidden test cases — share it only with other teachers.',
         'Deleting a notebook permanently removes all student attempts and submissions associated with it.',
     ];
     return (
         <div>
             <Note type="warning">
-                Ten things worth knowing before you set a coding notebook for real marks.
+                {items.length} things worth knowing before you set a coding notebook for real marks.
             </Note>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {items.map((text, i) => (
@@ -864,6 +1111,8 @@ export default function CodingManual({ standalone = false }) {
         overview:  <TabOverview />,
         create:    <TabCreate />,
         testcases: <TabTestCases />,
+        share:     <TabShare />,
+        integrity: <TabIntegrity />,
         runtime:   <TabRuntime />,
         student:   <TabStudent />,
         grade:     <TabGrade />,

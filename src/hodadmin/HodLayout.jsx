@@ -43,17 +43,21 @@ export default function HodLayout() {
         let cancelled = false;
         fetch(`${apiUrl}/attendancemodule/dept-admin/hod-menus`, { credentials: 'include' })
             .then(async (response) => {
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.message || 'Attendance access denied');
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(data.message || data.error || 'Attendance access denied');
                 if (!cancelled) setHodMenus(data.hodMenus || {});
             })
             .catch((err) => {
                 // A 403 here means the account is not an HOD (or lost the role
                 // mid-session). Send them to the picker rather than leaving a
-                // shell with no menu and no explanation.
+                // shell with no menu and no explanation. The reason travels with
+                // them so the roles page can say it — see AMSLayout.
                 if (cancelled) return;
                 setError(err.message);
-                navigate('/userroles', { replace: true });
+                navigate('/userroles', {
+                    replace: true,
+                    state: { deniedModule: 'iLEED', deniedReason: err.message },
+                });
             });
         return () => { cancelled = true; };
     }, [navigate]);

@@ -258,7 +258,7 @@ export default function TutorialPresent() {
             {state.participantCount === 1 ? '' : 's'} joined
           </Text>
         </Box>
-        <HStack>
+        <HStack wrap="wrap" spacing={2}>
           <Button
             size="sm"
             colorScheme="teal"

@@ -32,3 +32,8 @@ public/ground-truth/*
 .yarn/install-state.gz
 yarn.lock
 .yarn.env 
+.yarn
+# Notebook kernel runtimes, fetched at build time by scripts/fetch-runtimes.mjs.
+# ~490MB of Pyodide and clang WebAssembly; downloaded, not committed.
+public/pyodide/
+public/clang/

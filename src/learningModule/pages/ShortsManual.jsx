@@ -180,7 +180,6 @@ function TabCreate() {
                     <li><strong>Hide names in results</strong> — hides names from what's projected/shown only; answers stay fully attributed to accounts on the server, so you can still see who hasn't answered and still grade individuals.</li>
                     <li><strong>Mirror results to phones</strong> — otherwise results stay on the projector only.</li>
                     <li><strong>Allow changing an answer</strong>, <strong>Allow joining mid-deck</strong>, <strong>Reveal the answer when I close a slide</strong> — self-explanatory pacing controls.</li>
-                    <li><strong>Email the class when I start it</strong> (on by default) — the join code goes out by mail as well as in-app; turn it off for a rehearsal or when the room is already in front of you. <strong>This mail cannot be recalled once sent.</strong></li>
                     <li><strong>Send scores to the gradebook</strong> — creates a classwork entry when the session ends, only if the deck has at least one gradable slide. Guests are always excluded from this, even on a graded deck.</li>
                 </ul>
             </div>
@@ -201,7 +200,7 @@ function TabPresent() {
                 caption="Presenting live. Built to be read from the back of the room — the QR code and 6-digit join code are always visible, and the current slide's live results update as answers land." />
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    <li>Click <strong>Present</strong> on a deck's card. If a session is already live, the same button reads <strong>Back to presenting</strong> and rejoins it — resuming never re-sends the launch email.</li>
+                    <li>Click <strong>Present</strong> on a deck's card. If a session is already live, the same button reads <strong>Back to presenting</strong> and rejoins it. Starting sends the class an in-app notification with the join code (no email); resuming notifies nobody again.</li>
                     <li>Bottom control bar: previous/next slide, then a state-dependent action — <strong>Open for answers</strong> → <strong>Close answering</strong> → <strong>Reveal the answer</strong> (only if the slide has an answer key) → <strong>Reopen</strong>.</li>
                     <li>Keyboard shortcuts for a presenter remote: <strong>← →</strong> to move between slides, <strong>space</strong> to open / close / reveal.</li>
                     <li>Moving to a new slide always resets it to "not open yet" — you can't pre-arm the next slide's timer while still finishing the current discussion.</li>
@@ -263,7 +262,7 @@ function TabReports() {
 
 function TabGotchas() {
     const items = [
-        'The launch email cannot be recalled once a fresh session starts — that\'s why the app asks every time, but never again when you merely rejoin an already-live session.',
+        'Shorts never send email — the class is told a session has started only through the in-app notification, so students who are not in the app need the join code from the projector.',
         'Deleting a deck deletes every session\'s answers with it, and if it was ever graded, deletes the mirrored gradebook entries too — there\'s no "unlink but keep the deck" option.',
         'A deck with "Require sign-in to join" turned off is genuinely open to anyone with the code — no class-membership check at all. The presenter screen flags this with an "anyone with the code can join" badge for exactly that reason.',
         'Guests never receive gradebook credit, even on a graded deck, though their answers count in the live results and leaderboard for the room.',

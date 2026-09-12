@@ -121,36 +121,28 @@ function FilterBlock({
         if (!dept || !sem) return;
         setSubjectsLoading(true);
         // The Subject.dept field is frequently blank/inconsistent, so filtering
-        // /timetablemodule/subject by dept client-side (the old approach) could
-        // return nothing even when subjects exist for this dept+sem.
-        // Fix (no timetableModule changes): call the existing
-        // /subjects-by-dept-sem endpoint to get the authoritative list of
-        // subject NAMES for this dept+sem (it resolves them via the locked
-        // timetable, same reliable source the semester dropdown already uses),
-        // then join that name list against the full /subject collection here
-        // in the browser to recover each subject's _id/subCode.
-        Promise.all([
-            fetch(`${apiUrl}/timetablemodule/lock/subjects-by-dept-sem?dept=${encodeURIComponent(dept)}&sem=${encodeURIComponent(sem)}`).then(r => r.json()).catch(() => ({})),
-            fetch(`${apiUrl}/timetablemodule/subject`).then(r => r.json()).catch(() => ([])),
-        ])
-            .then(([nameData, allSubjects]) => {
-                const names = Array.isArray(nameData.subjects) ? nameData.subjects : [];
-                const nameSet = new Set(names.map(n => String(n).trim().toLowerCase()));
-                const list = Array.isArray(allSubjects) ? allSubjects : [];
-
-                const bySemAndName = list.filter(s => {
-                    const semMatch = String(s.sem).trim() === String(sem).trim();
-                    const nm = (s.subName || s.subjectFullName || '').trim().toLowerCase();
-                    return semMatch && nameSet.has(nm);
-                });
-
-                if (bySemAndName.length) {
-                    setSubjects(bySemAndName);
+        // /timetablemodule/subject by dept could return nothing even when
+        // subjects exist for this dept+sem. /subjects-by-dept-sem instead
+        // resolves the subjects through the locked timetable — the same
+        // reliable source the semester dropdown is fed from — and joins them
+        // against the Subject collection server-side to recover each one's
+        // _id/subCode, so `subjectDetails` is the list ready to display.
+        //
+        // That join used to run here, which meant downloading every subject in
+        // the institute on each change of the Semester dropdown to keep the
+        // handful belonging to this one.
+        fetch(`${apiUrl}/timetablemodule/lock/subjects-by-dept-sem?dept=${encodeURIComponent(dept)}&sem=${encodeURIComponent(sem)}`)
+            .then(r => r.json())
+            .then(data => {
+                const details = Array.isArray(data.subjectDetails) ? data.subjectDetails : [];
+                if (details.length) {
+                    setSubjects(details);
                     return;
                 }
                 // Fallback: no matching Subject doc found (e.g. it was never
                 // created in the Subject collection) — still show the plain
                 // names so the dropdown isn't empty.
+                const names = Array.isArray(data.subjects) ? data.subjects : [];
                 setSubjects(names.map(n => ({ _id: n, subName: n, subCode: '' })));
             })
             .catch(() => setSubjects([])).finally(() => setSubjectsLoading(false));

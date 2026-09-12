@@ -477,11 +477,14 @@ function QuestionPreview({ classId, tutorialId, index, dirty, variables }) {
     }
   }, [dirty]);
 
+  // textTransform, because a Badge uppercases its content by default. That is
+  // right for the status words it is meant for and wrong for a value: it prints
+  // a complex answer's imaginary unit as "I", and a "mA" unit as "MA".
   const answerBadges = (expected, partIndex) =>
     (expected || [])
       .filter((slot) => (slot.partIndex ?? null) === partIndex)
       .map((slot) => (
-        <Badge key={slot.key} colorScheme={slot.error ? 'red' : 'green'}>
+        <Badge key={slot.key} colorScheme={slot.error ? 'red' : 'green'} textTransform="none">
           {slot.label}:{' '}
           {slot.error ? 'failed' : `${formatAnswerValue(slot.value, slot.decimals, slot.valueIm)} ${slot.unit || ''}`}
         </Badge>
@@ -741,17 +744,25 @@ function QuestionCard({ classId, tutorialId, question, index, onChange, onRemove
 
   return (
     <SectionCard mb={4}>
-      <Flex justify="space-between" align="center" mb={3}>
+      <Flex justify="space-between" align="center" mb={3} gap={2} wrap="wrap">
         <HStack spacing={2}>
           <Heading size="sm">Question {index + 1}</Heading>
           {/* Coloured by type, so the make-up of a paper reads at a glance. */}
           <QuestionTypeBadge question={question} fontSize="sm" px={2} />
         </HStack>
-        <HStack>
-          {/* Changing type resets the answer section, as the quiz editor does. */}
+        <HStack spacing={2} wrap="wrap">
+          <Text fontSize="xs" fontWeight="600" color="lmFg.muted">
+            Type
+          </Text>
+          {/* Changing type resets the answer section, as the quiz editor does.
+              A fixed width, not "auto": a select sized by percentage may be
+              shrunk to nothing when the header is tight, which left only its
+              arrow showing and the chosen type invisible. On Chakra's Select
+              the width props land on the wrapper, which is what keeps it open. */}
           <Select
             size="sm"
-            w="auto"
+            w="250px"
+            minW="250px"
             aria-label="Question type"
             value={question.type || 'parametric'}
             onChange={(e) => onChange((current) => withType(current, e.target.value, parametricSeed()))}
@@ -1357,7 +1368,7 @@ export default function TutorialEditor() {
             {dirty ? ' · unsaved changes' : ''}
           </Text>
         </Box>
-        <HStack>
+        <HStack wrap="wrap" spacing={2} justify="flex-end">
           {/* Save first: the import appends to the stored tutorial and this page
               reloads it afterwards, so unsaved edits would go with the reload. */}
           <Button
@@ -1541,12 +1552,22 @@ export default function TutorialEditor() {
           </Text>
           {/* Complex answers need their own line: the constants list above
               shows i and j, but not what to do with them, and ∠ is an
-              operator so it never appears in the function list either. */}
+              operator so it never appears in the function list either.
+              polar() leads and ∠ trails, deliberately — ∠ is on no keyboard,
+              so a teacher who copies it into a question sets an answer their
+              students have no way to type. */}
           <Text fontSize="sm" color="lmFg.subtle" mb={2}>
             Complex answers: write <Code fontSize="xs">R + i*X</Code> or <Code fontSize="xs">3+4i</Code> (
             <Code fontSize="xs">j</Code> works too), or in polar form{' '}
-            <Code fontSize="xs">polar(10, 45)</Code> / <Code fontSize="xs">10∠45</Code> — magnitude and angle in
-            degrees. Students may answer in either form.
+            <Code fontSize="xs">polar(10, 45)</Code> — magnitude and angle in degrees. Students may answer
+            in either form, and their paper tells them so. <Code fontSize="xs">10∠45</Code> parses to the
+            same value, but ∠ is on no keyboard — <Code fontSize="xs">polar()</Code> is the form to set.
+          </Text>
+          <Text fontSize="sm" color="lmFg.subtle" mb={2}>
+            A variable cannot be named <Code fontSize="xs">i</Code>, <Code fontSize="xs">j</Code>,{' '}
+            <Code fontSize="xs">e</Code> or <Code fontSize="xs">pi</Code>: a variable is resolved before a
+            constant, so one of those would quietly replace it in every formula. Capitals are free — use{' '}
+            <Code fontSize="xs">I</Code> for a current.
           </Text>
           <Flex wrap="wrap" gap={1}>
             {reference.functions.map((fn) => (

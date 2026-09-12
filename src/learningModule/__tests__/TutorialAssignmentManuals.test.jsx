@@ -42,7 +42,7 @@ describe.each([
     renderWithProviders(<Manual />);
     await userEvent.click(screen.getByText(resultsTab));
     expect(screen.getByText('Re-evaluating Papers Already Issued')).toBeInTheDocument();
-    // The warning that a manual adjustment is dropped by a re-mark.
-    expect(screen.getByText('not added back')).toBeInTheDocument();
+    // That a manual adjustment survives a re-mark.
+    expect(screen.getByText('kept on top of the re-mark')).toBeInTheDocument();
   });
 });

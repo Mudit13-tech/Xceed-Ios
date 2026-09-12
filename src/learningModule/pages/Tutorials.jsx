@@ -262,7 +262,7 @@ export default function Tutorials() {
                 )}
               </Box>
 
-              <HStack>
+              <HStack wrap="wrap" spacing={2} justify="flex-end">
                 {isTeacher ? (
                   <>
                     {/* A deadline is optional, so an empty date box on every

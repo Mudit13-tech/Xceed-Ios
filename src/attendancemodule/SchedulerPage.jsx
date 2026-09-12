@@ -46,6 +46,9 @@ export const SCHEDULER_RESPONSIVE_CSS = `
   @media (max-width: 480px) {
     .scheduler-action-grid { grid-template-columns: 1fr !important; }
     .scheduler-action-grid button { width: 100%; }
+    /* Two half-day toggles no longer fit beside the room name — stack them
+       under it rather than letting the second one wrap on its own. */
+    .scheduler-room-row > div:last-child { width: 100%; justify-content: space-between; }
   }
 `;
 
@@ -737,18 +740,43 @@ function GlobalEditor({ config, onSave }) {
 }
 
 // ── Room participation row ───────────────────────────────────────────────────
+// A room is scheduled per half of the day, not per day: a lecture theatre that
+// becomes a locked lab after lunch is now switched off for the afternoon alone
+// instead of being flipped by hand twice a day. Which half a period belongs to
+// is decided by its start time against 12:30 — lunch, and the gap after Period
+// 4 ends. See server roomDayHalf.js for why the cutoff is not noon.
+//
+// Overrides written before the split carry only `enabled`, so both halves fall
+// back to it and an untouched room reads exactly as it did.
 function RoomParticipationRow({ room, override, onSave, allCamerasInactive }) {
   const [saving, setSaving] = useState(false);
-  const enabled = override ? override.enabled !== false : true;
+  const legacy = override ? override.enabled !== false : true;
+  const pick = (v) => (v == null ? legacy : v !== false);
+  const forenoon = pick(override?.enabledForenoon);
+  const afternoon = pick(override?.enabledAfternoon);
+  const enabled = forenoon || afternoon;
 
-  const handleToggle = async (v) => {
+  // Always send BOTH flags. Posting only the half that changed would leave the
+  // server guessing at the other one for a legacy override that has neither.
+  const handleToggle = async (half, v) => {
     setSaving(true);
-    await onSave({ room, enabled: v });
+    await onSave({
+      room,
+      enabledForenoon: half === 'forenoon' ? v : forenoon,
+      enabledAfternoon: half === 'afternoon' ? v : afternoon,
+    });
     setSaving(false);
   };
 
+  const statusColor = !enabled
+    ? theme.danger
+    : forenoon && afternoon
+      ? theme.success
+      : theme.warning;
+
   return (
     <div
+      className="scheduler-room-row"
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -759,6 +787,7 @@ function RoomParticipationRow({ room, override, onSave, allCamerasInactive }) {
         border: `1px solid ${enabled ? theme.border : theme.dangerDim}`,
         opacity: saving ? 0.6 : 1,
         transition: 'opacity .15s',
+        flexWrap: 'wrap',
       }}
     >
       <div
@@ -767,7 +796,7 @@ function RoomParticipationRow({ room, override, onSave, allCamerasInactive }) {
           height: 8,
           borderRadius: '50%',
           flexShrink: 0,
-          background: enabled ? theme.success : theme.danger,
+          background: statusColor,
         }}
       />
       <span
@@ -777,6 +806,7 @@ function RoomParticipationRow({ room, override, onSave, allCamerasInactive }) {
           color: theme.text,
           fontFamily: theme.fontMono,
           flex: 1,
+          minWidth: 90,
         }}
       >
         {room}
@@ -784,11 +814,23 @@ function RoomParticipationRow({ room, override, onSave, allCamerasInactive }) {
       {allCamerasInactive && (
         <span style={{ fontSize: 10, color: theme.warning }}>⚠ no camera</span>
       )}
-      <Toggle
-        value={enabled}
-        onChange={handleToggle}
-        label={enabled ? 'In scheduler' : 'Excluded'}
-      />
+      {!enabled && (
+        <span style={{ fontSize: 10, color: theme.danger, fontWeight: 700 }}>
+          EXCLUDED ALL DAY
+        </span>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+        <Toggle
+          value={forenoon}
+          onChange={(v) => handleToggle('forenoon', v)}
+          label="Forenoon"
+        />
+        <Toggle
+          value={afternoon}
+          onChange={(v) => handleToggle('afternoon', v)}
+          label="Afternoon"
+        />
+      </div>
     </div>
   );
 }
@@ -1657,7 +1699,7 @@ export default function SchedulerPage() {
         <div>
           <SectionHead
             title="Room Participation"
-            sub="All rooms with an active camera are auto-included. Toggle individual rooms here, or override their RTSP URL."
+            sub="All rooms with an active camera are auto-included. Switch each room on for the forenoon (Periods 1–4, starting before 12:30) and the afternoon (lunch onwards, 12:30 or later) independently — turning both off excludes the room all day."
             color={theme.accent}
           />
           {cameraRooms.length === 0 ? (

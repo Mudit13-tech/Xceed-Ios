@@ -408,6 +408,19 @@ export default function FrameVerification({ fixedDepartment = '' }) {
     const annotatedFrames = galleryData?.annotatedFrames || [];
     const modalFrame = annotatedFrames[modalState.index] || null;
 
+    // `identityLabels === false` means the ML service deliberately drew this
+    // frame without roll numbers: the run had no gallery of its own, so the only
+    // embeddings available were an institute-wide sweep of every enrolled
+    // student. Matching against that finds names, but by a different search from
+    // the one the attendance report is built on — which is how rooms that are
+    // not running attendance ended up with confidently annotated frames. The
+    // page says the identities are unavailable rather than showing them.
+    // Undefined/null on frames captured before the flag existed; those keep the
+    // old behaviour, since nothing can say after the fact how they were drawn.
+    const identitiesShown = !modalFrame || modalFrame.identityLabels !== false;
+    // Whole-selection version, for the notice above the gallery.
+    const unlabelledFrames = annotatedFrames.filter((f) => f.identityLabels === false);
+
     // Frames containing the deep-linked student (empty if no per-frame roll
     // data). When there are matches, the annotated gallery shows only those;
     // the modal still indexes the FULL annotated list so prev/next don't drift.
@@ -665,6 +678,27 @@ export default function FrameVerification({ fixedDepartment = '' }) {
 
                             {!framesLoading && annotatedFrames.length > 0 ? (
                                 <>
+                                    {/* Said once at the top rather than only per
+                                        frame: a whole period drawn without roll
+                                        numbers is a fact about the class's
+                                        enrolment, not about the frames. */}
+                                    {unlabelledFrames.length > 0 ? (
+                                        <div style={{
+                                            padding: '10px 14px', marginBottom: 16, borderRadius: 8,
+                                            background: theme.surfaceAlt, border: `1px solid ${theme.border}`,
+                                            fontSize: 13, lineHeight: 1.6, color: theme.textMuted,
+                                        }}>
+                                            <strong style={{ color: theme.text }}>
+                                                {unlabelledFrames.length === annotatedFrames.length
+                                                    ? 'Identities are not shown for these screenshots.'
+                                                    : `Identities are not shown for ${unlabelledFrames.length} of ${annotatedFrames.length} screenshots.`}
+                                            </strong>
+                                            {' '}This class has no enrolled embeddings of its own, so the run had
+                                            nothing class-specific to match the detected faces against. Faces are
+                                            boxed but left unlabelled; roll numbers appear once the class&apos;s
+                                            embeddings are available.
+                                        </div>
+                                    ) : null}
                                     {rollFilter ? (
                                         <div style={{
                                             display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
@@ -722,7 +756,14 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                                 {frame.filename}
                                             </div>
                                             <FrameStats frame={frame} />
-                                            {Array.isArray(frame.rolls) && frame.rolls.length > 0 ? (
+                                            {frame.identityLabels === false ? (
+                                                <div style={{
+                                                    fontSize: 10, fontWeight: 700, lineHeight: 1.4,
+                                                    color: theme.textMuted, marginTop: 8,
+                                                }}>
+                                                    Identities not shown — no embeddings for this class
+                                                </div>
+                                            ) : Array.isArray(frame.rolls) && frame.rolls.length > 0 ? (
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
                                                     {frame.rolls.map((roll) => (
                                                         <span
@@ -871,11 +912,17 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                     </div>
 
                                     <div style={{ display: 'grid', gap: 8, marginBottom: 12, fontSize: 12 }}>
-                                        {[
-                                            ['Detected', modalFrame.facesCount ?? '—', '#ffffff'],
-                                            ['Identified', modalFrame.identified ?? '—', '#86efac'],
-                                            ['Not identified', modalFrame.unidentified ?? '—', '#fcd34d'],
-                                        ].map(([label, value, color]) => (
+                                        {(identitiesShown
+                                            ? [
+                                                ['Detected', modalFrame.facesCount ?? '—', '#ffffff'],
+                                                ['Identified', modalFrame.identified ?? '—', '#86efac'],
+                                                ['Not identified', modalFrame.unidentified ?? '—', '#fcd34d'],
+                                            ]
+                                            // No matching ran against this class, so
+                                            // "identified: 0" would read as a result
+                                            // rather than as the absence of one.
+                                            : [['Detected', modalFrame.facesCount ?? '—', '#ffffff']]
+                                        ).map(([label, value, color]) => (
                                             <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
                                                 <span style={{ color: 'rgba(255,255,255,0.62)' }}>{label}</span>
                                                 <span style={{ fontWeight: 700, color }}>{value}</span>
@@ -883,8 +930,9 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                         ))}
                                     </div>
                                     <div style={{ fontSize: 10, lineHeight: 1.5, color: 'rgba(255,255,255,0.5)', marginBottom: 20 }}>
-                                        Not identified counts faces the detector found in this frame that could not be
-                                        matched to an enrolled roll number — not students absent from the class.
+                                        {identitiesShown
+                                            ? `Not identified counts faces the detector found in this frame that could not be matched to an enrolled roll number — not students absent from the class.`
+                                            : `Faces were detected and boxed, but none were matched: this class has no enrolled embeddings, so there was nothing class-specific to match them against.`}
                                     </div>
 
                                     {/* "Labelled", not "Present". A label means the
@@ -895,11 +943,25 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                         invited exactly the comparison that does
                                         not hold. */}
                                     <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.62)', marginBottom: 12 }}>
-                                        Roll Numbers Labelled ({(modalFrame.rolls || []).length})
+                                        {identitiesShown
+                                            ? `Roll Numbers Labelled (${(modalFrame.rolls || []).length})`
+                                            : 'Identities Not Shown'}
                                     </div>
 
                                     <div style={{ marginBottom: 20 }}>
-                                        {(modalFrame.rolls || []).length > 0 ? (
+                                        {!identitiesShown ? (
+                                            <div style={{ fontSize: 12, lineHeight: 1.6, color: 'rgba(255,255,255,0.62)' }}>
+                                                No roll numbers were drawn on this frame. This class has no
+                                                enrolled embeddings of its own
+                                                {modalFrame.enrollmentSource === 'institute'
+                                                    ? ', so the run fell back to matching against every student in the institute'
+                                                    : ''}
+                                                {' — '}
+                                                a different search from the one the attendance report is
+                                                built on. Labels are drawn only once this class&apos;s
+                                                embeddings are available.
+                                            </div>
+                                        ) : (modalFrame.rolls || []).length > 0 ? (
                                             <>
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                                                     {modalFrame.rolls.map((roll) => {

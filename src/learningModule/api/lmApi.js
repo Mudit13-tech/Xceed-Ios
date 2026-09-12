@@ -1080,6 +1080,9 @@ const lmApi = {
     request(`/classes/${classId}/notebook-attempts/${attemptId}/save`, { method: 'POST', body }),
   submitNotebookAttempt: (classId, attemptId, body) =>
     request(`/classes/${classId}/notebook-attempts/${attemptId}/submit`, { method: 'POST', body: body || {} }),
+  // type: 'fullscreen-exit' | 'paste-blocked'
+  reportNotebookIntegrity: (classId, attemptId, type) =>
+    request(`/classes/${classId}/notebook-attempts/${attemptId}/integrity`, { method: 'POST', body: { type } }),
   reopenNotebookAttempt: (classId, attemptId) =>
     request(`/classes/${classId}/notebook-attempts/${attemptId}/reopen`, { method: 'POST', body: {} }),
   gradeNotebookAttempt: (classId, attemptId, body) =>
@@ -1093,13 +1096,8 @@ const lmApi = {
     request(`/classes/${classId}/shorts/${shortId}`, { method: 'PATCH', body }),
   deleteShort: (classId, shortId) =>
     request(`/classes/${classId}/shorts/${shortId}`, { method: 'DELETE' }),
-  /* `email` overrides the deck's own emailOnStart setting for this one run;
-     omit it to present the way the deck is configured. */
-  presentShort: (classId, shortId, { email } = {}) =>
-    request(`/classes/${classId}/shorts/${shortId}/present`, {
-      method: 'POST',
-      body: typeof email === 'boolean' ? { email } : {},
-    }),
+  presentShort: (classId, shortId) =>
+    request(`/classes/${classId}/shorts/${shortId}/present`, { method: 'POST', body: {} }),
   listShortSessions: (classId, shortId) => request(`/classes/${classId}/shorts/${shortId}/sessions`),
   shortPresenterState: (classId, sessionId) =>
     request(`/classes/${classId}/short-sessions/${sessionId}/state`),

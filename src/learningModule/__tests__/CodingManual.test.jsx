@@ -63,6 +63,22 @@ describe('learningModule <CodingManual />', () => {
     expect(screen.getByText(/Hidden test cases evaluate locally inside the browser kernel/i)).toBeInTheDocument();
   });
 
+  it('explains downloading and importing notebook files with their test cases', () => {
+    render(<CodingManual />);
+    // The tab comes first; the overview also names it in its text.
+    fireEvent.click(screen.getAllByText('Download & Import')[0]);
+    expect(screen.getByText(/all hidden test cases/i)).toBeInTheDocument();
+    expect(screen.getByText(/As a new notebook — Coding tab → Import notebook file/)).toBeInTheDocument();
+  });
+
+  it('explains the full screen and paste rules, and that they are not proof', () => {
+    render(<CodingManual />);
+    fireEvent.click(screen.getByText('Full Screen & Paste'));
+    expect(screen.getByText('Students Write Code Only in Full Screen')).toBeInTheDocument();
+    expect(screen.getByText('Block Pasting into Code Cells')).toBeInTheDocument();
+    expect(screen.getByText(/A deterrent and a record, not a lock/)).toBeInTheDocument();
+  });
+
   it('renders standalone header when standalone prop is true', async () => {
     await React.act(async () => {
       render(<CodingManual standalone />);
