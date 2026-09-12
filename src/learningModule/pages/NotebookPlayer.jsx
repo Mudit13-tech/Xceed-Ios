@@ -14,7 +14,7 @@ import {
   useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
-import { FiFastForward, FiPlay, FiRefreshCw, FiSquare } from 'react-icons/fi';
+import { FiFastForward, FiMaximize, FiPlay, FiRefreshCw, FiSquare } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
 import { DeadlineCountdown, ErrorState, Loading } from '../components/common';
@@ -465,8 +465,15 @@ export default function NotebookPlayer() {
   };
 
   const submit = async () => {
+    // Some browsers drop full screen to show a confirm dialog. That exit is the
+    // page's doing, not the student's, so it is not recorded.
+    ignoreFullscreenExitRef.current = true;
     // eslint-disable-next-line no-alert
-    if (!window.confirm('Submit this notebook? You will not be able to edit it afterwards.')) return;
+    const confirmed = window.confirm('Submit this notebook? You will not be able to edit it afterwards.');
+    setTimeout(() => {
+      ignoreFullscreenExitRef.current = false;
+    }, 1000);
+    if (!confirmed) return;
     // Only once they have committed — cancelling out of the prompt must not
     // discard a save that was already due.
     clearTimeout(saveTimer.current);
@@ -479,7 +486,92 @@ export default function NotebookPlayer() {
     }
   };
 
+  /* ─────────────────────── full screen and paste rules ──────────────────── */
+
+  // Teachers opening the notebook to look at it are never held to either rule,
+  // and neither is a student once the work is handed in.
+  const enforcing = !isTeacher && !submitted && Boolean(attempt);
+  const requireFullscreen = enforcing && Boolean(notebook?.settings?.requireFullscreen);
+  const blockPaste = enforcing && Boolean(notebook?.settings?.blockPaste);
+  const fullscreenSupported = typeof document !== 'undefined' && Boolean(document.fullscreenEnabled);
+
+  const [isFullscreen, setIsFullscreen] = useState(
+    () => typeof document !== 'undefined' && Boolean(document.fullscreenElement),
+  );
+  const [fullscreenExits, setFullscreenExits] = useState(0);
+  const [leftFullscreen, setLeftFullscreen] = useState(false);
+
+  useEffect(() => {
+    setFullscreenExits(attempt?.integrity?.fullscreenExits || 0);
+  }, [attempt?._id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const report = useCallback(
+    (type) => {
+      if (!attempt?._id) return;
+      lmApi
+        .reportNotebookIntegrity(classId, attempt._id, type)
+        .then((counts) => {
+          if (type === 'fullscreen-exit' && counts?.recorded) setFullscreenExits(counts.fullscreenExits);
+        })
+        // A report that does not arrive must never get in the student's way.
+        .catch(() => {});
+    },
+    [attempt?._id, classId],
+  );
+
+  const requireFullscreenRef = useRef(requireFullscreen);
+  requireFullscreenRef.current = requireFullscreen;
+  const ignoreFullscreenExitRef = useRef(false);
+
+  useEffect(() => {
+    const onChange = () => {
+      const now = Boolean(document.fullscreenElement);
+      setIsFullscreen(now);
+      if (!now && requireFullscreenRef.current && !ignoreFullscreenExitRef.current) {
+        setLeftFullscreen(true);
+        setFullscreenExits((count) => count + 1);
+        report('fullscreen-exit');
+      }
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, [report]);
+
+  // Handing the work in lifts the requirement, so let them out of full screen
+  // rather than leaving them stuck in it with nothing left to do.
+  useEffect(() => {
+    if (submitted && document.fullscreenElement && notebook?.settings?.requireFullscreen && !isTeacher) {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  }, [submitted]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const enterFullscreen = () => {
+    document.documentElement.requestFullscreen?.().catch(() => {
+      toast({ status: 'error', title: 'This browser would not switch to full screen.', duration: 4000 });
+    });
+  };
+
+  // One report per burst: holding Ctrl+V should not send fifty.
+  const lastPasteReport = useRef(0);
+  const onPasteBlocked = useCallback(() => {
+    if (!toast.isActive('paste-blocked')) {
+      toast({
+        id: 'paste-blocked',
+        status: 'warning',
+        title: 'Pasting is turned off for this notebook',
+        description: 'Type your code instead. Your teacher can see blocked paste attempts.',
+        duration: 3500,
+      });
+    }
+    const now = Date.now();
+    if (now - lastPasteReport.current > 1500) {
+      lastPasteReport.current = now;
+      report('paste-blocked');
+    }
+  }, [report, toast]);
+
   const cardBg = useColorModeValue('white', 'gray.800');
+  const overlayBg = useColorModeValue('gray.50', 'gray.900');
 
   if (loading) return <Loading label="Opening the notebook…" />;
   if (error) return <ErrorState error={error} onRetry={load} />;
@@ -491,6 +583,61 @@ export default function NotebookPlayer() {
 
   return (
     <VStack align="stretch" spacing={4}>
+      {/* Covers the whole notebook, not just the editors: reading the question
+          and the output outside full screen is the same problem as typing there. */}
+      {requireFullscreen && fullscreenSupported && !isFullscreen && (
+        <Flex
+          position="fixed"
+          inset={0}
+          zIndex={1400}
+          bg={overlayBg}
+          align="center"
+          justify="center"
+          p={6}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="fullscreen-required-title"
+        >
+          <VStack spacing={4} maxW="520px" textAlign="center">
+            <Box fontSize="40px" color={leftFullscreen ? 'orange.400' : 'purple.400'}>
+              <FiMaximize />
+            </Box>
+            <Heading id="fullscreen-required-title" size="md">
+              {leftFullscreen ? 'You left full screen' : 'This notebook is done in full screen'}
+            </Heading>
+            <Text fontSize="sm" opacity={0.8}>
+              {leftFullscreen
+                ? 'Leaving full screen has been recorded, and your teacher can see it. Go back to full screen to carry on — your work is still here.'
+                : 'Your teacher has asked for this notebook to be done in full screen. Each time you leave full screen, it is recorded for your teacher.'}
+            </Text>
+            {fullscreenExits > 0 && (
+              <Badge colorScheme="orange" fontSize="xs" px={2} py={1}>
+                Left full screen {fullscreenExits} {fullscreenExits === 1 ? 'time' : 'times'}
+              </Badge>
+            )}
+            <Button colorScheme="purple" leftIcon={<FiMaximize />} onClick={enterFullscreen}>
+              {leftFullscreen ? 'Return to full screen' : 'Enter full screen'}
+            </Button>
+          </VStack>
+        </Flex>
+      )}
+
+      {requireFullscreen && !fullscreenSupported && (
+        <Alert status="warning" borderRadius="md" fontSize="sm">
+          <AlertIcon />
+          This notebook is meant to be done in full screen, but this browser can&apos;t switch to it. Use a computer
+          with Chrome, Edge or Firefox if you can.
+        </Alert>
+      )}
+
+      {blockPaste && (
+        <Alert status="info" borderRadius="md" fontSize="sm" py={2}>
+          <AlertIcon />
+          Pasting into code cells is turned off for this notebook — type your code. The Input boxes still accept
+          pasted input.
+        </Alert>
+      )}
+
       <Flex gap={3} wrap="wrap" align="flex-start">
         <Box flex="1" minW="220px">
           <Heading size="md">{notebook.title}</Heading>
@@ -638,6 +785,8 @@ export default function NotebookPlayer() {
               language={language}
               readOnly={submitted}
               testCases={cellTestCases[String(cell.sourceCellId)] || cell.testCases || []}
+              blockPaste={blockPaste}
+              onPasteBlocked={onPasteBlocked}
               testing={busyTestKey === cell.key}
               running={busyCellId === cell.key}
               canRun={status === 'ready' && !busyCellId && !busyTestKey}

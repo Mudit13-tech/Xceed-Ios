@@ -7,18 +7,21 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * start, restart, runCell, stop }` — so a page picks a kernel by language and
  * otherwise cannot tell which one it has. `useNotebookKernel` is the picker.
  *
- * The toolchain (clang, wasm-ld and a WASI sysroot, ~52MB) is fetched from a
- * CDN at first use rather than bundled, for the same reason Pyodide is: putting
- * it in the app bundle would slow every page in the platform down to pay for
- * one. `VITE_CLANG_URL` points it at a self-hosted mirror for a campus network
- * that blocks the CDN, or for offline use.
+ * The toolchain (clang, wasm-ld and a WASI sysroot, ~52MB) is fetched at first
+ * use rather than bundled, for the same reason Pyodide is: putting it in the app
+ * bundle would slow every page in the platform down to pay for one. It is served
+ * from this app's own origin, mirrored into `public/clang/` at build time by
+ * `scripts/fetch-runtimes.mjs`; `VITE_CLANG_URL` overrides that.
  *
  * Stopping a run means terminating the worker, exactly as it does for Python —
  * a `while (1) {}` in a compiled program cannot be interrupted cooperatively,
  * so Stop is a kernel restart and the UI says so.
  */
 
-const CLANG_URL = import.meta.env.VITE_CLANG_URL || 'https://runno.dev/langs/';
+// Mirrored into public/clang/ at build time, for the same reason Pyodide is:
+// runno.dev is one small host with no CDN behind it, and a timetabled lab should
+// not depend on anyone else's uptime. `VITE_CLANG_URL` overrides it.
+const CLANG_URL = import.meta.env.VITE_CLANG_URL || `${import.meta.env.BASE_URL}clang/`;
 
 export default function useCKernel() {
   // 'idle' until something actually needs C — a notebook that is only being

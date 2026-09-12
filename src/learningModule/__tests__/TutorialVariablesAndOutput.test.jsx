@@ -294,6 +294,42 @@ describe('adding a question', () => {
   });
 });
 
+describe('the question type dropdown', () => {
+  it('shows the type a question was saved with, and follows a change', async () => {
+    getTutorial.mockResolvedValue({
+      _id: 't1',
+      title: 'Units',
+      description: '',
+      settings: { attemptsAllowed: 0, newValuesOnRetry: true, showSolutionAfterSubmit: true, showHints: true },
+      questions: [
+        {
+          _id: 'q1',
+          type: 'mcq',
+          prompt: 'Unit of resistance?',
+          options: ['Volt', 'Ohm'],
+          correctAnswers: ['1'],
+          marks: 1,
+          variables: [],
+          answers: [],
+          parts: [],
+          tables: [],
+          difficulty: 'medium',
+        },
+      ],
+    });
+    const { default: TutorialEditor } = await import('../pages/TutorialEditor');
+    renderWithProviders(<TutorialEditor />);
+
+    const select = await screen.findByRole('combobox', { name: 'Question type' });
+    expect(select).toHaveValue('mcq');
+    expect(screen.getByRole('option', { name: 'Multiple choice' }).selected).toBe(true);
+
+    await userEvent.selectOptions(select, 'numerical');
+    expect(select).toHaveValue('numerical');
+    expect(screen.getByRole('option', { name: 'Numerical' }).selected).toBe(true);
+  });
+});
+
 describe('formatAnswerValue', () => {
   it('rounds to the decimal places the teacher asked for, and only those', () => {
     expect(formatAnswerValue(29.9712, 2)).toBe('29.97');

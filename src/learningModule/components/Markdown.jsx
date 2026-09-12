@@ -139,15 +139,24 @@ function markdownToHtml(markdown) {
     closeTable();
   };
 
+  // A fenced block's lines are gathered and emitted as one string. Pushed one
+  // by one, each line got its own newline *and* the join's, so every code block
+  // rendered double-spaced.
+  let codeLines = [];
+  const flushCode = () => {
+    out.push(`<pre><code>${codeLines.map(escapeHtml).join('\n')}</code></pre>`);
+    codeLines = [];
+  };
+
   for (const line of lines) {
     if (/^```/.test(line.trim())) {
       closeBlocks();
-      out.push(inCodeBlock ? '</code></pre>' : '<pre><code>');
+      if (inCodeBlock) flushCode();
       inCodeBlock = !inCodeBlock;
       continue;
     }
     if (inCodeBlock) {
-      out.push(`${escapeHtml(line)}\n`);
+      codeLines.push(line);
       continue;
     }
 
@@ -228,7 +237,7 @@ function markdownToHtml(markdown) {
   }
 
   closeBlocks();
-  if (inCodeBlock) out.push('</code></pre>');
+  if (inCodeBlock) flushCode();
   return out.join('\n');
 }
 

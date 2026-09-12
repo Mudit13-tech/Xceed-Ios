@@ -123,10 +123,14 @@ export default function PaperPreviewModal({ isOpen, onClose, classId, kind = 'tu
                       ))}
                     </HStack>
                     <HStack fontSize="xs" mt={1} wrap="wrap">
+                      {/* textTransform on the badges below: a Badge uppercases its
+                          content by default, which is right for a status word and
+                          wrong for a value — it turns the imaginary unit into "I"
+                          and a "mA" unit into "MA", nine orders of magnitude out. */}
                       {(question.expected || [])
                         .filter((expected) => (expected.partIndex ?? null) === null)
                         .map((expected) => (
-                          <Badge key={expected.key} colorScheme={expected.error ? 'red' : 'green'}>
+                          <Badge key={expected.key} colorScheme={expected.error ? 'red' : 'green'} textTransform="none">
                             {expected.label}:{' '}
                             {expected.error
                               ? 'failed'
@@ -160,7 +164,7 @@ export default function PaperPreviewModal({ isOpen, onClose, classId, kind = 'tu
                           {(question.expected || [])
                             .filter((expected) => expected.partIndex === partIndex)
                             .map((expected) => (
-                              <Badge key={expected.key} colorScheme={expected.error ? 'red' : 'green'}>
+                              <Badge key={expected.key} colorScheme={expected.error ? 'red' : 'green'} textTransform="none">
                                 {expected.label}:{' '}
                                 {expected.error
                                   ? 'failed'

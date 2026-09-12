@@ -3,11 +3,22 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 /**
  * Owns the Python kernel for a notebook page.
  *
- * The runtime is fetched from a CDN at first use rather than bundled: the
- * Pyodide core is several megabytes of WebAssembly, and putting that in the app
- * bundle would slow every page in the platform down to pay for one. The URL is
- * an env var so it can be pointed at a self-hosted copy for a campus network
- * that blocks the CDN, or for offline use.
+ * The runtime is fetched at first use rather than bundled: it is hundreds of
+ * megabytes of WebAssembly, and putting that in the app bundle would slow every
+ * page in the platform down to pay for one.
+ *
+ * **It is served from this app's own origin**, mirrored into `public/pyodide/`
+ * at build time by `scripts/fetch-runtimes.mjs`. It used to come from jsDelivr,
+ * and that ended exactly as you would expect — a lab full of students looking at
+ *
+ *     Failed to execute 'importScripts' on 'WorkerGlobalScope':
+ *     The script at 'https://cdn.jsdelivr.net/pyodide/…' failed to load.
+ *
+ * because several Indian ISPs block jsDelivr outright. Same-origin, there is
+ * nothing left to block: a student who can load the page can load the kernel.
+ *
+ * `VITE_PYODIDE_URL` still overrides it — for pointing a development build at
+ * the CDN rather than downloading 440 MB, or at a campus mirror.
  *
  * Stopping a run means terminating the worker. There is no gentler option:
  * Pyodide's cooperative interrupt needs SharedArrayBuffer, which needs
@@ -15,8 +26,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * restart, and the UI says so rather than pretending otherwise.
  */
 
+// BASE_URL keeps this right when the app is served from a sub-path. The
+// trailing slash is required — Pyodide joins its own filenames onto this.
 const PYODIDE_URL =
-  import.meta.env.VITE_PYODIDE_URL || 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/';
+  import.meta.env.VITE_PYODIDE_URL || `${import.meta.env.BASE_URL}pyodide/`;
 
 /**
  * @param {string[]} [packages] PyPI names to install with micropip. Only needed

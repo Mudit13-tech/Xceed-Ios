@@ -25,6 +25,13 @@ describe('learningModule <Markdown />', () => {
     expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
   });
 
+  it('keeps a fenced code block single-spaced, with its blank lines and HTML escaped', () => {
+    const { container } = render(<Markdown>{'```\nInput:\n5\n\nOutput:\n<3>\n```'}</Markdown>);
+    // Each line once, with only the blank line the author wrote — each line used
+    // to carry two newlines, so every block rendered double-spaced.
+    expect(container.querySelector('pre code').textContent).toBe('Input:\n5\n\nOutput:\n<3>');
+  });
+
   it('renders both list styles', () => {
     const { container } = render(<Markdown>{'- one\n- two\n\n1. first\n2. second'}</Markdown>);
 

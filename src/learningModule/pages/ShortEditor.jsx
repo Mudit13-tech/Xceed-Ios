@@ -34,7 +34,6 @@ import { ErrorState, Loading, SectionCard } from '../components/common';
 import RichTextEditor from '../components/RichTextEditor';
 import { isRichTextEmpty } from '../richTextUtils';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
-import StartShortModal from '../components/StartShortModal';
 import { Link as RouterLink } from 'react-router-dom';
 import { LmIcon } from '../components/Icon';
 
@@ -584,9 +583,6 @@ export default function ShortEditor() {
   const [saving, setSaving] = useState(false);
   const [serverProblems, setServerProblems] = useState([]);
   const [importing, setImporting] = useState(false);
-  // Open while the mail question is on screen, between "Save & present" and the
-  // session actually starting.
-  const [askingEmail, setAskingEmail] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -620,13 +616,11 @@ export default function ShortEditor() {
     });
 
   /**
-   * @param {{ thenPresent?: boolean, email?: boolean }} options `email` is the
-   *   teacher's answer to the launch-mail question, and is only meaningful with
-   *   `thenPresent`. It is always passed explicitly from here — presenting must
-   *   never mail the class without having asked.
+   * @param {{ thenPresent?: boolean }} options With `thenPresent`, the session
+   *   starts straight after the save; the class is notified in-app only.
    * @returns {Promise<boolean>} whether the deck actually reached the server.
    */
-  const save = async ({ thenPresent = false, email } = {}) => {
+  const save = async ({ thenPresent = false } = {}) => {
     if (problems.length) {
       toast({ status: 'warning', title: problems[0] });
       return false;
@@ -650,11 +644,10 @@ export default function ShortEditor() {
       toast({ status: 'success', title: 'Saved' });
 
       if (thenPresent) {
-        const { session, emailed } = await lmApi.presentShort(classId, shortId, { email });
+        const { session } = await lmApi.presentShort(classId, shortId);
         toast({
           status: 'success',
-          title: emailed ? 'Live — the class has been emailed' : 'Live — no email sent',
-          description: emailed ? undefined : 'The class still gets the in-app notification.',
+          title: 'Live — the class has been notified in-app',
           duration: 3000,
         });
         navigate(`/learning/class/${classId}/short/${shortId}/present/${session.sessionId}`);
@@ -668,7 +661,6 @@ export default function ShortEditor() {
       return false;
     } finally {
       setSaving(false);
-      setAskingEmail(false);
     }
   };
 
@@ -699,18 +691,10 @@ export default function ShortEditor() {
         >
           Preview
         </Button>
-        {/* The mail question first — the deck's setting picks the answer this
-            dialog opens on, it does not decide for the teacher. */}
         <Button
           size="sm"
           colorScheme="purple"
-          onClick={() => {
-            if (problems.length) {
-              toast({ status: 'warning', title: problems[0] });
-              return;
-            }
-            setAskingEmail(true);
-          }}
+          onClick={() => save({ thenPresent: true })}
           isLoading={saving}
         >
           Save &amp; present
@@ -764,12 +748,6 @@ export default function ShortEditor() {
               ['allowChangeAnswer', 'Allow changing an answer', 'While the slide is still open.'],
               ['allowLateJoin', 'Allow joining mid-deck', 'Off means only slide 1 accepts new joiners.'],
               ['autoRevealOnClose', 'Reveal the answer when I close a slide', ''],
-              [
-                'emailOnStart',
-                'Email the class when I start it',
-                'The join code goes out by mail as well as in-app. Turn it off for a rehearsal, or when the room is already in front of you.',
-                true,
-              ],
               ['graded', 'Send scores to the gradebook', 'Creates classwork when the session ends.'],
             ].map(([key, label, hint, defaultOn]) => (
               <FormControl key={key} display="flex" alignItems="flex-start" gap={3}>
@@ -853,14 +831,6 @@ export default function ShortEditor() {
         targetId={shortId}
         partLabel="slides"
         onImported={load}
-      />
-
-      <StartShortModal
-        isOpen={askingEmail}
-        short={short}
-        isBusy={saving}
-        onClose={() => setAskingEmail(false)}
-        onConfirm={(email) => save({ thenPresent: true, email })}
       />
     </VStack>
   );

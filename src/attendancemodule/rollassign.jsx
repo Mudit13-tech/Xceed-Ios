@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Fragment } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import getEnvironment from '../getenvironment';
@@ -102,6 +102,14 @@ const RESPONSIVE_CSS = `
     @media (max-width: 420px) {
         .roll-modal-actions { grid-template-columns: 1fr; }
         .roll-page .ams-tab { padding-left: 16px; padding-right: 16px; }
+    }
+
+    @keyframes rollRefreshPulse { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+    .roll-refresh-dot { animation: rollRefreshPulse 1s ease-in-out infinite; }
+    .roll-skeleton { animation: rollRefreshPulse 1.4s ease-in-out infinite; }
+
+    @media (prefers-reduced-motion: reduce) {
+        .roll-refresh-dot, .roll-skeleton { animation: none; opacity: 0.7; }
     }
 `;
 
@@ -207,6 +215,7 @@ export default function RollAssign({ fixedDepartment = '' }) {
     }, [activeTab]);
 
     const [loading,       setLoading]       = useState(false);
+    const [refreshing,    setRefreshing]    = useState(false);
     const [matching,      setMatching]      = useState(false);
     const [matchDone,     setMatchDone]     = useState(false);
     const [matchProgress, setMatchProgress] = useState(null);
@@ -268,9 +277,11 @@ export default function RollAssign({ fixedDepartment = '' }) {
     const flagErpPhotoUrl = (filename) =>
         `${FLAG_BASE}/erp-photo/${encodeURIComponent(batchName)}/${encodeURIComponent(filename)}`;
 
-    const loadClusters = useCallback(async () => {
+    // `silent` keeps the already-rendered folders mounted while data is refetched,
+    // so post-approval refreshes don't blank the page out.
+    const loadClusters = useCallback(async ({ silent = false } = {}) => {
         if (!batchName) return;
-        setLoading(true);
+        if (silent) setRefreshing(true); else setLoading(true);
         setMatchError(null);
         try {
             const [clusterRes, matchRes, studentsRes] = await Promise.all([
@@ -328,9 +339,11 @@ export default function RollAssign({ fixedDepartment = '' }) {
         } catch (err) {
             showToast(err.message, 'error');
         } finally {
-            setLoading(false);
+            if (silent) setRefreshing(false); else setLoading(false);
         }
     }, [batchName]);
+
+    const refreshClusters = useCallback(() => loadClusters({ silent: true }), [loadClusters]);
 
     useEffect(() => { loadClusters(); }, [loadClusters]);
 
@@ -340,11 +353,11 @@ export default function RollAssign({ fixedDepartment = '' }) {
         try {
             ch = new BroadcastChannel('attendance_refresh');
             ch.onmessage = (e) => {
-                if (e.data?.type === 'refresh' && e.data?.batch === batchName) loadClusters();
+                if (e.data?.type === 'refresh' && e.data?.batch === batchName) refreshClusters();
             };
         } catch (_) {}
         return () => { try { ch?.close(); } catch (_) {} };
-    }, [batchName, loadClusters]);
+    }, [batchName, refreshClusters]);
 
     useEffect(() => {
         if (!batchName) { setErpStatus({ loading: false, available: null, pklName: null, studentCount: null, studentCountSource: null }); return; }
@@ -428,13 +441,13 @@ export default function RollAssign({ fixedDepartment = '' }) {
             const ad = await ar.json();
             if (!ar.ok) showToast(`⚠ Matching saved, but rename failed: ${ad.error}`, 'warning');
             else showToast(`✓ ${ad.renamed} clusters auto-assigned` + (ad.unmatched ? `, ${ad.unmatched} unmatched` : '') + (ad.conflicts ? `, ${ad.conflicts} conflicts` : ''));
-            await loadClusters();
+            await refreshClusters();
         }
     } catch (err) {
         setMatchError(err.message); showToast(err.message, 'error');
-        setTimeout(() => loadClusters(), 500);
+        setTimeout(() => refreshClusters(), 500);
     } finally { setMatching(false); setMatchProgress(null); }
-}, [batchName, loadClusters]);
+}, [batchName, refreshClusters]);
 
     const reviewQueue = [...pendingReview, ...mergedItems, ...flaggedItems];
 
@@ -486,7 +499,7 @@ export default function RollAssign({ fixedDepartment = '' }) {
                 setFlagModal(nextItem); setFlagRollInput('');
             } else { setFlagModal(null); }
             showToast(data.rollNo, 'success');
-            await loadClusters();
+            refreshClusters();
         } catch (err) { showToast(err.message, 'error'); }
         finally { setSaving(null); }
     };
@@ -631,7 +644,7 @@ export default function RollAssign({ fixedDepartment = '' }) {
             }
             showToast(alreadyApproved ? `Merged into ${trimmed}` : (data.rollNo || trimmed), 'success');
             setModal(null);
-            await loadClusters();
+            refreshClusters();
         } catch (err) { showToast(err.message, 'error'); }
         finally { setSaving(null); }
     };
@@ -686,7 +699,7 @@ export default function RollAssign({ fixedDepartment = '' }) {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed');
             showToast(`Auto-assigned ${data.assigned} high-confidence clusters`);
-            await loadClusters();
+            refreshClusters();
         } catch (err) { showToast(err.message, 'error'); }
         finally { setApprovingAll(false); }
     };
@@ -813,7 +826,7 @@ Click Cancel to abort.`
             if (!res.ok) throw new Error(data.error || 'Failed');
             showToast(`Roll no updated to ${trimmed}`);
             setEditRollModal(null);
-            await loadClusters();
+            refreshClusters();
         } catch (err) { showToast(err.message, 'error'); }
         finally { setEditRollSaving(false); }
     };
@@ -912,9 +925,9 @@ Click Cancel to abort.`
                 <GTModal
                     rollNo={gtModal.rollNo}
                     batchName={batchName}
-                    onClose={() => { setGtModal(null); loadClusters(); }}
+                    onClose={() => { setGtModal(null); refreshClusters(); }}
                     showToast={showToast}
-                    onMoved={loadClusters}
+                    onMoved={refreshClusters}
                 />,
                 document.body
             )}
@@ -1087,6 +1100,13 @@ Click Cancel to abort.`
             </div>
 
             {loading && <div style={{ ...styles.card, textAlign: 'center', padding: '40px 20px', color: theme.textMuted }}>Loading folders...</div>}
+
+            {!loading && refreshing && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 7, margin: '10px 2px 0', fontSize: '11px', color: theme.textMuted }}>
+                    <span className="roll-refresh-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: theme.accent, display: 'inline-block' }} />
+                    Refreshing folders…
+                </div>
+            )}
 
             {!loading && batchName && (
                 <>
@@ -2370,6 +2390,7 @@ function ClusterCard({ item, batchName, photoUrl, erpPhotoUrl, onClick, isAssign
 // CHANGE 4+9: GTModal with delete photo + move photo (embedding ↔ backup) tabs
 export function GTModal({ rollNo, batchName, onClose, showToast, onMoved, embedded = false }) {
     const [loading,    setLoading]    = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [student,    setStudent]    = useState(null);
     const [busy,       setBusy]       = useState(null);
     const [doneSaving, setDoneSaving] = useState(false);
@@ -2379,19 +2400,23 @@ export function GTModal({ rollNo, batchName, onClose, showToast, onMoved, embedd
         setSelectedPhotos(prev => ({ ...prev, [filename]: !prev[filename] }));
     };
 
-    const fetchStudent = async () => {
-        setLoading(true);
+    // Once photos are on screen, later fetches refresh in place rather than
+    // tearing the body down — only the very first load shows the skeleton.
+    const hasLoadedRef = useRef(false);
+
+    const fetchStudent = async ({ silent = false } = {}) => {
+        if (silent) setRefreshing(true); else setLoading(true);
         try {
             const res  = await fetch(`${GT_BASE}/batches/${encodeURIComponent(batchName)}/students`);
             const data = await res.json();
             const found = (data.students || []).find(s => s.rollNo === rollNo);
-            if (found) setStudent(found);
+            if (found) { setStudent(found); hasLoadedRef.current = true; }
             else showToast('Student not found', 'error');
         } catch { showToast('Failed to load', 'error'); }
-        finally { setLoading(false); }
+        finally { if (silent) setRefreshing(false); else setLoading(false); }
     };
 
-    useEffect(() => { fetchStudent(); }, [rollNo, batchName]);
+    useEffect(() => { fetchStudent({ silent: hasLoadedRef.current }); }, [rollNo, batchName]);
 
    const movePhoto = (filename, currentType) => {
         setStudent(prev => {
@@ -2636,6 +2661,24 @@ export function GTModal({ rollNo, batchName, onClose, showToast, onMoved, embedd
         );
     };
 
+    // Mirrors SectionRow's heading + grid so the modal opens at roughly its
+    // final height instead of a short shell that snaps taller once photos land.
+    const SkeletonRow = ({ label, color, bg, tiles }) => (
+        <div style={{ marginBottom: 20 }}>
+            <div className="roll-section-heading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 8, borderBottom: `1px solid ${color}33` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+                    <span className="roll-skeleton" style={{ display: 'inline-block', width: 22, height: 16, borderRadius: 99, background: bg }} />
+                </div>
+            </div>
+            <div className="roll-photo-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
+                {Array.from({ length: tiles }).map((_, i) => (
+                    <div key={i} className="roll-skeleton" style={{ aspectRatio: '1', borderRadius: 8, background: theme.bg, border: `1.5px solid ${theme.border}` }} />
+                ))}
+            </div>
+        </div>
+    );
+
     const modalContent = (
         <div className="roll-modal-shell" style={{ background: theme.surface, border: embedded ? 'none' : `1px solid ${theme.border}`, borderRadius: embedded ? 0 : 12, width: '100%', height: embedded ? '100%' : 'auto', maxWidth: embedded ? '100%' : 960, maxHeight: embedded ? '100%' : '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
@@ -2643,6 +2686,7 @@ export function GTModal({ rollNo, batchName, onClose, showToast, onMoved, embedd
                 <div className="roll-modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: `1px solid ${theme.border}`, flexShrink: 0 }}>
                     <div className="roll-modal-header-main" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <span style={{ fontWeight: 700, fontSize: '15px' }}>Ground Truth — <span style={{ fontFamily: theme.fontMono }}>{rollNo}</span></span>
+                        {refreshing && <span className="roll-refresh-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: theme.accent, display: 'inline-block' }} />}
                         {student && (
                             <div style={{ display: 'flex', gap: 6 }}>
                                 <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: 99, background: theme.successDim, color: theme.success, fontWeight: 700 }}>{embCount} embedding</span>
@@ -2657,9 +2701,18 @@ export function GTModal({ rollNo, batchName, onClose, showToast, onMoved, embedd
                 {/* Body */}
                 <div className="roll-modal-body" style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'grid', gridTemplateColumns: '1fr 220px', gap: 20 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        {loading && <div style={{ textAlign: 'center', padding: '40px 0', color: theme.textMuted }}>Loading…</div>}
+                        {loading && (
+                            <>
+                                <SkeletonRow label="Embedding" color={theme.success} bg={theme.successDim} tiles={3} />
+                                <SkeletonRow label="Backup"    color={theme.warning} bg={theme.warningDim} tiles={6} />
+                            </>
+                        )}
 
-                        {!loading && totalCount === 0 && (
+                        {!loading && !student && (
+                            <div style={{ textAlign: 'center', padding: '40px 0', color: theme.textMuted }}>Could not load photos for this student</div>
+                        )}
+
+                        {!loading && student && totalCount === 0 && (
                             <div style={{ textAlign: 'center', padding: '40px 0', color: theme.textMuted }}>No photos found</div>
                         )}
 

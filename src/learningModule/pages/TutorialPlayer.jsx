@@ -447,7 +447,12 @@ export default function TutorialPlayer() {
               <>
                 Your figures are unique to you — comparing final answers with a classmate will not help, but
                 comparing <em>method</em> will. You may type an expression such as{' '}
-                <Code fontSize="xs">2*pi*3</Code> instead of a decimal.
+                <Code fontSize="xs">2*pi*3</Code> instead of a decimal.{' '}
+                {/* Written out because there is no way to discover it: ∠ is the form the
+                    teacher's own reference shows, and it is on no keyboard a student has. */}
+                A complex answer goes in as <Code fontSize="xs">3+4i</Code> (<Code fontSize="xs">j</Code>{' '}
+                works too) or in polar form as <Code fontSize="xs">polar(5, 45)</Code> — magnitude, then
+                angle in degrees.
               </>
             )}
             {isLive && ' Try your answer as many times as you like — a green tick means you have it right.'}

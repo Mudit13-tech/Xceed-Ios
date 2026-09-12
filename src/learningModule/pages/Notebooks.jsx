@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Badge,
@@ -9,18 +9,23 @@ import {
   Heading,
   Menu,
   MenuButton,
+  MenuDivider,
+  MenuGroup,
   MenuItem,
   MenuList,
   Text,
+  Tooltip,
   VStack,
   useToast,
 } from '@chakra-ui/react';
-import { FiChevronDown } from 'react-icons/fi';
+import { FiChevronDown, FiDownload, FiUpload } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
 import { DeadlineCountdown, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import { formatDate, relativeTime } from '../format';
 import { LmIcon } from '../components/Icon';
+import { SAMPLE_NOTEBOOK_CELLS } from '../sampleNotebook';
+import { countTestCases, downloadNotebookFile, parseNotebookFile } from '../notebookTransfer';
 
 /**
  * The class's coding notebooks.
@@ -83,6 +88,16 @@ const STARTER_CELLS = {
   ],
 };
 
+// The sample is found again by title, so these double as its identity.
+const SAMPLE_TITLE = {
+  python: 'Sample: setting up a tested exercise (Python)',
+  c: 'Sample: setting up a tested exercise (C)',
+};
+
+const SAMPLE_DESCRIPTION =
+  'A worked example for teachers: starter code, sample input, a hidden setup cell, helper functions and '
+  + 'hidden test cases. Read the teacher guide cell, then copy the pattern into your own notebooks.';
+
 const LANGUAGE_META = {
   python: ['green', 'Python'],
   c: ['blue', 'C'],
@@ -96,6 +111,7 @@ export default function Notebooks() {
   const [busy, setBusy] = useState('');
   const navigate = useNavigate();
   const toast = useToast();
+  const importInputRef = useRef(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -112,22 +128,91 @@ export default function Notebooks() {
     load();
   }, [load]);
 
-  const create = async (language = 'python') => {
-    setBusy('new');
+  const create = async (language = 'python', { sample = false } = {}) => {
+    setBusy(sample ? `sample-${language}` : 'new');
     try {
       const created = await lmApi.createNotebook(classId, {
-        title: language === 'c' ? 'Untitled C notebook' : 'Untitled notebook',
+        title: sample
+          ? SAMPLE_TITLE[language]
+          : language === 'c' ? 'Untitled C notebook' : 'Untitled notebook',
+        description: sample ? SAMPLE_DESCRIPTION : '',
         // Fixed at creation. The server refuses to change it once the notebook
         // is published, because students' attempts hold code written for the
         // kernel it had at the time.
         language,
-        cells: STARTER_CELLS[language] || STARTER_CELLS.python,
+        cells: sample
+          ? SAMPLE_NOTEBOOK_CELLS[language] || SAMPLE_NOTEBOOK_CELLS.python
+          : STARTER_CELLS[language] || STARTER_CELLS.python,
       });
       navigate(`/learning/class/${classId}/notebook/${created._id}/edit`);
     } catch (err) {
       toast({ status: 'error', title: err.message });
     } finally {
       setBusy('');
+    }
+  };
+
+  /**
+   * Opens the class's copy of the sample, making one the first time. Reusing
+   * it means pressing the button again does not pile up identical drafts.
+   */
+  const openSample = (language) => {
+    const existing = notebooks.find(
+      (notebook) => notebook.title === SAMPLE_TITLE[language] && (notebook.language || 'python') === language,
+    );
+    if (existing) navigate(`/learning/class/${classId}/notebook/${existing._id}/edit`);
+    else create(language, { sample: true });
+  };
+
+  /**
+   * Creates a notebook from a file another teacher downloaded — cells, hidden
+   * test cases, settings and packages all as they were. Always a draft, so
+   * nothing reaches this class until the teacher has looked it over.
+   */
+  const importNotebookFile = async (file) => {
+    if (!file) return;
+    setBusy('import');
+    try {
+      const { notebook, cells, truncated } = parseNotebookFile(await file.text());
+      // A deadline from another class that has already passed would mark every
+      // submission here late, so only a future one comes across.
+      const dueDate = notebook.dueDate && new Date(notebook.dueDate) > new Date() ? notebook.dueDate : null;
+      const created = await lmApi.createNotebook(classId, {
+        title: notebook.title,
+        description: notebook.description,
+        language: notebook.language,
+        packages: notebook.packages,
+        colabUrl: notebook.colabUrl,
+        settings: notebook.settings,
+        dueDate,
+        cells,
+      });
+      const tests = countTestCases(cells);
+      toast({
+        status: 'success',
+        title: `Imported "${notebook.title}" as a draft`,
+        description: [
+          `${cells.length} ${cells.length === 1 ? 'cell' : 'cells'} and ${tests} hidden test ${tests === 1 ? 'case' : 'cases'}, with the settings.`,
+          notebook.dueDate && !dueDate ? 'Its deadline had passed, so set a new one.' : '',
+          truncated ? 'Only the first 200 cells fit.' : '',
+        ].filter(Boolean).join(' '),
+        duration: 7000,
+      });
+      navigate(`/learning/class/${classId}/notebook/${created._id}/edit`);
+    } catch (err) {
+      toast({ status: 'error', title: 'Could not import that file.', description: err.message });
+    } finally {
+      setBusy('');
+    }
+  };
+
+  /** The list has no cells in it, so the full notebook is fetched first. */
+  const downloadNotebook = async (summary) => {
+    try {
+      const full = await lmApi.getNotebook(classId, summary._id);
+      downloadNotebookFile(full, [...(full.cells || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+    } catch (err) {
+      toast({ status: 'error', title: 'Could not download that notebook.', description: err.message });
     }
   };
 
@@ -177,6 +262,38 @@ export default function Notebooks() {
           </Button>
         )}
         {isTeacher && (
+          <>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".json,application/json"
+              hidden
+              data-testid="notebook-file-import"
+              onChange={(event) => {
+                importNotebookFile(event.target.files?.[0]);
+                // Cleared so choosing the same file again still fires.
+                event.target.value = '';
+              }}
+            />
+            <Tooltip
+              label="Add a notebook someone downloaded, with its hidden test cases and settings, as a new draft"
+              hasArrow
+            >
+              <Button
+                size="sm"
+                variant="outline"
+                colorScheme="purple"
+                leftIcon={<FiUpload />}
+                isLoading={busy === 'import'}
+                isDisabled={Boolean(busy)}
+                onClick={() => importInputRef.current?.click()}
+              >
+                Import notebook file
+              </Button>
+            </Tooltip>
+          </>
+        )}
+        {isTeacher && (
           <Menu>
             <MenuButton
               as={Button}
@@ -188,12 +305,62 @@ export default function Notebooks() {
               New notebook
             </MenuButton>
             <MenuList>
-              <MenuItem onClick={() => create('python')}>Python notebook</MenuItem>
-              <MenuItem onClick={() => create('c')}>C notebook</MenuItem>
+              <MenuGroup title="Blank">
+                <MenuItem onClick={() => create('python')}>Python notebook</MenuItem>
+                <MenuItem onClick={() => create('c')}>C notebook</MenuItem>
+              </MenuGroup>
+              <MenuDivider />
+              <MenuGroup title="Sample with hidden test cases">
+                <MenuItem onClick={() => openSample('python')}>Python sample</MenuItem>
+                <MenuItem onClick={() => openSample('c')}>C sample</MenuItem>
+              </MenuGroup>
             </MenuList>
           </Menu>
         )}
       </Flex>
+
+      {/* Always on the teacher's Coding tab, so how to set up a tested exercise
+          is one click away rather than buried in the manual. */}
+      {isTeacher && (
+        <SectionCard>
+          <Flex gap={4} wrap="wrap" align="center">
+            <Box flex="1" minW="240px">
+              <HStack spacing={2} mb={1}>
+                <Text fontWeight="700">📘 Sample notebook: how to set up a coding exercise</Text>
+                <Badge colorScheme="purple">for teachers</Badge>
+              </HStack>
+              <Text fontSize="sm" opacity={0.75}>
+                A ready-made exercise with two questions. It shows what to write in a cell and what to leave
+                for students, how a test case&apos;s input reaches <code>input()</code> or <code>scanf</code>, how
+                the output is checked, and how to put helper functions in the same cell. Opens as a draft that
+                students can&apos;t see.
+              </Text>
+            </Box>
+            <HStack spacing={2} wrap="wrap">
+              <Button
+                size="sm"
+                colorScheme="purple"
+                variant="outline"
+                isLoading={busy === 'sample-python'}
+                isDisabled={Boolean(busy)}
+                onClick={() => openSample('python')}
+              >
+                Open Python sample
+              </Button>
+              <Button
+                size="sm"
+                colorScheme="purple"
+                variant="outline"
+                isLoading={busy === 'sample-c'}
+                isDisabled={Boolean(busy)}
+                onClick={() => openSample('c')}
+              >
+                Open C sample
+              </Button>
+            </HStack>
+          </Flex>
+        </SectionCard>
+      )}
 
       {notebooks.length === 0 ? (
         <EmptyState
@@ -296,6 +463,11 @@ export default function Notebooks() {
                         >
                           Edit
                         </Button>
+                        <Tooltip label="Save as a file with its hidden test cases and settings, to import into another class" hasArrow>
+                          <Button size="sm" variant="ghost" leftIcon={<FiDownload />} onClick={() => downloadNotebook(notebook)}>
+                            Download
+                          </Button>
+                        </Tooltip>
                         <Button size="sm" variant="ghost" onClick={() => togglePublish(notebook)}>
                           {notebook.published ? 'Unpublish' : 'Publish'}
                         </Button>
@@ -389,7 +561,12 @@ export default function Notebooks() {
                               >
                                 Edit
                               </Button>
-                              <Button size="sm" variant="ghost" onClick={() => togglePublish(notebook)}>
+                              <Tooltip label="Save as a file with its hidden test cases and settings, to import into another class" hasArrow>
+                          <Button size="sm" variant="ghost" leftIcon={<FiDownload />} onClick={() => downloadNotebook(notebook)}>
+                            Download
+                          </Button>
+                        </Tooltip>
+                        <Button size="sm" variant="ghost" onClick={() => togglePublish(notebook)}>
                                 {notebook.published ? 'Unpublish' : 'Publish'}
                               </Button>
                               <Button

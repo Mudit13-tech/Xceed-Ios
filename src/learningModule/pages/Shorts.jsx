@@ -22,7 +22,6 @@ import { FiChevronDown } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, ShortsListSkeleton } from '../components/common';
-import StartShortModal from '../components/StartShortModal';
 import { relativeTime } from '../format';
 import { LmIcon } from '../components/Icon';
 
@@ -53,8 +52,6 @@ export default function Shorts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState('');
-  // The deck waiting on the mail question, or null when nothing is being started.
-  const [pendingStart, setPendingStart] = useState(null);
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -97,27 +94,17 @@ export default function Shorts() {
   };
 
   /**
-   * `email` left undefined presents the deck the way it is configured
-   * (Edit → "Email the class when I start it"); passing it overrides that
-   * setting for this run only.
-   *
-   * Starting a *fresh* session never takes the undefined path from here: the
-   * mail question is put to the teacher first (`StartShortModal`), because a
-   * launch mail cannot be recalled. Rejoining a live session notifies nobody,
-   * so that one goes straight through.
+   * Starts a fresh session (the class is notified in-app, never by mail) or
+   * rejoins the live one, which notifies nobody.
    */
-  const present = async (short, { email } = {}) => {
+  const present = async (short) => {
     setBusy(short._id);
     try {
-      const { session, resumed, emailed } = await lmApi.presentShort(classId, short._id, { email });
-      // Resuming does not notify anyone a second time, so only a fresh session
-      // has anything to report — and mail is worth confirming either way, since
-      // it is the half of the launch the teacher cannot see happen.
+      const { session, resumed } = await lmApi.presentShort(classId, short._id);
       if (!resumed) {
         toast({
           status: 'success',
-          title: emailed ? 'Live — the class has been emailed' : 'Live — no email sent',
-          description: emailed ? undefined : 'The class still gets the in-app notification.',
+          title: 'Live — the class has been notified in-app',
           duration: 3000,
         });
       }
@@ -132,7 +119,6 @@ export default function Shorts() {
       });
     } finally {
       setBusy('');
-      setPendingStart(null);
     }
   };
 
@@ -250,11 +236,6 @@ export default function Shorts() {
                     )}
                     {short.settings?.graded && <Badge colorScheme="purple">graded</Badge>}
                     {short.settings?.anonymous && <Badge>anonymous</Badge>}
-                    {/* Only the off state is worth a badge — mail on start is
-                        the default, and every deck saying so is just noise. */}
-                    {isTeacher && short.settings?.emailOnStart === false && (
-                      <Badge colorScheme="orange">no launch email</Badge>
-                    )}
                   </HStack>
 
                   {short.description ? (
@@ -282,54 +263,49 @@ export default function Shorts() {
 
                 {isTeacher ? (
                   <HStack spacing={2} wrap="wrap">
-                    {/* Split button: the main half asks the mail question and
-                        then starts, the caret answers it in one click for a
-                        teacher who already knows. Rejoining a live session
-                        notifies nobody, so it starts immediately — and its
-                        caret carries the way out, so ending a session does not
-                        mean opening the presenter view first. */}
-                    <HStack spacing={0}>
-                      <Button
-                        size="sm"
-                        colorScheme={short.liveSession ? 'red' : 'purple'}
-                        onClick={() =>
-                          short.liveSession ? present(short) : setPendingStart(short)
-                        }
-                        isLoading={busy === short._id}
-                        borderRightRadius={0}
-                      >
-                        {short.liveSession ? 'Back to presenting' : 'Present'}
-                      </Button>
-                      <Menu placement="bottom-end">
-                        <MenuButton
-                          as={IconButton}
-                          aria-label={short.liveSession ? 'Session options' : 'Presenting options'}
-                          icon={<FiChevronDown />}
+                    {/* A live deck gets a split button whose caret carries the
+                        way out, so ending a session does not mean opening the
+                        presenter view first. */}
+                    {short.liveSession ? (
+                      <HStack spacing={0}>
+                        <Button
                           size="sm"
-                          colorScheme={short.liveSession ? 'red' : 'purple'}
-                          borderLeftRadius={0}
-                          borderLeftWidth="1px"
-                          borderLeftColor="whiteAlpha.400"
-                          isDisabled={busy === short._id}
-                        />
-                        <MenuList>
-                          {short.liveSession ? (
+                          colorScheme="red"
+                          onClick={() => present(short)}
+                          isLoading={busy === short._id}
+                          borderRightRadius={0}
+                        >
+                          Back to presenting
+                        </Button>
+                        <Menu placement="bottom-end">
+                          <MenuButton
+                            as={IconButton}
+                            aria-label="Session options"
+                            icon={<FiChevronDown />}
+                            size="sm"
+                            colorScheme="red"
+                            borderLeftRadius={0}
+                            borderLeftWidth="1px"
+                            borderLeftColor="whiteAlpha.400"
+                            isDisabled={busy === short._id}
+                          />
+                          <MenuList>
                             <MenuItem color="red.500" onClick={() => endSession(short)}>
                               End session
                             </MenuItem>
-                          ) : (
-                            <>
-                              <MenuItem onClick={() => present(short, { email: true })}>
-                                Present and email the class
-                              </MenuItem>
-                              <MenuItem onClick={() => present(short, { email: false })}>
-                                Present without emailing
-                              </MenuItem>
-                            </>
-                          )}
-                        </MenuList>
-                      </Menu>
-                    </HStack>
+                          </MenuList>
+                        </Menu>
+                      </HStack>
+                    ) : (
+                      <Button
+                        size="sm"
+                        colorScheme="purple"
+                        onClick={() => present(short)}
+                        isLoading={busy === short._id}
+                      >
+                        Present
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
@@ -392,14 +368,6 @@ export default function Shorts() {
           ))}
         </VStack>
       )}
-
-      <StartShortModal
-        isOpen={Boolean(pendingStart)}
-        short={pendingStart}
-        isBusy={Boolean(pendingStart) && busy === pendingStart._id}
-        onClose={() => setPendingStart(null)}
-        onConfirm={(email) => present(pendingStart, { email })}
-      />
     </VStack>
   );
 }

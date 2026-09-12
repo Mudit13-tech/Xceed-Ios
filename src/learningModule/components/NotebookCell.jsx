@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Badge,
   Box,
@@ -8,6 +8,7 @@ import {
   HStack,
   IconButton,
   Image,
+  ListItem,
   Spinner,
   Table,
   Tbody,
@@ -17,6 +18,7 @@ import {
   Th,
   Thead,
   Tr,
+  UnorderedList,
   VStack,
   useColorMode,
   useColorModeValue,
@@ -31,6 +33,7 @@ import {
   FiChevronUp,
   FiEdit2,
   FiEye,
+  FiHelpCircle,
   FiLock,
   FiPlay,
   FiPlus,
@@ -39,13 +42,14 @@ import {
   FiTrash2,
   FiXCircle,
 } from 'react-icons/fi';
-import CodeMirror, { keymap } from '@uiw/react-codemirror';
+import CodeMirror, { EditorView, keymap } from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
 import { Prec } from '@codemirror/state';
 
 import HintTooltip from './HintTooltip';
 import RichText from './RichText';
+import { EXAMPLE_CELL } from '../sampleNotebook';
 
 /**
  * One notebook cell: source on top, output underneath.
@@ -220,10 +224,162 @@ function CellStatus({ running, cell }) {
           : `Ran without errors${when}. A cell that assigns or defines something shows no output — that is normal.`
       }
     >
-      <Box as="span" display="inline-flex" color={failed ? 'red.400' : 'green.400'} fontSize="14px">
-        {failed ? <FiAlertCircle aria-label="Finished with an error" /> : <FiCheckCircle aria-label="Ran successfully" />}
-      </Box>
+      <HStack as="span" spacing={1} color={failed ? 'red.400' : 'green.400'} flexShrink={0}>
+        <Box as="span" display="inline-flex" fontSize="14px">
+          {failed ? <FiAlertCircle aria-label="Finished with an error" /> : <FiCheckCircle aria-label="Ran successfully" />}
+        </Box>
+        <Text as="span" fontSize="xs" fontWeight="500">
+          {failed ? 'Error' : 'Completed'}
+        </Text>
+      </HStack>
     </HintTooltip>
+  );
+}
+
+/** One titled block of the setup guide. */
+function GuideSection({ title, children }) {
+  return (
+    <Box>
+      <Text fontSize="xs" fontWeight="700" mb={1}>
+        {title}
+      </Text>
+      <UnorderedList spacing={1} ml={4} fontSize="xs" lineHeight="1.55">
+        {children}
+      </UnorderedList>
+    </Box>
+  );
+}
+
+const Code = ({ children }) => (
+  <Box as="code" fontFamily="mono" fontSize="0.95em" px={1} borderRadius="sm" bg="blackAlpha.100">
+    {children}
+  </Box>
+);
+
+/**
+ * What a teacher needs to know to set up a tested exercise in this cell.
+ *
+ * Every statement here is a description of what the kernels and `testRunner`
+ * actually do — the cell source is what students start from, a test's input is
+ * the program's stdin, and output is compared after `normalizeOutput`. If one
+ * of those changes, this has to change with it.
+ */
+function SetupGuide({ isC, canInsertExample, onInsertExample }) {
+  const bg = useColorModeValue('blue.50', 'blackAlpha.300');
+  const border = useColorModeValue('blue.200', 'blue.800');
+  const exampleBg = useColorModeValue('white', 'gray.800');
+
+  // The same code "Insert example" puts in the cell, so what is shown is what you get.
+  const example = EXAMPLE_CELL[isC ? 'c' : 'python'].source.trim();
+
+  return (
+    <Box bg={bg} borderTopWidth="1px" borderColor={border} p={3}>
+      <Flex align="center" justify="space-between" mb={2} gap={2} wrap="wrap">
+        <Text fontSize="xs" fontWeight="700" color="blue.600" textTransform="uppercase">
+          How to set up this exercise
+        </Text>
+        {canInsertExample && (
+          <HintTooltip label="Fills this empty cell with the example below, a sample input and two test cases">
+            <Button size="xs" colorScheme="blue" variant="outline" onClick={onInsertExample}>
+              Insert example
+            </Button>
+          </HintTooltip>
+        )}
+      </Flex>
+
+      <Flex gap={4} direction={{ base: 'column', lg: 'row' }}>
+        <VStack align="stretch" spacing={3} flex="3">
+          <GuideSection title="1. What you write here, and what the student writes">
+            <ListItem>
+              The code in this cell is exactly what every student starts with. Write <b>starter code</b>: the
+              lines that read the input, the function headers, and <Code>TODO</Code> comments. Leave the logic out.
+            </ListItem>
+            <ListItem>
+              To check your tests, paste your full solution here, press <b>Test Cases</b> →{' '}
+              <b>Test Solution on Cell</b>, then put the starter code back before you save.
+            </ListItem>
+            {isC && (
+              <ListItem>
+                Each C cell is a whole program and needs its own <Code>main()</Code>.
+              </ListItem>
+            )}
+          </GuideSection>
+
+          <GuideSection title="2. How a test case's input reaches the code">
+            <ListItem>
+              A test&apos;s <b>Input</b> is fed to the program as if typed at the keyboard, and its{' '}
+              <b>Expected output</b> is compared with what the program prints.
+            </ListItem>
+            {isC ? (
+              <ListItem>
+                <Code>scanf(&quot;%d&quot;, …)</Code> skips spaces and line breaks, so <Code>3 4</Code> on one line
+                and on two lines read the same. <Code>fgets</Code> reads one whole line. Reading past the end gives
+                EOF.
+              </ListItem>
+            ) : (
+              <ListItem>
+                Each line of the Input is returned by one <Code>input()</Code> call. <Code>3 4</Code> is one line:{' '}
+                <Code>a, b = map(int, input().split())</Code>. Two lines need two <Code>input()</Code> calls.
+              </ListItem>
+            )}
+            <ListItem>
+              The <b>Input</b> box under the cell is only sample input for the ▶ button. Students get a copy of it,
+              and hidden tests don&apos;t use it.
+            </ListItem>
+          </GuideSection>
+
+          <GuideSection title="3. How the output is checked">
+            <ListItem>
+              It has to match exactly, including capital letters. Spaces at the end of lines and blank lines at the
+              start or end are ignored.
+            </ListItem>
+            <ListItem>
+              No prompts in tested cells:{' '}
+              {isC ? <Code>printf(&quot;Enter a number: &quot;)</Code> : <Code>input(&quot;Enter a number: &quot;)</Code>}{' '}
+              prints the prompt, which then fails the match. Print only the answer.
+            </ListItem>
+          </GuideSection>
+
+          <GuideSection title="4. Helper functions (sub-functions)">
+            <ListItem>
+              Yes, put them in the same cell, one after another, <b>above</b>{' '}
+              {isC ? <Code>main()</Code> : 'the code that calls them'}. Tests run this one cell by itself, so
+              everything the test needs must be in it.
+            </ListItem>
+            <ListItem>
+              If students should call a function but not write it, put it in a separate cell and tick{' '}
+              <b>Hidden setup</b>. It runs before every student cell and test
+              {isC ? ', and must not have its own main()' : ''}.
+            </ListItem>
+          </GuideSection>
+        </VStack>
+
+        <Box flex="2" minW={0}>
+          <Text fontSize="2xs" fontWeight="600" opacity={0.6} mb={1}>
+            EXAMPLE STARTER CODE
+          </Text>
+          <Box
+            as="pre"
+            bg={exampleBg}
+            borderWidth="1px"
+            borderColor={border}
+            borderRadius="md"
+            p={2}
+            fontFamily="mono"
+            fontSize="11px"
+            lineHeight="1.5"
+            overflowX="auto"
+            m={0}
+          >
+            {example}
+          </Box>
+          <Text fontSize="2xs" opacity={0.7} mt={1.5}>
+            Test case: Input <Code>3 4</Code> → Expected output <Code>7</Code>. The student replaces the TODO;
+            the input and print lines stay as they are.
+          </Text>
+        </Box>
+      </Flex>
+    </Box>
   );
 }
 
@@ -232,6 +388,7 @@ function CellStatus({ running, cell }) {
  */
 function TestCasesEditorPanel({
   testCases = [],
+  isC = false,
   onChange,
   onRunTestCases,
   testing = false,
@@ -284,8 +441,14 @@ function TestCasesEditorPanel({
           </Button>
         </HStack>
       </Flex>
+      <Text fontSize="2xs" opacity={0.7} mb={1}>
+        Students never see these. They press &quot;Run Hidden Test Case&quot;, and their code is run once for each
+        test below and gets a Yes/No result.
+      </Text>
       <Text fontSize="2xs" opacity={0.7} mb={3}>
-        Students will not see these inputs or expected outputs directly. They will click &quot;Run Hidden Test Case&quot; to test their code and receive Yes/No feedback.
+        <b>Input</b> is typed into the program for that run
+        {isC ? ' (what scanf / fgets read)' : ', one line per input() call'}. <b>Expected output</b> is exactly what
+        it should print. Capital letters count; spaces at line ends and trailing blank lines don&apos;t.
       </Text>
 
       {testCases.length === 0 ? (
@@ -324,8 +487,12 @@ function TestCasesEditorPanel({
                   <Textarea
                     size="xs"
                     fontFamily="mono"
-                    rows={2}
-                    placeholder="Input passed to stdin (e.g. 5 10)"
+                    rows={3}
+                    placeholder={
+                      isC
+                        ? 'What the program reads, e.g.\n5\n2 3 4 5 6\n(empty if it reads nothing)'
+                        : 'One line per input() call, e.g.\n5\n2 3 4 5 6\n(empty if it reads nothing)'
+                    }
                     value={tc.input || ''}
                     onChange={(e) => updateTestCase(idx, { input: e.target.value })}
                   />
@@ -337,8 +504,8 @@ function TestCasesEditorPanel({
                   <Textarea
                     size="xs"
                     fontFamily="mono"
-                    rows={2}
-                    placeholder="Expected output on stdout (e.g. 15)"
+                    rows={3}
+                    placeholder={'Exactly what it should print, e.g.\n3'}
                     value={tc.output || ''}
                     onChange={(e) => updateTestCase(idx, { output: e.target.value })}
                   />
@@ -450,6 +617,10 @@ export default function NotebookCell({
   canRun = true,
   isEditor = false,
   testCases = null,
+  // Refuses paste and drag-drop into the code editor; `onPasteBlocked` hears
+  // about each refusal so the page can tell the student and record it.
+  blockPaste = false,
+  onPasteBlocked,
   onChange,
   onRun,
   onStop,
@@ -460,6 +631,7 @@ export default function NotebookCell({
   const { colorMode } = useColorMode();
   const border = useColorModeValue('gray.200', 'whiteAlpha.200');
   const gutter = useColorModeValue('gray.50', 'whiteAlpha.50');
+  const hiddenNoteBg = useColorModeValue('orange.50', 'blackAlpha.300');
 
   const isC = language === 'c';
 
@@ -479,12 +651,44 @@ export default function NotebookCell({
     [canRun, running, onRun],
   );
 
-  const extensions = useMemo(() => [isC ? cpp() : python(), runKeymap], [isC, runKeymap]);
+  // Kept in a ref so a new callback each render does not rebuild the editor's
+  // extensions, which would reset its state.
+  const onPasteBlockedRef = useRef(onPasteBlocked);
+  onPasteBlockedRef.current = onPasteBlocked;
+
+  const pasteGuard = useMemo(() => {
+    if (!blockPaste) return [];
+    const refuse = (event) => {
+      event.preventDefault();
+      onPasteBlockedRef.current?.();
+      return true;
+    };
+    return Prec.highest(
+      EditorView.domEventHandlers({
+        paste: refuse,
+        drop: refuse,
+        // Belt and braces for inputs that arrive without a paste event, such as
+        // some mobile keyboards' clipboard suggestions.
+        beforeinput: (event) =>
+          event.inputType === 'insertFromPaste' || event.inputType === 'insertFromDrop' ? refuse(event) : false,
+      }),
+    );
+  }, [blockPaste]);
+
+  const extensions = useMemo(
+    () => [isC ? cpp() : python(), runKeymap, pasteGuard],
+    [isC, runKeymap, pasteGuard],
+  );
   const locked = cell.locked || readOnly;
 
   const [showStdin, setShowStdin] = useState(() => isC || Boolean(cell.stdin));
   const [showTestCases, setShowTestCases] = useState(false);
   const [showTestResults, setShowTestResults] = useState(true);
+  // Open by default on a fresh cell, the moment a teacher is deciding what to
+  // write in it; closed on cells that already have code, where it is noise.
+  const [showGuide, setShowGuide] = useState(
+    () => isEditor && !cell.hidden && !String(cell.source || '').trim() && !(cell.testCases || []).length,
+  );
 
   if (cell.type === 'markdown') {
     return (
@@ -604,6 +808,20 @@ export default function NotebookCell({
           </Button>
         )}
 
+        {isEditor && !cell.hidden && (
+          <HintTooltip label="What to write here, how test inputs are fed in, and how output is checked">
+            <Button
+              size="xs"
+              variant={showGuide ? 'solid' : 'ghost'}
+              colorScheme="blue"
+              leftIcon={<FiHelpCircle />}
+              onClick={() => setShowGuide((current) => !current)}
+            >
+              Setup guide
+            </Button>
+          </HintTooltip>
+        )}
+
         {testResults.length > 0 && (
           <Button
             size="xs"
@@ -626,21 +844,59 @@ export default function NotebookCell({
         />
       </Flex>
 
+      {isEditor && cell.hidden && (
+        <Text fontSize="2xs" px={3} py={1.5} bg={hiddenNoteBg} borderBottomWidth="1px" borderColor={border}>
+          <b>Hidden setup:</b>{' '}
+          {isC
+            ? 'pasted in front of every student cell before it compiles. Put shared #include lines and helper functions here, but no main().'
+            : 'runs before any student cell and before every hidden test. Put imports, data and helper functions here that students may call but should not write.'}{' '}
+          Students never see it.
+        </Text>
+      )}
+
       <CodeMirror
         value={cell.source}
         onChange={(source) => onChange({ source })}
         theme={colorMode === 'dark' ? 'dark' : 'light'}
         extensions={extensions}
         editable={!locked}
+        placeholder={
+          isEditor && !cell.hidden
+            ? 'Write the starter code students begin from: input lines, function headers and TODO comments. Open "Setup guide" for help.'
+            : undefined
+        }
         basicSetup={{ lineNumbers: true, foldGutter: false, autocompletion: false }}
         minHeight="72px"
       />
+
+      {isEditor && showGuide && !cell.hidden && (
+        <SetupGuide
+          isC={isC}
+          canInsertExample={!String(cell.source || '').trim() && !(cell.testCases || []).length}
+          onInsertExample={() => {
+            const example = EXAMPLE_CELL[isC ? 'c' : 'python'];
+            onChange({
+              source: example.source,
+              stdin: example.stdin,
+              testCases: example.testCases.map((tc) => ({ ...tc })),
+            });
+            setShowStdin(true);
+            setShowTestCases(true);
+          }}
+        />
+      )}
 
       {showStdin && (
         <Box px={3} py={2} borderTopWidth="1px" borderColor={border}>
           <Text fontSize="2xs" fontWeight="600" opacity={0.5} textTransform="uppercase" mb={1}>
             Input (stdin)
           </Text>
+          {isEditor && !cell.hidden && (
+            <Text fontSize="2xs" opacity={0.7} mb={1}>
+              Sample input for the ▶ button. Students get a copy of it to try their code with. Hidden tests don&apos;t
+              use this box; each test has its own Input.
+            </Text>
+          )}
           <Textarea
             value={cell.stdin || ''}
             onChange={(event) => onChange({ stdin: event.target.value })}
@@ -657,6 +913,7 @@ export default function NotebookCell({
       {isEditor && showTestCases && (
         <TestCasesEditorPanel
           testCases={cell.testCases || []}
+          isC={isC}
           onChange={(newTestCases) => onChange({ testCases: newTestCases })}
           onRunTestCases={onRunTests ? () => onRunTests(cell) : null}
           testing={testing}
