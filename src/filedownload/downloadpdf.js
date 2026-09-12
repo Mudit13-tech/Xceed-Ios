@@ -1,4 +1,5 @@
 import pdfMakeInitializer from './pdfMakeInitializer';
+import { savePdfDoc } from './savePdf';
 
 pdfMakeInitializer(); 
 
@@ -387,7 +388,7 @@ const session = ttdata.session;
         ],
       };
 
-      pdfMake.createPdf(documentDefinition).download(`${headTitle}_timetable.pdf`);
+      savePdfDoc(documentDefinition, `${headTitle}_timetable.pdf`);
     };
   };
 }

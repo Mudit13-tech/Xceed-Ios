@@ -1,4 +1,5 @@
 import pdfMakeInitializer from './pdfMakeInitializer';
+import { savePdfDoc } from './savePdf';
 // Import other dependencies
 
 pdfMakeInitializer(); 
@@ -182,8 +183,7 @@ const generateSummaryTablePDF = async (allFacultySummaries, deptfaculty, session
       },
     };
     
-    pdfMake.createPdf(docDefinition).download();
-    pdfMake.createPdf(docDefinition).open();
+    savePdfDoc(docDefinition, 'timetable_summary.pdf');
   } catch (error) {
     console.error('Error during PDF generation:', error);
   }

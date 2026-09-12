@@ -1,5 +1,6 @@
 import React from 'react';
 import pdfMakeInitializer from './pdfMakeInitializer';
+import { savePdfDoc } from './savePdf';
 // import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 // Import other dependencies
 
@@ -359,7 +360,7 @@ class PDFGenerator extends React.Component {
           pageBreak: 'auto',
         }
         console.log(documentDefinition)
-        pdfMake.createPdf(documentDefinition).open();
+        savePdfDoc(documentDefinition, `${headTitle}_timetable.pdf`);
       });
     };
   };

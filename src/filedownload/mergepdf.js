@@ -1,23 +1,5 @@
 import { PDFDocument } from 'pdf-lib';
-
-function downloadMergedPdf(mergedPdfBytes, fileName) {
-    const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement('a');
-    link.href = url;
-
-    link.download = fileName;
-    // The link has to be in the document for the download to fire reliably,
-    // and the URL can only be revoked once the browser has picked it up.
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    // Clean up the URL object
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-}
+import { savePdfBytes } from './savePdf';
 
 async function mergePdfs(buffer,fileName) {
     try {
@@ -41,7 +23,7 @@ async function mergePdfs(buffer,fileName) {
 
         // Save the merged PDF
         const mergedPdfBytes = await mergedPdfDoc.save();
-        downloadMergedPdf(mergedPdfBytes,fileName);
+        await savePdfBytes(mergedPdfBytes, fileName);
         // Do something with the merged PDF bytes, e.g., create a Blob, download, etc.
     } catch (error) {
         console.error('Error merging PDFs:', error);
