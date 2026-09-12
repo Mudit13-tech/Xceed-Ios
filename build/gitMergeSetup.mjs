@@ -39,7 +39,10 @@ try {
   for (const [key, value] of DRIVERS) {
     execFileSync('git', ['config', key, value], { stdio: 'pipe' });
   }
-  console.log('[git-merge-setup] merge drivers registered (mobile, package-json)');
+  // Derived, not spelled out: a driver added above but missing from this line
+  // is exactly the silent half-configuration the file exists to prevent.
+  const names = [...new Set(DRIVERS.map(([key]) => key.split('.')[1]))];
+  console.log(`[git-merge-setup] merge drivers registered (${names.join(', ')})`);
 } catch (error) {
   // Never fail an install over this. Installing from a tarball, or in a
   // container with no git, is legitimate — and a missing driver costs a
