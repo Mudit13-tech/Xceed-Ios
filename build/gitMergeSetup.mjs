@@ -17,6 +17,8 @@
  *   mobile        keep ours, always. Registered as `true` — the shell builtin,
  *                 which succeeds without touching %A, and %A is already ours.
  *   package-json  union the dependency maps; see build/mergePackageJson.mjs.
+ *   additive      keep both sides when they only added imports at the same
+ *                 point; see build/mergeAdditive.mjs.
  */
 import { execFileSync } from 'node:child_process';
 
@@ -25,6 +27,12 @@ const DRIVERS = [
   ['merge.mobile.driver', 'true'],
   ['merge.package-json.name', 'union dependencies, keep our version and scripts'],
   ['merge.package-json.driver', 'node build/mergePackageJson.mjs %O %A %B %P'],
+  ['merge.additive.name', 'keep both sides of an import-only insertion'],
+  // %L is the conflict marker size. git varies it when a file already contains
+  // something that looks like a marker, so the driver has to be told rather
+  // than assuming seven, or it would parse its own output wrongly in exactly
+  // the file where being wrong is least recoverable.
+  ['merge.additive.driver', 'node build/mergeAdditive.mjs %O %A %B %L %P'],
 ];
 
 try {

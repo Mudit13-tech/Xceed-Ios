@@ -54,3 +54,42 @@ package-lock.json     merge=mobile
 # version (the OTA channel reads it) and our deploy:ota script have to survive
 # it. See build/mergePackageJson.mjs.
 package.json          merge=package-json
+
+# ---------------------------------------------------------------------------
+# Both sides appended here.
+#
+# The rest of the policy above is about files with an owner. These two entries
+# are about the opposite case: files we and AMS genuinely co-own, where the
+# conflicts have never been disagreements at all — both sides added something
+# new at the same place, and the resolution was always "keep both".
+#
+# That has cost four OTA deploys: LoginForm (09-04, now an override), main.jsx
+# twice (09-07, 09-08), GpuMetrics (09-10) and .gitignore (09-12). Every one was
+# a position collision in a region where position means nothing.
+# ---------------------------------------------------------------------------
+
+# A list of paths, one per line, in no meaningful order — the textbook case for
+# git's builtin union driver. Both sides' lines are kept with no markers. The
+# worst a wrong union can do here is ignore a path twice, or keep ignoring one
+# that upstream stopped ignoring; neither is worth a failed deploy.
+.gitignore            merge=union
+.prettierignore       merge=union
+.eslintignore         merge=union
+
+# Sources are NOT unioned — union on real code silently produces nonsense. This
+# driver resolves a conflict only where both sides purely inserted, and only
+# where every inserted line is an import; anything else it hands back to git
+# with ordinary markers. See the safety argument in build/mergeAdditive.mjs.
+*.js                  merge=additive
+*.jsx                 merge=additive
+*.mjs                 merge=additive
+*.cjs                 merge=additive
+*.ts                  merge=additive
+*.tsx                 merge=additive
+
+# ...except under android/, which is ours whole. The globs above are broader
+# than the `android/** merge=mobile` rule near the top of this file and a LATER
+# attribute wins, so without this restatement a .js file in the native project
+# (a Gradle script, a generated plugin list) would quietly start merging with
+# AMS's scaffolded copy. Keep this last.
+android/**            merge=mobile
