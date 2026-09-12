@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { buildManifest, diffManifests, hashFile } from '../otaManifest.cjs';
+import { buildManifest, diffManifests, hashFile, isExcludedFromBundle } from '../otaManifest.cjs';
 
 // sha256 of "hello" — a fixed value rather than one computed the same way the
 // implementation computes it, so a change of algorithm fails here instead of
@@ -74,6 +74,44 @@ describe('otaManifest', () => {
     const second = buildManifest(dist, (h) => `https://x/${h}`);
 
     expect(first).toEqual(second);
+  });
+
+  describe('the notebook runtimes, which must never reach a device', () => {
+    // ~535MB of Pyodide and clang WebAssembly. AMS's build mirrors it into
+    // public/ for the web client; this app points the kernels at the web origin
+    // instead (.env.production), so these directories are normally absent. A
+    // developer who has run `npm run fetch:runtimes` has them, and without this
+    // the next deploy publishes half a gigabyte to every phone — silently,
+    // because nothing about a large bundle is invalid.
+    beforeEach(() => {
+      mkdirSync(join(dist, 'pyodide'), { recursive: true });
+      writeFileSync(join(dist, 'pyodide', 'pyodide.asm.wasm'), 'huge');
+      mkdirSync(join(dist, 'clang'), { recursive: true });
+      writeFileSync(join(dist, 'clang', 'clang.wasm'), 'huge');
+      mkdirSync(join(dist, 'assets'), { recursive: true });
+      writeFileSync(join(dist, 'assets', 'index-abc.js'), 'app');
+    });
+
+    it('leaves them out of the manifest', () => {
+      const names = buildManifest(dist, (h) => `https://x/${h}`).map((e) => e.file_name);
+
+      expect(names).toEqual(['assets/index-abc.js']);
+    });
+
+    it('excludes the directories themselves and everything under them', () => {
+      expect(isExcludedFromBundle('pyodide/pyodide.asm.wasm')).toBe(true);
+      expect(isExcludedFromBundle('clang/clang-fs.tar.gz')).toBe(true);
+      expect(isExcludedFromBundle('pyodide')).toBe(true);
+    });
+
+    it('does not exclude a file that merely starts with the same letters', () => {
+      // `clangd-notes.js` is not the clang toolchain, and a prefix test without
+      // the separator would have dropped it from the bundle with no error — the
+      // app would boot to a missing chunk.
+      expect(isExcludedFromBundle('clangd-notes.js')).toBe(false);
+      expect(isExcludedFromBundle('assets/pyodide-worker.js')).toBe(false);
+      expect(isExcludedFromBundle('pyodide-worker.js')).toBe(false);
+    });
   });
 
   describe('diffManifests', () => {

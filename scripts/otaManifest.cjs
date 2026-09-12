@@ -40,6 +40,31 @@ function walkFiles(dir, prefix = '') {
 }
 
 /**
+ * Directories that are built into `dist/` but must never enter an OTA bundle.
+ *
+ * The notebook kernels' runtimes — Pyodide and the clang toolchain, ~535 MB of
+ * WebAssembly — are mirrored into `public/` by AMS's build so the *web* client
+ * can serve them from its own origin, and Vite copies `public/` into `dist/`
+ * verbatim. This app does not mirror them (see .env.production: it points the
+ * kernels at https://xceed.nitj.ac.in instead), so in a normal build these
+ * directories are simply absent and this list matches nothing.
+ *
+ * It exists for the build that is not normal. `npm run fetch:runtimes` is still
+ * here as a development escape hatch, and a deploy from a checkout where
+ * somebody has run it would otherwise publish half a gigabyte to every phone on
+ * the network — with no error, because nothing about that is invalid. The zip
+ * would simply be 25x its usual size and the manifest would list 100,000 files.
+ * A silent 535 MB is not a failure mode worth leaving open for the sake of a
+ * list of two.
+ */
+const BUNDLE_EXCLUDES = ['pyodide', 'clang'];
+
+/** True for a `dist`-relative path that must not be published. */
+function isExcludedFromBundle(fileName) {
+  return BUNDLE_EXCLUDES.some((dir) => fileName === dir || fileName.startsWith(`${dir}/`));
+}
+
+/**
  * SHA-256, lowercase hex. The plugin compares with equalsIgnoreCase, so the
  * case does not matter to it, but keeping it stable keeps manifests diffable.
  *
@@ -62,6 +87,7 @@ function hashFile(absPath) {
  */
 function buildManifest(distDir, downloadUrlFor) {
   return walkFiles(distDir)
+    .filter((fileName) => !isExcludedFromBundle(fileName))
     .sort()
     .map((fileName) => {
       const fileHash = hashFile(path.join(distDir, ...fileName.split('/')));
@@ -87,4 +113,4 @@ function diffManifests(previous, next) {
   return { changed, unchanged: next.length - changed.length, total: next.length };
 }
 
-module.exports = { walkFiles, hashFile, buildManifest, diffManifests };
+module.exports = { walkFiles, hashFile, buildManifest, diffManifests, isExcludedFromBundle, BUNDLE_EXCLUDES };

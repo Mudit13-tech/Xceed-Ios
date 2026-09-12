@@ -4,7 +4,7 @@ const { ZipArchive } = require('archiver');
 const FormData = require('form-data');
 const axios = require('axios');
 const { execSync } = require('child_process');
-const { buildManifest, diffManifests } = require('./otaManifest.cjs');
+const { buildManifest, diffManifests, isExcludedFromBundle } = require('./otaManifest.cjs');
 require('dotenv').config();
 
 const DIST_DIR = path.join(__dirname, '../dist');
@@ -117,8 +117,16 @@ async function deploy() {
     archive.on('error', reject);
 
     archive.pipe(output);
-    // Zip the contents of the dist folder, not the folder itself
-    archive.directory(DIST_DIR, false);
+    // Zip the contents of the dist folder, not the folder itself.
+    //
+    // Filtered through the same predicate the manifest uses, and that sharing
+    // is the point rather than a tidiness: the device treats the manifest as
+    // the definition of the bundle, so a file in one and not the other is
+    // either dead weight in the zip or an entry that resolves to nothing. The
+    // two must be built from one rule. Returning false drops the entry.
+    archive.directory(DIST_DIR, false, (entry) =>
+      isExcludedFromBundle(entry.name.split(path.sep).join('/')) ? false : entry,
+    );
     archive.finalize();
   });
   console.log('✅ Zipped successfully.');

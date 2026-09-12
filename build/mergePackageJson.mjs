@@ -58,7 +58,23 @@ if (!ours || !theirs) {
 
 const MAPS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies', 'scripts'];
 
-function mergeMap(baseMap = {}, ourMap = {}, theirMap = {}, { sorted = false } = {}) {
+/**
+ * Values this repo deliberately kept while AMS was moving them, collected for
+ * the report at the end.
+ *
+ * "Keep ours" is the correct rule and also a silent one, which is the same trap
+ * `.mobile.` overrides set and build/amsDrift.mjs exists to answer: once a key
+ * diverges, every later upstream change to it is dropped with nothing said. The
+ * live example is `scripts.build` — AMS's is
+ * `node scripts/fetch-runtimes.mjs && vite build`, ours is plain `vite build`
+ * because that mirror is half a gigabyte this app must not ship (see
+ * .env.production). That divergence is deliberate and permanent; a *later*
+ * change AMS makes to the same script is not something anyone should have to
+ * notice by accident.
+ */
+const held = [];
+
+function mergeMap(baseMap = {}, ourMap = {}, theirMap = {}, { sorted = false, field = '' } = {}) {
   const merged = { ...ourMap };
   const keys = new Set([...Object.keys(baseMap), ...Object.keys(ourMap), ...Object.keys(theirMap)]);
 
@@ -71,6 +87,14 @@ function mergeMap(baseMap = {}, ourMap = {}, theirMap = {}, { sorted = false } =
     if (!inOurs && !inBase && inTheirs) merged[key] = theirMap[key]; // upstream added
     else if (inOurs && inTheirs && !weChanged) merged[key] = theirMap[key]; // upstream moved it, we had not
     else if (inBase && !inTheirs && !weChanged) delete merged[key]; // upstream removed
+    else if (inOurs && inTheirs && weChanged && ourMap[key] !== theirMap[key]) {
+      // Kept ours over a different upstream value. Only worth reporting when
+      // AMS actually moved it in this sync — a divergence that is merely still
+      // standing is not news every time.
+      if (inBase && theirMap[key] !== baseMap[key]) {
+        held.push(`${field}.${key}: kept ${JSON.stringify(ourMap[key])} over AMS's ${JSON.stringify(theirMap[key])}`);
+      }
+    }
   }
 
   // npm keeps the dependency maps sorted, so sorting here avoids showing an
@@ -83,7 +107,7 @@ function mergeMap(baseMap = {}, ourMap = {}, theirMap = {}, { sorted = false } =
 const result = { ...ours };
 for (const field of MAPS) {
   if (field in ours || field in theirs || field in base) {
-    result[field] = mergeMap(base[field], ours[field], theirs[field], { sorted: field !== 'scripts' });
+    result[field] = mergeMap(base[field], ours[field], theirs[field], { sorted: field !== 'scripts', field });
   }
 }
 
@@ -107,6 +131,12 @@ if (before !== after) {
     }
   }
   console.error(`[merge-package-json] ${realPath}: took from AMS: ${changed.join(' ') || '(none)'}`);
+}
+
+// Printed whether or not anything else changed: the whole point is that this is
+// the only place an upstream change to a diverged key is ever mentioned.
+for (const line of held) {
+  console.error(`[merge-package-json] ${realPath}: ${line}`);
 }
 
 process.exit(0);
