@@ -17,6 +17,28 @@ export const isNativeApp = () => {
 };
 
 /**
+ * Present the iOS share sheet, treating a dismissal as the non-event it is.
+ *
+ * Share.share() rejects when the user backs out without choosing anything, so
+ * cancelling landed in the same catch as a genuine failure and raised "Download
+ * failed -- could not save the file". The file had been written and the user had
+ * simply changed their mind, and was told the app was broken.
+ *
+ * The plugin signals this only in the message text, which varies by platform and
+ * spelling ("canceled", "cancelled", "Share canceled"), so the check is
+ * deliberately loose. A real error still throws.
+ */
+async function shareIgnoringCancel(options) {
+  try {
+    return await Share.share(options);
+  } catch (error) {
+    const message = String(error?.message || error).toLowerCase();
+    if (message.includes('cancel')) return undefined;
+    throw error;
+  }
+}
+
+/**
  * Saves a file into the device's public Downloads folder. Android's native
  * DownloadManager streams the response to disk, so large files do not occupy
  * WebView memory and can keep downloading in the background.
@@ -162,7 +184,7 @@ export const downloadBase64Native = async (base64Data, fileName, mimeType = 'app
         data: base64Data,
         directory: Directory.Cache,
       });
-      return await Share.share({
+      return await shareIgnoringCancel({
         title: fileName,
         url: result.uri,
         dialogTitle: 'Save file',
