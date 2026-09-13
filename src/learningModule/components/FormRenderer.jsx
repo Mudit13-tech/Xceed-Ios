@@ -18,16 +18,16 @@ import { buildAnswerPayload, isMissing, QuestionField, useFormAnswers } from './
  * read-only there rather than pretending to accept a file that would 403.
  */
 
-function QuestionCardField({ question, answer, patch, classId, canUploadFiles, uploading, handleUpload }) {
+function QuestionCardField({ question, answer, patch, classId, canUploadFiles, uploading, handleUpload, isFullscreen }) {
   const key = String(question._id);
   return (
     <SectionCard key={key}>
       <FormControl isRequired={question.required}>
-        <FormLabel fontSize="sm" fontWeight="600">
+        <FormLabel fontSize={isFullscreen ? 'lg' : 'sm'} fontWeight="600">
           {question.title}
         </FormLabel>
         {question.description && (
-          <FormHelperText mt={-1} mb={2} fontSize="xs">
+          <FormHelperText mt={-1} mb={2} fontSize={isFullscreen ? 'md' : 'xs'}>
             {question.description}
           </FormHelperText>
         )}
@@ -38,13 +38,14 @@ function QuestionCardField({ question, answer, patch, classId, canUploadFiles, u
           canUploadFiles={canUploadFiles}
           uploading={Boolean(uploading[key])}
           onUpload={(files) => handleUpload(classId, question, files)}
+          size={isFullscreen ? 'lg' : 'md'}
         />
       </FormControl>
     </SectionCard>
   );
 }
 
-export default function FormRenderer({ form, existingResponse, onSubmit, submitting, canUploadFiles, classId }) {
+export default function FormRenderer({ form, existingResponse, onSubmit, submitting, canUploadFiles, classId, isFullscreen }) {
   const toast = useToast();
   const { answers, patch, uploading, handleUpload } = useFormAnswers(form, existingResponse);
 
@@ -65,7 +66,7 @@ export default function FormRenderer({ form, existingResponse, onSubmit, submitt
     (bucket || ungrouped).push(question);
   });
 
-  const fieldProps = { patch, classId, canUploadFiles, uploading, handleUpload };
+  const fieldProps = { patch, classId, canUploadFiles, uploading, handleUpload, isFullscreen };
 
   return (
     <VStack align="stretch" spacing={4}>
@@ -81,10 +82,10 @@ export default function FormRenderer({ form, existingResponse, onSubmit, submitt
             {(section.title || section.description) && (
               <Box mb={3} mt={2}>
                 {section.title && (
-                  <Heading size="sm">{section.title}</Heading>
+                  <Heading size={isFullscreen ? 'md' : 'sm'}>{section.title}</Heading>
                 )}
                 {section.description && (
-                  <Text fontSize="sm" color="lmFg.muted" mt={1}>
+                  <Text fontSize={isFullscreen ? 'md' : 'sm'} color="lmFg.muted" mt={1}>
                     {section.description}
                   </Text>
                 )}
@@ -99,7 +100,7 @@ export default function FormRenderer({ form, existingResponse, onSubmit, submitt
         );
       })}
 
-      <Button colorScheme="teal" alignSelf="flex-start" onClick={submit} isLoading={submitting}>
+      <Button size={isFullscreen ? 'lg' : 'md'} colorScheme="teal" alignSelf="flex-start" onClick={submit} isLoading={submitting}>
         {existingResponse ? 'Update response' : 'Submit'}
       </Button>
     </VStack>

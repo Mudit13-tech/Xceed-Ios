@@ -47,7 +47,7 @@ function buildSteps(form) {
   return { steps, totalQuestions: flatIndex };
 }
 
-export default function TypeformRenderer({ form, existingResponse, onSubmit, submitting, canUploadFiles, classId, onProgress }) {
+export default function TypeformRenderer({ form, existingResponse, onSubmit, submitting, canUploadFiles, classId, onProgress, isFullscreen }) {
   const toast = useToast();
   const { answers, patch, uploading, handleUpload } = useFormAnswers(form, existingResponse);
   const { steps, totalQuestions } = useMemo(() => buildSteps(form), [form]);
@@ -119,22 +119,31 @@ export default function TypeformRenderer({ form, existingResponse, onSubmit, sub
       onKeyDown={handleKeyDown}
       align="stretch"
       spacing={0}
-      minH={{ base: '60vh', md: '65vh' }}
+      minH={isFullscreen ? undefined : { base: '60vh', md: '65vh' }}
       outline="none"
     >
-      <Progress value={progressPercent} size="xs" colorScheme="teal" borderRadius="full" mb={6} />
+      <Progress value={progressPercent} size="xs" colorScheme="teal" borderRadius="full" mb={isFullscreen ? 3 : 6} />
 
-      <Flex flex="1" direction="column" justify="center" maxW="860px" w="100%" mx="auto" px={{ base: 4, md: 8 }} py={6}>
+      <Flex
+        flex="1"
+        direction="column"
+        justify={isFullscreen ? 'flex-start' : 'center'}
+        maxW={isFullscreen ? '1000px' : '860px'}
+        w="100%"
+        mx="auto"
+        px={{ base: 4, md: 8 }}
+        py={isFullscreen ? 2 : 6}
+      >
         {step.kind === 'intro' ? (
           <VStack align="flex-start" spacing={4}>
-            <Text fontSize="xs" fontWeight="700" color="teal.500" textTransform="uppercase" letterSpacing="wide">
+            <Text fontSize={isFullscreen ? 'sm' : 'xs'} fontWeight="700" color="teal.500" textTransform="uppercase" letterSpacing="wide">
               Section
             </Text>
             {step.section.title && (
-              <Heading size="lg">{step.section.title}</Heading>
+              <Heading size={isFullscreen ? 'xl' : 'lg'}>{step.section.title}</Heading>
             )}
             {step.section.description && (
-              <Text fontSize="md" color="lmFg.muted">
+              <Text fontSize={isFullscreen ? 'lg' : 'md'} color="lmFg.muted">
                 {step.section.description}
               </Text>
             )}
@@ -144,11 +153,11 @@ export default function TypeformRenderer({ form, existingResponse, onSubmit, sub
           </VStack>
         ) : (
           <VStack align="stretch" spacing={5}>
-            <Text fontSize="sm" color="lmFg.muted">
+            <Text fontSize={isFullscreen ? 'md' : 'sm'} color="lmFg.muted">
               Question {step.flatIndex + 1} of {totalQuestions}
             </Text>
             <FormControl>
-              <Heading size="md" fontWeight="700">
+              <Heading size={isFullscreen ? 'xl' : 'md'} fontWeight="700">
                 {question.title}
                 {question.required && (
                   <Text as="span" color="red.400">
@@ -158,7 +167,7 @@ export default function TypeformRenderer({ form, existingResponse, onSubmit, sub
                 )}
               </Heading>
               {question.description && (
-                <FormHelperText fontSize="sm" mt={1} mb={4}>
+                <FormHelperText fontSize={isFullscreen ? 'md' : 'sm'} mt={1} mb={4}>
                   {question.description}
                 </FormHelperText>
               )}
@@ -170,17 +179,19 @@ export default function TypeformRenderer({ form, existingResponse, onSubmit, sub
                   canUploadFiles={canUploadFiles}
                   uploading={Boolean(uploading[String(question._id)])}
                   onUpload={(files) => handleUpload(classId, question, files)}
+                  size={isFullscreen ? 'lg' : 'md'}
                 />
               </Box>
             </FormControl>
 
             <Flex justify="flex-end" align="center" gap={3} pt={10} pr={{ base: 0, md: 4 }}>
               {mustAnswerToAdvance && !canAdvance && (
-                <Text fontSize="xs" color="lmFg.muted">
+                <Text fontSize={isFullscreen ? 'sm' : 'xs'} color="lmFg.muted">
                   Answer to continue.
                 </Text>
               )}
               <Button
+                size={isFullscreen ? 'lg' : 'md'}
                 leftIcon={<FiArrowLeft />}
                 variant="ghost"
                 onClick={goBack}
@@ -189,6 +200,7 @@ export default function TypeformRenderer({ form, existingResponse, onSubmit, sub
                 Back
               </Button>
               <Button
+                size={isFullscreen ? 'lg' : 'md'}
                 rightIcon={isLastStep ? undefined : <FiArrowRight />}
                 colorScheme="teal"
                 onClick={goNext}

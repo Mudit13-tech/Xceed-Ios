@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Avatar,
   Badge,
@@ -39,6 +39,7 @@ import lmApi from '../api/lmApi';
 import { FiMail } from 'react-icons/fi';
 import { EmptyState, ErrorState, Loading, SectionCard, buttonTextStyles } from '../components/common';
 import { LmIcon } from '../components/Icon';
+import useStableNavigate from '../hooks/useStableNavigate';
 import { formatDate, initials, relativeTime } from '../format';
 
 /**
@@ -587,6 +588,64 @@ function EmailModal({ isOpen, onClose, classId, membership, className }) {
   );
 }
 
+/**
+ * A student unenrolling themselves. Leaving is not reversible from this side —
+ * getting back in needs the class code or a fresh invite — so it asks first,
+ * and says what stays behind: the work already handed in remains with the
+ * teacher, only the student's access to the class goes.
+ */
+function LeaveClassModal({ isOpen, onClose, classId, klass }) {
+  const [leaving, setLeaving] = useState(false);
+  const toast = useToast();
+  const navigate = useStableNavigate();
+  const queryClient = useQueryClient();
+
+  const handleLeave = async () => {
+    setLeaving(true);
+    try {
+      await lmApi.leaveClass(classId);
+      // The route the student is standing on stops resolving the moment the
+      // membership goes, so drop this class from the cache before the
+      // dashboard re-reads the class list.
+      queryClient.removeQueries({ queryKey: ['learning', 'class', classId] });
+      queryClient.invalidateQueries({ queryKey: ['learning', 'classes'] });
+      toast({ status: 'success', title: `You left ${klass?.name || 'the class'}.` });
+      navigate('/learning', { replace: true });
+    } catch (error) {
+      toast({ status: 'error', title: 'Could not leave the class', description: error.message });
+      setLeaving(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={leaving ? () => {} : onClose} size="md" isCentered>
+      <ModalOverlay />
+      <ModalContent>
+        <ModalHeader>Leave {klass?.name || 'this class'}?</ModalHeader>
+        {!leaving && <ModalCloseButton />}
+        <ModalBody>
+          <Text fontSize="sm" mb={3}>
+            The class disappears from your dashboard and you lose access to its stream, material,
+            assignments and grades.
+          </Text>
+          <Text fontSize="sm" color="lmFg.muted">
+            Work you have already submitted stays with your teacher. To come back you will need the
+            class code or a new invite.
+          </Text>
+        </ModalBody>
+        <ModalFooter gap={2}>
+          <Button variant="ghost" size="sm" onClick={onClose} isDisabled={leaving}>
+            Cancel
+          </Button>
+          <Button colorScheme="red" size="sm" onClick={handleLeave} isLoading={leaving} loadingText="Leaving…">
+            Leave class
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
+
 function PersonRow({ member, isTeacher, isOwner, classId, onChanged, onViewProgress, onEmailMember }) {
   const toast = useToast();
 
@@ -724,6 +783,7 @@ export default function People() {
   const invite = useDisclosure();
   const progress = useDisclosure();
   const emailModal = useDisclosure();
+  const leaveModal = useDisclosure();
 
   const {
     data: members = { teachers: [], students: [] },
@@ -853,12 +913,26 @@ export default function People() {
         )}
       </SectionCard>
 
+      {/* The roster is where a student sees their own place in the class, so it
+          is also where they can give it up. Teachers get no such button: an
+          owner has to hand the class on first, and a co-teacher leaving is a
+          staffing change the class owner makes from this same page. */}
       {!isTeacher && (
-        <Box mt={4}>
-          <Text fontSize="xs" color="lmFg.muted">
-            Joined {formatDate(klass.created_at)} · taught by {klass.ownerName}
-          </Text>
-        </Box>
+        <SectionCard title="Your enrolment" mt={4}>
+          <Flex align="center" justify="space-between" gap={3} wrap="wrap">
+            <Box minW={0}>
+              <Text fontSize="sm">
+                Joined {formatDate(klass.created_at)} · taught by {klass.ownerName}
+              </Text>
+              <Text fontSize="xs" color="lmFg.muted" mt={1}>
+                Leaving removes this class from your dashboard.
+              </Text>
+            </Box>
+            <Button size="sm" variant="outline" colorScheme="red" onClick={leaveModal.onOpen}>
+              Leave class
+            </Button>
+          </Flex>
+        </SectionCard>
       )}
 
       <InviteModal
@@ -882,6 +956,12 @@ export default function People() {
         classId={classId}
         membership={emailFor}
         className={klass?.name}
+      />
+      <LeaveClassModal
+        isOpen={leaveModal.isOpen}
+        onClose={leaveModal.onClose}
+        classId={classId}
+        klass={klass}
       />
     </Box>
   );

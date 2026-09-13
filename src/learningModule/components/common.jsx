@@ -40,6 +40,27 @@ import { LmIcon } from './Icon';
  */
 export const buttonTextStyles = { color: 'lmFg.heading' };
 
+/** Best-effort: some browsers refuse this outside a direct user gesture. */
+export const requestFullscreen = () => {
+  try {
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+  } catch {
+    // Fullscreen is a nicety here, never a requirement to fill in a form.
+  }
+};
+
+/** Tracks whether the page is currently full screen, for full-screen-only styling. */
+export function useIsFullscreen() {
+  const [isFullscreen, setIsFullscreen] = useState(() => Boolean(document.fullscreenElement));
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  return isFullscreen;
+}
+
 /** Consistent loading state for every panel in the module. */
 export function Loading({ label = 'Loading…', minH = '200px' }) {
   return (

@@ -185,7 +185,7 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
       ? new Date(publishAt)
       : new Date();
   const publishInPast = Boolean(
-    !isAlreadyPublished && publishAt && new Date(publishAt) < new Date(Date.now() - 60000),
+    !isAlreadyPublished && publishAt && new Date(publishAt) < new Date(Date.now() - 5 * 60 * 1000),
   );
   const startsBeforePublished = Boolean(
     !isAlreadyPublished && availableFrom && effectivePublishTime && new Date(availableFrom) < effectivePublishTime,

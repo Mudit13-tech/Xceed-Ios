@@ -14,6 +14,7 @@ import {
 } from '../components/common';
 import FormPreviewModal from '../components/FormPreviewModal';
 import { LmIcon } from '../components/Icon';
+import { requestFullscreen } from '../components/common';
 
 function FormCard({ form, classId, isTeacher, onDeleted, onPreview }) {
   return (
@@ -103,6 +104,11 @@ function FormCard({ form, classId, isTeacher, onDeleted, onPreview }) {
               size="sm"
               colorScheme="teal"
               isDisabled={form.closed}
+              onClick={() => {
+                // Fired synchronously inside the click, so it still counts as
+                // a user gesture by the time the form itself has loaded.
+                if (form.autoFullscreen) requestFullscreen();
+              }}
             >
               {form.closed ? 'Closed' : form.responded ? 'View / edit response' : 'Fill in'}
             </Button>
@@ -271,6 +277,8 @@ export default function Forms() {
         onClose={previewDialog.onClose}
         form={previewForm}
         classId={classId}
+        subjectName={klass?.subject}
+        facultyName={previewForm?.createdByName || klass?.ownerName}
       />
     </Flex>
   );

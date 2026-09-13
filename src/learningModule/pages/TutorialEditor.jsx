@@ -626,6 +626,47 @@ function QuestionPreview({ classId, tutorialId, index, dirty, variables }) {
   );
 }
 
+function SolutionVariableRow({ variable, onChange, onRemove }) {
+  const set = (field, value) => onChange({ ...variable, [field]: value });
+
+  return (
+    <Flex gap={2} align="flex-end" wrap="wrap" mb={2}>
+      <FormControl maxW="110px">
+        <FormLabel fontSize="xs" mb={1}>
+          Name
+        </FormLabel>
+        <Input
+          size="sm"
+          value={variable.name}
+          placeholder="kVA"
+          onChange={(event) => set('name', event.target.value.trim())}
+        />
+      </FormControl>
+      <FormControl flex="1" minW="180px">
+        <FormLabel fontSize="xs" mb={1}>
+          Formula
+        </FormLabel>
+        <Input
+          size="sm"
+          fontFamily="mono"
+          value={variable.formula}
+          placeholder="P / 0.8"
+          onChange={(event) => set('formula', event.target.value)}
+        />
+      </FormControl>
+      <FormControl maxW="90px">
+        <FormLabel fontSize="xs" mb={1}>
+          Unit
+        </FormLabel>
+        <Input size="sm" value={variable.unit} placeholder="kVA" onChange={(e) => set('unit', e.target.value)} />
+      </FormControl>
+      <Button size="sm" variant="ghost" colorScheme="red" onClick={onRemove}>
+        ✕
+      </Button>
+    </Flex>
+  );
+}
+
 function QuestionCard({ classId, tutorialId, question, index, onChange, onRemove, onSave, saving, dirty }) {
   /**
    * Every edit is applied as a function of the *current* question, never of the
@@ -643,6 +684,30 @@ function QuestionCard({ classId, tutorialId, question, index, onChange, onRemove
     () => (question.variables || []).map((variable) => variable.name).filter(Boolean),
     [question.variables],
   );
+  const solutionVarNames = useMemo(
+    () => (question.solutionVariables || []).map((sv) => sv.name).filter(Boolean),
+    [question.solutionVariables],
+  );
+  const answerKeysAndLabels = useMemo(() => {
+    const keys = [];
+    (question.answers || []).forEach((ans) => {
+      if (ans.key && /^[A-Za-z_][A-Za-z0-9_]*$/.test(ans.key)) keys.push(ans.key);
+      if (ans.label && /^[A-Za-z_][A-Za-z0-9_]*$/.test(ans.label)) keys.push(ans.label);
+    });
+    (question.parts || []).forEach((part) => {
+      (part.answers || []).forEach((ans) => {
+        if (ans.key && /^[A-Za-z_][A-Za-z0-9_]*$/.test(ans.key)) keys.push(ans.key);
+        if (ans.label && /^[A-Za-z_][A-Za-z0-9_]*$/.test(ans.label)) keys.push(ans.label);
+      });
+    });
+    return [...new Set(keys)];
+  }, [question.answers, question.parts]);
+
+  const allKnownNames = useMemo(
+    () => [...new Set([...variableNames, ...solutionVarNames, ...answerKeysAndLabels, 'pi', 'e', 'i', 'j'])],
+    [variableNames, solutionVarNames, answerKeysAndLabels],
+  );
+
   // The list, with the single legacy `constraint` field folded in as its first
   // entry — that is how a tutorial saved before multi-constraint support opens
   // with its guard intact and editable.
@@ -668,7 +733,7 @@ function QuestionCard({ classId, tutorialId, question, index, onChange, onRemove
       ]),
     [question.prompt, question.hint, question.solutionSteps, question.parts],
   );
-  const undeclared = placeholders.filter((name) => !variableNames.includes(name));
+  const undeclared = placeholders.filter((name) => !allKnownNames.includes(name));
 
   const declare = (names) =>
     set('variables', withDeclared(question.variables, names));
@@ -733,24 +798,16 @@ function QuestionCard({ classId, tutorialId, question, index, onChange, onRemove
   // Typing declares. A newly typed {{R}} becomes a variable row on its own, so
   // the answer formulas and the placeholder bar can see it immediately instead
   // of the teacher having to add the same name a second time by hand.
-  //
-  // `handled` remembers every name already acted on, which does two things:
-  // deleting a variable row whose placeholder is still in the text keeps it
-  // deleted rather than resurrecting it on the next keystroke, and seeding it
-  // from what the question already contains means merely *opening* an old
-  // question never edits it. Those pre-existing gaps get the button below.
   const handled = useRef(null);
-  if (handled.current === null) handled.current = new Set([...variableNames, ...placeholders]);
+  if (handled.current === null) handled.current = new Set([...allKnownNames, ...placeholders]);
 
   useEffect(() => {
-    const fresh = placeholders.filter((name) => !handled.current.has(name));
+    const fresh = placeholders.filter((name) => !handled.current.has(name) && !allKnownNames.includes(name));
     if (fixed || !fresh.length) return;
     fresh.forEach((name) => handled.current.add(name));
     declare(fresh);
-    // `declare` closes over this render's question, which is the one the new
-    // placeholder was just typed into — re-running on it would only loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placeholders]);
+  }, [placeholders, allKnownNames, fixed]);
 
   return (
     <SectionCard mb={4}>
@@ -1167,12 +1224,58 @@ function QuestionCard({ classId, tutorialId, question, index, onChange, onRemove
       </SimpleGrid>
 
       <FormControl mt={4}>
-        <FormLabel fontSize="sm">{fixed ? 'Explanation' : 'Worked solution'} — shown after submitting</FormLabel>
+        {fixed ? (
+          <FormLabel fontSize="sm">Explanation — shown after submitting</FormLabel>
+        ) : (
+          <Flex justify="space-between" align="center" mb={1}>
+            <FormLabel fontSize="sm" mb={0}>Worked solution — shown after submitting</FormLabel>
+            <Button
+              size="xs"
+              variant="outline"
+              colorScheme="green"
+              onClick={() =>
+                set('solutionVariables', [
+                  ...(question.solutionVariables || []),
+                  { name: '', formula: '', label: '', unit: '' },
+                ])
+              }
+            >
+              + Add step variable
+            </Button>
+          </Flex>
+        )}
+
+        {!fixed && (question.solutionVariables || []).length > 0 && (
+          <Box mb={3} p={3} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" bg="lmHue.green50">
+            <Text fontSize="xs" fontWeight="600" color="lmHue.green800" mb={2}>
+              Intermediate step variables (computed for worked solution)
+            </Text>
+            {(question.solutionVariables || []).map((sv, svIdx) => (
+              <SolutionVariableRow
+                key={svIdx}
+                variable={sv}
+                onChange={(next) =>
+                  set(
+                    'solutionVariables',
+                    (question.solutionVariables || []).map((item, i) => (i === svIdx ? next : item)),
+                  )
+                }
+                onRemove={() =>
+                  set(
+                    'solutionVariables',
+                    (question.solutionVariables || []).filter((_, i) => i !== svIdx),
+                  )
+                }
+              />
+            ))}
+          </Box>
+        )}
+
         <RichTextEditor
           value={question.solutionSteps}
           onChange={(html) => set('solutionSteps', html)}
-          placeholder={fixed ? 'Why the answer is what it is' : 'P = I²R = {{I}}² × {{R}}'}
-          variables={fixed ? [] : variableNames}
+          placeholder={fixed ? 'Why the answer is what it is' : 'P = I²R = {{I}}² × {{R}} = {{kVA}} kVA'}
+          variables={fixed ? [] : allKnownNames}
           minH="110px"
         />
       </FormControl>

@@ -99,14 +99,25 @@ export function useFormAnswers(form, existingResponse) {
   return { answers, patch, uploading, handleUpload };
 }
 
-/** Renders the input control for one question. No label/help-text — callers place those to fit their own layout (a card row vs. a full-screen slide). */
-export function QuestionField({ question, answer, onChange, canUploadFiles, uploading, onUpload }) {
+/**
+ * Renders the input control for one question. No label/help-text — callers
+ * place those to fit their own layout (a card row vs. a full-screen slide).
+ *
+ * `size` is a Chakra size token ('md' by default, 'lg' in full screen).
+ * Chakra's Input/Textarea/Select/Radio/Checkbox each set their own explicit
+ * font size per `size` prop rather than inheriting one from an ancestor, so
+ * a wrapping element's `fontSize` alone does nothing to their text — the
+ * prop has to be threaded down to each control directly.
+ */
+export function QuestionField({ question, answer, onChange, canUploadFiles, uploading, onUpload, size = 'md' }) {
+  const scaleLabelSize = size === 'lg' ? 'md' : 'xs';
+
   if (question.type === 'short_answer') {
-    return <Input value={answer.text} onChange={(event) => onChange({ text: event.target.value })} />;
+    return <Input size={size} value={answer.text} onChange={(event) => onChange({ text: event.target.value })} />;
   }
 
   if (question.type === 'paragraph') {
-    return <Textarea rows={3} value={answer.text} onChange={(event) => onChange({ text: event.target.value })} />;
+    return <Textarea size={size} rows={3} value={answer.text} onChange={(event) => onChange({ text: event.target.value })} />;
   }
 
   if (question.type === 'multiple_choice') {
@@ -114,7 +125,7 @@ export function QuestionField({ question, answer, onChange, canUploadFiles, uplo
       <RadioGroup value={answer.selectedOptions[0] || ''} onChange={(value) => onChange({ selectedOptions: [value] })}>
         <Stack>
           {question.options.map((option) => (
-            <Radio key={option} value={option}>
+            <Radio key={option} size={size} value={option}>
               {option}
             </Radio>
           ))}
@@ -126,6 +137,7 @@ export function QuestionField({ question, answer, onChange, canUploadFiles, uplo
   if (question.type === 'dropdown') {
     return (
       <Select
+        size={size}
         placeholder="Choose one"
         value={answer.selectedOptions[0] || ''}
         onChange={(event) => onChange({ selectedOptions: event.target.value ? [event.target.value] : [] })}
@@ -145,6 +157,7 @@ export function QuestionField({ question, answer, onChange, canUploadFiles, uplo
         {question.options.map((option) => (
           <Checkbox
             key={option}
+            size={size}
             isChecked={answer.selectedOptions.includes(option)}
             onChange={(event) =>
               onChange({
@@ -165,45 +178,45 @@ export function QuestionField({ question, answer, onChange, canUploadFiles, uplo
     return (
       <RadioGroup value={String(answer.number ?? '')} onChange={(value) => onChange({ number: Number(value) })}>
         <HStack spacing={4} wrap="wrap">
-          {question.scaleMinLabel && <Text fontSize="xs">{question.scaleMinLabel}</Text>}
+          {question.scaleMinLabel && <Text fontSize={scaleLabelSize}>{question.scaleMinLabel}</Text>}
           {Array.from(
             { length: question.scaleMax - question.scaleMin + 1 },
             (_, i) => question.scaleMin + i,
           ).map((value) => (
             <VStack key={value} spacing={1}>
-              <Radio value={String(value)} />
-              <Text fontSize="xs">{value}</Text>
+              <Radio size={size} value={String(value)} />
+              <Text fontSize={scaleLabelSize}>{value}</Text>
             </VStack>
           ))}
-          {question.scaleMaxLabel && <Text fontSize="xs">{question.scaleMaxLabel}</Text>}
+          {question.scaleMaxLabel && <Text fontSize={scaleLabelSize}>{question.scaleMaxLabel}</Text>}
         </HStack>
       </RadioGroup>
     );
   }
 
   if (question.type === 'date') {
-    return <Input type="date" value={answer.dateValue} onChange={(event) => onChange({ dateValue: event.target.value })} />;
+    return <Input type="date" size={size} value={answer.dateValue} onChange={(event) => onChange({ dateValue: event.target.value })} />;
   }
 
   if (question.type === 'file_upload') {
     if (!canUploadFiles) {
       return (
-        <Text fontSize="sm" color="lmFg.muted">
+        <Text fontSize={scaleLabelSize === 'md' ? 'md' : 'sm'} color="lmFg.muted">
           File attachments are not available when responding via a shared link — open this form from the class to
           attach a file.
         </Text>
       );
     }
     return (
-      <Box>
+      <Box fontSize={size === 'lg' ? 'md' : 'sm'}>
         <input type="file" multiple disabled={uploading} onChange={(event) => onUpload([...event.target.files])} />
         {answer.attachments.length > 0 && (
           <VStack align="stretch" mt={2} spacing={1}>
             {answer.attachments.map((file, i) => (
-              <HStack key={`${file.url}-${i}`} fontSize="xs" justify="space-between">
+              <HStack key={`${file.url}-${i}`} justify="space-between">
                 <Text>{file.name}</Text>
                 <Button
-                  size="xs"
+                  size={size === 'lg' ? 'sm' : 'xs'}
                   variant="ghost"
                   colorScheme="red"
                   onClick={() => onChange({ attachments: answer.attachments.filter((_, idx) => idx !== i) })}

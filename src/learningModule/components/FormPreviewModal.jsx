@@ -26,7 +26,7 @@ import { LmIcon } from './Icon';
  * Provides a faculty preview of how a form will look and behave for students.
  * Purely visual — responses submitted in preview mode display a notice and are not saved.
  */
-export default function FormPreviewModal({ isOpen, onClose, form, classId }) {
+export default function FormPreviewModal({ isOpen, onClose, form, classId, subjectName, facultyName }) {
   const toast = useToast();
   const [isFullScreen, setIsFullScreen] = useState(false);
 
@@ -91,6 +91,7 @@ export default function FormPreviewModal({ isOpen, onClose, form, classId }) {
               </Text>
               <Text fontSize="xs" color="lmFg.muted" fontWeight="normal">
                 {questions.length} question{questions.length === 1 ? '' : 's'}
+                {(subjectName || facultyName) && ` · ${[subjectName, facultyName].filter(Boolean).join(' · ')}`}
               </Text>
             </Box>
             <IconButton
@@ -127,6 +128,7 @@ export default function FormPreviewModal({ isOpen, onClose, form, classId }) {
               submitting={false}
               canUploadFiles
               classId={classId}
+              isFullscreen={isFullScreen}
               onProgress={() => {}}
             />
           ) : (
@@ -136,6 +138,7 @@ export default function FormPreviewModal({ isOpen, onClose, form, classId }) {
               submitting={false}
               canUploadFiles
               classId={classId}
+              isFullscreen={isFullScreen}
             />
           )}
         </ModalBody>

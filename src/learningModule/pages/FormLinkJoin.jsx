@@ -18,7 +18,7 @@ import {
 import lmApi from '../api/lmApi';
 import StageBar from '../components/StageBar';
 import { loginPathFor } from '../../authRedirect';
-import { DeadlineCountdown, Loading } from '../components/common';
+import { DeadlineCountdown, Loading, requestFullscreen, useIsFullscreen } from '../components/common';
 import { formatDateTime } from '../format';
 import FormRenderer from '../components/FormRenderer';
 import TypeformRenderer from '../components/TypeformRenderer';
@@ -90,6 +90,14 @@ export default function FormLinkJoin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const isFullscreen = useIsFullscreen();
+
+  useEffect(() => {
+    if (phase === 'form' && form?.settings?.autoFullscreen && !document.fullscreenElement) {
+      requestFullscreen();
+    }
+  }, [phase, form]);
+
   const submit = async (answers) => {
     setSubmitting(true);
     try {
@@ -121,6 +129,11 @@ export default function FormLinkJoin() {
               <Heading size="md">{form.title}</Heading>
               {!form.closed && form.dueDate && <DeadlineCountdown dueDate={form.dueDate} prefix="Closes in" />}
             </HStack>
+            {(form.subjectName || form.facultyName) && (
+              <Text fontSize="sm" color="lmFg.muted" mt={1}>
+                {[form.subjectName, form.facultyName].filter(Boolean).join(' · ')}
+              </Text>
+            )}
             {form.description && (
               <Text fontSize="sm" color="lmFg.muted" mt={1}>
                 {form.description}
@@ -144,6 +157,7 @@ export default function FormLinkJoin() {
               onSubmit={submit}
               submitting={submitting}
               canUploadFiles={false}
+              isFullscreen={isFullscreen}
               onProgress={(questionIndex) => lmApi.pingFormProgressByLink(shareCode, questionIndex, form._id).catch(() => {})}
             />
           ) : (
@@ -153,6 +167,7 @@ export default function FormLinkJoin() {
               onSubmit={submit}
               submitting={submitting}
               canUploadFiles={false}
+              isFullscreen={isFullscreen}
             />
           )}
         </VStack>
