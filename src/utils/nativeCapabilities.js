@@ -291,6 +291,17 @@ export const serverFileLinkProps = (url, fileName) => {
   if (!isNativeApp()) return { href: url, isExternal: true };
   return {
     href: url,
+    // iOS only. A long press on a link opens iOS's own preview, and iOS loads
+    // the href itself -- unauthenticated, the same way Share.share() used to --
+    // so the card renders {"message":"Unauthorized"} and offers "Open Link",
+    // which fails for the same reason. The session cannot be given to it: this
+    // is iOS's fetch, outside the WebView. Suppressing the callout is the whole
+    // fix, and it costs nothing, because every entry in that menu is either
+    // broken or a URL the user has no use for. The tap path below is unaffected.
+    //
+    // Android keeps its menu: its long press is a WebView context menu, and its
+    // download route works.
+    ...(Capacitor.getPlatform() === 'ios' ? { style: { WebkitTouchCallout: 'none' } } : {}),
     onClick: (event) => {
       event.preventDefault();
       // downloadFileNative already tells the user when it cannot start; this
