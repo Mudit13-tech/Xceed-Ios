@@ -16,9 +16,29 @@ import getEnvironment from './getenvironment';
  * nothing. Delegating means a host AMS adds or retires reaches the app on the
  * next sync with no action here. See build/mobileOverrides.js.
  */
+/**
+ * The origin a native build talks to.
+ *
+ * Production is the default and stays the default: a build with no env set --
+ * a release build, a CI build, anyone's clone -- points at the live server, so
+ * there is nothing to remember to undo before shipping. VITE_NATIVE_API_ORIGIN
+ * is read only to override it, which is what a developer running the AMS server
+ * locally sets in .env (gitignored).
+ *
+ * Vite inlines import.meta.env at build time, so this is decided by `yarn build`,
+ * not at runtime -- change .env and rebuild for it to take effect.
+ *
+ * On the simulator http://localhost:8010 reaches the Mac directly. On a physical
+ * device it does not: localhost there is the phone. Use the Mac's LAN address
+ * (ipconfig getifaddr en0) with both on the same network -- Info.plist carries
+ * NSAllowsLocalNetworking so ATS permits the cleartext hop.
+ */
+const NATIVE_API_ORIGIN =
+  import.meta.env.VITE_NATIVE_API_ORIGIN || 'https://xceed.nitj.ac.in';
+
 export default function getEnvironmentNative() {
   if (window.Capacitor && window.Capacitor.isNativePlatform()) {
-    return 'https://xceed.nitj.ac.in';
+    return NATIVE_API_ORIGIN;
   }
   return getEnvironment();
 }
