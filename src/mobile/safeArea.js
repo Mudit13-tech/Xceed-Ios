@@ -60,16 +60,23 @@ function ensureStyles() {
       --xceed-safe-bottom: env(safe-area-inset-bottom, 0px);
     }
 
-    /* No header on this screen, so the page carries the inset itself. */
+    /* Deliberately no padding-top on body.
+     *
+     * Padding there does not add space, it reveals body's own background above
+     * whatever the screen is showing -- and that background is white while the
+     * app's launch splash is black, so it drew a white line across the top of
+     * the splash. The same padding drew the same line on the login screen. The
+     * colour cannot be known in advance: it differs per screen and per theme,
+     * and at launch there is no rendered content to sample it from. Trying to
+     * match it was the previous attempt, and it failed for exactly that reason.
+     *
+     * Screens with a header do not need it -- the header carries the inset
+     * below. Screens without one are the splash and the login form, both of
+     * which are vertically centred with room to spare, so full-bleed is correct
+     * there and matches what iOS does with a launch screen anyway.
+     */
     body {
-      padding-top: var(--xceed-safe-top);
       padding-bottom: var(--xceed-safe-bottom);
-    }
-
-    /* A header is sticking, and it carries the inset instead -- see below.
-       Both at once would inset twice. */
-    html[${HAS_STICKY_ATTR}] body {
-      padding-top: 0;
     }
 
     /* Stays pinned at the very top so its background covers the strip the
@@ -104,7 +111,8 @@ function tagStickyTops() {
     }
   });
 
-  // Drives which of the two insets above applies on this screen.
+  // Exposed for debugging and for anything that needs to know a header is
+  // carrying the inset on this screen; the stylesheet no longer branches on it.
   if (found) document.documentElement.setAttribute(HAS_STICKY_ATTR, '');
   else document.documentElement.removeAttribute(HAS_STICKY_ATTR);
 }
