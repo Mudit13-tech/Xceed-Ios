@@ -44,15 +44,49 @@ export const downloadFileNative = async (url, fileName) => {
     // us but native Android does not.
     const downloadUrl = new URL(url, window.location.href).href;
 
-    // iOS does not expose a public Downloads directory to apps. Keep its
-    // platform-standard "Save to Files" flow instead of calling Android code.
+    // iOS does not expose a public Downloads directory to apps, so the file
+    // goes through "Save to Files" -- but it has to be fetched here first.
+    //
+    // Handing Share.share() the https URL let iOS fetch it, and iOS fetches as
+    // itself: no bearer token, and no cookie either, since the API cookie is
+    // cross-site to this WebView (see the Android branch below, and
+    // src/mobile/httpSession.js). The server answered {"message":"Unauthorized"}
+    // and that JSON is what the user was handed -- the preview sheet rendered
+    // it in place of the assignment. Android never hit this because
+    // DownloadManager is given the session explicitly.
+    //
+    // So the request is made here, where the session exists, and iOS is handed
+    // a local file rather than a URL. downloadBase64Native already knows how to
+    // write to Cache and present the share sheet.
     if (Capacitor.getPlatform() !== 'android') {
-      return await Share.share({
-        title: fileName,
-        text: `Save ${fileName} to Files`,
-        url: downloadUrl,
-        dialogTitle: 'Save file',
+      const iosHeaders = {};
+      const iosToken = localStorage.getItem('token');
+      // Same-origin check as the Android branch: a download URL pointing
+      // anywhere else must not be handed the user's token.
+      if (iosToken && new URL(downloadUrl).origin === new URL(getEnvironment()).origin) {
+        iosHeaders.Authorization = `Bearer ${iosToken}`;
+      }
+
+      const response = await fetch(downloadUrl, { headers: iosHeaders, credentials: 'omit' });
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status} ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        // readAsDataURL yields "data:<mime>;base64,<payload>"; Filesystem wants
+        // only the payload.
+        reader.onloadend = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
       });
+
+      return await downloadBase64Native(
+        base64,
+        fileName,
+        blob.type || 'application/octet-stream',
+      );
     }
 
     // DownloadManager is outside the WebView, so explicitly forward the
