@@ -35,7 +35,9 @@
 # The native project. AMS carries an android/ folder because Capacitor was
 # scaffolded there once; ours is the one that ships, with the signing config,
 # the FCM keys, the deep-link intent filters and the launcher icons.
+# ios/ is ours outright -- AMS has never carried one.
 android/**            merge=mobile
+ios/**                merge=mobile
 
 # App id, asset-server hostname, updater and plugin config: all of it describes
 # this app, none of it has a meaningful web counterpart.
@@ -96,3 +98,4 @@ package.json          merge=package-json
 # (a Gradle script, a generated plugin list) would quietly start merging with
 # AMS's scaffolded copy. Keep this last.
 android/**            merge=mobile
+ios/**                merge=mobile
