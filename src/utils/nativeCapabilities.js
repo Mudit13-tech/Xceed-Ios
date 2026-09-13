@@ -4,6 +4,7 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { Browser } from '@capacitor/browser';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { FileViewer } from '@capacitor/file-viewer';
 import getEnvironment from '../getenvironment';
 import { appToast } from './appToast';
 
@@ -15,6 +16,28 @@ const Downloads = registerPlugin('Downloads');
 export const isNativeApp = () => {
   return Capacitor.isNativePlatform();
 };
+
+/**
+ * Present the iOS share sheet, treating a dismissal as the non-event it is.
+ *
+ * Share.share() rejects when the user backs out without choosing anything, so
+ * cancelling landed in the same catch as a genuine failure and raised "Download
+ * failed -- could not save the file". The file had been written and the user had
+ * simply changed their mind, and was told the app was broken.
+ *
+ * The plugin signals this only in the message text, which varies by platform and
+ * spelling ("canceled", "cancelled", "Share canceled"), so the check is
+ * deliberately loose. A real error still throws.
+ */
+async function shareIgnoringCancel(options) {
+  try {
+    return await Share.share(options);
+  } catch (error) {
+    const message = String(error?.message || error).toLowerCase();
+    if (message.includes('cancel')) return undefined;
+    throw error;
+  }
+}
 
 /**
  * Saves a file into the device's public Downloads folder. Android's native
@@ -44,15 +67,49 @@ export const downloadFileNative = async (url, fileName) => {
     // us but native Android does not.
     const downloadUrl = new URL(url, window.location.href).href;
 
-    // iOS does not expose a public Downloads directory to apps. Keep its
-    // platform-standard "Save to Files" flow instead of calling Android code.
+    // iOS does not expose a public Downloads directory to apps, so the file
+    // goes through "Save to Files" -- but it has to be fetched here first.
+    //
+    // Handing Share.share() the https URL let iOS fetch it, and iOS fetches as
+    // itself: no bearer token, and no cookie either, since the API cookie is
+    // cross-site to this WebView (see the Android branch below, and
+    // src/mobile/httpSession.js). The server answered {"message":"Unauthorized"}
+    // and that JSON is what the user was handed -- the preview sheet rendered
+    // it in place of the assignment. Android never hit this because
+    // DownloadManager is given the session explicitly.
+    //
+    // So the request is made here, where the session exists, and iOS is handed
+    // a local file rather than a URL. downloadBase64Native already knows how to
+    // write to Cache and present the share sheet.
     if (Capacitor.getPlatform() !== 'android') {
-      return await Share.share({
-        title: fileName,
-        text: `Save ${fileName} to Files`,
-        url: downloadUrl,
-        dialogTitle: 'Save file',
+      const iosHeaders = {};
+      const iosToken = localStorage.getItem('token');
+      // Same-origin check as the Android branch: a download URL pointing
+      // anywhere else must not be handed the user's token.
+      if (iosToken && new URL(downloadUrl).origin === new URL(getEnvironment()).origin) {
+        iosHeaders.Authorization = `Bearer ${iosToken}`;
+      }
+
+      const response = await fetch(downloadUrl, { headers: iosHeaders, credentials: 'omit' });
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status} ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        // readAsDataURL yields "data:<mime>;base64,<payload>"; Filesystem wants
+        // only the payload.
+        reader.onloadend = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
       });
+
+      return await downloadBase64Native(
+        base64,
+        fileName,
+        blob.type || 'application/octet-stream',
+      );
     }
 
     // DownloadManager is outside the WebView, so explicitly forward the
@@ -121,19 +178,35 @@ export const downloadBase64Native = async (base64Data, fileName, mimeType = 'app
   }
 
   try {
-    if (Capacitor.getPlatform() !== 'android') {
-      // iOS doesn't have a public Downloads folder accessible without the Share sheet
-      const result = await Filesystem.writeFile({
-        path: fileName,
-        data: base64Data,
-        directory: Directory.Cache,
-      });
-      return await Share.share({
-        title: fileName,
-        url: result.uri,
-        dialogTitle: 'Save file',
-      });
-    }
+      if (Capacitor.getPlatform() !== 'android') {
+        // iOS has no public Downloads folder, so the file goes to Cache and is
+        // then shown rather than handed off.
+        const result = await Filesystem.writeFile({
+          path: fileName,
+          data: base64Data,
+          directory: Directory.Cache,
+        });
+
+        // Open it in place. The share sheet was never what a student wanted
+        // from tapping an assignment -- they want to read it, and "Save to
+        // Files" is several taps and a decision before any of it is on screen.
+        // Quick Look presents the document over the app with a Done button, and
+        // carries its own share action for the times they do want to keep it.
+        try {
+          await FileViewer.openDocumentFromLocalPath({ path: result.uri });
+          return result;
+        } catch (viewerError) {
+          // A file type Quick Look will not preview still deserves to be
+          // openable, so the old behaviour stays as the fallback rather than
+          // the default.
+          console.warn('Could not preview the file, offering to save it instead', viewerError);
+          return await shareIgnoringCancel({
+            title: fileName,
+            url: result.uri,
+            dialogTitle: 'Save file',
+          });
+        }
+      }
 
     // Android: attempt to write to Downloads folder via ExternalStorage
     try {
@@ -257,6 +330,17 @@ export const serverFileLinkProps = (url, fileName) => {
   if (!isNativeApp()) return { href: url, isExternal: true };
   return {
     href: url,
+    // iOS only. A long press on a link opens iOS's own preview, and iOS loads
+    // the href itself -- unauthenticated, the same way Share.share() used to --
+    // so the card renders {"message":"Unauthorized"} and offers "Open Link",
+    // which fails for the same reason. The session cannot be given to it: this
+    // is iOS's fetch, outside the WebView. Suppressing the callout is the whole
+    // fix, and it costs nothing, because every entry in that menu is either
+    // broken or a URL the user has no use for. The tap path below is unaffected.
+    //
+    // Android keeps its menu: its long press is a WebView context menu, and its
+    // download route works.
+    ...(Capacitor.getPlatform() === 'ios' ? { style: { WebkitTouchCallout: 'none' } } : {}),
     onClick: (event) => {
       event.preventDefault();
       // downloadFileNative already tells the user when it cannot start; this

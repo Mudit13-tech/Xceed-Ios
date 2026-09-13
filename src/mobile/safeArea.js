@@ -3,42 +3,44 @@ import { Capacitor } from '@capacitor/core';
 /**
  * Keep the app clear of the notch, the Dynamic Island and the home indicator.
  *
- * The first attempt at this was capacitor.config's ios.contentInset: "always".
- * It looked right standing still and was wrong in motion: contentInset offsets
- * where content *begins*, but the scroll view still draws into that region, so
- * scrolling put a strip of live text in the gap above the header. The header
- * itself was pinned below the inset and could not cover it.
+ * Two earlier attempts are worth recording, because the fault each one left
+ * explains the shape of this one.
  *
- * So the WebView is now edge-to-edge (contentInset "never") and the page owns
- * the insets, which is what Apple's own guidance recommends and what
- * env(safe-area-inset-*) exists for.
+ * capacitor.config's ios.contentInset "always" looked right standing still and
+ * was wrong in motion: contentInset offsets where content begins, but the scroll
+ * view still draws into that region, so scrolling put a strip of live text above
+ * the header.
  *
- * Three things have to happen together, and none of them can live where you
- * would expect:
+ * Then body padding plus a fixed bar to cover the strip. The bar had to be
+ * painted some colour, and every choice was wrong somewhere -- white against the
+ * dark launch screen was a white line across the top, which is the fault it was
+ * added to fix.
  *
- *  1. viewport-fit=cover, or iOS reports every inset as 0. The meta tag is in
- *     index.html, which is AMS's, so it is amended here at runtime instead.
- *  2. Body padding, so the first screenful starts below the island.
- *  3. The sticky headers have to move down too. This is the part CSS alone
- *     cannot do from outside: `position: sticky; top: 0` pins to the scrollport,
- *     which body padding does not inset, so a padded body still leaves the
- *     header pinning under the island the moment you scroll. They need their
- *     `top` changed -- and they are Navbar.jsx and LearningLayout.jsx, both
- *     AMS's, one styled by Tailwind classes and the other by Chakra's generated
- *     ones. There is no stable selector to write.
+ * The bar was never needed. A sticky header pinned at top: 0 already spans the
+ * full width at the top of the screen; it only has to be tall enough. Giving it
+ * padding-top of the inset makes its own background cover the island strip and
+ * puts its content below the cutout, in one element, with no colour to guess at
+ * and nothing extra painted over the page.
  *
- * Hence the observer: rather than guess at class names that upstream will
- * change, it asks the browser which elements are actually sticking to the top
- * and tags them. A tag is a selector we own, so the stylesheet can then do the
- * work. New screens get handled as they mount, and nothing here needs updating
- * when AMS restyles a header.
+ * Body padding then applies only on screens that have no sticky header -- the
+ * login screen -- because there the page itself must start below the island.
+ * Applying both would inset twice and leave a gap.
+ *
+ * The header is Navbar.jsx on some screens and LearningLayout.jsx on others,
+ * both AMS's, one styled by Tailwind and the other by Chakra's generated class
+ * names. There is no stable selector to write, so rather than guess at names
+ * upstream will change, the observer asks the browser which elements are
+ * actually sticking to the top and tags them. The tag is a selector we own.
+ *
+ * viewport-fit=cover has to be set or iOS reports every inset as 0; that meta
+ * tag lives in index.html, which is AMS's, so it is amended at runtime.
  *
  * iOS only. Android has no cutout and its layout is correct today.
  */
 
 const STYLE_ID = 'xceed-safe-area';
 const STICKY_ATTR = 'data-xceed-sticky-top';
-const COVER_ID = 'xceed-safe-area-cover';
+const HAS_STICKY_ATTR = 'data-xceed-has-sticky-top';
 
 function ensureViewportFitCover() {
   const meta = document.querySelector('meta[name="viewport"]');
@@ -57,83 +59,62 @@ function ensureStyles() {
       --xceed-safe-top: env(safe-area-inset-top, 0px);
       --xceed-safe-bottom: env(safe-area-inset-bottom, 0px);
     }
+
+    /* Deliberately no padding-top on body.
+     *
+     * Padding there does not add space, it reveals body's own background above
+     * whatever the screen is showing -- and that background is white while the
+     * app's launch splash is black, so it drew a white line across the top of
+     * the splash. The same padding drew the same line on the login screen. The
+     * colour cannot be known in advance: it differs per screen and per theme,
+     * and at launch there is no rendered content to sample it from. Trying to
+     * match it was the previous attempt, and it failed for exactly that reason.
+     *
+     * Screens with a header do not need it -- the header carries the inset
+     * below. Screens without one are the splash and the login form, both of
+     * which are vertically centred with room to spare, so full-bleed is correct
+     * there and matches what iOS does with a launch screen anyway.
+     */
     body {
-      padding-top: var(--xceed-safe-top);
       padding-bottom: var(--xceed-safe-bottom);
     }
+
+    /* Stays pinned at the very top so its background covers the strip the
+       scroll view draws into, and grows by the inset so its own content sits
+       below the cutout. */
     [${STICKY_ATTR}] {
-      top: var(--xceed-safe-top) !important;
-    }
-    /* The bar that actually hides the strip. Padding alone cannot: it moves
-       where content begins, and scrolled content still travels up through the
-       inset. Something opaque has to sit over it. */
-    #${COVER_ID} {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: var(--xceed-safe-top);
-      background: var(--xceed-safe-bg, #ffffff);
-      z-index: 2147483647;
-      pointer-events: none;
+      top: 0 !important;
+      padding-top: var(--xceed-safe-top) !important;
     }
   `;
   document.head.appendChild(style);
 }
 
 /**
- * Tag anything the page is sticking to the very top.
+ * Tag whatever the page is sticking to the very top.
  *
- * Read from the computed style rather than from class names: it is the only
- * source that is true regardless of whether the header came from Tailwind,
- * Chakra or an inline style, and it stays true after upstream restyles it.
+ * Read from the computed style, not from class names: it is the only source
+ * that is true whether the header came from Tailwind, Chakra or an inline
+ * style, and it stays true after upstream restyles it.
  */
-function tagStickyTops(root) {
-  const scope = root && root.querySelectorAll ? root : document;
-  scope.querySelectorAll('*').forEach((el) => {
-    if (el.hasAttribute(STICKY_ATTR)) return;
+function tagStickyTops() {
+  let found = false;
+  document.querySelectorAll('*').forEach((el) => {
+    if (el.hasAttribute(STICKY_ATTR)) {
+      found = true;
+      return;
+    }
     const cs = window.getComputedStyle(el);
     if (cs.position === 'sticky' && cs.top === '0px') {
       el.setAttribute(STICKY_ATTR, '');
+      found = true;
     }
   });
-}
 
-/**
- * Paint the bar the same colour as whatever is beneath it.
- *
- * A fixed colour is wrong twice: the app has a dark mode, and the surface under
- * the island is a white header on most screens but the page background on the
- * login screen, which has no header at all. Either mismatch reads as a stray
- * line across the top -- which is exactly what a hardcoded white produced.
- *
- * So the colour is read from the page: the header if one is sticking, the body
- * otherwise. Transparent values are skipped, because a transparent bar defeats
- * the entire point of having one.
- */
-function matchCoverColour() {
-  const opaque = (c) => c && c !== 'transparent' && !c.startsWith('rgba(0, 0, 0, 0)');
-
-  const header = document.querySelector(`[${STICKY_ATTR}]`);
-  if (header) {
-    const bg = window.getComputedStyle(header).backgroundColor;
-    if (opaque(bg)) {
-      document.documentElement.style.setProperty('--xceed-safe-bg', bg);
-      return;
-    }
-  }
-
-  const bodyBg = window.getComputedStyle(document.body).backgroundColor;
-  if (opaque(bodyBg)) {
-    document.documentElement.style.setProperty('--xceed-safe-bg', bodyBg);
-  }
-}
-
-function ensureCover() {
-  if (document.getElementById(COVER_ID)) return;
-  const cover = document.createElement('div');
-  cover.id = COVER_ID;
-  document.body.appendChild(cover);
+  // Exposed for debugging and for anything that needs to know a header is
+  // carrying the inset on this screen; the stylesheet no longer branches on it.
+  if (found) document.documentElement.setAttribute(HAS_STICKY_ATTR, '');
+  else document.documentElement.removeAttribute(HAS_STICKY_ATTR);
 }
 
 export function setupSafeArea() {
@@ -141,9 +122,7 @@ export function setupSafeArea() {
 
   ensureViewportFitCover();
   ensureStyles();
-  ensureCover();
-  tagStickyTops(document);
-  matchCoverColour();
+  tagStickyTops();
 
   // Screens mount and unmount as the user navigates, so a one-off pass would
   // only ever fix the first one. Batched into an animation frame because React
@@ -154,9 +133,7 @@ export function setupSafeArea() {
     queued = true;
     requestAnimationFrame(() => {
       queued = false;
-      ensureCover();
-      tagStickyTops(document);
-      matchCoverColour();
+      tagStickyTops();
     });
   });
   observer.observe(document.body, { childList: true, subtree: true });
