@@ -38,6 +38,7 @@ import { Capacitor } from '@capacitor/core';
 
 const STYLE_ID = 'xceed-safe-area';
 const STICKY_ATTR = 'data-xceed-sticky-top';
+const COVER_ID = 'xceed-safe-area-cover';
 
 function ensureViewportFitCover() {
   const meta = document.querySelector('meta[name="viewport"]');
@@ -63,6 +64,19 @@ function ensureStyles() {
     [${STICKY_ATTR}] {
       top: var(--xceed-safe-top) !important;
     }
+    /* The bar that actually hides the strip. Padding alone cannot: it moves
+       where content begins, and scrolled content still travels up through the
+       inset. Something opaque has to sit over it. */
+    #${COVER_ID} {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: var(--xceed-safe-top);
+      background: var(--xceed-safe-bg, #ffffff);
+      z-index: 2147483647;
+      pointer-events: none;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -85,12 +99,51 @@ function tagStickyTops(root) {
   });
 }
 
+/**
+ * Paint the bar the same colour as whatever is beneath it.
+ *
+ * A fixed colour is wrong twice: the app has a dark mode, and the surface under
+ * the island is a white header on most screens but the page background on the
+ * login screen, which has no header at all. Either mismatch reads as a stray
+ * line across the top -- which is exactly what a hardcoded white produced.
+ *
+ * So the colour is read from the page: the header if one is sticking, the body
+ * otherwise. Transparent values are skipped, because a transparent bar defeats
+ * the entire point of having one.
+ */
+function matchCoverColour() {
+  const opaque = (c) => c && c !== 'transparent' && !c.startsWith('rgba(0, 0, 0, 0)');
+
+  const header = document.querySelector(`[${STICKY_ATTR}]`);
+  if (header) {
+    const bg = window.getComputedStyle(header).backgroundColor;
+    if (opaque(bg)) {
+      document.documentElement.style.setProperty('--xceed-safe-bg', bg);
+      return;
+    }
+  }
+
+  const bodyBg = window.getComputedStyle(document.body).backgroundColor;
+  if (opaque(bodyBg)) {
+    document.documentElement.style.setProperty('--xceed-safe-bg', bodyBg);
+  }
+}
+
+function ensureCover() {
+  if (document.getElementById(COVER_ID)) return;
+  const cover = document.createElement('div');
+  cover.id = COVER_ID;
+  document.body.appendChild(cover);
+}
+
 export function setupSafeArea() {
   if (Capacitor.getPlatform() !== 'ios') return;
 
   ensureViewportFitCover();
   ensureStyles();
+  ensureCover();
   tagStickyTops(document);
+  matchCoverColour();
 
   // Screens mount and unmount as the user navigates, so a one-off pass would
   // only ever fix the first one. Batched into an animation frame because React
@@ -101,7 +154,9 @@ export function setupSafeArea() {
     queued = true;
     requestAnimationFrame(() => {
       queued = false;
+      ensureCover();
       tagStickyTops(document);
+      matchCoverColour();
     });
   });
   observer.observe(document.body, { childList: true, subtree: true });
