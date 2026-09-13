@@ -25,6 +25,8 @@ PODS:
     - SwiftKeychainWrapper
   - CapacitorShare (8.0.1):
     - Capacitor
+  - CapacitorStatusBar (8.0.3):
+    - Capacitor
   - CapawesomeCapacitorFilePicker (8.1.0):
     - Capacitor
   - CapgoCapacitorDownloader (8.3.1):
@@ -53,6 +55,7 @@ DEPENDENCIES:
   - "CapacitorPushNotifications (from `../../node_modules/@capacitor/push-notifications`)"
   - CapacitorSecureStoragePlugin (from `../../node_modules/capacitor-secure-storage-plugin`)
   - "CapacitorShare (from `../../node_modules/@capacitor/share`)"
+  - "CapacitorStatusBar (from `../../node_modules/@capacitor/status-bar`)"
   - "CapawesomeCapacitorFilePicker (from `../../node_modules/@capawesome/capacitor-file-picker`)"
   - "CapgoCapacitorDownloader (from `../../node_modules/@capgo/capacitor-downloader`)"
   - "CapgoCapacitorUpdater (from `../../node_modules/@capgo/capacitor-updater`)"
@@ -90,6 +93,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/capacitor-secure-storage-plugin"
   CapacitorShare:
     :path: "../../node_modules/@capacitor/share"
+  CapacitorStatusBar:
+    :path: "../../node_modules/@capacitor/status-bar"
   CapawesomeCapacitorFilePicker:
     :path: "../../node_modules/@capawesome/capacitor-file-picker"
   CapgoCapacitorDownloader:
@@ -111,6 +116,7 @@ SPEC CHECKSUMS:
   CapacitorPushNotifications: 32a7f840815f319fd9ba1c1c9b0b914be9d95237
   CapacitorSecureStoragePlugin: d083ff28d9ba5bc74924b9bcf9754ea605016b63
   CapacitorShare: 0c58305114538568059bfc07111f22dcb9cb2a82
+  CapacitorStatusBar: eca7bc2b58d9f886f1ef9edb66e57a9b29c121af
   CapawesomeCapacitorFilePicker: 63170fae6d17f3ce2547ffc0290f287e7bdc45d7
   CapgoCapacitorDownloader: 760af047af3caf8f885bdafa628f34ab18ca50ee
   CapgoCapacitorUpdater: 691ad5c4955163d2b56e7eb4cb6dbc42766bdc48
@@ -120,6 +126,6 @@ SPEC CHECKSUMS:
   Version: de5907f2c5d0f3cf21708db7801d1d5401139486
   ZIPFoundation: dfd3d681c4053ff7e2f7350bc4e53b5dba3f5351
 
-PODFILE CHECKSUM: bab2aabd5249f5baa802253b8072211a0b321d22
+PODFILE CHECKSUM: 839d0957c98f62a717666defbd40b144a1a765ed
 
 COCOAPODS: 1.17.0

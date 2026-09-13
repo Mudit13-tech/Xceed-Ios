@@ -8,6 +8,7 @@ import {
 import { isInAppRoute, savePendingRoute } from '../utils/deepLink';
 import { setupOtaUpdater } from '../utils/otaUpdater';
 import { initializePushNotifications } from '../utils/pushNotifications';
+import { configureStatusBar } from './statusBar';
 
 /**
  * Everything the app does that a browser tab cannot: the hardware back key,
@@ -37,6 +38,10 @@ function NativeAppListeners() {
     locationRef.current = location.pathname;
     navigateRef.current = navigate;
   }, [location.pathname, navigate]);
+
+  // Runs once, before anything paints below the notch. See ./statusBar.js for
+  // why this is a status-bar call rather than CSS.
+  React.useEffect(() => { configureStatusBar(); }, []);
 
   React.useEffect(() => {
     let backButtonListener = null;
