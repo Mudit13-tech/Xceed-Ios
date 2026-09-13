@@ -21,6 +21,7 @@ import { loginPathFor } from '../../authRedirect';
 import { DeadlineCountdown, Loading } from '../components/common';
 import { formatDateTime } from '../format';
 import FormRenderer from '../components/FormRenderer';
+import TypeformRenderer from '../components/TypeformRenderer';
 import { LmIcon } from '../components/Icon';
 
 /**
@@ -110,10 +111,11 @@ export default function FormLinkJoin() {
   const cardShadow = useColorModeValue('xl', 'dark-lg');
 
   if (phase === 'form') {
+    const oneAtATime = form.settings?.displayMode === 'one_at_a_time';
     return (
       <Box minH="100vh" bg="lmBg.canvas">
         <StageBar label="Form" title={form.title} />
-        <VStack align="stretch" spacing={4} maxW="640px" mx="auto" p={{ base: 4, md: 8 }}>
+        <VStack align="stretch" spacing={4} maxW={oneAtATime ? '960px' : '640px'} mx="auto" p={{ base: 4, md: 8 }}>
           <Box>
             <HStack>
               <Heading size="md">{form.title}</Heading>
@@ -135,6 +137,15 @@ export default function FormLinkJoin() {
               <AlertIcon />
               This form closed on {formatDateTime(form.dueDate)} and is no longer accepting responses.
             </Alert>
+          ) : oneAtATime ? (
+            <TypeformRenderer
+              form={form}
+              existingResponse={existingResponse}
+              onSubmit={submit}
+              submitting={submitting}
+              canUploadFiles={false}
+              onProgress={(questionIndex) => lmApi.pingFormProgressByLink(shareCode, questionIndex, form._id).catch(() => {})}
+            />
           ) : (
             <FormRenderer
               form={form}

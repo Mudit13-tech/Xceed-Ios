@@ -1,27 +1,14 @@
-import React, { useState } from 'react';
-import {
-  Box,
-  Button,
-  Checkbox,
-  FormControl,
-  FormHelperText,
-  FormLabel,
-  HStack,
-  Input,
-  Radio,
-  RadioGroup,
-  Select,
-  Stack,
-  Text,
-  Textarea,
-  VStack,
-  useToast,
-} from '@chakra-ui/react';
-import lmApi from '../api/lmApi';
+import React from 'react';
+import { Box, Button, FormControl, FormHelperText, FormLabel, Heading, Text, VStack, useToast } from '@chakra-ui/react';
 import { SectionCard } from './common';
+import { buildAnswerPayload, isMissing, QuestionField, useFormAnswers } from './formFields';
 
 /**
- * Renders a form's questions and collects one respondent's answers.
+ * Renders every question on one scrolling page and collects one respondent's
+ * answers — the original "all at once" fill experience, now grouped under
+ * section headings when the form has any. The one-at-a-time flow lives in
+ * `TypeformRenderer`; `FormFill`/`FormLinkJoin`/`FormPreviewModal` pick
+ * between the two based on `form.settings.displayMode`.
  *
  * Shared between the class-scoped fill page and the public link-mode page —
  * both need identical question rendering, and only differ in how the form
@@ -31,61 +18,35 @@ import { SectionCard } from './common';
  * read-only there rather than pretending to accept a file that would 403.
  */
 
-const answerFor = (question, existing) => ({
-  text: existing?.text || '',
-  selectedOptions: existing?.selectedOptions || [],
-  number: existing?.number ?? '',
-  dateValue: existing?.dateValue ? String(existing.dateValue).slice(0, 10) : '',
-  attachments: existing?.attachments || [],
-});
-
-const isMissing = (question, answer) => {
-  if (!question.required) return false;
-  switch (question.type) {
-    case 'short_answer':
-    case 'paragraph':
-      return !answer.text.trim();
-    case 'multiple_choice':
-    case 'dropdown':
-    case 'checkboxes':
-      return !answer.selectedOptions.length;
-    case 'linear_scale':
-      return answer.number === '' || answer.number === null || answer.number === undefined;
-    case 'date':
-      return !answer.dateValue;
-    case 'file_upload':
-      return !answer.attachments.length;
-    default:
-      return false;
-  }
-};
+function QuestionCardField({ question, answer, patch, classId, canUploadFiles, uploading, handleUpload }) {
+  const key = String(question._id);
+  return (
+    <SectionCard key={key}>
+      <FormControl isRequired={question.required}>
+        <FormLabel fontSize="sm" fontWeight="600">
+          {question.title}
+        </FormLabel>
+        {question.description && (
+          <FormHelperText mt={-1} mb={2} fontSize="xs">
+            {question.description}
+          </FormHelperText>
+        )}
+        <QuestionField
+          question={question}
+          answer={answer}
+          onChange={(next) => patch(key, next)}
+          canUploadFiles={canUploadFiles}
+          uploading={Boolean(uploading[key])}
+          onUpload={(files) => handleUpload(classId, question, files)}
+        />
+      </FormControl>
+    </SectionCard>
+  );
+}
 
 export default function FormRenderer({ form, existingResponse, onSubmit, submitting, canUploadFiles, classId }) {
   const toast = useToast();
-  const existingByQuestion = new Map((existingResponse?.answers || []).map((a) => [String(a.questionId), a]));
-  const [answers, setAnswers] = useState(() =>
-    Object.fromEntries(
-      form.questions.map((question) => [String(question._id), answerFor(question, existingByQuestion.get(String(question._id)))]),
-    ),
-  );
-  const [uploading, setUploading] = useState({});
-
-  const patch = (questionId, next) =>
-    setAnswers((current) => ({ ...current, [questionId]: { ...current[questionId], ...next } }));
-
-  const handleUpload = async (question, files) => {
-    if (!files?.length) return;
-    const key = String(question._id);
-    setUploading((current) => ({ ...current, [key]: true }));
-    try {
-      const { attachments } = await lmApi.uploadFiles(classId, files);
-      patch(key, { attachments: [...answers[key].attachments, ...attachments] });
-    } catch (err) {
-      toast({ status: 'error', title: err.message });
-    } finally {
-      setUploading((current) => ({ ...current, [key]: false }));
-    }
-  };
+  const { answers, patch, uploading, handleUpload } = useFormAnswers(form, existingResponse);
 
   const submit = async () => {
     const missing = form.questions.find((question) => isMissing(question, answers[String(question._id)]));
@@ -93,151 +54,48 @@ export default function FormRenderer({ form, existingResponse, onSubmit, submitt
       toast({ status: 'warning', title: `"${missing.title}" is required.` });
       return;
     }
-    const payload = form.questions.map((question) => {
-      const answer = answers[String(question._id)];
-      return {
-        questionId: question._id,
-        text: answer.text,
-        selectedOptions: answer.selectedOptions,
-        number: answer.number === '' ? null : Number(answer.number),
-        dateValue: answer.dateValue || null,
-        attachments: answer.attachments,
-      };
-    });
-    await onSubmit(payload);
+    await onSubmit(buildAnswerPayload(form.questions, answers));
   };
+
+  const sections = (form.sections || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+  const questionsBySection = new Map(sections.map((s) => [String(s._id), []]));
+  const ungrouped = [];
+  form.questions.forEach((question) => {
+    const bucket = question.sectionId && questionsBySection.get(String(question.sectionId));
+    (bucket || ungrouped).push(question);
+  });
+
+  const fieldProps = { patch, classId, canUploadFiles, uploading, handleUpload };
 
   return (
     <VStack align="stretch" spacing={4}>
-      {form.questions.map((question) => {
-        const key = String(question._id);
-        const answer = answers[key];
+      {ungrouped.map((question) => (
+        <QuestionCardField key={question._id} question={question} answer={answers[String(question._id)]} {...fieldProps} />
+      ))}
+
+      {sections.map((section) => {
+        const sectionQuestions = questionsBySection.get(String(section._id)) || [];
+        if (!sectionQuestions.length && !section.title && !section.description) return null;
         return (
-          <SectionCard key={key}>
-            <FormControl isRequired={question.required}>
-              <FormLabel fontSize="sm" fontWeight="600">
-                {question.title}
-              </FormLabel>
-              {question.description && (
-                <FormHelperText mt={-1} mb={2} fontSize="xs">
-                  {question.description}
-                </FormHelperText>
-              )}
-
-              {question.type === 'short_answer' && (
-                <Input value={answer.text} onChange={(event) => patch(key, { text: event.target.value })} />
-              )}
-
-              {question.type === 'paragraph' && (
-                <Textarea rows={3} value={answer.text} onChange={(event) => patch(key, { text: event.target.value })} />
-              )}
-
-              {question.type === 'multiple_choice' && (
-                <RadioGroup value={answer.selectedOptions[0] || ''} onChange={(value) => patch(key, { selectedOptions: [value] })}>
-                  <Stack>
-                    {question.options.map((option) => (
-                      <Radio key={option} value={option}>
-                        {option}
-                      </Radio>
-                    ))}
-                  </Stack>
-                </RadioGroup>
-              )}
-
-              {question.type === 'dropdown' && (
-                <Select
-                  placeholder="Choose one"
-                  value={answer.selectedOptions[0] || ''}
-                  onChange={(event) => patch(key, { selectedOptions: event.target.value ? [event.target.value] : [] })}
-                >
-                  {question.options.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </Select>
-              )}
-
-              {question.type === 'checkboxes' && (
-                <Stack>
-                  {question.options.map((option) => (
-                    <Checkbox
-                      key={option}
-                      isChecked={answer.selectedOptions.includes(option)}
-                      onChange={(event) =>
-                        patch(key, {
-                          selectedOptions: event.target.checked
-                            ? [...answer.selectedOptions, option]
-                            : answer.selectedOptions.filter((o) => o !== option),
-                        })
-                      }
-                    >
-                      {option}
-                    </Checkbox>
-                  ))}
-                </Stack>
-              )}
-
-              {question.type === 'linear_scale' && (
-                <RadioGroup value={String(answer.number ?? '')} onChange={(value) => patch(key, { number: Number(value) })}>
-                  <HStack spacing={4} wrap="wrap">
-                    {question.scaleMinLabel && <Text fontSize="xs">{question.scaleMinLabel}</Text>}
-                    {Array.from(
-                      { length: question.scaleMax - question.scaleMin + 1 },
-                      (_, i) => question.scaleMin + i,
-                    ).map((value) => (
-                      <VStack key={value} spacing={1}>
-                        <Radio value={String(value)} />
-                        <Text fontSize="xs">{value}</Text>
-                      </VStack>
-                    ))}
-                    {question.scaleMaxLabel && <Text fontSize="xs">{question.scaleMaxLabel}</Text>}
-                  </HStack>
-                </RadioGroup>
-              )}
-
-              {question.type === 'date' && (
-                <Input type="date" value={answer.dateValue} onChange={(event) => patch(key, { dateValue: event.target.value })} />
-              )}
-
-              {question.type === 'file_upload' && (
-                canUploadFiles ? (
-                  <Box>
-                    <input
-                      type="file"
-                      multiple
-                      disabled={uploading[key]}
-                      onChange={(event) => handleUpload(question, [...event.target.files])}
-                    />
-                    {answer.attachments.length > 0 && (
-                      <VStack align="stretch" mt={2} spacing={1}>
-                        {answer.attachments.map((file, i) => (
-                          <HStack key={`${file.url}-${i}`} fontSize="xs" justify="space-between">
-                            <Text>{file.name}</Text>
-                            <Button
-                              size="xs"
-                              variant="ghost"
-                              colorScheme="red"
-                              onClick={() =>
-                                patch(key, { attachments: answer.attachments.filter((_, idx) => idx !== i) })
-                              }
-                            >
-                              Remove
-                            </Button>
-                          </HStack>
-                        ))}
-                      </VStack>
-                    )}
-                  </Box>
-                ) : (
-                  <Text fontSize="sm" color="lmFg.muted">
-                    File attachments are not available when responding via a shared link — open this form from
-                    the class to attach a file.
+          <Box key={section._id}>
+            {(section.title || section.description) && (
+              <Box mb={3} mt={2}>
+                {section.title && (
+                  <Heading size="sm">{section.title}</Heading>
+                )}
+                {section.description && (
+                  <Text fontSize="sm" color="lmFg.muted" mt={1}>
+                    {section.description}
                   </Text>
-                )
-              )}
-            </FormControl>
-          </SectionCard>
+                )}
+              </Box>
+            )}
+            <VStack align="stretch" spacing={4}>
+              {sectionQuestions.map((question) => (
+                <QuestionCardField key={question._id} question={question} answer={answers[String(question._id)]} {...fieldProps} />
+              ))}
+            </VStack>
+          </Box>
         );
       })}
 

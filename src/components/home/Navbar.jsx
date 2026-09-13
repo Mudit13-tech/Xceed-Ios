@@ -4,7 +4,20 @@ import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import getEnvironment from '../../getenvironment';
-import { Text, Button, Flex, IconButton, useColorMode, } from '@chakra-ui/react';
+import {
+  Text,
+  Button,
+  Flex,
+  IconButton,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
+  useColorMode,
+  useDisclosure,
+} from '@chakra-ui/react';
 import { loginPathFor } from '../../authRedirect';
 import { clearNativeSession } from '../../mobile/session';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -167,7 +180,10 @@ export default function Navbar() {
     }
   }, [isError, error, queryClient]);
 
+  const logoutModal = useDisclosure();
+
   const handleLogout = async () => {
+    logoutModal.onClose();
     try {
       const response = await fetch(`${apiUrl}/user/getuser/logout`, {
         method: 'POST',
@@ -408,7 +424,7 @@ export default function Navbar() {
                         _focusVisible={{
                           boxShadow: '0 0 0 3px rgba(34, 211, 238, 0.45)',
                         }}
-                        onClick={handleLogout}
+                        onClick={logoutModal.onOpen}
                       >
                         Logout
                       </Button>
@@ -420,6 +436,23 @@ export default function Navbar() {
           </ul>
         </div>
       </div>
+      <Modal isOpen={logoutModal.isOpen} onClose={logoutModal.onClose} isCentered size="sm">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader fontSize="lg">Log out</ModalHeader>
+          <ModalBody>
+            <Text>Are you sure you want to log out?</Text>
+          </ModalBody>
+          <ModalFooter gap={3}>
+            <Button variant="ghost" onClick={logoutModal.onClose}>
+              Cancel
+            </Button>
+            <Button colorScheme="red" onClick={handleLogout}>
+              Log out
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </nav>
   );
 }

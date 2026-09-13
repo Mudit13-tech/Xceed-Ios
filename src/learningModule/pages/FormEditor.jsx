@@ -58,6 +58,26 @@ const QUESTION_TYPES = [
 
 const HAS_OPTIONS = ['multiple_choice', 'checkboxes', 'dropdown'];
 
+// A section needs a stable id the moment it is created client-side, so a
+// question can be assigned to it before the form is ever saved — any 24-hex
+// string is a valid ObjectId to Mongoose, it does not have to come from the
+// server's own generator.
+const genObjectId = () => {
+  const timestamp = Math.floor(Date.now() / 1000).toString(16).padStart(8, '0');
+  const random = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  return timestamp + random;
+};
+
+const blankSection = () => ({ _id: genObjectId(), title: '', description: '' });
+
+const withSectionIds = (sections) =>
+  (sections || []).map((section) => ({
+    title: '',
+    description: '',
+    ...section,
+    _id: String(section._id || genObjectId()),
+  }));
+
 // `datetime-local` wants "YYYY-MM-DDTHH:mm" in the browser's own timezone,
 // not an ISO string — Date's own getters already return local components, so
 // this is just formatting them, not converting a timezone.
@@ -69,7 +89,7 @@ const toDatetimeLocal = (iso) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-const blankQuestion = (type = 'short_answer') => ({
+const blankQuestion = (type = 'short_answer', sectionId = null) => ({
   _key: Math.random().toString(36).slice(2),
   type,
   title: '',
@@ -80,6 +100,7 @@ const blankQuestion = (type = 'short_answer') => ({
   scaleMax: 5,
   scaleMinLabel: '',
   scaleMaxLabel: '',
+  sectionId,
 });
 
 // The server sends questions without the local _key that keeps React's list
@@ -147,7 +168,7 @@ function OptionRows({ question, onChange }) {
   );
 }
 
-function QuestionCard({ question, index, total, onChange, onMove, onRemove, onDuplicate }) {
+function QuestionCard({ question, index, total, sections, onChange, onMove, onRemove, onDuplicate }) {
   const meta = QUESTION_TYPES.find((entry) => entry.value === question.type);
 
   const changeType = (type) => {
@@ -169,6 +190,21 @@ function QuestionCard({ question, index, total, onChange, onMove, onRemove, onDu
             </option>
           ))}
         </Select>
+        {sections.length > 0 && (
+          <Select
+            size="sm"
+            maxW="200px"
+            value={question.sectionId || ''}
+            onChange={(event) => onChange({ sectionId: event.target.value || null })}
+          >
+            <option value="">No section</option>
+            {sections.map((section, sectionIndex) => (
+              <option key={section._id} value={section._id}>
+                {section.title || `Section ${sectionIndex + 1}`}
+              </option>
+            ))}
+          </Select>
+        )}
         <Box flex="1" />
         <IconButton
           aria-label="Move question up"
@@ -271,6 +307,76 @@ function QuestionCard({ question, index, total, onChange, onMove, onRemove, onDu
   );
 }
 
+function SectionsManager({ sections, onChange }) {
+  const patchSection = (index, patch) =>
+    onChange(sections.map((section, i) => (i === index ? { ...section, ...patch } : section)));
+  const moveSection = (index, delta) => {
+    const to = index + delta;
+    if (to < 0 || to >= sections.length) return;
+    const next = [...sections];
+    [next[index], next[to]] = [next[to], next[index]];
+    onChange(next);
+  };
+  const removeSection = (index) => onChange(sections.filter((_, i) => i !== index));
+  const addSection = () => onChange([...sections, blankSection()]);
+
+  return (
+    <SectionCard title="Sections" subtitle="Group questions under a heading — assign each question to one from its card below.">
+      <VStack align="stretch" spacing={3}>
+        {sections.map((section, index) => (
+          <Box key={section._id} borderWidth="1px" borderColor="lmBorder.subtle" borderRadius="md" p={3}>
+            <Flex align="center" gap={2} mb={2}>
+              <Badge>{index + 1}</Badge>
+              <Box flex="1" />
+              <IconButton
+                aria-label="Move section up"
+                icon={<FiArrowUp />}
+                size="xs"
+                variant="ghost"
+                isDisabled={index === 0}
+                onClick={() => moveSection(index, -1)}
+              />
+              <IconButton
+                aria-label="Move section down"
+                icon={<FiArrowDown />}
+                size="xs"
+                variant="ghost"
+                isDisabled={index === sections.length - 1}
+                onClick={() => moveSection(index, 1)}
+              />
+              <IconButton
+                aria-label="Delete section"
+                icon={<FiTrash2 />}
+                size="xs"
+                variant="ghost"
+                colorScheme="red"
+                onClick={() => removeSection(index)}
+              />
+            </Flex>
+            <VStack align="stretch" spacing={2}>
+              <Input
+                size="sm"
+                placeholder={`Section ${index + 1} title`}
+                value={section.title}
+                onChange={(event) => patchSection(index, { title: event.target.value })}
+              />
+              <Input
+                size="sm"
+                placeholder="Description shown to students (optional)"
+                value={section.description}
+                onChange={(event) => patchSection(index, { description: event.target.value })}
+              />
+            </VStack>
+          </Box>
+        ))}
+        <Button size="sm" variant="outline" onClick={addSection} alignSelf="flex-start">
+          + Add section
+        </Button>
+      </VStack>
+    </SectionCard>
+  );
+}
+
 function ShareLink({ form, classId }) {
   const shareUrl = form.shareCode ? lmApi.formShareUrl(form.shareCode) : '';
   const { onCopy, hasCopied } = useClipboard(shareUrl);
@@ -306,6 +412,7 @@ export default function FormEditor() {
 
   const [form, setForm] = useState(null);
   const [questions, setQuestions] = useState([]);
+  const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -317,6 +424,7 @@ export default function FormEditor() {
       const loaded = await lmApi.getForm(classId, formId);
       setForm(loaded);
       setQuestions(withKeys(loaded.questions));
+      setSections(withSectionIds(loaded.sections));
     } catch (err) {
       setError(err);
     } finally {
@@ -355,10 +463,12 @@ export default function FormEditor() {
         description: form.description,
         topicId: form.topicId || null,
         settings: form.settings,
+        sections: sections.map((section, order) => ({ ...section, order })),
         questions: questions.map((question, order) => ({ ...question, _key: undefined, order })),
       });
       setForm(updated);
       if (updated.questions) setQuestions(withKeys(updated.questions));
+      if (updated.sections) setSections(withSectionIds(updated.sections));
       toast({ status: 'success', title: 'Saved' });
       return true;
     } catch (err) {
@@ -457,6 +567,36 @@ export default function FormEditor() {
           <Divider />
 
           <FormControl>
+            <FormLabel fontSize="sm">How students answer</FormLabel>
+            <Select
+              maxW="320px"
+              value={form.settings?.displayMode === 'one_at_a_time' ? 'one_at_a_time' : 'all_at_once'}
+              onChange={(event) => setSetting('displayMode', event.target.value)}
+            >
+              <option value="all_at_once">All questions at once</option>
+              <option value="one_at_a_time">One question at a time</option>
+            </Select>
+          </FormControl>
+
+          {form.settings?.displayMode === 'one_at_a_time' && (
+            <FormControl display="flex" alignItems="flex-start" gap={3}>
+              <Switch
+                mt={1}
+                isChecked={Boolean(form.settings?.requireSequentialAnswers)}
+                onChange={(event) => setSetting('requireSequentialAnswers', event.target.checked)}
+              />
+              <Box>
+                <FormLabel mb={0} fontSize="sm">
+                  Require an answer before moving to the next question
+                </FormLabel>
+                <Text fontSize="xs" opacity={0.6}>
+                  Applies even to questions not marked required — a student cannot skip ahead.
+                </Text>
+              </Box>
+            </FormControl>
+          )}
+
+          <FormControl>
             <FormLabel fontSize="sm">Who can respond</FormLabel>
             <Select
               maxW="320px"
@@ -547,12 +687,15 @@ export default function FormEditor() {
 
       <ShareLink form={form} classId={classId} />
 
+      <SectionsManager sections={sections} onChange={setSections} />
+
       {questions.map((question, index) => (
         <QuestionCard
           key={question._key}
           question={question}
           index={index}
           total={questions.length}
+          sections={sections}
           onChange={(patch) => patchQuestion(index, patch)}
           onMove={(delta) => moveQuestion(index, delta)}
           onRemove={() => setQuestions((current) => current.filter((_, i) => i !== index))}
@@ -582,7 +725,7 @@ export default function FormEditor() {
       <FormPreviewModal
         isOpen={previewDialog.isOpen}
         onClose={previewDialog.onClose}
-        form={form ? { ...form, questions } : null}
+        form={form ? { ...form, questions, sections } : null}
         classId={classId}
       />
     </VStack>

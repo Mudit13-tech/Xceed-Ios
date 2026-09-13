@@ -683,7 +683,7 @@ export default function Dashboard() {
 
   // Creating a class is faculty-only on the server, so a student never sees
   // the entry points — nor the modal if they land on ?create=1 by hand.
-  const mayCreateClass = canCreateClass(me?.roles);
+  const mayCreateClass = !me || canCreateClass(me.roles);
   const showCreate = mayCreateClass && searchParams.get('create') === '1';
   const showJoin = searchParams.get('join') === '1';
   const closeModals = () => setSearchParams({}, { replace: true });
@@ -815,19 +815,26 @@ export default function Dashboard() {
           </TabList>
           <TabPanels>
             <TabPanel px={0}>
-              {classes.length === 0 ? (
+                {classes.length === 0 ? (
                 <EmptyState
                   icon="classes"
                   title="No classes yet"
                   description={
                     mayCreateClass
-                      ? 'Use Create in the header if you teach, or join one with the code your teacher shared.'
+                      ? 'Create your first class to get started, or join one with the code your teacher shared.'
                       : 'Join one with the code your teacher shared.'
                   }
                   action={
-                    <Button size="sm" variant="outline" onClick={() => setSearchParams({ join: '1' })}>
-                      Join a class
-                    </Button>
+                    <HStack>
+                      {mayCreateClass && (
+                        <Button colorScheme="blue" onClick={() => setSearchParams({ create: '1' })}>
+                          Create class
+                        </Button>
+                      )}
+                      <Button size="sm" variant="outline" onClick={() => setSearchParams({ join: '1' })}>
+                        Join a class
+                      </Button>
+                    </HStack>
                   }
                 />
               ) : (

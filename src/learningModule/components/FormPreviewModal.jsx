@@ -18,6 +18,7 @@ import {
 } from '@chakra-ui/react';
 import { FiMaximize2, FiMinimize2 } from 'react-icons/fi';
 import FormRenderer from './FormRenderer';
+import TypeformRenderer from './TypeformRenderer';
 import { LmIcon } from './Icon';
 
 /**
@@ -119,6 +120,15 @@ export default function FormPreviewModal({ isOpen, onClose, form, classId }) {
             <Text fontSize="sm" color="lmFg.muted" py={6} textAlign="center">
               No questions added to this form yet.
             </Text>
+          ) : form.settings?.displayMode === 'one_at_a_time' ? (
+            <TypeformRenderer
+              form={form}
+              onSubmit={handlePreviewSubmit}
+              submitting={false}
+              canUploadFiles
+              classId={classId}
+              onProgress={() => {}}
+            />
           ) : (
             <FormRenderer
               form={form}

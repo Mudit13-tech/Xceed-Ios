@@ -7,6 +7,7 @@ import {
   Button,
   Flex,
   HStack,
+  Image,
   Input,
   Select,
   Tab,
@@ -71,7 +72,21 @@ function ReportForm({ classes, pointsPerReport, onSent }) {
   // alone does not show), so the reporter names the module or pastes the link.
   const [pageUrl, setPageUrl] = useState('');
   const [saving, setSaving] = useState(false);
+  const [screenshot, setScreenshot] = useState(null);
+  const [screenshotError, setScreenshotError] = useState('');
   const toast = useToast();
+    const handleScreenshot = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setScreenshotError('');
+    try {
+      const dataUrl = await lmApi.uploadBugScreenshot(file);
+      setScreenshot(dataUrl);
+    } catch (err) {
+      setScreenshotError(err.message);
+    }
+    event.target.value = '';
+  };
 
   const submit = async () => {
     if (!title.trim()) return;
@@ -83,12 +98,15 @@ function ReportForm({ classes, pointsPerReport, onSent }) {
         description: description.trim(),
         classId: classId || null,
         pageUrl: pageUrl.trim(),
+        screenshotUrl: screenshot || '',
       });
       toast({ status: 'success', title: 'Sent — thank you', duration: 4000 });
       setTitle('');
       setDescription('');
       setClassId('');
       setPageUrl('');
+      setScreenshot(null);
+      setScreenshotError('');
       onSent();
     } catch (err) {
       toast({ status: 'error', title: err.message, duration: 6000 });
@@ -134,6 +152,36 @@ function ReportForm({ classes, pointsPerReport, onSent }) {
           </option>
         ))}
       </Select>
+      <Box>
+        <Text fontSize="sm" mb={1} color="lmFg.subtle">
+          Screenshot (optional, max 800 KB)
+        </Text>
+        <Input
+          type="file"
+          accept="image/*"
+          size="sm"
+          p={1}
+          onChange={handleScreenshot}
+        />
+        {screenshotError && (
+          <Text fontSize="xs" color="red.500" mt={1}>{screenshotError}</Text>
+        )}
+        {screenshot && (
+          <Box mt={2} position="relative" display="inline-block">
+            <Image src={screenshot} maxH="120px" borderRadius="md" borderWidth="1px" />
+            <Button
+              size="xs"
+              colorScheme="red"
+              position="absolute"
+              top={1}
+              right={1}
+              onClick={() => setScreenshot(null)}
+            >
+              ✕
+            </Button>
+          </Box>
+        )}
+      </Box>
       <Flex align="center" gap={3} wrap="wrap">
         <Button colorScheme="purple" onClick={submit} isLoading={saving} isDisabled={!title.trim() || (kind === 'bug' && !classId)}>
           Send
@@ -233,6 +281,19 @@ function AdminQueue({ reports, counts, onReviewed }) {
               <Text fontSize="xs" color="lmFg.muted" mb={2} wordBreak="break-all">
                 {report.pageUrl}
               </Text>
+            )}
+            {report.screenshotUrl && (
+              <Box mb={2}>
+                <Text fontSize="xs" color="lmFg.muted" mb={1}>Screenshot:</Text>
+                <Image
+                  src={report.screenshotUrl}
+                  maxH="200px"
+                  borderRadius="md"
+                  borderWidth="1px"
+                  cursor="pointer"
+                  onClick={() => window.open(report.screenshotUrl, '_blank')}
+                />
+              </Box>
             )}
 
             {report.awardedAt && (

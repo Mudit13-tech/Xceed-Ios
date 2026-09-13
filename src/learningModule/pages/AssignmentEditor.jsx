@@ -586,9 +586,19 @@ function QuestionPreview({ classId, assignmentId, index, dirty, variables }) {
           {fixedResult && (
             <Box mt={3} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" p={3} bg="lmBg.card">
               <RichText fontSize="sm">{fixedResult.prompt}</RichText>
-              <HStack fontSize="xs" mt={2} wrap="wrap">
+                            <HStack fontSize="xs" mt={2} wrap="wrap">
                 {answerBadges(fixedResult.expected, null)}
               </HStack>
+
+              {fixedResult.solution && (
+                <Box mt={2} p={2} bg="lmHue.green50" borderRadius="md">
+                  <Text fontSize="xs" fontWeight="700" color="lmHue.green800" mb={1}>
+                    Worked solution
+                  </Text>
+                  <RichText fontSize="sm">{fixedResult.solution}</RichText>
+                </Box>
+              )}
+
               {(fixedResult.parts || []).map((part, partIndex) => (
                 <Box key={partIndex} mt={3} pl={3} borderLeftWidth="2px" borderColor="lmHue.purple200">
                   {part.label && (
