@@ -5,6 +5,7 @@ import lmApi from '../api/lmApi';
 import { DeadlineCountdown, ErrorState, Loading } from '../components/common';
 import { formatDateTime } from '../format';
 import FormRenderer from '../components/FormRenderer';
+import TypeformRenderer from '../components/TypeformRenderer';
 
 /** A class member filling in (or re-filling) a published form. */
 export default function FormFill() {
@@ -52,6 +53,7 @@ export default function FormFill() {
   if (!state) return null;
 
   const { form, existingResponse } = state;
+  const oneAtATime = form.settings?.displayMode === 'one_at_a_time';
 
   if (justSubmitted) {
     return (
@@ -82,7 +84,7 @@ export default function FormFill() {
   }
 
   return (
-    <VStack align="stretch" spacing={4} maxW="640px">
+    <VStack align="stretch" spacing={4} maxW={oneAtATime ? '960px' : '640px'}>
       <Box>
         <HStack>
           <Heading size="md">{form.title}</Heading>
@@ -105,6 +107,16 @@ export default function FormFill() {
           <AlertIcon />
           This form closed on {formatDateTime(form.dueDate)} and is no longer accepting responses.
         </Alert>
+      ) : oneAtATime ? (
+        <TypeformRenderer
+          form={form}
+          existingResponse={existingResponse}
+          onSubmit={submit}
+          submitting={submitting}
+          canUploadFiles
+          classId={classId}
+          onProgress={(questionIndex) => lmApi.pingFormProgress(classId, formId, questionIndex).catch(() => {})}
+        />
       ) : (
         <FormRenderer
           form={form}

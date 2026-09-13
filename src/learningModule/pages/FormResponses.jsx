@@ -88,10 +88,42 @@ function TextSummary({ entry }) {
   );
 }
 
+function formatDuration(seconds) {
+  if (seconds === null || seconds === undefined) return '—';
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `${minutes}m ${rest}s`;
+}
+
+function DropOffFunnel({ summary }) {
+  if (!summary?.funnel?.length || !summary.totalStarts) return null;
+  return (
+    <SectionCard title="Where students drop off" subtitle={`${summary.totalStarts} started this form`}>
+      <VStack align="stretch" spacing={3}>
+        {summary.funnel.map((entry, index) => (
+          <Box key={entry.questionId}>
+            <Flex justify="space-between" fontSize="sm" mb={1}>
+              <Text noOfLines={1}>
+                {index + 1}. {entry.title}
+              </Text>
+              <Text color="lmFg.muted">
+                {entry.reached}/{summary.totalStarts} ({Math.round((entry.reached / summary.totalStarts) * 100)}%)
+              </Text>
+            </Flex>
+            <Progress value={(entry.reached / summary.totalStarts) * 100} size="sm" borderRadius="full" colorScheme="orange" />
+          </Box>
+        ))}
+      </VStack>
+    </SectionCard>
+  );
+}
+
 function SummaryTab({ summary }) {
   if (!summary) return null;
   return (
     <VStack align="stretch" spacing={4}>
+      <DropOffFunnel summary={summary} />
       {summary.summary.map((entry) => (
         <SectionCard key={entry.questionId} title={entry.title} subtitle={`${entry.answered} response(s)`}>
           {CHOICE_TYPES.includes(entry.type) && <ChoiceSummary entry={entry} />}
@@ -249,12 +281,19 @@ export default function FormResponses() {
       </Flex>
 
       <SimpleGrid columns={{ base: 2, md: 3 }} spacing={4}>
-        <StatTile label="Responses" value={summary?.totalResponses ?? responses.length} accent="teal.500" />
-        <StatTile label="Questions" value={form.questions.length} accent="blue.500" />
+        <StatTile label="Started" value={summary?.totalStarts ?? responses.length} accent="orange.500" />
+        <StatTile label="Completed" value={summary?.totalCompletions ?? responses.length} accent="teal.500" />
+        <StatTile
+          label="Completion rate"
+          value={summary?.completionRate !== null && summary?.completionRate !== undefined ? `${summary.completionRate}%` : '—'}
+          accent="green.500"
+        />
+        <StatTile label="Avg. time to complete" value={formatDuration(summary?.averageCompletionSeconds)} accent="blue.500" />
+        <StatTile label="Questions" value={form.questions.length} accent="purple.500" />
         <StatTile
           label="Access"
           value={form.settings?.accessMode === 'anyone' ? 'Anyone with link' : 'Class only'}
-          accent="purple.500"
+          accent="pink.500"
         />
       </SimpleGrid>
 

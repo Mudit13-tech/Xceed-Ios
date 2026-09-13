@@ -38,14 +38,22 @@ function StatusDot({ status, size = 7 }) {
 function ServiceButton({ label, status, details, action, dropWidth = 220 }) {
   const actions = action ? (Array.isArray(action) ? action : [action]) : [];
   const [open, setOpen] = useState(false);
-  const [dropPos, setDropPos] = useState({ top: 0, right: 0 });
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: dropWidth });
   const btnRef = useRef(null);
   const dropId = `health-drop-${label}`;
 
+  // Right-align the drop under the button by default, but clamp it so it
+  // never runs off either edge of the viewport — buttons near the left
+  // (common once these wrap on narrow/mobile screens) used to push the
+  // drop's left edge past x=0, off-screen with no way to reach it.
   const handleClick = () => {
     if (btnRef.current) {
+      const margin = 8;
       const r = btnRef.current.getBoundingClientRect();
-      setDropPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+      const width = Math.min(dropWidth, window.innerWidth - margin * 2);
+      let left = r.right - width;
+      left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
+      setDropPos({ top: r.bottom + 6, left, width });
     }
     setOpen(o => !o);
   };
@@ -105,9 +113,8 @@ function ServiceButton({ label, status, details, action, dropWidth = 220 }) {
           style={{
             position: 'fixed',
             top: dropPos.top,
-            right: dropPos.right,
-            width: dropWidth,
-            maxWidth: 'calc(100vw - 24px)',
+            left: dropPos.left,
+            width: dropPos.width,
             background: T.surface,
             border: `1px solid ${T.border}`,
             borderRadius: 10,

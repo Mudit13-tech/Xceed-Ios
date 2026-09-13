@@ -949,12 +949,28 @@ const lmApi = {
   /* ---- profile and bugs/suggestions (outside any class) ---- */
   myProfile: () => request('/me/profile'),
   reportBug: (body) => request('/bugs', { method: 'POST', body }),
+  uploadBugScreenshot: async (file) => {
+    if (file.size > 800 * 1024) throw new Error('Screenshot must be under 800 KB');
+    const form = new FormData();
+    form.append('screenshot', file);
+    const res = await fetch(`${getEnvironment()}/api/v1/learningmodule/bugs/screenshot`, {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Upload failed');
+    }
+    const data = await res.json();
+    return data.url;
+  },
   myBugReports: () => request('/bugs/mine'),
   // 403s for anyone who is not a platform admin; the page uses that to decide
   // whether to show the queue at all.
   allBugReports: ({ status, kind } = {}) => request(`/bugs${qs({ status, kind })}`),
   reviewBug: (reportId, body) => request(`/bugs/${reportId}`, { method: 'PATCH', body }),
-
+  deleteBugScreenshot: (reportId) => request(`/bugs/${reportId}/screenshot`, { method: 'DELETE' }),
   /* ---- joining the development team ---- */
   applyToDevTeam: (body) => request('/dev-team/apply', { method: 'POST', body }),
   // Carries this semester's application (if any) alongside the history, so the
@@ -1158,6 +1174,10 @@ const lmApi = {
   getFormForFill: (classId, formId) => request(`/classes/${classId}/forms/${formId}/fill`),
   submitFormResponse: (classId, formId, answers) =>
     request(`/classes/${classId}/forms/${formId}/fill`, { method: 'POST', body: { answers } }),
+  // Best-effort progress telemetry for the one-at-a-time renderer — callers
+  // should swallow failures rather than surface them to the respondent.
+  pingFormProgress: (classId, formId, questionIndex) =>
+    request(`/classes/${classId}/forms/${formId}/fill/progress`, { method: 'POST', body: { questionIndex } }),
   listFormResponses: (classId, formId) => request(`/classes/${classId}/forms/${formId}/responses`),
   getFormSummary: (classId, formId) => request(`/classes/${classId}/forms/${formId}/responses/summary`),
   formResponsesCsvUrl: (classId, formId) => `${BASE()}/classes/${classId}/forms/${formId}/responses.csv`,
@@ -1177,6 +1197,8 @@ const lmApi = {
   getFormByLink: (shareCode, formId) => request(`/forms/link/${encodeURIComponent(shareCode)}`, { formId }),
   submitFormResponseByLink: (shareCode, answers, formId) =>
     request(`/forms/link/${encodeURIComponent(shareCode)}/responses`, { method: 'POST', body: { answers }, formId }),
+  pingFormProgressByLink: (shareCode, questionIndex, formId) =>
+    request(`/forms/link/${encodeURIComponent(shareCode)}/progress`, { method: 'POST', body: { questionIndex }, formId }),
   formShareUrl: (shareCode) => `${getEnvironment()}/learning/form/link/${shareCode}`,
 
   /* analytics + uploads */

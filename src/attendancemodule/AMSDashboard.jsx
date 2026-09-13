@@ -12,6 +12,7 @@ import DashboardProgress from './DashboardProgress';
 import ILeed, { ILEED_FULL_FORM } from './BrandName';
 import PendingActionsCard from './PendingActionsCard';
 import DeptOverridesChart from './DeptOverridesChart';
+import DeptRollAssignmentChart from './DeptRollAssignmentChart';
 import { MLDataFolder } from './MLDataFolder';
 import { createPortal } from "react-dom";
 import { useRef } from "react";
@@ -352,7 +353,8 @@ export default function AMSDashboard() {
   const [showML, setShowML] = useState(false);
   const [mlFolderLoad, setMLFolderLoad] = useState(true);
   const [mlFoldertree, setMlFolderTree] = useState({});
-  const [mlDropPos, setMlDropPos] = useState({ top: 0, right: 0 });
+  const ML_DROP_WIDTH = 280;
+  const [mlDropPos, setMlDropPos] = useState({ top: 0, left: 0, width: ML_DROP_WIDTH });
   const mlBtnRef = useRef(null);
 
   /* data fetches */
@@ -391,12 +393,13 @@ export default function AMSDashboard() {
   };
   const handleMLClick = () => {
     if (mlBtnRef.current) {
+      const margin = 8;
       const r = mlBtnRef.current.getBoundingClientRect();
+      const width = Math.min(ML_DROP_WIDTH, window.innerWidth - margin * 2);
+      let left = r.right - width;
+      left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
 
-      setMlDropPos({
-        top: r.bottom + 6,
-        right: window.innerWidth - r.right,
-      });
+      setMlDropPos({ top: r.bottom + 6, left, width });
     }
 
     setShowML(prev => !prev);
@@ -637,8 +640,8 @@ export default function AMSDashboard() {
                     style={{
                       position: "fixed",
                       top: mlDropPos.top,
-                      right: mlDropPos.right,
-                      width: 280,
+                      left: mlDropPos.left,
+                      width: mlDropPos.width,
                       background: T.surface,
                       border: `1px solid ${T.border}`,
                       borderRadius: 10,
@@ -835,6 +838,9 @@ export default function AMSDashboard() {
 
         {/* ── Charts ── */}
         <div className="dash-chart-grid">
+
+          {/* dept-wise roll assignment vs ERP photos */}
+          <DeptRollAssignmentChart />
 
           {/* dept-wise override verifications */}
           <DeptOverridesChart />

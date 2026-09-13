@@ -6,6 +6,7 @@ import {
   Box,
   Button,
   Container,
+  Divider,
   Drawer,
   DrawerBody,
   DrawerCloseButton,
@@ -13,18 +14,24 @@ import {
   DrawerHeader,
   DrawerOverlay,
   Flex,
-  HStack,
   Heading,
+  HStack,
   IconButton,
   Menu,
   MenuButton,
   MenuDivider,
   MenuItem,
   MenuList,
-  Text,
-  Tooltip,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
   Skeleton,
   SkeletonCircle,
+  Text,
+  Tooltip,
   useColorMode,
   useColorModeValue,
   useDisclosure,
@@ -513,21 +520,21 @@ export default function LearningLayout() {
   // the mobile nav open on different things and must not share a switch.
   const identityEdit = useDisclosure();
 
-  const handleLogout = useCallback(async () => {
+  const logoutModal = useDisclosure();
+
+  const confirmLogout = useCallback(async () => {
+    logoutModal.onClose();
     try {
       await fetch(`${getEnvironment()}/user/getuser/logout`, {
         method: 'POST',
         credentials: 'include',
       });
     } catch (error) {
-      // A failed call must not strand the user on a signed-in screen; the
-      // local token still goes and the login page re-checks the session.
       console.error('Error during logout:', error.message);
     }
     localStorage.removeItem('token');
     navigate('/login', { replace: true });
-  }, [navigate]);
-
+  }, [navigate, logoutModal]);
   const mayCreateClass = canCreateClass(me?.roles);
   // Students have no platform navbar above this header, so it owns the page.
   const studentOnly = isStudentOnly(me?.roles);
@@ -617,7 +624,7 @@ export default function LearningLayout() {
                 color={headerTitleColor}
               />
               <IconButton
-                onClick={handleLogout}
+                onClick={logoutModal.onOpen}
                 variant="ghost"
                 aria-label="Logout"
                 title="Logout"
@@ -673,7 +680,7 @@ export default function LearningLayout() {
                       </HStack>
                     </MenuItem>
                   )}
-                  <MenuItem color={menuTextColor} onClick={handleLogout}>
+                  <MenuItem color={menuTextColor} onClick={logoutModal.onOpen}>
                     Log out
                   </MenuItem>
                 </MenuList>
@@ -758,6 +765,24 @@ export default function LearningLayout() {
           />
         </Suspense>
       )}
+
+      <Modal isOpen={logoutModal.isOpen} onClose={logoutModal.onClose} isCentered size="sm">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader fontSize="lg">Log out</ModalHeader>
+          <ModalBody>
+            <Text>Are you sure you want to log out?</Text>
+          </ModalBody>
+          <ModalFooter gap={3}>
+            <Button variant="ghost" onClick={logoutModal.onClose}>
+              Cancel
+            </Button>
+            <Button colorScheme="red" onClick={confirmLogout}>
+              Log out
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }
