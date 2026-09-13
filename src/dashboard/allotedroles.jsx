@@ -9,6 +9,7 @@ import {
   Icon,
   SimpleGrid,
   Spinner,
+  Stack,
   Text,
   useColorModeValue,
   useToast,
@@ -229,6 +230,7 @@ const AllocatedRolesPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isNotifying, setIsNotifying] = useState(false);
 
   const handlePublishOTA = async () => {
     setIsPublishing(true);
@@ -253,6 +255,53 @@ const AllocatedRolesPage = () => {
       alert("An error occurred.");
     } finally {
       setIsPublishing(false);
+    }
+  };
+
+  // A store release is not an OTA publish: the new build sits in the Play Store
+  // until each user goes and installs it, so it only reaches anyone if we say
+  // so. One fixed message, sent as it is — the version number is on the store
+  // listing the notification opens, and repeating it here only adds a field to
+  // get wrong.
+  const handleNotifyStoreRelease = async () => {
+    setIsNotifying(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/v1/ota/notify-store-release`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        toast({
+          title: 'Update notification sent',
+          description: data.message || 'Every registered device has been notified.',
+          status: 'success',
+          duration: 6000,
+          isClosable: true,
+        });
+      } else {
+        toast({
+          title: 'Could not send the notification',
+          description: data.error || 'Please check the server logs.',
+          status: 'error',
+          duration: 8000,
+          isClosable: true,
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      toast({
+        title: 'Could not send the notification',
+        description: 'The server could not be reached.',
+        status: 'error',
+        duration: 8000,
+        isClosable: true,
+      });
+    } finally {
+      setIsNotifying(false);
     }
   };
 
@@ -422,13 +471,24 @@ const AllocatedRolesPage = () => {
           </Box>
           
           {allocatedRoles.includes('admin') && (
-            <Button 
-              colorScheme="blue" 
-              onClick={handlePublishOTA}
-              isLoading={isPublishing}
-            >
-              Publish OTA Update
-            </Button>
+            <Stack direction={{ base: 'column', md: 'row' }} spacing={3} w={{ base: 'full', sm: 'auto' }}>
+              <Button 
+                colorScheme="blue" 
+                onClick={handlePublishOTA}
+                isLoading={isPublishing}
+              >
+                Publish OTA Update
+              </Button>
+              <Button
+                colorScheme="green"
+                variant="outline"
+                onClick={handleNotifyStoreRelease}
+                isLoading={isNotifying}
+                loadingText="Sending"
+              >
+                Notify Play Store Update
+              </Button>
+            </Stack>
           )}
         </Flex>
 

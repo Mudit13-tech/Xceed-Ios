@@ -2,9 +2,8 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChakraProvider } from '@chakra-ui/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import AssignmentEditor from '../pages/AssignmentEditor';
-import { toDateTimeInput, formatDateTime } from '../format';
+import { MemoryRouter } from 'react-router-dom';
+import { toDateTimeInput } from '../format';
 import lmApi from '../api/lmApi';
 
 vi.mock('../api/lmApi');
@@ -13,7 +12,27 @@ vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
     ...actual,
+    useNavigate: () => vi.fn(),
+    useParams: () => ({ classId: 'c1', assignmentId: 'a1' }),
     useOutletContext: () => ({ classId: 'c1', klass: { name: 'Circuits' }, isTeacher: true }),
+  };
+});
+
+// Quill needs a real selection API; the editor's own rich-text behaviour is not
+// what is under test here, only what AssignmentEditor does with the date field.
+vi.mock('../components/RichTextEditor', async () => {
+  const React = await vi.importActual('react');
+  return {
+    default: React.forwardRef(function RichTextEditorMock({ value, onChange, placeholder }, ref) {
+      return (
+        <textarea
+          data-testid="rich-text"
+          value={value || ''}
+          placeholder={placeholder}
+          onChange={(e) => onChange && onChange(e.target.value)}
+        />
+      );
+    }),
   };
 });
 
@@ -83,15 +102,13 @@ describe('Due Date Timezone & Formatting (Issue #2131)', () => {
       lmApi.listTopics.mockResolvedValue([]);
       lmApi.assignmentFormulaReference.mockResolvedValue(null);
 
+      // Dynamic import keeps the expensive AssignmentEditor transform outside
+      // the per-test timeout budget when 36+ files load in parallel in CI.
+      const { default: AssignmentEditor } = await import('../pages/AssignmentEditor');
       render(
         <ChakraProvider>
           <MemoryRouter initialEntries={['/learning/class/c1/assignment/a1/edit']}>
-            <Routes>
-              <Route
-                path="/learning/class/:classId/assignment/:assignmentId/edit"
-                element={<AssignmentEditor />}
-              />
-            </Routes>
+            <AssignmentEditor />
           </MemoryRouter>
         </ChakraProvider>,
       );
@@ -110,15 +127,11 @@ describe('Due Date Timezone & Formatting (Issue #2131)', () => {
       lmApi.assignmentFormulaReference.mockResolvedValue(null);
       lmApi.updateAssignment.mockResolvedValue({ ...mockAssignment });
 
+      const { default: AssignmentEditor } = await import('../pages/AssignmentEditor');
       render(
         <ChakraProvider>
           <MemoryRouter initialEntries={['/learning/class/c1/assignment/a1/edit']}>
-            <Routes>
-              <Route
-                path="/learning/class/:classId/assignment/:assignmentId/edit"
-                element={<AssignmentEditor />}
-              />
-            </Routes>
+            <AssignmentEditor />
           </MemoryRouter>
         </ChakraProvider>,
       );

@@ -13,6 +13,7 @@ import {
   DrawerContent,
   DrawerHeader,
   DrawerOverlay,
+  DrawerFooter,
   Flex,
   Heading,
   HStack,
@@ -737,7 +738,6 @@ export default function LearningLayout() {
             </Flex>
           </DrawerHeader>
           <DrawerBody>
-
             <NavItems
               onNavigate={onClose}
               studentOnly={studentOnly}
@@ -753,7 +753,20 @@ export default function LearningLayout() {
               onNavigate={onClose}
             />
             <DevTeamCta onNavigate={onClose} />
-          </DrawerBody>
+            
+        </DrawerBody>
+          <DrawerFooter borderTopWidth="1px">
+            <Button
+              w="full"
+              colorScheme="red"
+              variant="outline"
+              leftIcon={<PowerIcon size={16} />}
+              onClick={() => { onClose(); setTimeout(() => logoutModal.onOpen(), 350); }}
+              justifyContent="flex-start"
+            >
+              Log out
+            </Button>
+          </DrawerFooter>
         </DrawerContent>
       </Drawer>
 
@@ -771,9 +784,9 @@ export default function LearningLayout() {
         </Suspense>
       )}
 
-      <Modal isOpen={logoutModal.isOpen} onClose={logoutModal.onClose} isCentered size="sm">
+      <Modal isOpen={logoutModal.isOpen} onClose={logoutModal.onClose} isCentered size="sm" closeOnOverlayClick={false}>
         <ModalOverlay />
-        <ModalContent>
+        <ModalContent >
           <ModalHeader fontSize="lg">Log out</ModalHeader>
           <ModalBody>
             <Text>Are you sure you want to log out?</Text>

@@ -103,7 +103,7 @@ const safeStyle = (value) =>
  * change how the conference, review and timetable modules sanitise their
  * content — an improvement, probably, but not this module's call to make.
  */
-const purify = createDOMPurify(window);
+const purify = typeof window !== 'undefined' && window.document ? createDOMPurify(window) : { addHook: () => {}, sanitize: (s) => String(s || '') };
 
 purify.addHook('afterSanitizeAttributes', (node) => {
   if (node.hasAttribute?.('style')) {

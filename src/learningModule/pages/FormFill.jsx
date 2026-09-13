@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { Alert, AlertIcon, Badge, Box, Button, HStack, Heading, Text, VStack, useToast } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { DeadlineCountdown, ErrorState, Loading } from '../components/common';
+import { DeadlineCountdown, ErrorState, Loading, requestFullscreen, useIsFullscreen } from '../components/common';
 import { formatDateTime } from '../format';
 import FormRenderer from '../components/FormRenderer';
 import TypeformRenderer from '../components/TypeformRenderer';
@@ -34,6 +34,16 @@ export default function FormFill() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const isFullscreen = useIsFullscreen();
+
+  useEffect(() => {
+    // Fallback for a direct link/bookmark, where the "Fill in" click (which
+    // already tried this, still inside its user gesture) never happened.
+    if (state?.form?.settings?.autoFullscreen && !document.fullscreenElement) {
+      requestFullscreen();
+    }
+  }, [state]);
 
   const submit = async (answers) => {
     setSubmitting(true);
@@ -90,6 +100,11 @@ export default function FormFill() {
           <Heading size="md">{form.title}</Heading>
           {!form.closed && form.dueDate && <DeadlineCountdown dueDate={form.dueDate} prefix="Closes in" />}
         </HStack>
+        {(form.subjectName || form.facultyName) && (
+          <Text fontSize="sm" color="lmFg.muted" mt={1}>
+            {[form.subjectName, form.facultyName].filter(Boolean).join(' · ')}
+          </Text>
+        )}
         {form.description && (
           <Text fontSize="sm" color="lmFg.muted" mt={1}>
             {form.description}
@@ -115,6 +130,7 @@ export default function FormFill() {
           submitting={submitting}
           canUploadFiles
           classId={classId}
+          isFullscreen={isFullscreen}
           onProgress={(questionIndex) => lmApi.pingFormProgress(classId, formId, questionIndex).catch(() => {})}
         />
       ) : (
@@ -125,6 +141,7 @@ export default function FormFill() {
           submitting={submitting}
           canUploadFiles
           classId={classId}
+          isFullscreen={isFullscreen}
         />
       )}
     </VStack>
