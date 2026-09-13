@@ -25,6 +25,7 @@
     "@capacitor/camera": "^8.2.2",
     "@capacitor/cli": "^8.5.0",
     "@capacitor/core": "^8.5.0",
+    "@capacitor/file-viewer": "^2.0.3",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/ios": "^8.5.2",
     "@capacitor/preferences": "^8.0.1",
