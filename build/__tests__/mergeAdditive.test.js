@@ -196,6 +196,123 @@ describe('mergeAdditive', () => {
     });
   });
 
+  // The conflict of 2026-09-12, and the second shape of the same thing: the two
+  // sides edit members inside ONE import statement rather than adding whole
+  // statements next to each other.
+  describe('a member list both sides edited', () => {
+    const list = (members) => `import {\n${members.map((m) => `  ${m},`).join('\n')}\n} from '@chakra-ui/react';\n\nexport default function App() {\n  return <Box />;\n}\n`;
+
+    it('keeps every member either side added', () => {
+      const { conflicted, result } = merge({
+        base: list(['Box', 'MenuList', 'Text']),
+        ours: list(['Box', 'MenuList', 'Spinner', 'Text']),
+        theirs: list(['Box', 'MenuList', 'Modal', 'ModalOverlay', 'Text']),
+      });
+
+      expect(conflicted).toBe(false);
+      expect(result).not.toContain('<<<<<<<');
+      expect(result).toBe(list(['Box', 'MenuList', 'Modal', 'ModalOverlay', 'Spinner', 'Text']));
+    });
+
+    // The LearningLayout conflict exactly: AMS added the Modal family *and*
+    // moved Text/Tooltip down into sorted position, so the naive "keep both
+    // sides of the hunk" answer declares Text twice and the file will not parse.
+    it('does not duplicate a member the other side moved', () => {
+      const { conflicted, result } = merge({
+        base: list(['MenuList', 'Text', 'Tooltip', 'Skeleton', 'useDisclosure']),
+        ours: list(['MenuList', 'Spinner', 'Text', 'Tooltip', 'Skeleton', 'useDisclosure']),
+        theirs: list(['MenuList', 'Modal', 'ModalOverlay', 'Skeleton', 'Text', 'Tooltip', 'useDisclosure']),
+      });
+
+      expect(conflicted).toBe(false);
+      expect(result.match(/\bText\b/g)).toHaveLength(1);
+      expect(result).toBe(list(['MenuList', 'Modal', 'ModalOverlay', 'Skeleton', 'Spinner', 'Text', 'Tooltip', 'useDisclosure']));
+    });
+
+    // A removal is not honoured, deliberately: dropping a member we still
+    // reference fails at the user, keeping one we do not costs an unused
+    // import — and fails the build loudly if the export is really gone.
+    it('keeps a member AMS removed while we were adding one', () => {
+      const { conflicted, result } = merge({
+        base: list(['Box', 'Divider', 'Text']),
+        ours: list(['Box', 'Divider', 'Spinner', 'Text']),
+        theirs: list(['Box', 'Text']),
+      });
+
+      expect(conflicted).toBe(false);
+      expect(result).toContain('Divider');
+      expect(result).toContain('Spinner');
+    });
+
+    it('emits a member both sides added only once', () => {
+      const { conflicted, result } = merge({
+        base: list(['Box', 'Text']),
+        ours: list(['Box', 'Spinner', 'Text']),
+        theirs: list(['Box', 'Spinner', 'Tooltip', 'Text']),
+      });
+
+      expect(conflicted).toBe(false);
+      expect(result.match(/\bSpinner\b/g)).toHaveLength(1);
+    });
+
+    it('carries an alias through', () => {
+      const { conflicted, result } = merge({
+        base: list(['Box', 'Text']),
+        ours: list(['Box', 'Link as ChakraLink', 'Text']),
+        theirs: list(['Box', 'Modal', 'Text']),
+      });
+
+      expect(conflicted).toBe(false);
+      expect(result).toContain('Link as ChakraLink,');
+    });
+
+    it('leaves a list alone that was not sorted to begin with', () => {
+      const { conflicted, result } = merge({
+        base: list(['useToast', 'Box']),
+        ours: list(['useToast', 'Box', 'Spinner']),
+        theirs: list(['useToast', 'Box', 'Modal']),
+      });
+
+      expect(conflicted).toBe(false);
+      expect(result).toBe(list(['useToast', 'Box', 'Modal', 'Spinner']));
+    });
+
+    it('conflicts when the two sides bind the same local name to different members', () => {
+      const { conflicted, result } = merge({
+        base: list(['Box', 'Text']),
+        ours: list(['Box', 'Spinner as Loader', 'Text']),
+        theirs: list(['Box', 'Skeleton as Loader', 'Text']),
+      });
+
+      expect(conflicted).toBe(true);
+      expect(result).toContain('<<<<<<<');
+    });
+
+    it('conflicts when the hunk holds anything but plain members', () => {
+      const base = `import {\n  Box,\n} from '@chakra-ui/react';\n\nconst value = 1;\n\nexport default value;\n`;
+      const { conflicted } = merge({
+        base,
+        ours: base.replace('const value = 1;', 'const value = 2;'),
+        theirs: base.replace('const value = 1;', 'const value = 3;'),
+      });
+
+      expect(conflicted).toBe(true);
+    });
+
+    // The ends of the statement are what prove it IS a statement. Without a
+    // visible `import {` above the hunk these are just bare words.
+    it('conflicts when the lines only look like members', () => {
+      const base = `const theme = {\n  Box,\n  Text,\n};\n\nexport default theme;\n`;
+      const { conflicted } = merge({
+        base,
+        ours: base.replace('  Text,', '  Spinner,\n  Text,'),
+        theirs: base.replace('  Text,', '  Modal,\n  Text,'),
+      });
+
+      expect(conflicted).toBe(true);
+    });
+  });
+
   describe('the cases that are not conflicts at all', () => {
     it('passes a clean merge through unchanged', () => {
       const ours = BASE.replace('<div />', '<main />');

@@ -63,9 +63,10 @@ package.json          merge=package-json
 # conflicts have never been disagreements at all — both sides added something
 # new at the same place, and the resolution was always "keep both".
 #
-# That has cost four OTA deploys: LoginForm (09-04, now an override), main.jsx
-# twice (09-07, 09-08), GpuMetrics (09-10) and .gitignore (09-12). Every one was
-# a position collision in a region where position means nothing.
+# That has cost six OTA deploys: LoginForm (09-04, now an override), main.jsx
+# twice (09-07, 09-08), GpuMetrics (09-10), .gitignore (09-12) and
+# LearningLayout (09-12). Every one was a position collision in a region where
+# position means nothing.
 # ---------------------------------------------------------------------------
 
 # A list of paths, one per line, in no meaningful order — the textbook case for
@@ -77,9 +78,11 @@ package.json          merge=package-json
 .eslintignore         merge=union
 
 # Sources are NOT unioned — union on real code silently produces nonsense. This
-# driver resolves a conflict only where both sides purely inserted, and only
-# where every inserted line is an import; anything else it hands back to git
-# with ordinary markers. See the safety argument in build/mergeAdditive.mjs.
+# driver resolves two shapes and nothing else: both sides purely inserting, where
+# every inserted line is an import; and both sides editing the member list inside
+# one import, where the answer is every member either side has. Anything else it
+# hands back to git with ordinary markers. See the safety argument in
+# build/mergeAdditive.mjs.
 *.js                  merge=additive
 *.jsx                 merge=additive
 *.mjs                 merge=additive

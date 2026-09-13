@@ -248,6 +248,133 @@ function resolveHunk({ ours, base, theirs }) {
   return out.filter((line, at) => line.trim() !== '' || at === 0 || out[at - 1].trim() !== '');
 }
 
+/* ─────────────────── the named-import specifier list ───────────────────── */
+
+/**
+ * The second shape of the same conflict, which cost the deploy of 2026-09-12.
+ *
+ * The rules above work on whole import *statements*. They cannot help when
+ * both sides edit the member list *inside* one statement, because the lines in
+ * the hunk are then bare specifiers — `  Spinner,` — and none of them parses as
+ * an import:
+ *
+ *     import {
+ *       MenuList,
+ *   <<<<<<<
+ *       Spinner,          ← we added Spinner
+ *   =======
+ *       Modal,            ← AMS added the Modal family
+ *       ModalOverlay,
+ *   >>>>>>>
+ *       Skeleton,
+ *     } from '@chakra-ui/react';
+ *
+ * A shared Chakra import is the single most-edited line range in this repo and
+ * in AMS both, so this is the shape most likely to keep recurring.
+ *
+ * A specifier list is a set, which makes the merge well-defined: the answer is
+ * every member either side has, once each. The driver takes the UNION and never
+ * honours a removal — if AMS dropped a member we still use, honouring that
+ * would leave our code referencing an unbound name and only fail when a user
+ * opened the screen; keeping a member AMS dropped costs, at worst, an unused
+ * import, and if the export is genuinely gone the build says so before anything
+ * is published. Those are not symmetrical either.
+ *
+ * It refuses, as everywhere else here, on anything it does not positively
+ * recognise: a line in the list that is not a plain specifier, a list it cannot
+ * see the `import {` and `} from '…'` ends of, or two sides binding the same
+ * local name to different members.
+ */
+const SPECIFIER = /^\s*([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*,?\s*$/;
+const LIST_OPENS = /^\s*(?:import|export)\b[^{}]*\{\s*$/;
+const LIST_CLOSES = /^\s*\}\s*from\s*['"][^'"\n]*['"]\s*;?\s*$/;
+
+/** `{ name, local, text }` for a specifier line, or null if it is not one. */
+function specifier(line) {
+  const match = SPECIFIER.exec(line);
+  if (!match || line.trim() === '') return null;
+  return { name: match[1], local: match[2] ?? match[1], text: line };
+}
+
+/**
+ * Every line is a specifier — the test applied to both sides of a hunk.
+ *
+ * An empty side passes: that is the side that removed a member the other side
+ * was adding next to, and the union below is what keeps the removal from
+ * taking effect.
+ */
+function allSpecifiers(block) {
+  return block.every((line) => specifier(line) !== null);
+}
+
+/** Case-insensitive, the order both this repo and AMS keep these lists in. */
+const byName = (a, b) => a.local.toLowerCase().localeCompare(b.local.toLowerCase()) || a.local.localeCompare(b.local);
+
+function isSorted(specs) {
+  return specs.every((spec, at) => at === 0 || byName(specs[at - 1], spec) <= 0);
+}
+
+/**
+ * Try to read the conflict at `index` as an edit inside one specifier list.
+ *
+ * Returns the three rewritten line blocks — what is left of the text before the
+ * list, the merged list itself, and what is left of the text after it — or null
+ * to decline. The caller splices them back in place of the three parts.
+ */
+function resolveSpecifierList(parts, index) {
+  const hunk = parts[index];
+  const before = parts[index - 1];
+  const after = parts[index + 1];
+  if (!before || before.type !== 'text' || !after || after.type !== 'text') return null;
+  if (hunk.ours.length + hunk.theirs.length === 0) return null;
+  if (!allSpecifiers(hunk.ours) || !allSpecifiers(hunk.theirs)) return null;
+  if (hunk.base.some((line) => specifier(line) === null && line.trim() !== '')) return null;
+
+  // Walk back to the `import {` that opens the list, over specifiers only.
+  let open = before.lines.length - 1;
+  while (open >= 0 && specifier(before.lines[open])) open -= 1;
+  if (open < 0 || !LIST_OPENS.test(before.lines[open])) return null;
+
+  // Walk forward to the `} from '…'` that closes it, over specifiers only. A
+  // close that is not in this part means another conflict sits inside the same
+  // list; one list rewritten around two independent hunks is past what this can
+  // reason about, so it declines and the file goes to a human whole.
+  let close = 0;
+  while (close < after.lines.length && specifier(after.lines[close])) close += 1;
+  if (close >= after.lines.length || !LIST_CLOSES.test(after.lines[close])) return null;
+
+  const head = before.lines.slice(open + 1).map(specifier);
+  const tail = after.lines.slice(0, close).map(specifier);
+  // AMS's members lead and ours trail, the convention the rest of this file
+  // follows; `head` and `tail` are the parts git merged without conflict.
+  const all = [...head, ...hunk.theirs.map(specifier), ...hunk.ours.map(specifier), ...tail];
+
+  const merged = [];
+  const seen = new Map();
+  for (const spec of all) {
+    const already = seen.get(spec.local);
+    // The same member, named the same way, reached here from both sides: one
+    // copy. A local name bound to two different members is a real
+    // disagreement — and emitting both would redeclare it — so decline.
+    if (already) {
+      if (already.name !== spec.name) return null;
+      continue;
+    }
+    seen.set(spec.local, spec);
+    merged.push(spec);
+  }
+
+  // Sort only a list that was already sorted on the way in. Reordering a list
+  // somebody deliberately grouped would be a diff nobody asked for; leaving a
+  // sorted one unsorted would be too.
+  const sorted = isSorted(head.concat(tail)) ? merged.slice().sort(byName) : merged;
+
+  const indent = /^\s*/.exec(sorted[0]?.text ?? '  ')[0];
+  const lines = sorted.map((spec) => `${indent}${spec.name === spec.local ? spec.name : `${spec.name} as ${spec.local}`},`);
+
+  return { before: before.lines.slice(0, open + 1), merged: lines, after: after.lines.slice(close) };
+}
+
 /* ──────────────────────────────── main ─────────────────────────────────── */
 
 let clean;
@@ -278,8 +405,23 @@ try {
   fallback();
 }
 
-const resolved = [];
 let hunks = 0;
+
+// First pass: the hunks that are an edit inside one import's member list. They
+// are rewritten in place because the resolution reaches past the hunk into the
+// unconflicted text on either side of it — the rest of the same statement.
+for (let at = 0; at < parts.length; at += 1) {
+  if (parts[at].type !== 'conflict') continue;
+  if (resolveHunk(parts[at])) continue; // the whole-statement rules have it
+  const list = resolveSpecifierList(parts, at);
+  if (!list) continue; // leave it for the second pass to refuse
+  parts[at - 1].lines = list.before;
+  parts[at] = { type: 'text', lines: list.merged };
+  parts[at + 1].lines = list.after;
+  hunks += 1;
+}
+
+const resolved = [];
 for (const part of parts) {
   if (part.type === 'text') {
     resolved.push(...part.lines);
