@@ -72,5 +72,12 @@
 	<string>XCEED saves course material and documents you download to your photo library.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>XCEED uses Face ID to unlock your saved account so you do not have to re-enter your password each time.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>XCEED connects to a development server running on your local network when testing pre-release builds.</string>
 </dict>
 </plist>
