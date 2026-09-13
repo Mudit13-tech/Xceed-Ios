@@ -9,7 +9,7 @@
 function getEnvironment() {
   const currentURL = window.location.href;
   const development = 'http://localhost:8010';
-  const nitjServer = 'http://localhost:8010';
+  const nitjServer = 'https://xceed.nitj.ac.in';
   if (currentURL.includes('localhost') || currentURL.includes('127.0.0.1')) {
     return development;
   } else {

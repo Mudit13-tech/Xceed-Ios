@@ -34,7 +34,7 @@ import getEnvironment from './getenvironment';
  * NSAllowsLocalNetworking so ATS permits the cleartext hop.
  */
 const NATIVE_API_ORIGIN =
-  import.meta.env.VITE_NATIVE_API_ORIGIN || 'http://localhost:8010';
+  import.meta.env.VITE_NATIVE_API_ORIGIN || 'https://xceed.nitj.ac.in';
 
 export default function getEnvironmentNative() {
   if (window.Capacitor && window.Capacitor.isNativePlatform()) {

@@ -5,7 +5,8 @@
   "server": {
     "hostname": "xceed.learning.app",
     "cleartext": true,
-    "androidScheme": "http"
+    "androidScheme": "http",
+    "iosScheme": "capacitor"
   },
   "plugins": {
     "PushNotifications": {
