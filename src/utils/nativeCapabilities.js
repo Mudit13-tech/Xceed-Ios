@@ -4,6 +4,7 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { Browser } from '@capacitor/browser';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { FileViewer } from '@capacitor/file-viewer';
 import getEnvironment from '../getenvironment';
 import { appToast } from './appToast';
 
@@ -177,19 +178,35 @@ export const downloadBase64Native = async (base64Data, fileName, mimeType = 'app
   }
 
   try {
-    if (Capacitor.getPlatform() !== 'android') {
-      // iOS doesn't have a public Downloads folder accessible without the Share sheet
-      const result = await Filesystem.writeFile({
-        path: fileName,
-        data: base64Data,
-        directory: Directory.Cache,
-      });
-      return await shareIgnoringCancel({
-        title: fileName,
-        url: result.uri,
-        dialogTitle: 'Save file',
-      });
-    }
+      if (Capacitor.getPlatform() !== 'android') {
+        // iOS has no public Downloads folder, so the file goes to Cache and is
+        // then shown rather than handed off.
+        const result = await Filesystem.writeFile({
+          path: fileName,
+          data: base64Data,
+          directory: Directory.Cache,
+        });
+
+        // Open it in place. The share sheet was never what a student wanted
+        // from tapping an assignment -- they want to read it, and "Save to
+        // Files" is several taps and a decision before any of it is on screen.
+        // Quick Look presents the document over the app with a Done button, and
+        // carries its own share action for the times they do want to keep it.
+        try {
+          await FileViewer.openDocumentFromLocalPath({ path: result.uri });
+          return result;
+        } catch (viewerError) {
+          // A file type Quick Look will not preview still deserves to be
+          // openable, so the old behaviour stays as the fallback rather than
+          // the default.
+          console.warn('Could not preview the file, offering to save it instead', viewerError);
+          return await shareIgnoringCancel({
+            title: fileName,
+            url: result.uri,
+            dialogTitle: 'Save file',
+          });
+        }
+      }
 
     // Android: attempt to write to Downloads folder via ExternalStorage
     try {
