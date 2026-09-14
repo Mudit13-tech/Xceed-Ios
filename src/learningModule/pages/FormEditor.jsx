@@ -596,6 +596,23 @@ export default function FormEditor() {
             </FormControl>
           )}
 
+          <FormControl display="flex" alignItems="flex-start" gap={3}>
+            <Switch
+              mt={1}
+              isChecked={Boolean(form.settings?.autoFullscreen)}
+              onChange={(event) => setSetting('autoFullscreen', event.target.checked)}
+            />
+            <Box>
+              <FormLabel mb={0} fontSize="sm">
+                Open in full screen automatically
+              </FormLabel>
+              <Text fontSize="xs" opacity={0.6}>
+                When a student opens this form, their browser is asked to go full screen — questions are
+                shown with larger text while full screen, Typeform-style.
+              </Text>
+            </Box>
+          </FormControl>
+
           <FormControl>
             <FormLabel fontSize="sm">Who can respond</FormLabel>
             <Select
@@ -727,6 +744,8 @@ export default function FormEditor() {
         onClose={previewDialog.onClose}
         form={form ? { ...form, questions, sections } : null}
         classId={classId}
+        subjectName={klass?.subject}
+        facultyName={form.createdByName || klass?.ownerName}
       />
     </VStack>
   );

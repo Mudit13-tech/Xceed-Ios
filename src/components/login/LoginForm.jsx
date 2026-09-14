@@ -237,7 +237,7 @@ const LoginForm = () => {
                     borderWidth="1px"
                     borderRadius="md"
                   />
-                  <Button size="sm" variant="ghost" onClick={loadCaptcha}>
+                  <Button size="sm" variant="ghost" bg="transparent" onClick={loadCaptcha}>
                     New image
                   </Button>
                 </HStack>
@@ -259,11 +259,17 @@ const LoginForm = () => {
                 {/* The accessible route out. An image challenge has no answer for
                     somebody who cannot see it, and this is the one page they
                     cannot skip. */}
+                {/* bg stated outright: a global `button { background-color: #007bff }`
+                    in timetableadmin/Timetable.css matches this element directly, and
+                    the link variant sets no background of its own to beat it. */}
                 {!emailCode && (
                   <Button
                     variant='link'
                     size='sm'
                     colorScheme='blue'
+                    bg='transparent'
+                    _hover={{ bg: 'transparent', textDecoration: 'underline' }}
+                    _active={{ bg: 'transparent' }}
                     mt={1}
                     isLoading={sendingCode}
                     onClick={requestEmailCode}

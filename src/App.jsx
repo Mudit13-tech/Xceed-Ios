@@ -44,6 +44,7 @@ const ForgotPassword = lazyWithPreload(() => import('./dashboard/ForgotPassword'
 const SuperAdminPage = lazyWithPreload(() => import('./dashboard/superadmin'));
 const BugReportsAdmin = lazyWithPreload(() => import('./dashboard/bugReports'));
 const DevTeamApplicationsAdmin = lazyWithPreload(() => import('./dashboard/devTeamApplications'));
+const AnnouncementConsole = lazyWithPreload(() => import('./dashboard/AnnouncementConsole'));
 const DeptAdminAssignPage = lazyWithPreload(() => import('./dashboard/deptAdminAssign'));
 const HodAssignPage = lazyWithPreload(() => import('./dashboard/hodAssign'));
 const CommonSlot = lazyWithPreload(() => import('./timetableadmin/commonslot.jsx'));
@@ -320,6 +321,10 @@ const APP_ROUTES = (
             {/* Which mailbox each module's mail goes out from, and a week of
                 volume per sender. Platform-wide, so it sits here. */}
             <Route path="mail" element={<MailConsole />} />
+            {/* One message pushed to every installed device. A page of its own
+                because it cannot be edited, recalled or narrowed to anyone —
+                see dashboard/AnnouncementConsole.jsx. */}
+            <Route path="announce" element={<AnnouncementConsole />} />
             {/* The department → head mapping every module reads. Platform-wide,
                 so it sits here rather than inside any one module. */}
             {/* Heads of department, the Dean (Academic), and what each of

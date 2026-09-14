@@ -27,6 +27,22 @@ const fetchWithAuth = (input, init = {}) => window.fetch(input, {
 // here so the limit is visible in the UI rather than arriving as a 400.
 const MAX_EMBEDDING = 5;
 
+// The floor the student-facing tab enforces (myGroundTruthController's
+// MIN_EMBEDDING) and the ML service's own advice: below three photos a mean
+// embedding describes too few angles to match reliably, and a student with a
+// thin embedding is one bad frame away from not being recognised at all.
+//
+// Applied here to DEMOTION only — moving a photo out of the embedding and into
+// backup, which is a reshuffle and never urgent. Deleting a photo is untouched:
+// that is the reason this modal exists (a photo of the wrong person in
+// somebody's folder has to go, whatever it leaves behind), and the server
+// refills the freed slot from backup afterwards.
+//
+// It is a floor, not a requirement: a folder that simply does not hold three
+// photos cannot be made to, so the rule is "you may not demote below three
+// while three are available to be in there".
+const MIN_EMBEDDING = 3;
+
 const MODAL_CSS = `
     .gt-modal-grid {
         display: grid;
@@ -49,7 +65,7 @@ const MODAL_CSS = `
 const GROUPS = {
     embedding: {
         title: 'Embedding photos',
-        hint: `Used to build this student's face embedding — at most ${MAX_EMBEDDING}.`,
+        hint: `Used to build this student's face embedding — ${MIN_EMBEDDING} to ${MAX_EMBEDDING}.`,
         color: theme.success,
         dim: theme.successDim,
     },
@@ -125,10 +141,24 @@ export default function StudentGroundTruthModal({ batch, rollNo, student, onSave
     const inGroup = (group) => photos.filter((p) => p.group === group);
     const embeddingCount = inGroup('embedding').length;
 
+    // What the embedding could hold if every photo in the folder were in it —
+    // the ceiling on the floor below, so a student with only two photos on disk
+    // is not stuck with a modal that refuses every move.
+    const assignableCount = Math.min(photos.length, MAX_EMBEDDING);
+
     function moveTo(filename, group) {
         setNotice('');
         if (group === 'embedding' && embeddingCount >= MAX_EMBEDDING) {
             setNotice(`At most ${MAX_EMBEDDING} embedding photos — move one out first.`);
+            return;
+        }
+        if (group !== 'embedding'
+            && embeddingCount <= MIN_EMBEDDING
+            && assignableCount >= MIN_EMBEDDING) {
+            setNotice(
+                `Keep at least ${MIN_EMBEDDING} embedding photos — move a backup photo in first. `
+                + 'Use the delete button if the photo has to go entirely.',
+            );
             return;
         }
         setPhotos((current) => current.map(
@@ -143,6 +173,18 @@ export default function StudentGroundTruthModal({ batch, rollNo, student, onSave
 
         if (embeddingFiles.length === 0) {
             setNotice('Keep at least one embedding photo.');
+            return;
+        }
+        // The same floor the move buttons enforce, checked again on the way
+        // out: a delete can drop the count below it after the moves were made,
+        // and saving that would write exactly the thin embedding the floor
+        // exists to prevent.
+        const floor = Math.min(MIN_EMBEDDING, assignableCount);
+        if (embeddingFiles.length < floor) {
+            setNotice(
+                `Keep at least ${floor} embedding photos — move ${floor - embeddingFiles.length} `
+                + 'backup photo(s) into the embedding first.',
+            );
             return;
         }
 

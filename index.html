@@ -9,6 +9,18 @@
   <link rel="icon" id="favicon" type="image/svg+xml" href="/logo-mark-white.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>XCEED NITJ</title>
+
+  <!-- Web app manifest: what makes this installable, and what PWABuilder reads
+       to build the Microsoft Store package. The name, icons and theme colour in
+       manifest.webmanifest are copied into the Windows package at packaging
+       time, so a change there means a new Store submission, not just a deploy. -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#0166ff" />
+  <!-- Same root-relative reasoning as the favicon above: a bare filename breaks
+       on deep routes. iOS ignores the manifest icons and wants its own link. -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png" />
+  <meta name="description"
+    content="Attendance, timetable, learning and conference platform for Dr B R Ambedkar National Institute of Technology, Jalandhar." />
   <!-- The favicon is swapped for the browser's colour scheme in
        src/utils/favicon.js, not by an inline script here: script-src 'self'
        blocks inline script, so the block that used to live here never ran in

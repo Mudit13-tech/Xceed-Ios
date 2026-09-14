@@ -26,6 +26,7 @@ import {
   FiUploadCloud,
   FiDatabase,
   FiMail,
+  FiSend,
 } from 'react-icons/fi';
 import getEnvironment from '../getenvironment';
 
@@ -102,6 +103,14 @@ const MODULES = [
     to: '/superadmin/mail',
     icon: FiMail,
     accent: 'blue',
+  },
+  {
+    title: 'Message All Users',
+    description:
+      'Push one message to every device with the app installed — a shutdown window, a moved exam. It cannot be taken back.',
+    to: '/superadmin/announce',
+    icon: FiSend,
+    accent: 'orange',
   },
   {
     title: 'Pull & Deploy',

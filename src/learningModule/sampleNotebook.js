@@ -317,14 +317,20 @@ int main(void) {
 // cases avoid an expected answer of 0, which the C starter would pass by
 // accident, since its stub already returns 0.
 const SUM_TESTS = [
-  { input: '3 4', output: '7' },
+  // The first is the worked example. A sample is how the student learns that
+  // two numbers arrive on one line and a bare integer goes back — and the
+  // sample notebook is where a teacher learns to set one, so it has to have
+  // one rather than describe it.
+  { input: '3 4', output: '7', isSample: true },
   { input: '10 -2', output: '8' },
   { input: '0 0', output: '0' },
   { input: '1000000 2000000', output: '3000000' },
 ];
 
 const PRIME_TESTS = [
-  { input: '5\n2 3 4 5 6', output: '3' },
+  // Sampled for the same reason, and more so: this input is two lines, and
+  // nothing but a sample would tell the student that.
+  { input: '5\n2 3 4 5 6', output: '3', isSample: true },
   { input: '4\n1 0 9 7', output: '1' },
   { input: '4\n11 13 17 19', output: '4' },
   { input: '3\n-5 1 2', output: '1' },
@@ -386,7 +392,7 @@ print(add(a, b))
 `,
     stdin: '3 4\n',
     testCases: [
-      { input: '3 4', output: '7' },
+      { input: '3 4', output: '7', isSample: true },
       { input: '10 -2', output: '8' },
     ],
   },
@@ -407,7 +413,7 @@ int main(void) {
 `,
     stdin: '3 4\n',
     testCases: [
-      { input: '3 4', output: '7' },
+      { input: '3 4', output: '7', isSample: true },
       { input: '10 -2', output: '8' },
     ],
   },

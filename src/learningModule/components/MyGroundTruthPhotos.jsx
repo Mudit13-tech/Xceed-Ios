@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogOverlay,
   AlertIcon,
   Badge,
   Box,
@@ -35,10 +41,19 @@ import { formatDate, relativeTime } from '../format';
  * student who knew perfectly well that one of their five was a bad frame had no
  * way to say so.
  *
- * So: swap between the two groups, and nothing else. There is no delete and no
- * upload here, and not because the buttons are missing — the server accepts a
- * save only when the two lists it receives are a rearrangement of exactly the
- * photos already on disk.
+ * So: swap between the two groups. The save itself does nothing else — there is
+ * no delete and no upload in it, and not because the buttons are missing: the
+ * server accepts a save only when the two lists it receives are a rearrangement
+ * of exactly the photos already on disk.
+ *
+ * One photo a student CAN throw away is a bad crop in the backup set — a
+ * half-face, a blur, the person sitting behind them — because backups are
+ * collected automatically by the cameras and nobody else is going to look
+ * through thousands of them. That is a separate request to a separate endpoint
+ * (POST /attendancemodule/photo-cleanup/:rollNo), capped at two a week, and it
+ * refuses anything that is in the embedding or that would leave the embedding
+ * under its floor. Nothing on this page can delete a photo recognition is
+ * currently using.
  *
  * The ERP photo sits alongside for reference. It is not part of the swap: it is
  * the official record, read-only from here.
@@ -59,6 +74,12 @@ import { formatDate, relativeTime } from '../format';
  */
 
 const API = `${getEnvironment()}/attendancemodule/my-photos`;
+// Removing a bad backup crop is not part of the photo tab's own API surface:
+// different endpoint, different rules, different allowance. Addressed by roll
+// number, which the server checks against the roster row for the signed-in
+// account before it does anything — the roll number in the URL is not what
+// authorises the call, it is what the call must agree with.
+const CLEANUP_API = `${getEnvironment()}/attendancemodule/photo-cleanup`;
 
 const authHeaders = () => {
   const token = localStorage.getItem('token');
@@ -75,6 +96,32 @@ async function api(path = '', { method = 'GET', body } = {}) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(data.message || 'Request failed');
+    error.code = data.code;
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+
+/**
+ * The one call from this page that removes a file.
+ *
+ * Kept out of `api()` above rather than given a path argument, because it is
+ * not the same API: it answers to different rules, a different allowance and a
+ * different endpoint, and a helper that could reach both would make "which
+ * requests can delete something" a question about an argument rather than about
+ * a function name.
+ */
+async function removeBackupPhoto(rollNo, filename) {
+  const response = await fetch(`${CLEANUP_API}/${encodeURIComponent(rollNo)}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.message || 'Could not remove that photo.');
     error.code = data.code;
     error.status = response.status;
     throw error;
@@ -133,7 +180,15 @@ function useAuthedImage(kind, filename) {
   return { src, failed };
 }
 
-function PhotoCard({ kind = 'gt', photo, accent, actionLabel, actionHint, onAction, disabled }) {
+function PhotoCard({
+  kind = 'gt', photo, accent, actionLabel, actionHint, onAction, disabled,
+  // The second, destructive action. Passed only for a photo the SERVER
+  // currently holds in backup, and only while a removal would actually be
+  // accepted — a photo moved into the embedding on this page but not yet saved
+  // is still an embedding photo everywhere else, and offering a button the
+  // server would refuse is worse than offering none.
+  onRemove, removeLabel = 'Remove',
+}) {
   const { src, failed } = useAuthedImage(kind, photo.filename);
 
   return (
@@ -168,21 +223,36 @@ function PhotoCard({ kind = 'gt', photo, accent, actionLabel, actionHint, onActi
           </Tooltip>
         )}
       </Box>
-      {onAction && (
-        <Tooltip label={disabled ? actionHint : ''} isDisabled={!disabled}>
-          <Box p={2}>
+      {(onAction || onRemove) && (
+        <VStack p={2} spacing={1} align="stretch">
+          {onAction && (
+            <Tooltip label={disabled ? actionHint : ''} isDisabled={!disabled}>
+              <Box>
+                <Button
+                  size="xs"
+                  width="100%"
+                  variant="outline"
+                  colorScheme={accent}
+                  isDisabled={disabled}
+                  onClick={() => onAction(photo)}
+                >
+                  {actionLabel}
+                </Button>
+              </Box>
+            </Tooltip>
+          )}
+          {onRemove && (
             <Button
               size="xs"
               width="100%"
-              variant="outline"
-              colorScheme={accent}
-              isDisabled={disabled}
-              onClick={() => onAction(photo)}
+              variant="ghost"
+              colorScheme="red"
+              onClick={() => onRemove(photo)}
             >
-              {actionLabel}
+              {removeLabel}
             </Button>
-          </Box>
-        </Tooltip>
+          )}
+        </VStack>
       )}
     </Box>
   );
@@ -341,6 +411,13 @@ export default function MyGroundTruthPhotos() {
   const [active, setActive] = useState([]);
   const [reserve, setReserve] = useState([]);
   const [saving, setSaving] = useState(false);
+  // The backup photo whose removal is waiting on a confirmation, and whether
+  // that removal is in flight. Confirmed rather than done on the click: it is
+  // the only irreversible thing on the page, and the allowance behind it is two
+  // a week.
+  const [pendingRemoval, setPendingRemoval] = useState(null);
+  const [removing, setRemoving] = useState(false);
+  const cancelRemoveRef = useRef(null);
   const toast = useToast();
   const initial = useRef({ active: [], reserve: [] });
 
@@ -422,6 +499,61 @@ export default function MyGroundTruthPhotos() {
     }
   };
 
+  /**
+   * Removing a bad backup crop.
+   *
+   * Local state rather than a reload afterwards: a student may have rearranged
+   * the two lists and not saved yet, and re-fetching would silently throw that
+   * away as the price of deleting one blurred frame. The server's own answer
+   * carries the new allowance, which is what the notice re-renders from.
+   */
+  const confirmRemoval = async () => {
+    const photo = pendingRemoval;
+    if (!photo) return;
+    setRemoving(true);
+    try {
+      const result = await removeBackupPhoto(state.data?.rollNo, photo.filename);
+      setReserve((prev) => prev.filter((p) => p.filename !== photo.filename));
+      // Also out of the baseline, so Reset does not try to put back a photo
+      // that no longer exists.
+      initial.current = {
+        ...initial.current,
+        reserve: initial.current.reserve.filter((name) => name !== photo.filename),
+      };
+      setState((prev) => (prev.data ? {
+        ...prev,
+        data: {
+          ...prev.data,
+          backup: (prev.data.backup || []).filter((p) => p.filename !== photo.filename),
+          cleanup: result.cleanup || prev.data.cleanup,
+        },
+      } : prev));
+      setPendingRemoval(null);
+      toast({
+        status: 'success',
+        title: 'Photo removed',
+        description: result.cleanup?.remaining === 0
+          ? 'That was your last removal for this week.'
+          : `You can remove ${result.cleanup?.remaining} more this week.`,
+        duration: 6000,
+      });
+    } catch (err) {
+      toast({
+        status: err.code === 'REMOVAL_LIMIT' ? 'info' : 'error',
+        title: err.code === 'REMOVAL_LIMIT' ? 'That is all for this week' : 'Could not remove that photo',
+        description: err.message,
+        duration: 8000,
+      });
+      setPendingRemoval(null);
+      // The page is describing photos that have since changed — an admin
+      // deleted one, or the set moved under it. Reload rather than leave the
+      // student clicking at names that are gone.
+      if (err.code === 'PHOTO_NOT_FOUND' || err.code === 'PHOTO_IN_USE') await load();
+    } finally {
+      setRemoving(false);
+    }
+  };
+
   if (state.loading && !state.data) return <Loading label="Loading your photos…" />;
 
   if (state.error) {
@@ -443,6 +575,26 @@ export default function MyGroundTruthPhotos() {
   // Absent on an older server: default to allowed rather than to locked, so a
   // version skew disables nothing the server would in fact have accepted.
   const canUpdate = data.canUpdate !== false;
+
+  // The removal allowance. Absent on an older server means the endpoint is not
+  // there either, so this one defaults the other way — to no buttons at all
+  // rather than to buttons that would 404.
+  const cleanup = data.cleanup || null;
+  const canRemove = Boolean(cleanup?.enabled) && (cleanup?.remaining ?? 0) > 0;
+  // Only a photo the server itself holds in backup may be removed. A photo
+  // moved across on this page but not yet saved is still an embedding photo to
+  // the server, which would refuse it — see PhotoCard's onRemove. Computed
+  // plainly rather than memoised: this sits after the early returns above, and
+  // a hook here would be a hook that does not run on every render.
+  const serverBackup = new Set((data.backup || []).map((p) => p.filename));
+  // The embedding floor, from the removal side: while the set in use is thin,
+  // the reserve is what refills it, and the server refuses to spend it. Read
+  // off the server's own lists, not the pending arrangement on this page —
+  // unsaved moves have not reached the folder the server will look at.
+  const embeddingThin = (data.embedding || []).length < limits.minEmbedding;
+  // Whether a Remove would be accepted right now. One name for the three
+  // conditions, so the notice and the buttons cannot describe different rules.
+  const removalOpen = canRemove && !embeddingThin;
 
   return (
     <VStack align="stretch" spacing={5}>
@@ -514,21 +666,23 @@ export default function MyGroundTruthPhotos() {
             lastPhotoUpdateAt={data.lastPhotoUpdateAt}
           />
 
-          {/* The one problem on this tab a student must NOT try to fix here.
-              Moving a stranger's photo to backup leaves it in their folder, so
-              the active-learning loop can put it back and the batch rebuild
-              still reads it; only staff can take it out of the folder. Said as
-              a warning rather than buried in the guide because a student who
-              spots it will otherwise reach for the buttons in front of them. */}
+          {/* Moving a photo of somebody else to backup does not get rid of it —
+              it stays in the folder either way, and while it is there the batch
+              rebuild still reads it. What differs by group is who can take it
+              out: a backup photo the student can remove themselves (two a
+              week), an embedding photo only staff can. Said as a warning rather
+              than buried in the guide because a student who spots a stranger in
+              their folder will otherwise reach for the nearest button. */}
           <Alert status="warning" borderRadius="md" fontSize="sm" alignItems="start">
             <AlertIcon />
             <Box>
               <Text fontWeight="600">Is one of these photos not you?</Text>
               <Text color="lmFg.muted">
-                Do not move it to backup and leave it at that — it stays in your folder either way,
-                and while it is there the cameras can mark the wrong person present. Contact your
-                department coordinator at iLEED and ask them to remove it; they are the only ones
-                who can.
+                Moving it to backup does not get rid of it — it stays in your folder, and while it
+                is there the cameras can mark the wrong person present. If it is already in{' '}
+                <Text as="span" fontWeight="600">Backup photos</Text> below, use Remove and it is
+                gone for good. If it is one of the photos in use for recognition, contact your
+                department coordinator at iLEED — they are the only ones who can take that one out.
               </Text>
             </Box>
           </Alert>
@@ -561,11 +715,62 @@ export default function MyGroundTruthPhotos() {
 
           <SectionCard
             title="Backup photos"
-            subtitle={canUpdate
-              ? 'Collected automatically and topped up daily — every time the cameras recognise you in class, that frame is kept here. None of them is used for recognition until you move it into the embedding.'
-              : 'Collected automatically and topped up daily — every time the cameras recognise you in class, that frame is kept here. None of them is used for recognition until you move it into the embedding.'}
+            subtitle="Collected automatically and topped up daily — every time the cameras recognise you in class, that frame is kept here. None of them is used for recognition until you move it into the embedding."
             action={<Badge colorScheme="blue">{reserve.length}</Badge>}
           >
+            {/* What Remove costs, said before the button is used rather than
+                after. Two a week is not a number anyone guesses, and a student
+                who has spent both needs the date, not a greyed-out button. */}
+            {cleanup?.enabled && (
+              <Alert
+                status={removalOpen ? 'info' : 'warning'}
+                borderRadius="md"
+                fontSize="sm"
+                mb={3}
+                alignItems="start"
+              >
+                <AlertIcon />
+                <Box>
+                  {removalOpen && (
+                    <>
+                      <Text fontWeight="600">
+                        Bad crop in here? You can remove {cleanup.remaining} more this week.
+                      </Text>
+                      <Text color="lmFg.muted">
+                        The cameras keep whatever they caught, so some of these are blurred, half a
+                        face, or somebody sitting behind you. Removing those is worth doing — this
+                        is the pool a photo is promoted from when one of the photos in use gets
+                        deleted. It cannot be undone, and it is {cleanup.allowance} a week.
+                      </Text>
+                    </>
+                  )}
+                  {!removalOpen && embeddingThin && (
+                    <>
+                      <Text fontWeight="600">
+                        Removing backups is held until {limits.minEmbedding} photos are in use for
+                        recognition.
+                      </Text>
+                      <Text color="lmFg.muted">
+                        These are what refills the set the cameras match you against, so while that
+                        set is thin they are the last thing to throw away. Move a good one across
+                        first, or ask your department admin.
+                      </Text>
+                    </>
+                  )}
+                  {!removalOpen && !embeddingThin && (
+                    <>
+                      <Text fontWeight="600">
+                        You have used both removals for this week
+                        {cleanup.nextSlotAt ? ` — the next is on ${formatDate(cleanup.nextSlotAt)}` : ''}.
+                      </Text>
+                      <Text color="lmFg.muted">
+                        Contact your department admin if more of these need to go before then.
+                      </Text>
+                    </>
+                  )}
+                </Box>
+              </Alert>
+            )}
             {reserve.length === 0 ? (
               <Text fontSize="sm" color="lmFg.muted">
                 No backup photos yet. The system adds one here each time the cameras recognise you in class, so this fills up on its own over the first few weeks.
@@ -581,6 +786,15 @@ export default function MyGroundTruthPhotos() {
                     actionHint={`Move one of the ${limits.maxEmbedding} in the embedding to backup first.`}
                     onAction={canUpdate ? promote : undefined}
                     disabled={!canPromote}
+                    // Offered only for photos the server itself has in backup,
+                    // and only while a removal would be accepted — the notice
+                    // above says why when it is not. Same reasoning as the Save
+                    // button below: a disabled button is one devtools edit away
+                    // from gone, and the page should not imply a rule it does
+                    // not itself enforce.
+                    onRemove={canRemove && !embeddingThin && serverBackup.has(photo.filename)
+                      ? setPendingRemoval
+                      : undefined}
                   />
                 ))}
               </SimpleGrid>
@@ -606,7 +820,7 @@ export default function MyGroundTruthPhotos() {
                   : `Read-only until ${formatDate(data.cooldownUntil)}. Contact your department admin if you need to update it sooner.`)
                 : dirty
                   ? 'Unsaved changes. Nothing is applied until you save.'
-                  : 'Photos are never deleted here — moving one to backup keeps it.'}
+                  : 'Moving a photo to backup keeps it — only Remove, on a backup photo, deletes one.'}
             </Text>
             {/* Rendered, not merely disabled, only while a save would be
                 accepted. A disabled button is a button a devtools console can
@@ -630,6 +844,64 @@ export default function MyGroundTruthPhotos() {
               </HStack>
             )}
           </Flex>
+
+          {/* Confirmed, and confirmed with the photo in view: the filenames are
+              camera timestamps, so a student picking between two blurred frames
+              by name alone would be guessing. Nothing here is recoverable and
+              the allowance is two a week. */}
+          <AlertDialog
+            isOpen={Boolean(pendingRemoval)}
+            leastDestructiveRef={cancelRemoveRef}
+            onClose={() => { if (!removing) setPendingRemoval(null); }}
+            isCentered
+          >
+            <AlertDialogOverlay>
+              <AlertDialogContent>
+                <AlertDialogHeader fontSize="lg" fontWeight="600">
+                  Remove this backup photo?
+                </AlertDialogHeader>
+                <AlertDialogBody>
+                  <HStack align="start" spacing={4}>
+                    <Box width="120px" flexShrink={0}>
+                      {pendingRemoval && (
+                        <PhotoCard photo={pendingRemoval} accent="red" />
+                      )}
+                    </Box>
+                    <VStack align="start" spacing={2} fontSize="sm">
+                      <Text>
+                        It is deleted for good — it does not go anywhere you can get it back from.
+                      </Text>
+                      <Text color="lmFg.muted">
+                        {cleanup?.remaining === 1
+                          ? 'This is your last removal for this week.'
+                          : `You can remove ${cleanup?.remaining ?? 0} this week, including this one.`}
+                      </Text>
+                    </VStack>
+                  </HStack>
+                </AlertDialogBody>
+                <AlertDialogFooter>
+                  <Button
+                    ref={cancelRemoveRef}
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setPendingRemoval(null)}
+                    isDisabled={removing}
+                  >
+                    Keep it
+                  </Button>
+                  <Button
+                    size="sm"
+                    colorScheme="red"
+                    ml={3}
+                    onClick={confirmRemoval}
+                    isLoading={removing}
+                  >
+                    Remove
+                  </Button>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialogOverlay>
+          </AlertDialog>
         </>
       )}
     </VStack>
