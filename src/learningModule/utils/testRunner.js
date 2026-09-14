@@ -29,11 +29,44 @@ export function evaluateOutputMatch(actual, expected) {
 }
 
 /**
+ * SHA-256 of a normalized output, as lowercase hex.
+ *
+ * The counterpart of `hashOutput` on the server, and the two must agree
+ * byte-for-byte — `normalizeOutput` here and `canonicalOutput` there are the
+ * same rule written twice, which is a thing to keep in step. A test pins them
+ * against a known digest so a change to either one is caught.
+ */
+export async function hashOutput(text) {
+  const bytes = new TextEncoder().encode(normalizeOutput(text));
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Whether one run passed, against whichever form of the answer we were given.
+ *
+ * A sample case arrives with its expected output in full, because the student is
+ * shown it anyway. Every other case arrives as a digest only: the server stopped
+ * sending hidden answers to the browser, so matching means hashing what the
+ * program printed and comparing. Same verdict either way, and the page no longer
+ * has anything worth reading in it.
+ */
+export async function evaluateAgainstCase(actual, testCase) {
+  if (typeof testCase.outputHash === 'string' && testCase.outputHash) {
+    return (await hashOutput(actual)) === testCase.outputHash;
+  }
+  return evaluateOutputMatch(actual, testCase.output);
+}
+
+/**
  * Runs a cell against an array of test cases using the kernel's runCell function.
  *
  * @param {Object} options
  * @param {Object} options.cell - The notebook cell being tested
- * @param {Array} options.testCases - Array of { _id, input, output }
+ * @param {Array} options.testCases - Array of { _id, input, isSample, and either
+ *        `output` (sample cases) or `outputHash` (everything else)
  * @param {Boolean} [options.isC] - Whether this is a C cell (requires prelude)
  * @param {Array} [options.prelude] - Hidden setup sources for C compilation
  * @param {Function} options.runCell - Kernel runCell function (cellId, source, onOutput, opts)
@@ -81,11 +114,16 @@ export async function runCellTestCases({
 
       // If the cell produced a result expression, append if not already captured
       const outputText = collectedStdout || (result !== null && result !== undefined ? String(result) : '');
-      const passed = !error && evaluateOutputMatch(outputText, tc.output);
+      // eslint-disable-next-line no-await-in-loop
+      const passed = !error && (await evaluateAgainstCase(outputText, tc));
 
       testResults.push({
         testCaseId: tc._id || null,
         passed,
+        // A sample case is shown to the student in the cell anyway, so there is
+        // nothing to withhold. A hidden one has no expected output here to
+        // record — the browser never received it.
+        isSample: Boolean(tc.isSample),
         input: tc.input || '',
         expectedOutput: tc.output || '',
         actualOutput: outputText.trim(),
@@ -96,6 +134,7 @@ export async function runCellTestCases({
       testResults.push({
         testCaseId: tc._id || null,
         passed: false,
+        isSample: Boolean(tc.isSample),
         input: tc.input || '',
         expectedOutput: tc.output || '',
         actualOutput: '',

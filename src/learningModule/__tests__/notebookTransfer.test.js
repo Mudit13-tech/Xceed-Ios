@@ -46,7 +46,15 @@ describe('learningModule notebook file', () => {
       expect(cell.hidden).toBe(Boolean(cells[i].hidden));
       expect(cell.locked).toBe(Boolean(cells[i].locked));
       expect(cell.stdin).toBe(cells[i].stdin || '');
-      expect(cell.testCases).toEqual((cells[i].testCases || []).map(({ input, output }) => ({ input, output })));
+      // `isSample` travels with every case now — a downloaded notebook that
+      // came back with its worked example turned off would be a silent loss.
+      expect(cell.testCases).toEqual(
+        (cells[i].testCases || []).map(({ input, output, isSample }) => ({
+          input,
+          output,
+          isSample: Boolean(isSample),
+        })),
+      );
     });
     expect(countTestCases(backCells)).toBe(8);
   });

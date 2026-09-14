@@ -29,6 +29,7 @@ import { DeadlineCountdown, ErrorState, Loading, SectionCard } from '../componen
 import HintTooltip from '../components/HintTooltip';
 import NotebookCell from '../components/NotebookCell';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
+import NotebookPreviewModal from '../components/NotebookPreviewModal';
 import { toDateTimeInput } from '../format';
 import useNotebookKernel from '../hooks/useNotebookKernel';
 import { MAX_IMPORT_CELLS, cellsFromFile } from '../notebookImport';
@@ -59,6 +60,63 @@ const newCell = (type) => ({
   runCount: 0,
 });
 
+/** "a moment ago", "3 minutes ago" — a clock time is more precision than this needs. */
+function agoLabel(then, now) {
+  const seconds = Math.max(0, Math.round((now - then) / 1000));
+  if (seconds < 10) return 'just now';
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  return then.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Saved, saving, or unsaved — and when.
+ *
+ * Ticks on its own so "3 minutes ago" does not sit there reading "just now"
+ * for the rest of the session; the interval is local to this component so the
+ * rest of the editor is not re-rendered by a clock.
+ */
+function SavedState({ savingAction, lastSavedAt, dirty, published }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!lastSavedAt) return undefined;
+    const timer = setInterval(() => tick((n) => n + 1), 15_000);
+    return () => clearInterval(timer);
+  }, [lastSavedAt]);
+
+  const saving = savingAction === 'auto' || savingAction === 'save';
+  const label = saving
+    ? 'Saving…'
+    : lastSavedAt
+      ? `Saved ${agoLabel(lastSavedAt, Date.now())}`
+      : dirty
+        ? 'Unsaved changes'
+        : 'No changes yet';
+
+  return (
+    <HStack spacing={2} fontSize="xs" color="lmFg.muted" mr={1}>
+      <Box
+        w="7px"
+        h="7px"
+        borderRadius="full"
+        bg={saving ? 'blue.400' : dirty ? 'orange.400' : 'green.400'}
+        flexShrink={0}
+      />
+      <Text>{label}</Text>
+      {dirty && !saving && lastSavedAt && <Text opacity={0.7}>· edited since</Text>}
+      {!published && (
+        <Badge colorScheme="gray" fontSize="2xs">
+          Draft
+        </Badge>
+      )}
+    </HStack>
+  );
+}
+
+/** How often an edited notebook saves itself. */
+const AUTOSAVE_MS = 30_000;
+
 export default function NotebookEditor() {
   const { classId } = useOutletContext();
   const { notebookId } = useParams();
@@ -76,11 +134,18 @@ export default function NotebookEditor() {
   // publishing too.
   const [savingAction, setSavingAction] = useState(null);
   const [importingCells, setImportingCells] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [problems, setProblems] = useState([]);
   // Packages the browser kernel cannot install. The save still goes through —
   // this is what the server said about it, not why it refused.
   const [packageNotes, setPackageNotes] = useState([]);
   const [setupDone, setSetupDone] = useState(false);
+  /* When the notebook last reached the server, and whether anything has been
+     typed since. Autosave reads both: there is nothing to save if nothing
+     changed, and a teacher who has been editing for ten minutes should be able
+     to see that it landed rather than take it on faith. */
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+  const [dirty, setDirty] = useState(false);
 
   // The buttons only disable once React has re-rendered, which is a tick later
   // than the click that started the save.
@@ -109,6 +174,32 @@ export default function NotebookEditor() {
   // during the startup wait without the teacher declaring them anywhere.
   const sources = useMemo(() => cells.map((cell) => cell.source), [cells]);
 
+  /**
+   * Everything a save would send, as one comparable string.
+   *
+   * Autosave needs to know whether anything actually changed, and "did some
+   * state object get a new identity" is not that — React hands out new objects
+   * constantly. Comparing the payload means an edit that is typed and then
+   * undone leaves the notebook clean, which is what a teacher would expect from
+   * the word "saved".
+   */
+  const snapshot = useMemo(
+    () => (notebook ? JSON.stringify({ notebook, cells, packages }) : ''),
+    [notebook, cells, packages],
+  );
+  const savedSnapshotRef = useRef('');
+
+  useEffect(() => {
+    if (!snapshot) return;
+    // First render after a load or a save: this *is* the saved state.
+    if (!savedSnapshotRef.current) {
+      savedSnapshotRef.current = snapshot;
+      setDirty(false);
+      return;
+    }
+    setDirty(snapshot !== savedSnapshotRef.current);
+  }, [snapshot]);
+
   const language = notebook?.language === 'c' ? 'c' : 'python';
   const isC = language === 'c';
   const { status, detail, busyCellId, kernelPackages, label, start, restart, runCell, stop } =
@@ -124,6 +215,9 @@ export default function NotebookEditor() {
     setError(null);
     try {
       const loaded = await lmApi.getNotebook(classId, notebookId);
+      // Cleared so the effect above takes the freshly loaded state as the
+      // baseline rather than reading it as an edit.
+      savedSnapshotRef.current = '';
       setNotebook(loaded);
       setCells((loaded.cells || []).map((cell) => ({ ...cell, outputs: [], runCount: 0 })));
       setPackagesText((loaded.packages || []).join(', '));
@@ -401,13 +495,15 @@ export default function NotebookEditor() {
     }
   };
 
-  const save = async ({ thenPublish = false } = {}) => {
+  const save = async ({ thenPublish = false, auto = false } = {}) => {
     // Two saves in flight against one notebook race each other: `cells` is
     // replaced wholesale server-side, so the slower response decides what the
     // notebook ends up containing.
     if (savingRef.current) return;
     savingRef.current = true;
-    setSavingAction(thenPublish ? 'publish' : 'save');
+    // An autosave shows in the header line rather than putting a spinner on a
+    // button the teacher is not pressing.
+    setSavingAction(thenPublish ? 'publish' : auto ? 'auto' : 'save');
     setProblems([]);
     setPackageNotes([]);
 
@@ -437,12 +533,18 @@ export default function NotebookEditor() {
             _id: String(tc._id || '').startsWith('new-') ? undefined : tc._id,
             input: tc.input || '',
             output: tc.output || '',
+            // Without this the sample tick survives until the next save and
+            // then quietly reverts, which is worse than not having the tick.
+            isSample: Boolean(tc.isSample),
           })),
           order,
         })),
       });
 
       stored = true;
+      setLastSavedAt(new Date());
+      setDirty(false);
+      savedSnapshotRef.current = '';
 
       // The save worked; these packages just will not install in the browser.
       // Shown as a standing note rather than a toast, because it stays true
@@ -454,12 +556,16 @@ export default function NotebookEditor() {
       if (thenPublish) {
         await lmApi.publishNotebook(classId, notebookId, { publish: true });
         toast({ status: 'success', title: 'Saved and published' });
-      } else {
+      } else if (!auto) {
+        // The autosave says so in the header instead. A toast every thirty
+        // seconds would be the most annoying possible way to reassure someone.
         toast({ status: 'success', title: 'Saved' });
       }
     } catch (err) {
       setProblems(err.payload?.errors || [err.message]);
-      toast({ status: 'error', title: err.message });
+      // A failed autosave still has to be visible — silently not saving is the
+      // thing autosave exists to prevent — but it says what it was doing.
+      toast({ status: 'error', title: auto ? `Autosave failed: ${err.message}` : err.message });
     } finally {
       // Only once the save itself landed. Reloading after a *rejected* save
       // would throw away the very edits the teacher has to fix — but a publish
@@ -471,6 +577,35 @@ export default function NotebookEditor() {
     }
     return stored;
   };
+
+  /**
+   * Autosave, every thirty seconds.
+   *
+   * A notebook is a long editing session — twenty cells, test cases, settings —
+   * and losing it to a closed tab is the kind of thing that stops a teacher
+   * using the feature at all. Thirty seconds is the interval the request asked
+   * for, and it suits the shape of the work: cells are edited in bursts with
+   * long pauses, so a debounce on keystrokes would either fire constantly or
+   * not at all.
+   *
+   * Deliberately *not* a save on every change. `updateNotebook` replaces `cells`
+   * wholesale, so each save is a full rewrite of the document; doing that per
+   * keystroke would be pointless write load for no extra safety.
+   *
+   * It never publishes, and it never runs while a manual save is in flight —
+   * `save()` already refuses a second concurrent call, and this checks `dirty`
+   * so an idle tab is silent.
+   */
+  const saveRef = useRef(null);
+  saveRef.current = save;
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const timer = setInterval(() => {
+      if (savingRef.current) return;
+      saveRef.current?.({ auto: true });
+    }, AUTOSAVE_MS);
+    return () => clearInterval(timer);
+  }, [dirty]);
 
   if (loading) return <Loading label="Loading notebook…" />;
   if (error) return <ErrorState error={error} onRetry={load} />;
@@ -506,6 +641,17 @@ export default function NotebookEditor() {
             Restart {label}
           </Button>
         )}
+        {/* Where the notebook stands, in the place a teacher looks before
+            closing the tab. Autosave is only reassuring if it is visible. */}
+        <SavedState
+          savingAction={savingAction}
+          lastSavedAt={lastSavedAt}
+          dirty={dirty}
+          published={Boolean(notebook.published)}
+        />
+        <Button size="sm" variant="outline" onClick={() => setPreviewing(true)}>
+          Preview
+        </Button>
         <Button
           size="sm"
           onClick={() => save()}
@@ -905,6 +1051,14 @@ export default function NotebookEditor() {
           Import cells
         </Button>
       </HStack>
+
+      <NotebookPreviewModal
+        isOpen={previewing}
+        onClose={() => setPreviewing(false)}
+        notebook={notebook}
+        cells={cells}
+        language={language}
+      />
 
       <ImportQuestionsModal
         isOpen={importingCells}

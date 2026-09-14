@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
   Badge,
+  Checkbox,
   Box,
   Button,
   Collapse,
@@ -398,7 +399,9 @@ function TestCasesEditorPanel({
   const border = useColorModeValue('purple.200', 'purple.800');
 
   const addTestCase = () => {
-    onChange([...testCases, { input: '', output: '' }]);
+    // Explicit rather than relying on the coercion downstream: a new case is
+    // hidden, and the teacher ticks the one they want shown.
+    onChange([...testCases, { input: '', output: '', isSample: false }]);
   };
 
   const updateTestCase = (index, patch) => {
@@ -416,7 +419,8 @@ function TestCasesEditorPanel({
       <Flex align="center" justify="space-between" mb={2} wrap="wrap" gap={2}>
         <HStack spacing={2}>
           <Text fontSize="xs" fontWeight="700" color="purple.600" textTransform="uppercase">
-            Hidden Test Cases ({testCases.length})
+            Test Cases ({testCases.filter((tc) => tc.isSample).length} sample ·{' '}
+            {testCases.filter((tc) => !tc.isSample).length} hidden)
           </Text>
           {testSummary?.total > 0 && (
             <Badge colorScheme={testSummary.passedAll ? 'green' : 'red'} fontSize="2xs">
@@ -449,6 +453,10 @@ function TestCasesEditorPanel({
         <b>Input</b> is typed into the program for that run
         {isC ? ' (what scanf / fgets read)' : ', one line per input() call'}. <b>Expected output</b> is exactly what
         it should print. Capital letters count; spaces at line ends and trailing blank lines don&apos;t.
+        {' '}Because matching is that strict, tick <b>Show as sample</b> on one case: the student is shown
+        its input and its expected output as a worked example, which is the only thing telling them how
+        the input arrives and exactly what to print. The rest stay hidden — their expected output is
+        never sent to the student&apos;s browser, only a checksum of it.
       </Text>
 
       {testCases.length === 0 ? (
@@ -467,9 +475,25 @@ function TestCasesEditorPanel({
               bg={useColorModeValue('white', 'gray.800')}
             >
               <Flex justify="space-between" align="center" mb={1.5}>
-                <Text fontSize="xs" fontWeight="600">
-                  Test Case #{idx + 1}
-                </Text>
+                <HStack spacing={2}>
+                  <Text fontSize="xs" fontWeight="600">
+                    Test Case #{idx + 1}
+                  </Text>
+                  {tc.isSample && (
+                    <Badge colorScheme="blue" fontSize="2xs">
+                      Sample · student sees this
+                    </Badge>
+                  )}
+                </HStack>
+                <Checkbox
+                  size="sm"
+                  ml="auto"
+                  mr={1}
+                  isChecked={Boolean(tc.isSample)}
+                  onChange={(event) => updateTestCase(idx, { isSample: event.target.checked })}
+                >
+                  <Text fontSize="2xs">Show as sample</Text>
+                </Checkbox>
                 <IconButton
                   aria-label="Remove test case"
                   icon={<FiTrash2 />}
@@ -515,6 +539,73 @@ function TestCasesEditorPanel({
           ))}
         </VStack>
       )}
+    </Box>
+  );
+}
+
+/**
+ * The worked example a student reads before they write anything.
+ *
+ * Every other panel here is about judging an answer; this one is the only thing
+ * that states the *question's* contract — how the input arrives, and exactly
+ * what to print back. Without it a student who solved the problem perfectly
+ * still fails on a trailing zero, and the feedback cannot tell them why, because
+ * telling them why would mean showing a hidden answer.
+ *
+ * Rendered only where a teacher ticked "Show as sample", and only to students:
+ * the teacher already sees every case in the editor panel below.
+ */
+function SampleCasePanel({ testCases = [], isC = false }) {
+  const samples = (testCases || []).filter((tc) => tc.isSample);
+  const bg = useColorModeValue('blue.50', 'rgba(66,153,225,0.12)');
+  const border = useColorModeValue('blue.200', 'blue.800');
+  // Hoisted: a hook inside the map below would run a different number of times
+  // per render as samples are added or removed.
+  const cardBg = useColorModeValue('white', 'gray.800');
+  if (!samples.length) return null;
+
+  return (
+    <Box bg={bg} borderTopWidth="1px" borderColor={border} p={3}>
+      <HStack spacing={2} mb={2}>
+        <Text fontSize="xs" fontWeight="700" color="blue.600" textTransform="uppercase">
+          {samples.length === 1 ? 'Sample' : `Samples (${samples.length})`}
+        </Text>
+        <Text fontSize="2xs" opacity={0.75}>
+          Print it exactly like this — same text, same number of decimal places, nothing extra.
+        </Text>
+      </HStack>
+
+      <VStack align="stretch" spacing={2}>
+        {samples.map((tc, idx) => (
+          <Flex
+            key={tc._id || idx}
+            gap={3}
+            direction={{ base: 'column', sm: 'row' }}
+            borderWidth="1px"
+            borderColor={border}
+            borderRadius="md"
+            bg={cardBg}
+            p={2.5}
+          >
+            <Box flex="1" minW={0}>
+              <Text fontSize="2xs" fontWeight="600" opacity={0.6} mb={0.5}>
+                {isC ? 'Input (what scanf reads)' : 'Input (what input() reads)'}
+              </Text>
+              <Box as="pre" fontFamily="mono" fontSize="xs" overflowX="auto" m={0}>
+                {tc.input || '(no input)'}
+              </Box>
+            </Box>
+            <Box flex="1" minW={0}>
+              <Text fontSize="2xs" fontWeight="600" opacity={0.6} mb={0.5}>
+                Your program should print
+              </Text>
+              <Box as="pre" fontFamily="mono" fontSize="xs" overflowX="auto" m={0} color="blue.600">
+                {tc.output}
+              </Box>
+            </Box>
+          </Flex>
+        ))}
+      </VStack>
     </Box>
   );
 }
@@ -585,16 +676,37 @@ function TestResultsPanel({ testResults = [], testSummary, isTeacher = false }) 
                     Error: {result.error}
                   </Text>
                 ) : (
+                  /* What a failed case is allowed to say.
+
+                     It used to say one sentence to students — "Output did not
+                     match expected result" — which cannot tell a wrong answer
+                     apart from a right answer printed to two decimal places.
+                     A student could spend an evening on a formatting slip.
+
+                     So: their own output is always theirs to see, on any case;
+                     it is what their code just printed. The expected output is
+                     shown only where it is already public — a sample case, or
+                     the teacher's own view. A hidden case still gives nothing
+                     away, and still says enough to act on. */
                   <VStack align="stretch" spacing={1} fontSize="2xs" fontFamily="mono">
-                    {isTeacher && (
+                    {(isTeacher || result.isSample) && (
                       <>
                         {result.input && <Text opacity={0.8}>Input: {result.input}</Text>}
-                        <Text color="green.600">Expected: {result.expectedOutput}</Text>
+                        {result.expectedOutput !== '' && result.expectedOutput !== undefined && (
+                          <Text color="green.600">Expected: {result.expectedOutput}</Text>
+                        )}
                       </>
                     )}
                     <Text color="red.500">
-                      {isTeacher ? `Actual: ${result.actualOutput || '(empty)'}` : 'Output did not match expected result.'}
+                      {isTeacher || result.isSample ? 'Actual: ' : 'Your output: '}
+                      {result.actualOutput || '(nothing printed)'}
                     </Text>
+                    {!isTeacher && !result.isSample && (
+                      <Text color="red.400" opacity={0.85} fontFamily="body">
+                        This is a hidden case, so the expected output is not shown. Check it against the
+                        sample above — same format, same number of decimal places.
+                      </Text>
+                    )}
                   </VStack>
                 )}
               </Box>
@@ -920,6 +1032,10 @@ export default function NotebookCell({
           testSummary={testSummary}
         />
       )}
+
+      {/* The sample, for the student. The teacher sees every case in the panel
+          above, so showing it to them as well would just be the same data twice. */}
+      {!isEditor && <SampleCasePanel testCases={cell.testCases || []} isC={isC} />}
 
       {/* Test Results Output */}
       {showTestResults && testResults.length > 0 && (
