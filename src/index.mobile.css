@@ -1,0 +1,149 @@
+/**
+ * The app's global stylesheet, on a device.
+ *
+ * Why this file exists
+ * --------------------
+ * AMS's src/index.css opens with three `@import url(https://fonts.googleapis.com/...)`
+ * rules. In a browser that is a tolerable cost paid once and then cached by the
+ * CDN. In the app it is the single largest thing standing between launching and
+ * seeing anything at all, for three compounding reasons:
+ *
+ *  1. The stylesheet is render-blocking, and `@import` at the top of a
+ *     render-blocking stylesheet is itself render-blocking. The WebView cannot
+ *     paint one pixel until it has resolved DNS for fonts.googleapis.com,
+ *     completed a TLS handshake and read three responses back. On campus wifi
+ *     that was measured in seconds; on a train it is however long the network
+ *     takes to admit it is not there.
+ *
+ *  2. It happens on *every* cold start. A browser has an HTTP cache that
+ *     survives; a freshly-launched WebView reliably does not, so this is not a
+ *     first-visit cost, it is the cost of opening the app.
+ *
+ *  3. Two of the three imports are the certificate designer's font picker --
+ *     some forty-five families, of which a student opening a quiz uses exactly
+ *     none. Every user on every launch was waiting on Rubik Wet Paint.
+ *
+ * What replaces it
+ * ----------------
+ * Nothing blocking. The UI font is fetched after first paint by
+ * src/mobile/deferredFonts.js, and the certificate families are fetched by the
+ * two screens that actually own a font picker (see the .mobile.jsx overrides in
+ * src/certificatemodule/pages/). Until each arrives the text renders in the
+ * system font, which is what Chakra's theme already names as the fallback and
+ * what every other native app on the phone is set in.
+ *
+ * The consequence worth stating plainly: `tw-font-jakarta` text is in San
+ * Francisco (iOS) or Roboto (Android) for the first moment of a launch and then
+ * swaps. That swap is the entire price, and it is paid against a white screen
+ * that used to last until Google answered.
+ *
+ * The rest of the file is AMS's, unchanged, plus the touch-behaviour block at
+ * the bottom. Run `npm run drift` to see what upstream has changed in
+ * src/index.css since. See build/mobileOverrides.js.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/**
+ * Touch behaviour. None of this exists upstream, because none of it is a
+ * problem in a desktop browser.
+ */
+@layer base {
+  html {
+    /* Without this iOS grows the text on any element it decides is too narrow
+       after a rotation, which it does per-element -- so a rotated page comes
+       back with a heading at one size and the paragraph under it at another.
+       Capping the adjustment leaves the layout the one the CSS describes. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    /* Stops a scroll that has reached the end of the page from being handed to
+       the WebView itself, which is what drags the whole document down off the
+       status bar and shows a band of background above the header. */
+    overscroll-behavior-y: contain;
+
+    /* iOS paints a grey wash over anything tappable and holds it for the length
+       of its own tap delay. The app has its own pressed states on every control
+       worth having one (Chakra's _active, Tailwind's active:), so the wash adds
+       nothing except the impression that the tap landed late. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* `manipulation` tells the browser this element will never be double-tapped
+     to zoom, which lets it dispatch the click on touchend instead of waiting
+     ~300ms to find out whether a second tap is coming. Kept scoped to the
+     things that are actually pressed rather than set on body, even though
+     vite.config.js's mobileViewport() now caps the page scale as well: these
+     are two different gestures, and the tap delay is worth removing on its own
+     merits. */
+  a,
+  button,
+  summary,
+  label,
+  select,
+  [role='button'],
+  [role='tab'],
+  [role='menuitem'] {
+    touch-action: manipulation;
+  }
+}
+
+/**
+ * A floor under form-control text, so iOS never has a reason to zoom.
+ *
+ * WebKit zooms the page in whenever a focused control computes to less than
+ * 16px, and in a WebView there is no way back out -- no address bar to tap, no
+ * double-tap-to-fit, nothing. Tapping the class comment box left the app at
+ * roughly 1.3x with the Post button past the right edge, and it stayed there
+ * for the rest of the session.
+ *
+ * vite.config.js caps the viewport scale, which stops the zoom from being
+ * possible. This removes the reason for it, which is the better half of the
+ * pair: it is what makes the cap safe to lift later if anyone wants pinch-zoom
+ * back on the timetable or a certificate preview, and it is the fix that would
+ * still be right if WebKit changed its mind about honouring maximum-scale
+ * again, as it has before.
+ *
+ * `max(16px, 1em)` is a floor rather than a size: a control that inherits 14px
+ * is raised to 16, one that sits in an 18px context keeps 18. Nothing is made
+ * smaller.
+ *
+ * Deliberately outside @layer, and the reason is worth writing down because
+ * the obvious one is wrong. Tailwind v3's `@layer` is not the CSS cascade
+ * layer of the same name -- it is a compile-time directive that hoists rules
+ * to where the matching `@tailwind` sits, and the built stylesheet contains no
+ * native @layer at-rule at all. So "unlayered outranks layered" does not apply
+ * here and cannot be relied on.
+ *
+ * What actually wins is specificity: each `:not([type=...])` contributes its
+ * argument's weight, so the selector below carries five attribute selectors and
+ * an element, comfortably above the single class of `tw-text-sm` or a Chakra
+ * emotion class. Source order settles any tie, since a rule written after the
+ * `@tailwind utilities` line above is emitted after the utilities it competes
+ * with. Inside `@layer base` it would be hoisted up to the base block and lose
+ * to that utility instead, which is exactly the control the bug came from.
+ *
+ * An inline style or an !important in AMS's own CSS would still outrank this,
+ * which is the second reason the viewport cap carries the guarantee and this
+ * carries the correctness.
+ *
+ * The excluded input types have no text to size and no keyboard to raise; a
+ * checkbox given a 16px font-size is just a checkbox with a larger line-box
+ * pushing the row it sits in around.
+ */
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']),
+textarea,
+select,
+[contenteditable='true'] {
+  font-size: max(16px, 1em);
+}
