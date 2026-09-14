@@ -9,6 +9,7 @@ import { isInAppRoute, savePendingRoute } from '../utils/deepLink';
 import { setupOtaUpdater } from '../utils/otaUpdater';
 import { initializePushNotifications } from '../utils/pushNotifications';
 import { configureStatusBar } from './statusBar';
+import { loadUiFonts } from './deferredFonts';
 import { setupSafeArea } from './safeArea';
 
 /**
@@ -25,6 +26,25 @@ import { setupSafeArea } from './safeArea';
  *
  * Rendered inside <Router>, because the listeners navigate.
  */
+/**
+ * How long the updater waits before it starts looking.
+ *
+ * It used to start on mount, which put it in a race it should never have been
+ * entered into. `setupOtaUpdater` fetches version.json and, finding the server
+ * ahead, downloads a bundle — and it was doing that over the same connection,
+ * at the same moment, as the first screen's own API calls. The user was
+ * watching a spinner for their timetable while the phone spent its bandwidth on
+ * an update that, by design, is not applied until the next launch anyway.
+ *
+ * Five seconds is long enough for the first screen to have finished asking for
+ * what it needs, and short enough that the check still happens in any session
+ * worth calling a session. Nothing about the update is made less likely: the
+ * dialog appears whenever the download lands, and a user who leaves sooner than
+ * that simply gets the update on the following launch, which is the launch it
+ * would have been applied on regardless.
+ */
+const OTA_START_DELAY_MS = 5000;
+
 let isAppColdStart = true;
 
 function NativeAppListeners() {
@@ -154,17 +174,35 @@ export default function MobileShell() {
     // default and nothing about shipping changes.
     if (import.meta.env.VITE_DISABLE_OTA === '1') {
       console.log('[OTA] Disabled for this build (VITE_DISABLE_OTA=1) — keeping the bundle that was installed.');
-      return;
+      return undefined;
     }
 
-    setupOtaUpdater({
-      onUpdateDownloaded: (version) =>
-        new Promise((resolve) => {
-          confirmRef.current = resolve;
-          setDialog({ kind: 'update', version });
-        }),
-      onUpdateFailed: () => setDialog({ kind: 'failed' }),
-    });
+    // See OTA_START_DELAY_MS: the updater competes with the first screen for
+    // the network, and it is the one of the two that can afford to wait.
+    const timer = window.setTimeout(() => {
+      setupOtaUpdater({
+        onUpdateDownloaded: (version) =>
+          new Promise((resolve) => {
+            confirmRef.current = resolve;
+            setDialog({ kind: 'update', version });
+          }),
+        onUpdateFailed: () => setDialog({ kind: 'failed' }),
+      });
+    }, OTA_START_DELAY_MS);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  /**
+   * The app's own typeface, fetched once the app is on screen.
+   *
+   * It is requested here rather than from the stylesheet because a stylesheet
+   * that asks for it blocks the first paint on a round trip to Google — which
+   * is what it did, on every cold start, for every user. src/index.mobile.css
+   * has the full account; src/mobile/deferredFonts.js does the work.
+   */
+  useEffect(() => {
+    loadUiFonts();
   }, []);
 
   const applyUpdate = () => {

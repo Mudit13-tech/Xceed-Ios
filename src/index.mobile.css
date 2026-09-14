@@ -1,0 +1,99 @@
+/**
+ * The app's global stylesheet, on a device.
+ *
+ * Why this file exists
+ * --------------------
+ * AMS's src/index.css opens with three `@import url(https://fonts.googleapis.com/...)`
+ * rules. In a browser that is a tolerable cost paid once and then cached by the
+ * CDN. In the app it is the single largest thing standing between launching and
+ * seeing anything at all, for three compounding reasons:
+ *
+ *  1. The stylesheet is render-blocking, and `@import` at the top of a
+ *     render-blocking stylesheet is itself render-blocking. The WebView cannot
+ *     paint one pixel until it has resolved DNS for fonts.googleapis.com,
+ *     completed a TLS handshake and read three responses back. On campus wifi
+ *     that was measured in seconds; on a train it is however long the network
+ *     takes to admit it is not there.
+ *
+ *  2. It happens on *every* cold start. A browser has an HTTP cache that
+ *     survives; a freshly-launched WebView reliably does not, so this is not a
+ *     first-visit cost, it is the cost of opening the app.
+ *
+ *  3. Two of the three imports are the certificate designer's font picker --
+ *     some forty-five families, of which a student opening a quiz uses exactly
+ *     none. Every user on every launch was waiting on Rubik Wet Paint.
+ *
+ * What replaces it
+ * ----------------
+ * Nothing blocking. The UI font is fetched after first paint by
+ * src/mobile/deferredFonts.js, and the certificate families are fetched by the
+ * two screens that actually own a font picker (see the .mobile.jsx overrides in
+ * src/certificatemodule/pages/). Until each arrives the text renders in the
+ * system font, which is what Chakra's theme already names as the fallback and
+ * what every other native app on the phone is set in.
+ *
+ * The consequence worth stating plainly: `tw-font-jakarta` text is in San
+ * Francisco (iOS) or Roboto (Android) for the first moment of a launch and then
+ * swaps. That swap is the entire price, and it is paid against a white screen
+ * that used to last until Google answered.
+ *
+ * The rest of the file is AMS's, unchanged, plus the touch-behaviour block at
+ * the bottom. Run `npm run drift` to see what upstream has changed in
+ * src/index.css since. See build/mobileOverrides.js.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/**
+ * Touch behaviour. None of this exists upstream, because none of it is a
+ * problem in a desktop browser.
+ */
+@layer base {
+  html {
+    /* Without this iOS grows the text on any element it decides is too narrow
+       after a rotation, which it does per-element -- so a rotated page comes
+       back with a heading at one size and the paragraph under it at another.
+       Capping the adjustment leaves the layout the one the CSS describes. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    /* Stops a scroll that has reached the end of the page from being handed to
+       the WebView itself, which is what drags the whole document down off the
+       status bar and shows a band of background above the header. */
+    overscroll-behavior-y: contain;
+
+    /* iOS paints a grey wash over anything tappable and holds it for the length
+       of its own tap delay. The app has its own pressed states on every control
+       worth having one (Chakra's _active, Tailwind's active:), so the wash adds
+       nothing except the impression that the tap landed late. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* `manipulation` tells the browser this element will never be double-tapped
+     to zoom, which lets it dispatch the click on touchend instead of waiting
+     ~300ms to find out whether a second tap is coming. Scoped to the things
+     that are actually pressed rather than set on body, so pinch-zoom still
+     works on the page itself -- notably on certificate previews and timetables,
+     where zooming is the point. */
+  a,
+  button,
+  summary,
+  label,
+  select,
+  [role='button'],
+  [role='tab'],
+  [role='menuitem'] {
+    touch-action: manipulation;
+  }
+}
+
