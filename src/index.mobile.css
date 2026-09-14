@@ -81,10 +81,11 @@
 
   /* `manipulation` tells the browser this element will never be double-tapped
      to zoom, which lets it dispatch the click on touchend instead of waiting
-     ~300ms to find out whether a second tap is coming. Scoped to the things
-     that are actually pressed rather than set on body, so pinch-zoom still
-     works on the page itself -- notably on certificate previews and timetables,
-     where zooming is the point. */
+     ~300ms to find out whether a second tap is coming. Kept scoped to the
+     things that are actually pressed rather than set on body, even though
+     vite.config.js's mobileViewport() now caps the page scale as well: these
+     are two different gestures, and the tap delay is worth removing on its own
+     merits. */
   a,
   button,
   summary,
@@ -97,3 +98,52 @@
   }
 }
 
+/**
+ * A floor under form-control text, so iOS never has a reason to zoom.
+ *
+ * WebKit zooms the page in whenever a focused control computes to less than
+ * 16px, and in a WebView there is no way back out -- no address bar to tap, no
+ * double-tap-to-fit, nothing. Tapping the class comment box left the app at
+ * roughly 1.3x with the Post button past the right edge, and it stayed there
+ * for the rest of the session.
+ *
+ * vite.config.js caps the viewport scale, which stops the zoom from being
+ * possible. This removes the reason for it, which is the better half of the
+ * pair: it is what makes the cap safe to lift later if anyone wants pinch-zoom
+ * back on the timetable or a certificate preview, and it is the fix that would
+ * still be right if WebKit changed its mind about honouring maximum-scale
+ * again, as it has before.
+ *
+ * `max(16px, 1em)` is a floor rather than a size: a control that inherits 14px
+ * is raised to 16, one that sits in an 18px context keeps 18. Nothing is made
+ * smaller.
+ *
+ * Deliberately outside @layer, and the reason is worth writing down because
+ * the obvious one is wrong. Tailwind v3's `@layer` is not the CSS cascade
+ * layer of the same name -- it is a compile-time directive that hoists rules
+ * to where the matching `@tailwind` sits, and the built stylesheet contains no
+ * native @layer at-rule at all. So "unlayered outranks layered" does not apply
+ * here and cannot be relied on.
+ *
+ * What actually wins is specificity: each `:not([type=...])` contributes its
+ * argument's weight, so the selector below carries five attribute selectors and
+ * an element, comfortably above the single class of `tw-text-sm` or a Chakra
+ * emotion class. Source order settles any tie, since a rule written after the
+ * `@tailwind utilities` line above is emitted after the utilities it competes
+ * with. Inside `@layer base` it would be hoisted up to the base block and lose
+ * to that utility instead, which is exactly the control the bug came from.
+ *
+ * An inline style or an !important in AMS's own CSS would still outrank this,
+ * which is the second reason the viewport cap carries the guarantee and this
+ * carries the correctness.
+ *
+ * The excluded input types have no text to size and no keyboard to raise; a
+ * checkbox given a 16px font-size is just a checkbox with a larger line-box
+ * pushing the row it sits in around.
+ */
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']),
+textarea,
+select,
+[contenteditable='true'] {
+  font-size: max(16px, 1em);
+}
