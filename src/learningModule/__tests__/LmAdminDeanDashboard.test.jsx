@@ -37,6 +37,14 @@ vi.mock('../api/lmApi', () => ({
 }));
 
 describe('LmAdmin dean dashboard link', () => {
+  it('opens the bug queue from the Bugs & suggestions summary card', async () => {
+    const { default: LmAdmin } = await import('../pages/LmAdmin');
+    renderWithProviders(<LmAdmin />);
+
+    const bugs = await screen.findByRole('link', { name: /Bugs & suggestions/i });
+    expect(bugs).toHaveAttribute('href', '/learning/bugs');
+  });
+
   it('offers the institute-wide dashboard from the console', async () => {
     const { default: LmAdmin } = await import('../pages/LmAdmin');
     renderWithProviders(<LmAdmin />);

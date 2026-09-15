@@ -253,11 +253,47 @@ const MLFineTuning = lazyWithPreload(() => import('./attendancemodule/MLFineTuni
  * Inline styles and no component library on purpose: this is the one thing that
  * has to render before anything else has loaded, on the slow connection that
  * made splitting worth doing in the first place.
+ *
+ * The shimmer uses a CSS animation injected once via a <style> tag — no deps,
+ * no import, and it survives rendering before Chakra or anything else is ready.
+ * The bar mirrors the skeleton shimmer already used inside the learning module,
+ * giving a consistent "loading" signal across the whole app.
  */
+const _routeFallbackStyle = `
+@keyframes _rfShimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position:  600px 0; }
+}
+._rfBar {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    #e8e8e8 25%,
+    #f5f5f5 50%,
+    #e8e8e8 75%
+  );
+  background-size: 1200px 100%;
+  animation: _rfShimmer 1.4s ease-in-out infinite;
+}
+`;
+
+let _rfStyleInjected = false;
 function RouteFallback() {
+  if (!_rfStyleInjected && typeof document !== 'undefined') {
+    const tag = document.createElement('style');
+    tag.textContent = _routeFallbackStyle;
+    document.head.appendChild(tag);
+    _rfStyleInjected = true;
+  }
   return (
-    <div style={{ padding: 48, textAlign: 'center', color: '#666' }} role="status" aria-live="polite">
-      Loading…
+    <div
+      style={{ padding: '48px 24px' }}
+      role="status"
+      aria-live="polite"
+      aria-label="Loading page"
+    >
+      <div className="_rfBar" style={{ maxWidth: 480, margin: '0 auto' }} />
     </div>
   );
 }

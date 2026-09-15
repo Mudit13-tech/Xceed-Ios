@@ -9,8 +9,6 @@ import {
   Heading,
   Menu,
   MenuButton,
-  MenuDivider,
-  MenuGroup,
   MenuItem,
   MenuList,
   Text,
@@ -305,15 +303,8 @@ export default function Notebooks() {
               New notebook
             </MenuButton>
             <MenuList>
-              <MenuGroup title="Blank">
-                <MenuItem onClick={() => create('python')}>Python notebook</MenuItem>
-                <MenuItem onClick={() => create('c')}>C notebook</MenuItem>
-              </MenuGroup>
-              <MenuDivider />
-              <MenuGroup title="Sample with hidden test cases">
-                <MenuItem onClick={() => openSample('python')}>Python sample</MenuItem>
-                <MenuItem onClick={() => openSample('c')}>C sample</MenuItem>
-              </MenuGroup>
+              <MenuItem onClick={() => create('python')}>Python notebook</MenuItem>
+              <MenuItem onClick={() => create('c')}>C notebook</MenuItem>
             </MenuList>
           </Menu>
         )}
@@ -451,7 +442,7 @@ export default function Notebooks() {
                       size="sm"
                       colorScheme="purple"
                     >
-                      {isTeacher ? 'Open' : notebook.myStatus === 'not-started' ? 'Start' : 'Continue'}
+                      {isTeacher ? 'Preview' : notebook.myStatus === 'not-started' ? 'Start' : 'Continue'}
                     </Button>
                     {isTeacher && (
                       <>
@@ -549,7 +540,7 @@ export default function Notebooks() {
                             size="sm"
                             colorScheme="purple"
                           >
-                            {isTeacher ? 'Open' : notebook.myStatus === 'not-started' ? 'Start' : 'Continue'}
+                            {isTeacher ? 'Preview' : notebook.myStatus === 'not-started' ? 'Start' : 'Continue'}
                           </Button>
                           {isTeacher && (
                             <>

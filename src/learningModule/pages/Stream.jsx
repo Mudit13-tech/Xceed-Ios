@@ -429,6 +429,9 @@ export default function Stream() {
     queryKey: ['learning', 'stream', classId, debouncedSearch],
     queryFn: () => debouncedSearch ? lmApi.searchClass(classId, debouncedSearch) : lmApi.getStream(classId),
     placeholderData: (previousData) => previousData,
+    // Announcements don't arrive mid-session often enough to warrant an
+    // immediate re-fetch on every tab revisit. Background-refresh after 1 min.
+    staleTime: 60 * 1000,
   });
 
   if (loading && !data) return <AnnouncementStreamSkeleton />;

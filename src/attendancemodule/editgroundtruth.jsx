@@ -306,6 +306,7 @@ const movePhoto = async (rollNo, filename, direction) => {
                     background: toast.type === 'error' ? theme.danger : theme.success,
                     color: '#ffffff',
                     border: 'none',
+                    maxWidth: 'calc(100vw - 24px)', wordBreak: 'break-word',
                 }}>
                     {toast.msg}
                 </div>

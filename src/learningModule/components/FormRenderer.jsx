@@ -15,7 +15,8 @@ import { buildAnswerPayload, isMissing, QuestionField, useFormAnswers } from './
  * and the submit call are fetched. `canUploadFiles` is false in link mode: the
  * shared attachment endpoint sits behind class membership (`loadClass`), which
  * a signed-out link guest does not have, so a file-upload question is shown
- * read-only there rather than pretending to accept a file that would 403.
+ * read-only there rather than pretending to accept a file that would 403 —
+ * and is not held against the respondent when it is required (see isAnswered).
  */
 
 function QuestionCardField({ question, answer, patch, classId, canUploadFiles, uploading, handleUpload, isFullscreen }) {
@@ -50,7 +51,9 @@ export default function FormRenderer({ form, existingResponse, onSubmit, submitt
   const { answers, patch, uploading, handleUpload } = useFormAnswers(form, existingResponse);
 
   const submit = async () => {
-    const missing = form.questions.find((question) => isMissing(question, answers[String(question._id)]));
+    const missing = form.questions.find((question) =>
+      isMissing(question, answers[String(question._id)], { canUploadFiles: Boolean(canUploadFiles) }),
+    );
     if (missing) {
       toast({ status: 'warning', title: `"${missing.title}" is required.` });
       return;

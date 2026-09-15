@@ -655,6 +655,7 @@ export default function ERPSync({ fixedDepartment, embedded = false }) {
           position: 'fixed', top: 96, left: '50%', transform: 'translateX(-50%)', zIndex: 9000,
           padding: '12px 24px', borderRadius: 8, fontSize: 13, fontWeight: 700,
           background: toast.type === 'error' ? theme.danger : theme.success, color: '#fff',
+          maxWidth: 'calc(100vw - 24px)', wordBreak: 'break-word',
         }}>
           {toast.msg}
         </div>
@@ -833,7 +834,8 @@ export default function ERPSync({ fixedDepartment, embedded = false }) {
             )}
           </div>
         ) : (
-          <table className="ams-table" style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+          <div style={{ overflowX: 'auto' }}>
+          <table className="ams-table" style={{ width: '100%', minWidth: 960, fontSize: 12, borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: theme.surfaceAlt || '#f8fafc' }}>
                 {COLUMNS.map((c) => (
@@ -1236,6 +1238,7 @@ export default function ERPSync({ fixedDepartment, embedded = false }) {
               })()}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 

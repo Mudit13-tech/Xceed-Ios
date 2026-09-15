@@ -239,6 +239,14 @@ describe('the dark palette is legible', () => {
     });
   });
 
+  it("keeps white ink legible on the calendar's today cell", () => {
+    /* Today is a saturated fill with white ink, held fixed rather than mirrored.
+       Worth an assertion because the tempting change is the wrong one: swapping
+       `blue.600` for `lmHue.blue600` looks like consistency and flips the fill to
+       `blue.300` in dark mode, leaving white ink on pale blue at 2.2:1. */
+    expect(contrast('white', 'blue.600')).toBeGreaterThanOrEqual(4.5);
+  });
+
   it('keeps every tint readable against its own backing', () => {
     ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink'].forEach((hue) => {
       const ratio = contrast(valueOf(`lmHue.${hue}700`, 'dark'), valueOf(`lmHue.${hue}50`, 'dark'));
@@ -378,5 +386,60 @@ describe('no light-only colour literals in the module', () => {
     const sample = '<Text color="gray.500">hi</Text>';
     const hits = [...sample.matchAll(re)].map(([, prop, value]) => BANNED[`${prop}=${value}`]);
     expect(hits).toEqual(['lmFg.muted']);
+  });
+});
+
+/* ───────────────── the guard's blind spot: colours that are not props ──────── */
+
+/**
+ * The guard above only sees JSX attribute syntax — `bg="white"`. The calendar
+ * was reported as keeping its light colours in dark mode despite that guard
+ * passing, because it never writes a colour as an attribute. It computes one
+ * into a local (`let bg = 'white'`) and spreads others through object literals
+ * (`_hover={{ bg: 'gray.50' }}`), and neither form has a `=` followed by a
+ * quote where the regex is looking.
+ *
+ * So the same BANNED table, matched against `prop: value` and `prop = value`
+ * as well. Raw hex is included here and not above for the same reason: a hex
+ * is unusable as a Chakra attribute value but perfectly usable as a computed
+ * one, which is exactly how `#2c5f99` reached the page.
+ *
+ * Scoped to the files that have been swept, rather than the module. The other
+ * pages carry colon-form literals too and cleaning them is separate work; the
+ * point of the list is that a file, once fixed, cannot quietly come undone.
+ * Add a file here when you sweep it.
+ */
+const SWEPT = ['pages/Calendar.jsx'];
+
+/** `prop: 'x'` and `prop = 'x'` — object literals, locals and plain attributes. */
+const computed = () =>
+  new RegExp(`\\b(${PROPS.join('|')})\\s*[:=]\\s*['"]([^'"]+)['"]`, 'g');
+
+describe('no computed light-only colours in the swept files', () => {
+  it.each(SWEPT)('%s writes every colour as a token', (short) => {
+    const src = readFileSync(`src/learningModule/${short}`, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+
+    const found = [];
+
+    for (const [, prop, value] of src.matchAll(computed())) {
+      if (/^#[0-9a-fA-F]{3,8}$/.test(value)) {
+        found.push(`${short}: ${prop} = "${value}" → a raw hex cannot answer for two modes`);
+      } else if (BANNED[`${prop}=${value}`]) {
+        found.push(`${short}: ${prop} = "${value}" → use "${BANNED[`${prop}=${value}`]}"`);
+      }
+    }
+
+    expect(found, `computed light-only colours:\n${found.join('\n')}`).toEqual([]);
+  });
+
+  it('catches both forms, and the hex', () => {
+    // Written because the first draft of this guard did not: an escaping slip
+    // left the pattern matching nothing and the suite went green on a page that
+    // was still white in dark mode. A guard's own claim needs checking.
+    const sample = "let bg = 'white'; _hover={{ bg: 'gray.50' }}; bg = '#2c5f99';";
+    const hits = [...sample.matchAll(computed())].map(([, , value]) => value);
+    expect(hits).toEqual(['white', 'gray.50', '#2c5f99']);
   });
 });

@@ -29,6 +29,7 @@ vi.mock('../api/lmApi', () => ({
     joinFormByLink: (...a) => joinFormByLink(...a),
     getFormByLink: (...a) => getFormByLink(...a),
     submitFormResponseByLink: (...a) => submitFormResponseByLink(...a),
+    pingFormProgressByLink: () => Promise.resolve({ recorded: true }),
     formGuest: {
       save: vi.fn(),
       token: () => null,
@@ -80,6 +81,39 @@ describe('FormLinkJoin', () => {
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
 
     expect((await screen.findAllByText('Public Feedback Form')).length).toBeGreaterThan(0);
+  });
+
+  describe('a required file-upload question (uploads are unavailable via a link)', () => {
+    const fileForm = (displayMode) => ({
+      ...sampleForm,
+      questions: [{ _id: 'q1', type: 'file_upload', title: 'Attach your work', required: true, options: [] }],
+      settings: { accessMode: 'anyone', displayMode, requireSequentialAnswers: true },
+    });
+
+    it('does not trap the respondent in one-at-a-time mode', async () => {
+      joinFormByLink.mockResolvedValue({ formId: 'f1', guestToken: 'token123' });
+      getFormByLink.mockResolvedValue({ form: fileForm('one_at_a_time'), existingResponse: null });
+      submitFormResponseByLink.mockResolvedValue({ submitted: true });
+
+      await open();
+
+      const submit = await screen.findByRole('button', { name: /submit/i });
+      expect(submit).toBeEnabled();
+      expect(screen.queryByText(/answer to continue/i)).not.toBeInTheDocument();
+      fireEvent.click(submit);
+      await waitFor(() => expect(submitFormResponseByLink).toHaveBeenCalled());
+    });
+
+    it('lets the respondent submit in all-at-once mode', async () => {
+      joinFormByLink.mockResolvedValue({ formId: 'f1', guestToken: 'token123' });
+      getFormByLink.mockResolvedValue({ form: fileForm('all_at_once'), existingResponse: null });
+      submitFormResponseByLink.mockResolvedValue({ submitted: true });
+
+      await open();
+
+      fireEvent.click(await screen.findByRole('button', { name: /submit/i }));
+      await waitFor(() => expect(submitFormResponseByLink).toHaveBeenCalled());
+    });
   });
 
   it('redirects to login when form requires class membership (LOGIN_REQUIRED)', async () => {

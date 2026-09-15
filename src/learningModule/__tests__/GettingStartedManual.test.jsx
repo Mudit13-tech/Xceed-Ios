@@ -162,7 +162,7 @@ describe('learningModule <FormsManual />', () => {
 
   it('renders every tab label', () => {
     render(<FormsManual />);
-    ['Overview', 'Build a Form', 'Publish & Share', 'What Respondents See', 'Responses', 'Gotchas'].forEach(
+    ['Overview', 'Build a Form', 'Publish & Share', 'Assignment Forms', 'What Respondents See', 'Responses', 'Gotchas'].forEach(
       (label) => expect(screen.getByText(label)).toBeInTheDocument(),
     );
   });

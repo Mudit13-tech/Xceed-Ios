@@ -639,6 +639,7 @@ export default function MLFineTuning() {
                     position: 'fixed', top: 96, left: '50%', transform: 'translateX(-50%)', zIndex: 9000,
                     padding: '12px 24px', borderRadius: 8, fontSize: 13, fontWeight: 700,
                     background: toast.type === 'error' ? theme.danger : theme.success, color: '#fff',
+                    maxWidth: 'calc(100vw - 24px)', wordBreak: 'break-word',
                 }}>
                     {toast.msg}
                 </div>

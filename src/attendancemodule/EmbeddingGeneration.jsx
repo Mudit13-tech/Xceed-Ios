@@ -23,11 +23,12 @@ function Toast({ toast }) {
     if (!toast) return null;
     return (
         <div style={{
-            position: 'fixed', top: 96, left: '50%', transform: 'translateX(-50%)', zIndex: 9000, whiteSpace: 'nowrap',
+            position: 'fixed', top: 96, left: '50%', transform: 'translateX(-50%)', zIndex: 9000,
             padding: '12px 24px', borderRadius: 8, fontSize: '13px', fontWeight: 700,
             background: toast.type === 'error' ? theme.danger : theme.success,
             color: '#ffffff',
             border: 'none',
+            maxWidth: 'calc(100vw - 24px)', wordBreak: 'break-word',
             boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
         }}>{toast.msg}</div>
     );

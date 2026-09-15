@@ -108,6 +108,17 @@ describe('as a teacher', () => {
     expect(await screen.findByText(/closes in/i)).toBeInTheDocument();
   });
 
+  it('groups forms by category rather than by topic', async () => {
+    listForms.mockResolvedValue([
+      { _id: 'f1', title: 'Lab report', category: 'assignment', published: true, questions: [{}], settings: {} },
+      { _id: 'f2', title: 'Feedback', category: 'normal', published: true, questions: [{}], settings: {} },
+    ]);
+    await open();
+    expect(await screen.findByRole('heading', { name: /^assignment$/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^normal form$/i })).toBeInTheDocument();
+    expect(screen.queryByText(/topics/i)).toBeNull();
+  });
+
   it('creates a form and navigates to its editor', async () => {
     listForms.mockResolvedValue([]);
     createForm.mockResolvedValue({ _id: 'new1' });

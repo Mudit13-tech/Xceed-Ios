@@ -76,14 +76,15 @@ export default function TypeformRenderer({ form, existingResponse, onSubmit, sub
 
   const question = step.kind === 'question' ? step.question : null;
   const answer = question ? answers[String(question._id)] : null;
+  const answerOptions = { canUploadFiles: Boolean(canUploadFiles) };
   const mustAnswerToAdvance = question && (question.required || requireSequential);
-  const canAdvance = !mustAnswerToAdvance || isAnswered(question, answer);
+  const canAdvance = !mustAnswerToAdvance || isAnswered(question, answer, answerOptions);
   const isLastStep = stepIndex === steps.length - 1;
 
   const goBack = () => setStepIndex((i) => Math.max(0, i - 1));
 
   const submitForm = async () => {
-    const missing = form.questions.find((q) => isMissing(q, answers[String(q._id)]));
+    const missing = form.questions.find((q) => isMissing(q, answers[String(q._id)], answerOptions));
     if (missing) {
       const missingStepIndex = steps.findIndex((s) => s.kind === 'question' && s.question._id === missing._id);
       if (missingStepIndex >= 0) setStepIndex(missingStepIndex);

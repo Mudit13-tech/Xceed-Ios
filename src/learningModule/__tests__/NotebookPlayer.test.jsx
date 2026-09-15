@@ -162,4 +162,31 @@ describe('learningModule <NotebookPlayer />', () => {
     await waitFor(() => expect(lmApi.saveNotebookAttempt).toHaveBeenCalledTimes(2));
     expect(lmApi.saveNotebookAttempt.mock.calls[1][2].cells[0].source).toBe('second');
   });
+
+  it('marks a cell the faculty updated and reminds the student before submitting', async () => {
+    lmApi.notebookAttempt.mockResolvedValue(
+      attemptResponse([
+        seededCell,
+        {
+          ...seededCell,
+          _id: 's2',
+          source: 'mine',
+          facultyUpdate: { kind: 'changed', at: new Date().toISOString(), keptOwnCode: true },
+        },
+      ]),
+    );
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await open();
+
+    expect(screen.getByText('Your faculty updated this notebook after you started.')).toBeInTheDocument();
+    expect(screen.getByText(/Changes are in cell 2,/)).toBeInTheDocument();
+    // Only the updated cell carries the strip.
+    expect(screen.getAllByRole('note')).toHaveLength(1);
+    expect(screen.getByText(/Your code was kept/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Submit'));
+    expect(confirm.mock.calls[0][0]).toMatch(/cell 2 after you started\. Kindly check all the completed answers before submitting\./);
+    expect(lmApi.submitNotebookAttempt).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
 });

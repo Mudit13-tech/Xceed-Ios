@@ -21,6 +21,7 @@ import { LmIcon } from '../components/Icon';
 import useStableNavigate from '../hooks/useStableNavigate';
 import NotificationPreferencesModal from '../components/NotificationPreferencesModal';
 import SubjectAttendanceStrip from '../components/SubjectAttendanceStrip';
+import { preloadPath } from '../../routePreload';
 
 // People and Settings are about the class rather than its work, so they sit in
 // the header beside the class code instead of competing with the teaching tabs.
@@ -34,7 +35,7 @@ const TABS = [
   { path: 'shorts', label: 'Shorts' },
   { path: 'quizzes', label: 'Quizzes' },
   { path: 'tutorials', label: 'Tutorials' },
-  { path: 'assignments', label: 'Assignments' },
+  { path: 'assignments', label: 'Numerical Assignments' },
   { path: 'forms', label: 'Forms' },
   { path: 'notebooks', label: 'Coding' },
   { path: 'grades', label: 'Grades' },
@@ -69,6 +70,10 @@ export default function ClassLayout() {
     queryKey: ['learning', 'class', classId],
     queryFn: () => lmApi.getClass(classId),
     retry: false, // Don't retry on 401s so we can redirect immediately
+    // The class name, cover colour and settings don't change mid-session.
+    // 2 min keeps the header instant on every tab switch without hiding a
+    // rename or cover-colour change for longer than a meeting lasts.
+    staleTime: 2 * 60 * 1000,
   });
 
   const { onCopy, hasCopied } = useClipboard(klass?.code || '');
@@ -78,6 +83,18 @@ export default function ClassLayout() {
       navigate(loginPathFor(window.location), { replace: true });
     }
   }, [error, navigate]);
+
+  // The moment a class opens, the user is very likely to click one of the
+  // first few tabs (Stream → Material → Shorts are the most-visited). Kick
+  // off the chunk fetches now — before the hover — so the download is
+  // already done (or well under way) by the time the click arrives.
+  useEffect(() => {
+    if (!classId) return;
+    const tabs = ['', 'material', 'shorts', 'quizzes', 'tutorials', 'assignments'];
+    tabs.forEach((tab) => {
+      preloadPath(`/learning/class/${classId}${tab ? `/${tab}` : ''}`);
+    });
+  }, [classId]);
 
   if (loading) return <Loading label="Opening class…" minH="360px" />;
   if (error) {

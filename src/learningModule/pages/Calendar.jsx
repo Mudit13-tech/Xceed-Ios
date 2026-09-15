@@ -160,7 +160,7 @@ function DayDetailModal({ date, items, holiday, onClose }) {
                 py={2.5}
                 borderBottomWidth="1px"
                 borderColor="lmBorder.subtle"
-                _hover={item.to ? { bg: 'gray.50', textDecoration: 'none' } : undefined}
+                _hover={item.to ? { bg: 'lmBg.hover', textDecoration: 'none' } : undefined}
               >
                 <Box color="lmFg.subtle">
                   <LmIcon name={item.icon} size={18} />
@@ -348,7 +348,7 @@ export default function Calendar() {
       ...classEntries,
       { color: 'purple.500', label: 'Quiz' },
       { color: 'teal.500', label: 'Short' },
-      { color: 'blue.200', label: 'Non-teaching day' },
+      { color: 'lmHue.blue200', label: 'Non-teaching day' },
     ];
   }, [data.coursework]);
 
@@ -411,15 +411,26 @@ export default function Calendar() {
                 const holiday = holidayByDay.get(key);
                 const isToday = sameDay(date, today);
 
-                let borderColor = 'gray.100';
-                let bg = 'white';
+                /* A plain day takes the card's own surface; a holiday takes the
+                   mirrored blue tint, so the pale backing becomes a deep one in
+                   dark mode instead of staying a white patch on a dark page.
+
+                   Today is the exception, and deliberately not mirrored: it is a
+                   saturated fill carrying white ink, the same case `lmFg.onAccent`
+                   exists for. Mirroring it would turn the fill pale and leave the
+                   ink white on top of it. */
+                let borderColor = 'lmBorder.subtle';
+                let bg = 'lmBg.surface';
                 if (holiday) {
-                  borderColor = 'blue.200';
-                  bg = 'blue.50';
+                  borderColor = 'lmHue.blue200';
+                  bg = 'lmHue.blue50';
                 }
                 if (isToday) {
+                  // Plain `blue.600`, not `lmHue.blue600`: the mirrored token
+                  // would flip this to a pale blue and strand the white ink on
+                  // top of it at 2.2:1. Fixed, white reads 5.4:1 in both modes.
                   borderColor = 'blue.800';
-                  bg = '#2c5f99';
+                  bg = 'blue.600';
                 }
 
                 const open = () => setSelectedDay(date);
@@ -453,7 +464,7 @@ export default function Calendar() {
                         <Text
                           fontSize={{ base: '0.6rem', md: 'xs' }}
                           fontWeight={isToday ? '700' : '500'}
-                          color={isToday ? 'lmFg.onAccent' : holiday ? 'blue.600' : 'lmFg.subtle'}
+                          color={isToday ? 'lmFg.onAccent' : holiday ? 'lmHue.blue600' : 'lmFg.subtle'}
                         >
                           {date.getDate()}
                         </Text>
@@ -471,7 +482,7 @@ export default function Calendar() {
                       {isToday && <AnimatedXceedLogo />}
                     </Flex>
                     {holiday && (
-                      <Text fontSize={{ base: '0.5rem', md: '0.6rem' }} color={isToday ? 'lmFg.onAccent' : "blue.600"} noOfLines={1} title={holiday.remark}>
+                      <Text fontSize={{ base: '0.5rem', md: '0.6rem' }} color={isToday ? 'lmFg.onAccent' : 'lmHue.blue600'} noOfLines={1} title={holiday.remark}>
                         {holiday.remark}
                       </Text>
                     )}
@@ -487,7 +498,7 @@ export default function Calendar() {
                     {dayItems.length > CHIPS_PER_CELL && (
                       <Text
                         fontSize={{ base: '0.5rem', md: '0.6rem' }}
-                        color={isToday ? 'lmFg.onAccent' : 'blue.600'}
+                        color={isToday ? 'lmFg.onAccent' : 'lmHue.blue600'}
                         fontWeight="600"
                         mt={0.5}
                         _hover={{ textDecoration: 'underline' }}
@@ -517,7 +528,7 @@ export default function Calendar() {
                     py={2.5}
                     borderBottomWidth="1px"
                     borderColor="lmBorder.subtle"
-                    _hover={{ bg: 'gray.50', textDecoration: 'none' }}
+                    _hover={{ bg: 'lmBg.hover', textDecoration: 'none' }}
                   >
                     <Box color={`${meta.colorScheme}.600`}>
                       <LmIcon name={meta.icon} size={18} />
@@ -564,7 +575,7 @@ export default function Calendar() {
                     py={2.5}
                     borderBottomWidth="1px"
                     borderColor="lmBorder.subtle"
-                    _hover={{ bg: 'gray.50', textDecoration: 'none' }}
+                    _hover={{ bg: 'lmBg.hover', textDecoration: 'none' }}
                   >
                     <Box color="purple.500">
                       <LmIcon name="quiz" size={18} />
@@ -616,7 +627,7 @@ export default function Calendar() {
                       py={2.5}
                       borderBottomWidth="1px"
                       borderColor="lmBorder.subtle"
-                      _hover={reportPath ? { bg: 'gray.50', textDecoration: 'none' } : undefined}
+                      _hover={reportPath ? { bg: 'lmBg.hover', textDecoration: 'none' } : undefined}
                     >
                       <Box color="teal.500">
                         <LmIcon name="short" size={18} />

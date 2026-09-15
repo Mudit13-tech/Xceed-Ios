@@ -148,6 +148,7 @@ const TABS = [
     { id: 'overview', label: 'Overview', icon: 'form' },
     { id: 'build', label: 'Build a Form', icon: 'edit' },
     { id: 'share', label: 'Publish & Share', icon: 'link' },
+    { id: 'assignment', label: 'Assignment Forms', icon: 'assignment' },
     { id: 'student', label: 'What Respondents See', icon: 'mobile' },
     { id: 'responses', label: 'Responses', icon: 'insights' },
     { id: 'gotchas', label: 'Gotchas', icon: 'warning' },
@@ -160,15 +161,27 @@ function TabOverview() {
         <div>
             <Note type="key">
                 Forms are the module&apos;s un-graded surface: surveys, feedback, sign-up sheets, project-group
-                declarations, consent. Nothing here is marked, no response is ever scored, and no gradebook row
-                is created. If you want a mark, you want a Quiz or an Assignment instead.
+                declarations, consent — and, with the <strong>Assignment</strong> category, document hand-ins
+                where students upload a PDF or other file before a deadline. Nothing here is marked, no response
+                is ever scored, and no gradebook row is created. If you want a mark, you want a Quiz or a
+                Numerical Assignment instead.
             </Note>
 
             <ShotSlot
-                screen="The Forms tab for a class, with published and draft forms"
+                screen="The Forms tab for a class, grouped under Assignment and Normal form"
                 path="manualAssets/forms/list.png"
-                caption="The Forms tab. Badges show what is published, what is closed, and what is open to anyone with the link."
+                caption="The Forms tab. Forms are grouped by category; badges show what is published, what is closed, and what is open to anyone with the link."
             />
+
+            <SectionTitle>Two Categories</SectionTitle>
+            <Rows items={[
+                { label: 'Normal form', desc: 'The default. A survey, feedback form, sign-up sheet or anything else that is not a hand-in. Listed on the Forms tab only.' },
+                { label: 'Assignment', desc: 'A document hand-in — usually a single File upload question. It must have a submission deadline before it can be published, it is announced to students as a new assignment, and it is listed on the Numerical Assignments tab under Document Submissions as well as on the Forms tab. See the Assignment Forms tab of this manual.' },
+            ]} />
+            <P>
+                The Forms tab groups its list under those two headings, Assignment first. Forms used to be
+                filed under the class&apos;s Material topics; that grouping has been replaced by the category.
+            </P>
 
             <SectionTitle>Eight Question Types</SectionTitle>
             <div className="fmm-grid-2" style={{ marginBottom: 8 }}>
@@ -180,7 +193,7 @@ function TabOverview() {
                     { label: 'Dropdown', desc: 'Pick one, from a dropdown.' },
                     { label: 'Linear scale', desc: 'Rate between two labels. Summarised with an average.' },
                     { label: 'Date', desc: 'A calendar date.' },
-                    { label: 'File upload', desc: 'Attach a file as the answer.' },
+                    { label: 'File upload', desc: 'Attach a file as the answer. The question an assignment form is built around.' },
                 ].map((item) => (
                     <div key={item.label} style={{
                         border: `1px solid ${T.border}`, borderRadius: 8, padding: '10px 12px', marginBottom: 4,
@@ -191,11 +204,21 @@ function TabOverview() {
                 ))}
             </div>
 
+            <SectionTitle>Each Form in the List</SectionTitle>
+            <Rows items={[
+                { label: 'Badges', desc: 'Published or Draft, Anyone with the link, Closed, and a “Closes in …” countdown while a deadline is ahead.' },
+                { label: 'Uptake', desc: 'The question count and, for a class-only form, how many of the enrolled students have filled it in (for example 23/60). An anyone-with-the-link form shows a plain response count instead.' },
+                { label: 'Copy link', desc: 'Shown once the form is published. Copies the share link.' },
+                { label: 'Edit · Preview', desc: 'Edit opens the builder. Preview shows the form exactly as a respondent will see it, without submitting anything.' },
+                { label: 'The Responses button', desc: 'The summary, individual responses, drop-off chart and CSV export.' },
+                { label: 'Delete', desc: 'Asks for confirmation, then removes the form and every response to it. There is no undo.' },
+            ]} />
+
             <SectionTitle>How a Form Differs From a Quiz</SectionTitle>
             <Rows items={[
-                { label: 'No marking', desc: 'There is no answer key, no score and no release step. A response is data, not an attempt.' },
+                { label: 'No marking', desc: 'There is no answer key, no score and no release step. A response is data, not an attempt — even on an assignment form.' },
                 { label: 'No proctoring', desc: 'No fullscreen lock, no webcam, no Safe Exam Browser. A form is not an exam surface and should not be used as one.' },
-                { label: 'Can leave the class', desc: 'A form can be shared as a link that anyone opens, signed in or not. Quizzes never leave the roster.' },
+                { label: 'Can go beyond the class', desc: 'A form can be shared as a link that anyone opens, signed in or not. Quizzes never leave the roster.' },
                 { label: 'Answers are editable', desc: 'By default a second submission replaces the first rather than piling up a duplicate row.' },
             ]} />
         </div>
@@ -206,21 +229,31 @@ function TabBuild() {
     return (
         <div>
             <P>
-                The builder is deliberately close to Google Forms — a title, a description, and a list of
-                questions you reorder, duplicate and delete. It validates as you go, so you find a problem before
-                you share the form rather than after.
+                The builder is deliberately close to Google Forms — a title, a description, optional
+                sections, and a list of questions you reorder, duplicate and delete. It validates as you go,
+                so you find a problem before you share the form rather than after.
             </P>
 
             <Steps items={[
                 {
                     title: 'Open the class → Forms → New form',
-                    body: 'A blank draft is created and you land straight in the editor. A draft is invisible to students until you publish it.',
+                    body: 'A blank draft is created and you land straight in the editor. A draft is invisible to students until you publish it. (For a document hand-in there is a shortcut on the Numerical Assignments tab — see Assignment Forms.)',
                     shot: { screen: 'Forms tab with the New-form button', path: 'manualAssets/forms/new-form.png' },
                 },
                 {
                     title: 'Give it a title and a description',
                     body: 'The description is what a respondent reads before the first question — say what the form is for and when it closes.',
                     shot: { screen: 'Form editor, title and description fields', path: 'manualAssets/forms/editor-title.png' },
+                },
+                {
+                    title: 'Choose the category',
+                    body: 'Normal form for everything except hand-ins. Choose Assignment when students are uploading their work: the form then needs a submission deadline, shows on the Numerical Assignments tab too, and students are mailed about it as a new assignment.',
+                    shot: { screen: 'Form editor, the Category dropdown and the note beneath it', path: 'manualAssets/forms/editor-category.png' },
+                },
+                {
+                    title: 'Add sections, if the form is long',
+                    body: 'The Sections card sits above the questions. + Add section gives a section a title and an optional description shown to respondents; the arrows reorder sections and the bin removes one. Once a form has a section, every question card gains a section dropdown — pick which section the question belongs under, or leave it on No section. A section is only a heading: deleting one does not delete its questions.',
+                    shot: { screen: 'The Sections card, and a question card with its section dropdown', path: 'manualAssets/forms/editor-sections.png' },
                 },
                 {
                     title: 'Add a question and choose its type',
@@ -243,8 +276,8 @@ function TabBuild() {
                     shot: { screen: 'Question card toolbar with the move, duplicate and delete controls', path: 'manualAssets/forms/editor-toolbar.png' },
                 },
                 {
-                    title: 'Save',
-                    body: 'The same validation runs again on the server, so nothing invalid is stored even if the page is out of date.',
+                    title: 'Preview, then Save',
+                    body: 'Preview shows the form as a respondent meets it — sections, one-question-at-a-time mode and all — without recording anything. Save runs the same validation again on the server, so nothing invalid is stored even if the page is out of date. Problems are listed in a yellow banner at the top of the editor.',
                     shot: { screen: 'Form editor with the Save button and a validation warning', path: 'manualAssets/forms/editor-save.png' },
                 },
             ]} />
@@ -261,44 +294,102 @@ function TabBuild() {
 function TabShare() {
     return (
         <div>
-            <SectionTitle>Settings That Decide Who Answers</SectionTitle>
+            <SectionTitle>Settings That Decide Who Answers, and How</SectionTitle>
             <Rows items={[
-                { label: 'Access: class', desc: 'The default. Only signed-in, active members of this class may respond. Their name, email and roll number are recorded with the response.' },
-                { label: 'Access: anyone with the link', desc: 'Anyone holding the share link may respond, signed in or not. A signed-out respondent is asked for a name and is recorded as a guest.' },
+                { label: 'How students answer', desc: 'All questions at once (the default) — one scrolling page, sections shown as headings. Or One question at a time — a single question per screen, which also records how far each respondent gets, so the Responses screen can show where people give up.' },
+                { label: 'Require an answer before moving on', desc: 'Only in one-question-at-a-time mode. Every question must be answered before the respondent can go to the next — including questions not marked required.' },
+                { label: 'Who can respond: class', desc: 'The default. Only signed-in, active members of this class may respond. Their name, email and roll number are recorded with the response.' },
+                { label: 'Who can respond: anyone with the link', desc: 'Anyone holding the share link may respond, signed in or not. A signed-out respondent is asked for a name and is recorded as a guest.' },
                 { label: 'One response per person', desc: 'On by default. A second submission overwrites the first instead of adding a duplicate row. Turn it off for a sign-up sheet that the same person legitimately fills in twice.' },
                 { label: 'Collect email', desc: 'Records the respondent’s email address alongside the answers.' },
                 { label: 'Show summary to respondents', desc: 'Off by default. With it on, a respondent sees the aggregate results after they submit — good for a poll, wrong for anything sensitive.' },
-                { label: 'Closing time', desc: 'Optional. Leave it empty and the form never closes on its own.' },
-                { label: 'Allow late responses', desc: 'What happens once the closing time passes. Off stops new and updated responses outright; on keeps accepting them and simply marks them late. Meaningless with no closing time set.' },
+                { label: 'Submission deadline', desc: 'Optional on a normal form — leave it empty and the form never closes on its own. Required on an assignment form, where students see it as the due date.' },
+                { label: 'Allow late responses', desc: 'What happens once the deadline passes. Off stops new and updated responses outright; on keeps accepting them and simply marks them late. Only appears once a deadline is set.' },
             ]} />
 
             <Steps items={[
                 {
-                    title: 'Set the access mode and the closing time',
-                    body: 'Both live in the settings panel of the editor. Decide these before you publish — changing the access mode after the link is out changes who can answer a link already in circulation.',
+                    title: 'Set the access mode, the answering mode and the deadline',
+                    body: 'All live in the settings panel of the editor. Decide these before you publish — changing the access mode after the link is out changes who can answer a link already in circulation.',
                     shot: { screen: 'Form editor settings panel', path: 'manualAssets/forms/settings.png' },
                 },
                 {
                     title: 'Publish',
-                    body: 'Publishing is what makes the form visible to students. It also mints the share code, once — the link is kept stable across every later edit, so a link you have already handed out never goes stale under you.',
+                    body: 'Publishing saves the form and makes it visible to students. It also mints the share code, once — the link is kept stable across every later edit, so a link you have already handed out never goes stale under you. An assignment form without a deadline is refused, with the reason shown.',
                     shot: { screen: 'Form editor header with the Publish button', path: 'manualAssets/forms/publish.png' },
                 },
                 {
-                    title: 'Copy the share link',
-                    body: 'The link appears next to the publish control once the form is published. It opens the form directly, with no class navigation in the way.',
-                    shot: { screen: 'The share link with its copy button', path: 'manualAssets/forms/share-link.png' },
+                    title: 'Students are told automatically',
+                    body: 'The first time a form is published, every member of the class gets a notification and an email: “New form in …” for a normal form, “New assignment in …” with the due date for an assignment form. Unpublishing and publishing again does not send it a second time.',
+                    shot: { screen: 'The notification a student receives for a newly published form', path: 'manualAssets/forms/announce.png' },
                 },
                 {
-                    title: 'Announce it',
-                    body: 'For a class form, posting the link to the class stream is usually enough — it also shows up on the Forms tab on its own. For an anyone-with-the-link form, send the link wherever the audience is.',
-                    shot: { screen: 'A class stream post carrying the form link', path: 'manualAssets/forms/announce.png' },
+                    title: 'Copy the share link, if the audience is outside the class',
+                    body: 'The link appears next to the publish control, and as Copy link on the form’s card, once the form is published. It opens the form directly, with no class navigation in the way. For an anyone-with-the-link form, send it wherever the audience is — people outside the class are not notified.',
+                    shot: { screen: 'The share link with its copy button', path: 'manualAssets/forms/share-link.png' },
                 },
             ]} />
 
             <Note type="warning">
-                Unpublishing hides the form and stops the link working, but does not delete the responses already
-                collected. A form set to <em>anyone with the link</em> is exactly as private as the link is —
-                treat the link as the credential, because that is what it is.
+                Because the first publish mails the whole class, do not publish a form just to try it out —
+                use <strong>Preview</strong> instead. Unpublishing hides the form and stops the link working,
+                but does not delete the responses already collected. A form set to <em>anyone with the
+                link</em> is exactly as private as the link is — treat the link as the credential, because
+                that is what it is.
+            </Note>
+        </div>
+    );
+}
+
+function TabAssignment() {
+    return (
+        <div>
+            <Note type="key">
+                An <strong>assignment form</strong> is how students hand in a document — a report, a scanned
+                answer sheet, a lab write-up. It is an ordinary form with its category set to
+                <strong> Assignment</strong>, usually built around a single <strong>File upload</strong>
+                question. It is collected, not marked: you read the files and give marks outside the form.
+            </Note>
+
+            <SectionTitle>Two Ways to Create One</SectionTitle>
+            <Steps items={[
+                {
+                    title: 'From the Numerical Assignments tab: + New document assignment',
+                    body: 'Under the Document Submissions heading. This creates a draft called “Untitled assignment”, already in the Assignment category, with one required File upload question (“Upload your submission”), and opens it in the form editor.',
+                    shot: { screen: 'Numerical Assignments tab, the Document Submissions section and its button', path: 'manualAssets/forms/assignment-new.png' },
+                },
+                {
+                    title: 'Or from the Forms tab: + New form, then set Category to Assignment',
+                    body: 'Add a File upload question yourself. Any other question types can sit alongside it — a declaration checkbox, a comment box.',
+                    shot: { screen: 'Form editor with the Category set to Assignment', path: 'manualAssets/forms/assignment-category.png' },
+                },
+                {
+                    title: 'Set the submission deadline, then publish',
+                    body: 'The deadline is required: the field is marked, the editor warns until it is filled, and Publish refuses without it. A draft can be saved without one while you are still building it. Decide on Allow late responses at the same time.',
+                    shot: { screen: 'Assignment form settings with the required deadline field', path: 'manualAssets/forms/assignment-deadline.png' },
+                },
+            ]} />
+
+            <SectionTitle>What the Category Changes</SectionTitle>
+            <Rows items={[
+                { label: 'Where it is listed', desc: 'Under the Assignment heading on the Forms tab, and under Document Submissions on the Numerical Assignments tab — for you and for students. Both lists carry the same buttons.' },
+                { label: 'Deadline', desc: 'Required before publishing, and it cannot be cleared from a published assignment form — unpublish first if you really mean to remove it.' },
+                { label: 'Announcement', desc: 'On first publish, students are notified and emailed “New assignment in <class>: <title>”, with the question count and due date. It follows their assignment notification preference rather than the general one.' },
+                { label: 'What it does not change', desc: 'No marks, no gradebook row, no late penalty. Access mode, one-response-per-person, sections and the rest behave exactly as on a normal form.' },
+            ]} />
+
+            <SectionTitle>Collecting the Work</SectionTitle>
+            <P>
+                Open <strong>Responses</strong> on the form&apos;s card. For a class-only form the card already
+                shows how many of the class have handed in (for example 41/60). The individual view shows each
+                student&apos;s upload with their name, roll number and submission time; the CSV lists the file
+                names. With <em>allow late responses</em> on, anything after the deadline is marked late.
+            </P>
+
+            <Note type="tip">
+                Keep <strong>one response per person</strong> on for a hand-in: a student who uploads the wrong
+                file can resubmit before the deadline, and the new upload replaces the old one instead of
+                leaving you two rows to choose between.
             </Note>
         </div>
     );
@@ -312,17 +403,17 @@ function TabStudent() {
                 saves most of the &ldquo;it says I have to sign in&rdquo; questions.
             </P>
 
-            <SectionTitle>A class member, from the Forms tab</SectionTitle>
+            <SectionTitle>A class member, from the class</SectionTitle>
             <Steps items={[
                 {
-                    title: 'Open the class → Forms',
-                    body: 'Published forms are listed with their closing time. A form they have already answered is badged Responded.',
+                    title: 'Open the class → Forms (or, for an assignment form, Numerical Assignments)',
+                    body: 'Published forms are listed with their deadline countdown. A form they have already answered is badged Responded, and its button reads View / edit response. After the deadline, a form that does not allow late responses shows Closed.',
                     shot: { screen: 'Student view of the Forms tab', path: 'manualAssets/forms/student-list.png' },
                 },
                 {
                     title: 'Fill it in',
-                    body: 'Required questions are marked. Their identity is already known, so nothing has to be typed to prove who they are.',
-                    shot: { screen: 'Student filling in a form', path: 'manualAssets/forms/student-fill.png' },
+                    body: 'In the default mode every question is on one page, grouped under your section headings. In one-question-at-a-time mode they see a single question per screen and move through the form in order — and if you required an answer before moving on, they cannot skip ahead. Their identity is already known, so nothing has to be typed to prove who they are.',
+                    shot: { screen: 'Student filling in a form, one question at a time', path: 'manualAssets/forms/student-fill.png' },
                 },
                 {
                     title: 'Submit — and edit if they need to',
@@ -340,7 +431,7 @@ function TabStudent() {
                 },
                 {
                     title: 'Fill in and submit',
-                    body: 'Identical from here on. Guest responses are labelled “(guest)” in the response list and in the CSV export, so they are never mistaken for a roster member’s.',
+                    body: 'Identical from here on, including one-question-at-a-time mode. Guest responses are labelled “(guest)” in the response list and in the CSV export, so they are never mistaken for a roster member’s.',
                     shot: { screen: 'A guest submitting a shared form', path: 'manualAssets/forms/guest-fill.png' },
                 },
             ]} />
@@ -358,11 +449,28 @@ function TabResponses() {
     return (
         <div>
             <P>
-                Everything a form has collected lives on its Responses screen, in three views.
+                Everything a form has collected lives on its Responses screen: a row of figures across the
+                top, then three views.
             </P>
 
+            <SectionTitle>The Figures at the Top</SectionTitle>
             <Rows items={[
-                { label: 'Summary', desc: 'Per question: option counts for choice questions, a distribution and an average for a linear scale, the list of answers for text and date questions, and a count of files attached for an upload question.' },
+                { label: 'Started · Completed', desc: 'How many people opened the form, and how many submitted it.' },
+                { label: 'Completion rate', desc: 'Completed as a share of Started.' },
+                { label: 'Avg. time to complete', desc: 'From opening the form to submitting it, averaged over finished responses.' },
+                { label: 'Questions · Access', desc: 'The question count, and whether the form is class-only or open to anyone with the link.' },
+            ]} />
+            <Note type="info">
+                Only a <strong>one-question-at-a-time</strong> form records a respondent as they go, so only
+                there do Started, the completion rate and the drop-off chart tell you something. An
+                all-at-once form records a response only when it is submitted, so Started equals Completed.
+                If you want to know where people give up on a long form, publish it in one-question-at-a-time
+                mode.
+            </Note>
+
+            <SectionTitle>Three Views</SectionTitle>
+            <Rows items={[
+                { label: 'Summary', desc: 'Opens with “Where students drop off” — for each question in order, how many of those who started reached it, as a bar. Then, per question: option counts for choice questions, a distribution and an average for a linear scale, the list of answers for text and date questions, and a count of files attached for an upload question.' },
                 { label: 'Individual responses', desc: 'One respondent at a time, with their name, email, roll number and submission time. A response can be deleted from here — a test submission of your own, usually.' },
                 { label: 'CSV export', desc: 'One row per response; columns are Name, Email, Roll No, Submitted At, then one column per question in form order. Checkbox answers are joined with a pipe, and a file-upload answer exports the file names.' },
             ]} />
@@ -371,16 +479,16 @@ function TabResponses() {
                 {
                     title: 'Open the form → Responses',
                     body: 'The response count is on the form card, so you can see uptake without opening anything.',
-                    shot: { screen: 'Responses screen, summary view', path: 'manualAssets/forms/responses-summary.png' },
+                    shot: { screen: 'Responses screen, the figures and the drop-off chart', path: 'manualAssets/forms/responses-summary.png' },
                 },
                 {
                     title: 'Read the summary while it is still open',
-                    body: 'The summary is the point of a feedback form — reading it before the closing time is what lets you nudge the people who have not answered.',
+                    body: 'The summary is the point of a feedback form — reading it before the deadline is what lets you nudge the people who have not answered. A sharp fall in the drop-off chart points at the question that loses people.',
                     shot: { screen: 'Summary view showing a choice question and a linear scale', path: 'manualAssets/forms/responses-charts.png' },
                 },
                 {
                     title: 'Browse individual responses when something needs following up',
-                    body: 'A single odd answer usually needs the person behind it, which the summary deliberately does not show you.',
+                    body: 'A single odd answer usually needs the person behind it, which the summary deliberately does not show you. This is also where you open each student’s upload on an assignment form.',
                     shot: { screen: 'Individual response view', path: 'manualAssets/forms/responses-individual.png' },
                 },
                 {
@@ -397,33 +505,49 @@ function TabGotchas() {
     return (
         <div>
             <Note type="danger">
-                <strong>A form is not an exam.</strong> No proctoring, no timer, no marking. If the answers
-                decide a grade, build it as a Quiz or an Assignment.
+                <strong>A form is not an exam.</strong> No proctoring, no timer, no marking — not even on an
+                assignment form. If the answers decide a grade automatically, build it as a Quiz or a
+                Numerical Assignment.
             </Note>
 
             <ul style={{ fontSize: 13, color: T.text, lineHeight: 1.9, paddingLeft: 20, marginBottom: 16 }}>
                 <li><strong>A draft is invisible.</strong> Students see nothing until you press Publish — the
                     single most common &ldquo;where is my form?&rdquo;</li>
+                <li><strong>The first publish mails the whole class.</strong> Use Preview to check a form, not
+                    Publish. Republishing later does not mail anyone again — so it cannot be used to send a
+                    reminder either.</li>
+                <li><strong>An assignment form cannot be published without a deadline</strong>, and a
+                    published one cannot have its deadline cleared.</li>
+                <li><strong>Switching a form from Assignment back to Normal</strong> takes it off the
+                    Numerical Assignments tab, but students who were already mailed about &ldquo;a new
+                    assignment&rdquo; are not told.</li>
+                <li><strong>Delete is permanent.</strong> It removes the form and every response to it. To stop collecting but keep the answers, unpublish instead.</li>
                 <li><strong>The share link is minted on first publish and never changes.</strong> That is
                     deliberate, so a reshare does not break a link already handed out. It also means the only way
                     to revoke a leaked link is to unpublish the form.</li>
-                <li><strong>Closing time without &ldquo;allow late responses&rdquo; is a hard stop.</strong> Once
-                    it passes, new and updated responses are both refused. Extend the closing time to reopen it.</li>
+                <li><strong>A deadline without &ldquo;allow late responses&rdquo; is a hard stop.</strong> Once
+                    it passes, new and updated responses are both refused. Extend the deadline to reopen it.</li>
+                <li><strong>&ldquo;Require an answer before moving on&rdquo; makes every question required</strong>,
+                    whatever the Required box on each question says.</li>
+                <li><strong>The drop-off chart needs one-question-at-a-time mode.</strong> On an all-at-once form
+                    it can only ever show everyone reaching everything.</li>
                 <li><strong>Changing the type of a question clears its options.</strong> Choose the type first.</li>
                 <li><strong>Editing after responses arrive leaves gaps.</strong> Anyone who already submitted has
                     no answer to a question added later, and their CSV cell is empty.</li>
                 <li><strong>&ldquo;One response per person&rdquo; is keyed on identity.</strong> For guests that
                     means the browser they answered from — a guest who returns on another device is a new person
                     as far as the form is concerned.</li>
+                <li><strong>Forms are no longer filed under Material topics.</strong> The list is grouped by
+                    category — Assignment and Normal form — instead.</li>
                 <li><strong>Responses are not anonymous.</strong> Name, email and roll number are recorded for
                     class members. For genuinely anonymous feedback, use the class&apos;s Anonymous Feedback tab
                     instead.</li>
             </ul>
 
             <Note type="tip">
-                Answer your own form once from a private window before you send it out. It is the fastest way to
-                catch a required question you did not mean to require, an access mode set to the wrong thing, and
-                a closing time set in the past.
+                Answer your own form once through Preview, and once from a private window after publishing a
+                link-only form. It is the fastest way to catch a required question you did not mean to
+                require, an access mode set to the wrong thing, and a deadline set in the past.
             </Note>
         </div>
     );
@@ -447,6 +571,7 @@ export default function FormsManual({ standalone = false }) {
         overview: <TabOverview />,
         build: <TabBuild />,
         share: <TabShare />,
+        assignment: <TabAssignment />,
         student: <TabStudent />,
         responses: <TabResponses />,
         gotchas: <TabGotchas />,
@@ -500,7 +625,7 @@ export default function FormsManual({ standalone = false }) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="fmm-title" style={{ fontWeight: 800, color: T.text }}>Forms — Teacher Manual</div>
                         <div className="fmm-subtitle" style={{ color: T.textMuted, marginTop: 2 }}>
-                            Surveys, feedback and sign-ups — nothing here is marked · XCEED Learning
+                            Surveys, feedback, sign-ups and document hand-ins — nothing here is marked · XCEED Learning
                         </div>
                     </div>
                 </div>
