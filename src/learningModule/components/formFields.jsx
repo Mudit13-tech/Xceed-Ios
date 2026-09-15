@@ -31,8 +31,15 @@ export const answerFor = (question, existing) => ({
   attachments: existing?.attachments || [],
 });
 
-/** Whether `answer` counts as filled in for `question` — ignores `question.required` on purpose, so callers decide when that check applies (e.g. "require every question" in one-at-a-time mode). */
-export const isAnswered = (question, answer) => {
+/**
+ * Whether `answer` counts as filled in for `question` — ignores `question.required` on purpose, so callers decide when that check applies (e.g. "require every question" in one-at-a-time mode).
+ *
+ * With `canUploadFiles: false` (link mode) a file-upload question always counts
+ * as answered: the respondent has no way to attach a file, so treating it as
+ * unanswered would leave them unable to advance or submit. The server applies
+ * the same rule to link-mode submissions.
+ */
+export const isAnswered = (question, answer, { canUploadFiles = true } = {}) => {
   switch (question.type) {
     case 'short_answer':
     case 'paragraph':
@@ -46,13 +53,13 @@ export const isAnswered = (question, answer) => {
     case 'date':
       return Boolean(answer.dateValue);
     case 'file_upload':
-      return answer.attachments.length > 0;
+      return !canUploadFiles || answer.attachments.length > 0;
     default:
       return true;
   }
 };
 
-export const isMissing = (question, answer) => question.required && !isAnswered(question, answer);
+export const isMissing = (question, answer, options) => question.required && !isAnswered(question, answer, options);
 
 /** Builds the payload shape the fill/submit endpoints expect. */
 export const buildAnswerPayload = (questions, answers) =>

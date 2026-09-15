@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link as RouterLink, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Alert,
@@ -21,6 +21,7 @@ import {
 import { FiChevronDown } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
+import { useQuery } from '@tanstack/react-query';
 import { EmptyState, ErrorState, Loading, SectionCard, ShortsListSkeleton } from '../components/common';
 import { relativeTime } from '../format';
 import { LmIcon } from '../components/Icon';
@@ -48,27 +49,23 @@ const SLIDE_TYPE_LABEL = {
 
 export default function Shorts() {
   const { classId, isTeacher } = useOutletContext();
-  const [shorts, setShorts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const {
+    data: shorts = [],
+    isLoading: loading,
+    error,
+    refetch: load,
+  } = useQuery({
+    queryKey: ['learning', 'shorts', classId],
+    queryFn: () => lmApi.listShorts(classId),
+    // Keep the previous list on screen during background refresh so switching
+    // to this tab never shows the skeleton after the first visit.
+    placeholderData: (prev) => prev,
+    staleTime: 2 * 60 * 1000,
+  });
+
   const [busy, setBusy] = useState('');
   const navigate = useNavigate();
   const toast = useToast();
-
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setShorts(await lmApi.listShorts(classId));
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [classId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   const create = async () => {
     setBusy('new');
@@ -153,7 +150,10 @@ export default function Shorts() {
     }
   };
 
-  if (loading) return <ShortsListSkeleton />;
+  // Only show the skeleton on the very first load. On revisits,
+  // placeholderData keeps the previous list visible while the background
+  // refresh runs silently — no skeleton flash.
+  if (loading && !shorts.length) return <ShortsListSkeleton />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   const live = shorts.filter((short) => short.liveSession);

@@ -19,7 +19,7 @@ describe.each([
     renderWithProviders(<Manual />);
     const tabs = [
       'Overview', 'Create & Author', 'Question Types', 'Settings',
-      'Import a Paper', 'What Students See', resultsTab, 'Gotchas',
+      'What Students See', resultsTab, 'Gotchas',
     ];
     for (const label of tabs) {
       // eslint-disable-next-line no-await-in-loop

@@ -115,6 +115,40 @@ it('does not offer a share link before the form is published', async () => {
   expect(screen.queryByText(/^share$/i)).toBeNull();
 });
 
+describe('category', () => {
+  it('saves the chosen category', async () => {
+    updateForm.mockResolvedValue(baseForm({ category: 'assignment' }));
+    await open();
+    fireEvent.change(screen.getByLabelText(/category/i), { target: { value: 'assignment' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await waitFor(() =>
+      expect(updateForm).toHaveBeenCalledWith('c1', 'f1', expect.objectContaining({ category: 'assignment' })),
+    );
+  });
+
+  it('explains that a document hand-in should be an Assignment form', async () => {
+    await open();
+    expect(screen.getByText(/upload a document as their submission/i)).toBeInTheDocument();
+  });
+
+  it('refuses to publish an assignment form with no deadline', async () => {
+    await open(baseForm({ category: 'assignment' }));
+    expect(screen.getAllByText(/needs a submission deadline/i).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /^publish$/i }));
+    await waitFor(() => expect(screen.getAllByText(/needs a submission deadline/i).length).toBeGreaterThan(1));
+    expect(publishForm).not.toHaveBeenCalled();
+  });
+
+  it('publishes an assignment form once a deadline is set', async () => {
+    updateForm.mockResolvedValue(baseForm({ category: 'assignment', settings: { dueDate: '2099-01-01T10:00:00.000Z' } }));
+    publishForm.mockResolvedValue({ published: true, shareCode: 'abc' });
+    await open(baseForm({ category: 'assignment' }));
+    fireEvent.change(screen.getByLabelText(/submission deadline/i), { target: { value: '2099-01-01T10:00' } });
+    fireEvent.click(screen.getByRole('button', { name: /^publish$/i }));
+    await waitFor(() => expect(publishForm).toHaveBeenCalledWith('c1', 'f1', { publish: true }));
+  });
+});
+
 describe('submission deadline', () => {
   it('hides the after-deadline choice until a deadline is actually set', async () => {
     await open();

@@ -119,6 +119,33 @@ async function installMatplotlibHook() {
 }
 
 /**
+ * Runs a cell and returns what a notebook shows for its last expression.
+ *
+ * The `repr` is taken on the Python side, on the value itself. It used to be
+ * taken in JavaScript on whatever `runPythonAsync` handed back, and that is a
+ * converted copy: Pyodide turns a Python float into a JS number, and a whole
+ * one comes back in as an int — a cell ending in `2.0` showed `2`, and a test
+ * expecting `2.0` failed an answer that was right.
+ *
+ * `None` shows nothing, as in Jupyter. That is not an accident of conversion:
+ * a cell ending in `print(x)` or `main()` has a last expression whose value is
+ * None, and showing it would put a stray `None` under nearly every cell.
+ * A trailing `;` also hides the value, as in Jupyter.
+ *
+ * Given its own filename so the one extra frame it adds to a traceback does
+ * not read as a line of the student's cell, which is `<exec>`.
+ */
+const RESULT_SHIM = `
+from pyodide.code import eval_code_async as _lm_eval_code_async
+
+async def _lm_run_cell(source):
+    value = await _lm_eval_code_async(source, globals())
+    return None if value is None else repr(value)
+`;
+
+let runCellInPython = null;
+
+/**
  * Every import in the notebook, gathered into one synthetic snippet.
  *
  * Import *lines* rather than whole cells: a cell need not parse on its own — a
@@ -196,6 +223,9 @@ async function init(indexURL, packages, sources) {
 
   await installMatplotlibHook();
 
+  pyodide.runPython(RESULT_SHIM, { filename: '<kernel>' });
+  runCellInPython = pyodide.globals.get('_lm_run_cell');
+
   ready = true;
   post({ type: 'status', phase: 'ready', detail: '' });
 }
@@ -262,16 +292,13 @@ async function run(id, code, stdin) {
   }
 
   try {
-    const value = await pyodide.runPythonAsync(code);
-    // A notebook shows the value of the last expression. `undefined` means the
-    // cell ended in a statement, which should print nothing at all — as opposed
-    // to `None`, which a student may have asked for explicitly.
-    if (value !== undefined) {
-      result = pyodide.globals.get('repr')(value);
-      if (value?.destroy) value.destroy();
-    }
+    // Already the `repr`, or undefined when there is nothing to show — see
+    // RESULT_SHIM for why it is not computed here.
+    const shown = await runCellInPython(code);
+    if (shown !== undefined && shown !== null) result = String(shown);
   } catch (thrown) {
-    error = String(thrown.message || thrown);
+    // Drop the shim's own frame, so the traceback is the one the cell produced.
+    error = String(thrown.message || thrown).replace(/^ {2}File "<kernel>".*\n/m, '');
   } finally {
     stdout.close();
     stderr.close();

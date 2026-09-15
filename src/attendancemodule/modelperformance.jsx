@@ -58,7 +58,12 @@ export default function ModelPerformance() {
 
     return (
         <div style={styles.page}>
-            <style>{cssReset}</style>
+            <style>{cssReset}{`
+                .mp-stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+                @media (max-width: 600px) {
+                    .mp-stat-grid { grid-template-columns: 1fr 1fr !important; }
+                }
+            `}</style>
 
             {toast && (
                 <div style={{
@@ -67,6 +72,7 @@ export default function ModelPerformance() {
                     background: toast.type === 'error' ? theme.danger : theme.success,
                     color: '#ffffff',
                     border: 'none',
+                    maxWidth: 'calc(100vw - 24px)', wordBreak: 'break-word',
                 }}>
                     {toast.msg}
                 </div>
@@ -79,7 +85,7 @@ export default function ModelPerformance() {
             </div>
 
             {/* Overview Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 }}>
+            <div className="mp-stat-grid" style={{ marginBottom: 28 }}>
                 {[
                     { label: 'Total Batches', val: batches.length, icon: '📁' },
                     { label: 'Total Students', val: totalStudents, icon: '👤' },
@@ -105,6 +111,7 @@ export default function ModelPerformance() {
                     <div style={{ fontSize: '15px', fontWeight: 700 }}>Batch Embedding Status</div>
                 </div>
 
+                <div style={{ overflowX: 'auto' }}>
                 <table className="ams-table">
                     <thead>
                         <tr>
@@ -162,6 +169,7 @@ export default function ModelPerformance() {
                         )}
                     </tbody>
                 </table>
+                </div>
             </div>
 
             {/* Embedding Generation Results */}
@@ -172,7 +180,7 @@ export default function ModelPerformance() {
                     </div>
 
                     {/* Summary */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
+                    <div className="mp-stat-grid" style={{ marginBottom: 20 }}>
                         {[
                             { label: 'Total', val: embResult.totalStudents, color: theme.text },
                             { label: 'Success', val: embResult.successful, color: theme.success },

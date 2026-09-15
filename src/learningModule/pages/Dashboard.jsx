@@ -696,6 +696,10 @@ export default function Dashboard() {
   } = useQuery({
     queryKey: ['learning', 'classes', 'active'],
     queryFn: () => lmApi.listClasses(),
+    // The class list doesn’t change during a typical session. 2 min avoids
+    // re-fetching (and re-showing skeletons) every time the user navigates
+    // back to the dashboard.
+    staleTime: 2 * 60 * 1000,
   });
 
   const {
@@ -706,6 +710,7 @@ export default function Dashboard() {
   } = useQuery({
     queryKey: ['learning', 'classes', 'archived'],
     queryFn: () => lmApi.listClasses('archived'),
+    staleTime: 2 * 60 * 1000,
   });
 
   const {
@@ -716,6 +721,7 @@ export default function Dashboard() {
   } = useQuery({
     queryKey: ['learning', 'classes', 'completed'],
     queryFn: () => lmApi.listClasses('completed'),
+    staleTime: 2 * 60 * 1000,
   });
 
   const loading = loadingClasses || loadingArchived || loadingCompleted;

@@ -251,6 +251,38 @@ const lmApi = {
   LmApiError,
   fileUrl: (url) => (url?.startsWith('http') ? url : `${getEnvironment()}${url}`),
 
+  /* An attachment's own address, carrying its display name so the server hands
+     the file over as "Unit 3 Notes.pdf" rather than the random name it is
+     stored under (see uploadController.serveFile). `download` asks for a save
+     instead of the browser's viewer. A link is someone else's URL and passes
+     through untouched. */
+  attachmentUrl: (attachment, { download = false } = {}) => {
+    if (attachment.kind === 'link') return attachment.url;
+    const params = new URLSearchParams();
+    if (attachment.name) params.set('name', attachment.name);
+    if (download) params.set('download', '1');
+    const query = params.toString();
+    const joiner = attachment.url.includes('?') ? '&' : '?';
+    return lmApi.fileUrl(query ? `${attachment.url}${joiner}${query}` : attachment.url);
+  },
+
+  /* An attachment's bytes, fetched with the session token.
+     Following the plain link authenticates by cookie alone, and an installed
+     app on iOS does not share its cookies with the browser a new tab opens in,
+     so from there the link came back 401. This carries the bearer header like
+     every other call here, and works wherever the app itself does. */
+  fetchAttachment: async (attachment) => {
+    const url = attachment.url || '';
+    const prefix = '/api/v1/learningmodule';
+    if (url.startsWith(prefix)) {
+      const response = await request(url.slice(prefix.length), { raw: true });
+      return response.blob();
+    }
+    const response = await fetch(lmApi.fileUrl(url));
+    if (!response.ok) throw new LmApiError('Request failed', response.status, null);
+    return response.blob();
+  },
+
   /* account level */
   me: () => request('/me'),
   overview: () => request('/overview'),
@@ -1069,9 +1101,9 @@ const lmApi = {
   adminStudentImportStatus: (batchId) => request(`/admin/students/import-status/${batchId}`),
   /* Editing a student's name/email/dept from the directory. */
   adminUpdateStudent: (studentId, body) => request(`/admin/students/${studentId}`, { method: 'PATCH', body }),
-  /* Folds every student's dept to the timetable's own casing, merging
-     duplicates ("Computer Science..." / "COMPUTER SCIENCE...") left over from
-     before that fold applied to every write — the distribution's "fix" button. */
+  /* Settles every student's dept on one title-cased spelling, merging duplicates
+     ("Computer Science..." / "COMPUTER SCIENCE...") left over from before that
+     fold applied to every write — the distribution's "fix" button. */
   adminNormalizeStudentDepartments: () => request('/admin/students/normalize-departments', { method: 'POST' }),
 
   /* ---- discussion forum ---- */

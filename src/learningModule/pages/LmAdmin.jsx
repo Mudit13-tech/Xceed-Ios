@@ -605,12 +605,20 @@ export default function LmAdmin() {
         <StatTile label="Courses" value={courses.total} hint={`${courses.active} active`} accent="blue.500" />
         <StatTile label="Students enrolled" value={people.students} accent="teal.500" />
         <StatTile label="Teaching staff" value={people.teachers} accent="orange.500" />
-        <StatTile
-          label="Bugs & suggestions"
-          value={bugs.total}
-          hint={`${bugs.byStatus.open || 0} open`}
-          accent="red.500"
-        />
+        <Box
+          as={RouterLink}
+          to="/learning/bugs"
+          borderRadius="lg"
+          _hover={{ textDecoration: 'none' }}
+          _focusVisible={{ boxShadow: 'outline' }}
+        >
+          <StatTile
+            label="Bugs & suggestions"
+            value={bugs.total}
+            hint={`${bugs.byStatus.open || 0} open`}
+            accent="red.500"
+          />
+        </Box>
         <StatTile
           label="Feedback"
           value={feedback.total}

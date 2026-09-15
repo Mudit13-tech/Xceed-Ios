@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Badge,
@@ -54,39 +54,6 @@ export default function Tutorials() {
   useEffect(() => {
     load();
   }, [load]);
-
-  const fileRef = useRef(null);
-  const [importing, setImporting] = useState(false);
-
-  /**
-   * Uploads the pages, then asks the server to read them.
-   *
-   * Two requests rather than one multipart call to the import endpoint: the
-   * upload handler already exists, already enforces the size and type rules, and
-   * already stores files under names it minted. Reusing it keeps one place
-   * responsible for what lands on disk.
-   */
-  const startImport = async (files) => {
-    if (!files.length) return;
-    setImporting(true);
-    try {
-      const { attachments } = await lmApi.uploadFiles(classId, files);
-      const draft = await lmApi.startTutorialImport(classId, {
-        title: files.length === 1 ? files[0].name.replace(/\.[^.]+$/, '') : 'Imported tutorial',
-        sources: attachments.map((file) => ({
-          name: file.name,
-          url: file.url,
-          mimeType: file.mimeType,
-        })),
-      });
-      navigate(`/learning/class/${classId}/tutorial-import/${draft._id}`);
-    } catch (err) {
-      toast({ status: 'error', title: err.message, duration: 10000 });
-    } finally {
-      setImporting(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
-  };
 
   const create = async () => {
     try {
@@ -161,26 +128,6 @@ export default function Tutorials() {
         </Box>
         {isTeacher && (
           <>
-          {/* Reads a photographed or scanned paper and proposes variables and
-              answer formulas, each checked against the paper's own numbers. The
-              result is a draft to review, never a published tutorial. */}
-          <Button
-            variant="outline"
-            colorScheme="purple"
-            isLoading={importing}
-            onClick={() => fileRef.current?.click()}
-          >
-            <LmIcon name="assignment" size={14} style={{ marginRight: 6 }} />
-            Import from a paper
-          </Button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/pdf,image/png,image/jpeg,image/gif,image/webp"
-            multiple
-            style={{ display: 'none' }}
-            onChange={(event) => startImport([...event.target.files])}
-          />
           <Button as="a" href="/learning/tutorialmanual" target="_blank" rel="noreferrer" variant="ghost">
             <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
             Manual

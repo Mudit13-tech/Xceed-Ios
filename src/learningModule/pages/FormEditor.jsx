@@ -58,6 +58,11 @@ const QUESTION_TYPES = [
 
 const HAS_OPTIONS = ['multiple_choice', 'checkboxes', 'dropdown'];
 
+const DEADLINE_REQUIRED = 'An assignment form needs a submission deadline before it can be published.';
+
+// Mirrors formController.missingAssignmentDeadline.
+const deadlineMissing = (form) => form?.category === 'assignment' && !form?.settings?.dueDate;
+
 // A section needs a stable id the moment it is created client-side, so a
 // question can be assigned to it before the form is ever saved — any 24-hex
 // string is a valid ObjectId to Mongoose, it does not have to come from the
@@ -383,6 +388,8 @@ function ShareLink({ form, classId }) {
 
   if (!form.published) return null;
 
+  const hasFileQuestion = (form.questions || []).some((question) => question.type === 'file_upload');
+
   return (
     <SectionCard title="Share">
       <VStack align="stretch" spacing={2}>
@@ -391,6 +398,13 @@ function ShareLink({ form, classId }) {
             ? 'Anyone with this link can respond, signed in or not.'
             : 'This link only accepts a signed-in member of this class.'}
         </Text>
+        {hasFileQuestion && (
+          <Alert status="info" borderRadius="md" fontSize="sm" alignItems="flex-start">
+            <AlertIcon />
+            File uploads are not available through this link, so file-upload questions are skipped for anyone
+            responding here — even required ones. Students who open the form from the class can still attach files.
+          </Alert>
+        )}
         <HStack>
           <Input size="sm" value={shareUrl} isReadOnly />
           <Button size="sm" onClick={onCopy} leftIcon={<FiCopy />}>
@@ -404,7 +418,6 @@ function ShareLink({ form, classId }) {
 
 export default function FormEditor() {
   const { classId, klass } = useOutletContext();
-  const topics = klass?.topics || [];
   const { formId } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
@@ -461,7 +474,7 @@ export default function FormEditor() {
       const updated = await lmApi.updateForm(classId, formId, {
         title: form.title,
         description: form.description,
-        topicId: form.topicId || null,
+        category: form.category === 'assignment' ? 'assignment' : 'normal',
         settings: form.settings,
         sections: sections.map((section, order) => ({ ...section, order })),
         questions: questions.map((question, order) => ({ ...question, _key: undefined, order })),
@@ -481,6 +494,12 @@ export default function FormEditor() {
   };
 
   const togglePublish = async () => {
+    // The server refuses this too; checking here saves a round trip and says
+    // which field to fill in.
+    if (!form.published && deadlineMissing(form)) {
+      toast({ status: 'warning', title: DEADLINE_REQUIRED });
+      return;
+    }
     if (!form.published && !(await save())) return;
     try {
       const result = await lmApi.publishForm(classId, formId, { publish: !form.published });
@@ -497,6 +516,13 @@ export default function FormEditor() {
 
   const setSetting = (key, value) =>
     setForm((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
+
+  const isAssignment = form.category === 'assignment';
+  const bannerProblems = [...new Set([
+    ...problems,
+    ...serverProblems,
+    ...(deadlineMissing(form) ? [DEADLINE_REQUIRED] : []),
+  ])];
 
   return (
     <VStack align="stretch" spacing={5}>
@@ -522,11 +548,11 @@ export default function FormEditor() {
         </Button>
       </Flex>
 
-      {(problems.length > 0 || serverProblems.length > 0) && (
+      {bannerProblems.length > 0 && (
         <Alert status="warning" borderRadius="md" alignItems="flex-start">
           <AlertIcon />
           <VStack align="stretch" spacing={0} fontSize="sm">
-            {[...new Set([...problems, ...serverProblems])].map((problem) => (
+            {bannerProblems.map((problem) => (
               <Text key={problem}>{problem}</Text>
             ))}
           </VStack>
@@ -550,19 +576,25 @@ export default function FormEditor() {
           </FormControl>
 
           <FormControl maxW="320px">
-            <FormLabel fontSize="sm">Topic</FormLabel>
+            <FormLabel fontSize="sm">Category</FormLabel>
             <Select
-              value={form.topicId || ''}
-              onChange={(event) => setForm({ ...form, topicId: event.target.value })}
+              value={isAssignment ? 'assignment' : 'normal'}
+              onChange={(event) => setForm({ ...form, category: event.target.value })}
             >
-              <option value="">No topic</option>
-              {topics.map((topic) => (
-                <option key={topic._id} value={topic._id}>
-                  {topic.name}
-                </option>
-              ))}
+              <option value="normal">Normal form</option>
+              <option value="assignment">Assignment</option>
             </Select>
           </FormControl>
+
+          <Alert status="info" borderRadius="md" fontSize="sm" alignItems="flex-start">
+            <AlertIcon />
+            <Box>
+              If you want students to upload a document as their submission, use this form, add a{' '}
+              <strong>File upload</strong> question and choose the category <strong>Assignment</strong>.
+              An assignment form needs a submission deadline, appears on both the Forms and Assignments
+              tabs, and students are mailed about it as a new assignment.
+            </Box>
+          </Alert>
 
           <Divider />
 
@@ -640,8 +672,8 @@ export default function FormEditor() {
           )}
 
           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
-            <FormControl>
-              <FormLabel fontSize="sm">Submission deadline (optional)</FormLabel>
+            <FormControl isRequired={isAssignment} isInvalid={deadlineMissing(form)}>
+              <FormLabel fontSize="sm">Submission deadline{isAssignment ? '' : ' (optional)'}</FormLabel>
               <Input
                 type="datetime-local"
                 value={toDatetimeLocal(form.settings?.dueDate)}
@@ -649,7 +681,11 @@ export default function FormEditor() {
                   setSetting('dueDate', event.target.value ? new Date(event.target.value).toISOString() : null)
                 }
               />
-              <FormHelperText fontSize="xs">Leave blank to keep this form open indefinitely.</FormHelperText>
+              <FormHelperText fontSize="xs">
+                {isAssignment
+                  ? 'Required for an assignment — students see it as the due date.'
+                  : 'Leave blank to keep this form open indefinitely.'}
+              </FormHelperText>
             </FormControl>
             {form.settings?.dueDate && (
               <FormControl>

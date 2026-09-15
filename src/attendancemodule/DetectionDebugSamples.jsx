@@ -134,7 +134,8 @@ export default function DetectionDebugSamples() {
                     Face Detector, then start a live attendance run.
                 </div>
             ) : (
-                <table className="ams-table">
+                <div style={{ overflowX: 'auto' }}>
+                <table className="ams-table" style={{ minWidth: 640 }}>
                     <thead>
                         <tr>
                             <th style={{ textAlign: 'left' }}>Run</th>
@@ -198,6 +199,7 @@ export default function DetectionDebugSamples() {
                         ))}
                     </tbody>
                 </table>
+                </div>
             )}
 
             {openRun && (

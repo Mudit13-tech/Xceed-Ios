@@ -7,7 +7,6 @@ import shotEditor from '../manualAssets/tutorials/editor.png';
 import shotPreview from '../manualAssets/tutorials/preview.png';
 import shotPlayer from '../manualAssets/tutorials/player.png';
 import shotResults from '../manualAssets/tutorials/results.png';
-import shotImport from '../manualAssets/tutorials/import.png';
 
 // ── design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -113,7 +112,6 @@ const TABS = [
     { id: 'create',   label: 'Create & Author',  icon: 'edit' },
     { id: 'types',    label: 'Question Types',   icon: 'quiz' },
     { id: 'settings', label: 'Settings',         icon: 'settings' },
-    { id: 'import',   label: 'Import a Paper',   icon: 'assignment' },
     { id: 'student',  label: 'What Students See',icon: 'preview' },
     { id: 'results',  label: 'Results & Marks',  icon: 'insights' },
     { id: 'gotchas',  label: 'Gotchas',          icon: 'warning' },
@@ -139,7 +137,7 @@ function TabOverview() {
             <SectionTitle>Tutorial or Assignment?</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 Tutorials and Assignments share the exact same engine — variables, formulas, tolerances,
-                the same editor, the same paper-import pipeline. The difference is purely how you use them:
+                and the same editor. The difference is purely how you use them:
                 <ul style={{ margin: '8px 0 0 0', paddingLeft: 18 }}>
                     <li><strong>Tutorial</strong> — practice. Multiple attempts are normal, instant feedback is easy to justify turning on, and the class average is a formative signal, not a grade.</li>
                     <li><strong>Assignment</strong> — assessed. Usually one attempt, instant feedback is off by default, and the score is meant to count. See the separate Assignment manual for that side.</li>
@@ -150,7 +148,7 @@ function TabOverview() {
 
             <SectionTitle>Workflow at a Glance</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9 }}>
-                Create (from scratch, or from an uploaded paper) → pick each question&apos;s type and author it
+                Create → pick each question&apos;s type and author it
                 (variables and formulas, or options and a key) → set retry/feedback settings → publish → students each sit their own numbers →
                 you read the Method-analysis table and adjust individual scores where needed.
             </div>
@@ -175,8 +173,9 @@ function TabCreate() {
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                     <li><strong>Prompt</strong> — write the question and simply <em>type</em> <code>{'{{R}}'}</code> where a value should appear. The variable is declared for you the moment you type it, so there is no separate step; the <em>Insert variable</em> buttons remain for dropping an existing one at the cursor. A placeholder typed into a hint, a sub-question or the worked solution counts too.</li>
-                    <li><strong>Variables</strong> — each has a <strong>Type</strong> (Integer by default, or Decimal, or From a list), a range or list of values, a <strong>Step</strong> (so values land on a clean grid — 4.5, not 4.5137), and a Unit. A row you delete stays deleted, even if the placeholder is still in the text.</li>
+                    <li><strong>Variables</strong> — each has a <strong>Type</strong> (Integer by default, or Decimal, or From a list), a range or list of values, a <strong>Step</strong> (so values land on a clean grid — 4.5, not 4.5137), and a Unit. A row you delete stays deleted, even if the placeholder is still in the text. The names <code>i</code>, <code>j</code>, <code>e</code> and <code>pi</code> are refused on save: the formula engine already uses them for the imaginary unit and the constants, and a variable of that name would silently take their place in every formula. Use <code>i_1</code> or similar — capital <code>I</code> for a current is fine. A question saved before this rule keeps working until it is next saved.</li>
                     <li><strong>Answers</strong> — a formula over the variables above, evaluated per student and compared with what they type. Set a <strong>Tol %</strong> and/or <strong>Tol ±</strong> tolerance — whichever is looser applies; the absolute tolerance matters most when the correct value is near zero.</li>
+                    <li><strong>Complex answers</strong> — a formula may work out to a complex number: write <code>R + i*X</code> (<code>j</code> works too), or <code>polar(10, 45)</code> for a magnitude and an angle in degrees. Students may answer in either form, <code>3+4i</code> or <code>polar(5, 45)</code>, and are marked on how far their value lies from the key, against the same tolerance. <code>10∠45</code> is read the same way, but ∠ is on no keyboard — write <code>polar()</code> in anything students see. The editor&apos;s formula reference lists the functions that go with it: <code>abs</code> (the modulus), <code>re</code>, <code>im</code>, <code>conj</code> and <code>arg</code>.</li>
                     <li><strong>Decimals</strong> — how many decimal places the student should give, set per answer and defaulting to 2 dp. It is shown on their paper (&quot;give your answer to 2 decimal places&quot;), the answer key is stated to the same precision, and it appears again in Results so a near-miss reads as rounding rather than a wrong method. Choose <em>Exact</em> to leave the value unrounded.</li>
                     <li><strong>Reads as</strong> — under each formula box, the formula is echoed back as a typeset equation: <code>V/(R_1+R_2)</code> appears as a real fraction, <code>sqrt(2*g*h)</code> under a root sign, <code>omega</code> as ω. It is built from the same parsed formula the server will evaluate, so what you see cannot disagree with what gets marked — and a mistyped formula usually looks wrong long before its value does.</li>
                     <li><strong>Sub-questions</strong> — optional parts sharing the same drawn variables, each with its own prompt and its own separately-marked answers. They are no longer auto-lettered; type your own label if you want one. Leave this empty for a single-answer question.</li>
@@ -204,8 +203,8 @@ function TabCreate() {
                 caption="Roll samples — genuinely different draws of the same question, with the computed answer for each, so you can eyeball that the numbers behave sensibly before anyone sits the paper." />
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    <li><strong>Roll samples</strong>, under each question, shows the actual numbers two students would be given for <em>that</em> question — sub-questions nested under the stem, each with the answers belonging to it.</li>
-                    <li><strong>Work it out for values you choose</strong> answers the other question you usually have: you already know that at <em>R</em> = 7 Ω and <em>I</em> = 2 A the answer is 28 W, and you want to check the question agrees. Type the values, press the button, and you get the answer for exactly those — no rolling until those numbers happen to come up. It runs the same evaluation students are marked against. Values that break a constraint still compute, with a note saying no student would be given them.</li>
+                    <li><strong>Roll samples</strong>, under each question, shows the actual numbers two students would be given for <em>that</em> question — sub-questions nested under the stem, each with the answers belonging to it, and the worked solution under each sample.</li>
+                    <li><strong>Work it out for values you choose</strong> answers the other question you usually have: you already know that at <em>R</em> = 7 Ω and <em>I</em> = 2 A the answer is 28 W, and you want to check the question agrees. Type the values, press the button, and you get the answer for exactly those — no rolling until those numbers happen to come up. It runs the same evaluation students are marked against. Values that break a constraint still compute, with a note saying no student would be given them. The worked solution for those values is shown with the answer.</li>
                     <li><strong>Preview</strong>, on the tutorial&apos;s card in the list, rolls three complete papers end to end — the whole thing as a student meets it, rather than one question.</li>
                 </ul>
             </div>
@@ -221,8 +220,7 @@ function TabCreate() {
                 <strong><LmIcon name="import" size={13} /> Import questions</strong>, in the toolbar at the top of the editor, copies whole questions from
                 another tutorial — in this class or any other class you teach — into the one you have open.
                 Copies are independent from the moment they land: editing them never touches the original,
-                and no student work comes with them. This is separate from importing from a scanned paper —
-                see the Import a Paper tab.
+                and no student work comes with them.
             </div>
         </div>
     );
@@ -381,33 +379,6 @@ function TabSettings() {
     );
 }
 
-function TabImport() {
-    return (
-        <div>
-            <Note type="key">
-                Building a tutorial from a photographed or scanned paper is a four-stage, teacher-reviewed
-                pipeline: read the paper, choose the variables, derive the answers, merge. Nothing here
-                publishes anything automatically — the merge produces an unpublished tutorial you still open,
-                review, and release like any other.
-            </Note>
-
-            <Shot src={shotImport} alt="Reviewing an imported tutorial draft, with verified and mismatched answer badges"
-                caption="Reviewing an import. Question 1's answer reproduced the paper's own printed value (verified, green); Question 2's did not (mismatch, red) — exactly the kind of thing this screen exists to catch." />
-
-            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
-                <ol style={{ margin: 0, paddingLeft: 18 }}>
-                    <li><strong>Upload.</strong> From the list page, click <strong><LmIcon name="assignment" size={13} /> Import from a paper</strong> and pick one or more PDF/image files. The paper is read automatically, and you land on this review screen.</li>
-                    <li><strong>Suggest variables.</strong> Click <strong><LmIcon name="ai" size={13} /> Suggest variables</strong> on a question — the model proposes which numbers in the paper should become variables, with a type, a sensible range, and a note showing exactly what value the paper actually used.</li>
-                    <li><strong>Derive answers.</strong> Click <strong><LmIcon name="ai" size={13} /> Derive answers from the paper</strong> — the model writes the formula, then immediately checks it by substituting the paper's own original numbers back in and comparing the result to the paper's printed answer.</li>
-                    <li><strong>Read the verification badge on every answer</strong> before trusting it: <strong style={{ color: '#166534' }}>✓ matches the paper</strong> (green), <strong style={{ color: '#991b1b' }}>✗ does not match</strong> (red), <strong>? not checkable</strong> (orange), or <strong>✗ will not parse</strong> (red). This badge is advisory, not a gate — nothing stops you from merging a question whose answer is still unverified, so treat a non-green badge as a hold, not a suggestion.</li>
-                    <li><strong>Roll samples</strong> on this screen shows the answer key alongside each draw (unlike the editor's own preview) — the last sanity check before this goes anywhere near students.</li>
-                    <li><strong>Merge</strong> the questions you've selected into a new, unpublished tutorial, ready for the normal editor.</li>
-                </ol>
-            </div>
-        </div>
-    );
-}
-
 function TabStudent() {
     return (
         <div>
@@ -417,6 +388,7 @@ function TabStudent() {
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                     <li>Every question is labelled with its <strong>type</strong>, in that type&apos;s colour — so a student knows before reading on whether to tick one option or several.</li>
                     <li>On a random-variable question, students see their own drawn <strong>Your values</strong> under the prompt, and may type an unevaluated expression as an answer (e.g. <code>2*pi*3</code>) instead of computing a decimal themselves.</li>
+                    <li>A note on the same papers tells them how to type a complex answer: <code>3+4i</code> (<code>j</code> works too) or <code>polar(5, 45)</code> — magnitude, then angle in degrees.</li>
                     <li>A <strong>multiple-choice</strong> question shows its options lettered A, B, C… with radio buttons, so a second pick replaces the first; a <strong>multiple-answers</strong> question uses checkboxes. Clicking anywhere on an option picks it. Ticks are kept by <em>Save progress</em> and come back on reload.</li>
                     <li>After submitting — with <em>Show the worked solution after submitting</em> on — the right options are outlined green and marked <strong>correct</strong>, and a wrong pick outlined red, so the student sees both what they chose and what they should have. In a live session this waits until you have moved on to the next question.</li>
                     <li>A standing note reminds them that comparing <em>final answers</em> with a classmate is useless — everyone's numbers differ — but comparing <em>method</em> is exactly the point. It appears only when the paper has random-variable questions: an all-MCQ tutorial does not claim everyone&apos;s numbers differ.</li>
@@ -517,15 +489,16 @@ function TabGotchas() {
         'A partially-filled sub-question is fine — each part is marked independently on submit.',
         'Deleting a tutorial deletes every student\'s attempt at it, with no way to keep the tutorial and wipe only the responses (unlike quizzes, which separate the two).',
         'There is no CSV/bulk export on the Results page — only what you can read on-screen and the per-attempt manual adjustment.',
-        'Import verification badges are advisory, not a gate: nothing stops you from merging (and later publishing) a question whose derived answer never matched the paper.',
-        'Preview — in both the editor and the import screen — always rolls against the saved server copy, never unsaved edits in front of you.',
-        'Assignments use the exact same engine under a different name for a different purpose — see the separate Assignment manual if you want this mechanic to count toward a grade.',
+        'Preview always rolls against the saved server copy, never unsaved edits in front of you.',
+        'Numerical Assignments use the exact same engine under a different name for a different purpose — see the separate Assignment manual if you want this mechanic to count toward a grade.',
         'Only "Numerical with random variables" gives each student different numbers. MCQ, MSQ and plain Numerical questions are the same for the whole class, so an answer passed along works for them.',
         'A multiple-answers question has no partial credit: one missed or one extra tick scores zero, exactly as in a quiz.',
         'A paper is fixed when a student first opens it. Questions added, re-keyed or changed to another type afterwards reach existing papers only through Re-evaluate, or on a new attempt.',
         'With instant feedback on, each Check on an MCQ rules an option out — keep Checks allowed per answer low, or leave feedback off, for choice questions that should measure something.',
         'Negative marking and shuffled options or question order, available in quizzes, are not available in tutorials.',
         'Re-evaluate keeps an earlier Adjust marks on top of the re-mark. An adjustment you made to cover a wrong key will count twice once the key is fixed — set it back to 0 after re-evaluating.',
+        'i, j, e and pi cannot be variable names — they are the imaginary unit and the constants, and a variable would silently replace them in every formula. Rename to i_1 or similar; capital I is allowed.',
+        'Set polar answers as polar(magnitude, angle in degrees). 10∠45 parses too, but no student can type ∠.',
     ];
     return (
         <div>
@@ -567,7 +540,6 @@ export default function TutorialManual({ standalone = false }) {
         create:   <TabCreate />,
         types:    <TabTypes />,
         settings: <TabSettings />,
-        import:   <TabImport />,
         student:  <TabStudent />,
         results:  <TabResults />,
         gotchas:  <TabGotchas />,

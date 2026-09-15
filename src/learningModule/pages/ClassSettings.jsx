@@ -14,6 +14,8 @@ import {
   SimpleGrid,
   Text,
   Textarea,
+  Wrap,
+  WrapItem,
   useClipboard,
   useToast,
 } from '@chakra-ui/react';
@@ -349,22 +351,26 @@ export default function ClassSettings() {
             Generate new code
           </Button>
         </Flex>
-        <Checkbox
-          mt={4}
-          size="sm"
-          isChecked={settings.allowJoinByCode}
-          onChange={(event) => setSetting('allowJoinByCode', event.target.checked)}
-        >
-          Allow joining with this code
-        </Checkbox>
-        <Checkbox
-          mt={2}
-          size="sm"
-          isChecked={settings.requireApproval}
-          onChange={(event) => setSetting('requireApproval', event.target.checked)}
-        >
-          Review every join request before admitting a student
-        </Checkbox>
+        <Wrap spacing={6} mt={4}>
+          <WrapItem>
+            <Checkbox
+              size="sm"
+              isChecked={settings.allowJoinByCode}
+              onChange={(event) => setSetting('allowJoinByCode', event.target.checked)}
+            >
+              Allow joining with this code
+            </Checkbox>
+          </WrapItem>
+          <WrapItem>
+            <Checkbox
+              size="sm"
+              isChecked={settings.requireApproval}
+              onChange={(event) => setSetting('requireApproval', event.target.checked)}
+            >
+              Review every join request before admitting a student
+            </Checkbox>
+          </WrapItem>
+        </Wrap>
       </SectionCard>
 
       <SectionCard title="Permissions & notifications" mb={4}>
@@ -376,21 +382,26 @@ export default function ClassSettings() {
             <option value="teachers_only">Only teachers can post or comment</option>
           </Select>
         </FormControl>
-        <Checkbox
-          size="sm"
-          isChecked={settings.showGradesToStudents}
-          onChange={(event) => setSetting('showGradesToStudents', event.target.checked)}
-        >
-          Let students see their gradebook
-        </Checkbox>
-        <Checkbox
-          mt={2}
-          size="sm"
-          isChecked={settings.emailNotifications}
-          onChange={(event) => setSetting('emailNotifications', event.target.checked)}
-        >
-          Email class members on updates
-        </Checkbox>
+        <Wrap spacing={6}>
+          <WrapItem>
+            <Checkbox
+              size="sm"
+              isChecked={settings.showGradesToStudents}
+              onChange={(event) => setSetting('showGradesToStudents', event.target.checked)}
+            >
+              Let students see their gradebook
+            </Checkbox>
+          </WrapItem>
+          <WrapItem>
+            <Checkbox
+              size="sm"
+              isChecked={settings.emailNotifications}
+              onChange={(event) => setSetting('emailNotifications', event.target.checked)}
+            >
+              Email class members on updates
+            </Checkbox>
+          </WrapItem>
+        </Wrap>
 
         {settings.emailNotifications && (
           <Box ml={6} mt={2} p={3} bg="lmBg.sunken" borderRadius="md" borderLeft="3px solid" borderColor="blue.400">

@@ -27,7 +27,8 @@ function Toast({ toast }) {
         position: 'fixed', top: 96, left: '50%', transform: 'translateX(-50%)',
         zIndex: 9000, padding: '12px 20px', borderRadius: 8, fontSize: 13,
         fontWeight: 700, background: isError ? theme.danger : theme.success,
-        color: '#ffffff', border: 'none', maxWidth: 420,
+        color: '#ffffff', border: 'none', maxWidth: 'min(420px, calc(100vw - 24px))',
+        wordBreak: 'break-word',
         boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
       }}
     >
@@ -191,6 +192,13 @@ export default function ModelAnalytics() {
         .ma-table tr:last-child td { border-bottom: none; }
         .ma-table tr:hover td { background: ${theme.surfaceAlt}; }
         .ma-controls-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+        .ma-stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 18px; }
+        .ma-split-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+        @media (max-width: 600px) {
+          .ma-stat-grid { grid-template-columns: 1fr 1fr !important; }
+          .ma-split-grid { grid-template-columns: 1fr !important; }
+          .ma-table { display: block; overflow-x: auto; }
+        }
       `}</style>
 
       <Toast toast={toast} />
@@ -270,7 +278,7 @@ export default function ModelAnalytics() {
       {data && (
         <>
           {/* Stat cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 18 }}>
+          <div className="ma-stat-grid">
             <StatCard label="Total Records" value={data.overall.total} />
             <StatCard label="Agreement Rate" value={pct(data.overall.agreementRate)} accent={rateColor(data.overall.agreementRate)} />
             <StatCard label="Overrides" value={data.overall.overrides} accent={theme.warning} />
@@ -452,7 +460,7 @@ export default function ModelAnalytics() {
           </section>
 
           {/* Disagreement breakdown + top overridden students */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+          <div className="ma-split-grid">
             <section style={styles.card}>
               <div style={styles.sectionTitle}>Disagreement Breakdown</div>
               {disagreements.length === 0 ? (
