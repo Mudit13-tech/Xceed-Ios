@@ -284,7 +284,7 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
                   {item.pinned ? 'Unpin' : 'Pin to top'}
                 </MenuItem>
               )}
-              <MenuItem color="red.600" onClick={remove}>
+              <MenuItem color="red.600" icon={<LmIcon name="delete" size={15} />} onClick={remove}>
                 Delete post
               </MenuItem>
             </MenuList>

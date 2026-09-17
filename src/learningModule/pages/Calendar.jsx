@@ -23,7 +23,7 @@ import {
 } from '@chakra-ui/react';
 import { keyframes } from '@emotion/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { CalendarSkeleton, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
 import { useRive, Layout, Fit, Alignment } from '@rive-app/react-canvas';
 import '../../utils/riveWasm.js';
 import { courseworkLink, courseworkMeta, formatDate, formatDateTime } from '../format';
@@ -381,7 +381,7 @@ export default function Calendar() {
       <ErrorState error={error} onRetry={load} />
 
       {loading ? (
-        <Loading />
+        <Loading label="Loading your calendar…" skeleton={<CalendarSkeleton />} />
       ) : (
         <>
           <Wrap spacing={4} mb={3}>

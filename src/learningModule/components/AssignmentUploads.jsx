@@ -3,6 +3,7 @@ import { Box, Button, HStack, Link, Text, useToast } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
 import { LmIcon } from './Icon';
+import DeleteButton from './DeleteButton';
 
 /**
  * The student's attached working — photos or a PDF of what they did on paper.
@@ -101,15 +102,12 @@ export default function AssignmentUploads({
                 {file.name || 'Attachment'}
               </Link>
               {canEdit && (
-                <Button
+                <DeleteButton
                   size="xs"
-                  variant="ghost"
-                  colorScheme="red"
+                  label="Remove attachment"
                   isLoading={removing === file.url}
                   onClick={() => remove(file.url)}
-                >
-                  Remove
-                </Button>
+                />
               )}
             </HStack>
           ))}

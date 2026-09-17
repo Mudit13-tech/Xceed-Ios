@@ -29,7 +29,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard, StatTile, buttonTextStyles } from '../components/common';
+import { buttonTextStyles, EmptyState, ErrorState, Loading, SectionCard, StatTile, TableSkeleton } from '../components/common';
 import { richTextToPlain } from '../richTextUtils';
 import { decimalPlacesHint, formatAnswerValue, formatDateTime } from '../format';
 import { optionLetters } from '../questionTypes';
@@ -85,7 +85,7 @@ export default function AssignmentResults() {
     }
   };
 
-  if (loading) return <Loading label="Loading results…" />;
+  if (loading) return <Loading label="Loading results…" skeleton={<TableSkeleton rows={6} columns={5} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!data) return null;
 

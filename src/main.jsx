@@ -6,6 +6,7 @@ import { ChakraProvider, extendTheme } from '@chakra-ui/react';
 import './index.css';
 import { RecoilRoot } from 'recoil';
 import axios from 'axios';
+import { readLocal } from './utils/safeStorage';
 import getEnvironment from './getenvironment';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
@@ -30,7 +31,14 @@ const originalFetch = window.fetch;
 // then rests entirely on a SameSite=None cookie that private windows drop.
 const apiOrigin = getEnvironment();
 window.fetch = function(url, options = {}) {
-  const token = localStorage.getItem('token');
+  /* Read through `readLocal`, because this wrapper is on the path of every
+     request the application makes and a bare `localStorage.getItem` throws —
+     it does not return null — in a browser told to keep no site data. A Safe
+     Exam Browser profile with `removeLocalStorage` on is exactly that browser,
+     and a throw here is not a missing token, it is every call in the app dying
+     before it reaches the network. Without a stored copy the session rests on
+     the httpOnly cookie, which is what signs these requests anyway. */
+  const token = readLocal('token');
   const target = typeof url === 'string' ? url : url?.url || String(url ?? '');
   const isOwnServer = target.startsWith(apiOrigin);
 
@@ -56,7 +64,9 @@ window.fetch = function(url, options = {}) {
 
 axios.defaults.withCredentials = true;
 axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  // Same reasoning as the fetch wrapper above, and the same failure if it is
+  // skipped: this runs on every axios call in the platform.
+  const token = readLocal('token');
   // Same reasoning as the fetch wrapper above: the header is the CSRF proof, so
   // it goes on whether or not there is a token to go with it.
   config.headers['X-App-Name'] = 'xceed-web';

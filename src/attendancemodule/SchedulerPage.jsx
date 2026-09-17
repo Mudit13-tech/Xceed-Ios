@@ -739,6 +739,360 @@ function GlobalEditor({ config, onSave }) {
   );
 }
 
+// ── Per-slot participation grid ──────────────────────────────────────────────
+// The room's week as the current-session timetable has it, with one switch per
+// booked slot. The half-day toggles above cover "this room is a lab after
+// lunch"; this covers the case underneath it — one class in the room that must
+// not be checked (a lab the cameras cannot see past the benches, a batch with
+// no embeddings yet) while the periods around it stay on.
+//
+// Free slots are shown but not switchable: nothing runs in them anyway, since
+// a slot with no subject never resolves a class. Extra classes and alterations
+// are per-date and are not shown here — they have their own tabs, and a
+// one-off Tuesday in a weekly grid would read as every Tuesday.
+const DAY_LABEL = (day) => day.charAt(0).toUpperCase() + day.slice(1);
+
+// Why a slot is dark, in the order the scheduler decides it. A slot switched
+// ON inside a half that is OFF still does not run, and saying so here is what
+// stops it reading as a toggle that failed to save.
+const BLOCKED_NOTE = {
+  half: 'room off this half',
+  period: 'period disabled',
+  slot: 'slot off',
+};
+
+function RoomSlotGrid({ room, onChanged, showToast }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `${AC_API}/rooms/${encodeURIComponent(room)}/timetable`,
+        { credentials: 'include' },
+      );
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      setData(json);
+      setError('');
+    } catch (e) {
+      setError(e.message);
+      setData(null);
+    }
+    setLoading(false);
+  }, [room]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const save = async (edits) => {
+    setBusy(true);
+    try {
+      const res = await fetch(
+        `${AC_API}/rooms/${encodeURIComponent(room)}/slots`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ slots: edits }),
+        },
+      );
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      // Re-read rather than patching local state: the grid also reports the
+      // half-day and period-level blocks, which are not ours to guess at.
+      await load();
+      onChanged?.(json.includedRooms);
+    } catch (e) {
+      showToast?.(`Could not save slots: ${e.message}`, 'error');
+    }
+    setBusy(false);
+  };
+
+  if (loading) {
+    return (
+      <div style={{ padding: '14px 16px', fontSize: 12, color: theme.textMuted }}>
+        Loading the timetable for {room}…
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div style={{ padding: '14px 16px', fontSize: 12, color: theme.danger }}>
+        Could not load the timetable for {room}: {error}
+      </div>
+    );
+  }
+
+  const slotAt = (day, periodKey) =>
+    (data.slots || []).find((s) => s.day === day && s.periodKey === periodKey) ||
+    null;
+
+  const bookedOn = (day) => (data.slots || []).filter((s) => s.day === day);
+
+  const cellStyle = (slot) => {
+    if (!slot) {
+      return {
+        background: 'transparent',
+        border: `1px dashed ${theme.border}`,
+        color: theme.textMuted,
+      };
+    }
+    if (!slot.enabled) {
+      return {
+        background: theme.dangerDim,
+        border: `1px solid ${theme.danger}`,
+        color: theme.textMuted,
+      };
+    }
+    return {
+      background: theme.surface,
+      border: `1px solid ${theme.border}`,
+      color: theme.text,
+    };
+  };
+
+  if (!(data.slots || []).length) {
+    return (
+      <div style={{ padding: '14px 16px', fontSize: 12, color: theme.textMuted }}>
+        No class in the {data.session} timetable books {room}, so there is
+        nothing to switch off here. The half-day toggles above still apply to
+        extra classes scheduled into this room.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '4px 14px 14px' }}>
+      <div
+        style={{
+          fontSize: 11,
+          color: theme.textMuted,
+          marginBottom: 10,
+          lineHeight: 1.6,
+        }}
+      >
+        Session {data.session}. Click a class to switch attendance for that slot
+        on or off — every other slot in the room is unaffected. Free slots are
+        not switchable: nothing runs in them. A slot inside a half-day switched
+        off above stays dark whatever you set here.
+      </div>
+      <div className="scheduler-table-wrap">
+        <table
+          style={{
+            borderCollapse: 'separate',
+            borderSpacing: 4,
+            minWidth: 120 + (data.periods || []).length * 150,
+          }}
+        >
+          <thead>
+            <tr>
+              <th
+                style={{
+                  textAlign: 'left',
+                  fontSize: 11,
+                  color: theme.textMuted,
+                  fontWeight: 700,
+                  padding: '4px 6px',
+                }}
+              >
+                Day
+              </th>
+              {(data.periods || []).map((p) => (
+                <th
+                  key={p.periodKey}
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: p.enabled ? theme.text : theme.textMuted,
+                    padding: '4px 6px',
+                    textAlign: 'left',
+                    minWidth: 140,
+                  }}
+                >
+                  {p.label || p.periodKey}
+                  <div
+                    style={{
+                      fontWeight: 500,
+                      color: theme.textMuted,
+                      fontFamily: theme.fontMono,
+                      fontSize: 10,
+                    }}
+                  >
+                    {p.startTime && p.endTime
+                      ? `${p.startTime}–${p.endTime}`
+                      : 'no timing set'}
+                    {!p.enabled && ' · disabled'}
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(data.days || []).map((day) => {
+              const booked = bookedOn(day);
+              const anyOn = booked.some((s) => s.slotEnabled);
+              return (
+                <tr key={day}>
+                  <th
+                    style={{
+                      textAlign: 'left',
+                      verticalAlign: 'top',
+                      padding: '8px 6px',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: theme.text,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {DAY_LABEL(day)}
+                    {booked.length > 0 && (
+                      <div>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            save(
+                              booked.map((s) => ({
+                                day,
+                                periodKey: s.periodKey,
+                                enabled: !anyOn,
+                              })),
+                            )
+                          }
+                          style={{
+                            marginTop: 4,
+                            padding: '2px 8px',
+                            fontSize: 10,
+                            fontWeight: 600,
+                            borderRadius: 6,
+                            cursor: busy ? 'default' : 'pointer',
+                            background: 'transparent',
+                            border: `1px solid ${theme.border}`,
+                            color: theme.textMuted,
+                          }}
+                        >
+                          {anyOn ? 'All off' : 'All on'}
+                        </button>
+                      </div>
+                    )}
+                  </th>
+                  {(data.periods || []).map((p) => {
+                    const slot = slotAt(day, p.periodKey);
+                    return (
+                      <td key={p.periodKey} style={{ verticalAlign: 'top' }}>
+                        <div
+                          onClick={
+                            slot && !busy
+                              ? () =>
+                                  save([
+                                    {
+                                      day,
+                                      periodKey: p.periodKey,
+                                      enabled: !slot.slotEnabled,
+                                    },
+                                  ])
+                              : undefined
+                          }
+                          title={
+                            slot
+                              ? `${slot.subject}${slot.faculty ? ` — ${slot.faculty}` : ''}`
+                              : 'Free slot'
+                          }
+                          style={{
+                            ...cellStyle(slot),
+                            borderRadius: 8,
+                            padding: '8px 10px',
+                            minHeight: 54,
+                            cursor: slot && !busy ? 'pointer' : 'default',
+                            opacity: busy ? 0.6 : 1,
+                            transition: 'opacity .15s',
+                          }}
+                        >
+                          {!slot ? (
+                            <span style={{ fontSize: 11 }}>free</span>
+                          ) : (
+                            <>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  marginBottom: 2,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: 7,
+                                    height: 7,
+                                    borderRadius: '50%',
+                                    flexShrink: 0,
+                                    background: slot.enabled
+                                      ? theme.success
+                                      : theme.danger,
+                                  }}
+                                />
+                                <span
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    textDecoration: slot.slotEnabled
+                                      ? 'none'
+                                      : 'line-through',
+                                  }}
+                                >
+                                  {slot.subject}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 10, color: theme.textMuted }}>
+                                {[slot.faculty, slot.sem && `Sem ${slot.sem}`]
+                                  .filter(Boolean)
+                                  .join(' · ') || '—'}
+                              </div>
+                              {slot.blockedBy && (
+                                <div
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    color: theme.danger,
+                                    marginTop: 3,
+                                  }}
+                                >
+                                  {BLOCKED_NOTE[slot.blockedBy]}
+                                </div>
+                              )}
+                              {slot.ambiguous && (
+                                <div
+                                  style={{
+                                    fontSize: 10,
+                                    color: theme.warning,
+                                    marginTop: 3,
+                                  }}
+                                  title={`Also claimed by ${(slot.alsoClaimedBy || []).join(', ')}`}
+                                >
+                                  ⚠ double-booked
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── Room participation row ───────────────────────────────────────────────────
 // A room is scheduled per half of the day, not per day: a lecture theatre that
 // becomes a locked lab after lunch is now switched off for the afternoon alone
@@ -748,8 +1102,17 @@ function GlobalEditor({ config, onSave }) {
 //
 // Overrides written before the split carry only `enabled`, so both halves fall
 // back to it and an untouched room reads exactly as it did.
-function RoomParticipationRow({ room, override, onSave, allCamerasInactive }) {
+function RoomParticipationRow({
+  room,
+  override,
+  onSave,
+  onSlotsChanged,
+  showToast,
+  allCamerasInactive,
+}) {
   const [saving, setSaving] = useState(false);
+  const [showSlots, setShowSlots] = useState(false);
+  const offSlots = (override?.disabledSlots || []).length;
   const legacy = override ? override.enabled !== false : true;
   const pick = (v) => (v == null ? legacy : v !== false);
   const forenoon = pick(override?.enabledForenoon);
@@ -776,61 +1139,98 @@ function RoomParticipationRow({ room, override, onSave, allCamerasInactive }) {
 
   return (
     <div
-      className="scheduler-room-row"
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: '10px 16px',
         background: theme.surfaceAlt,
         borderRadius: 8,
         border: `1px solid ${enabled ? theme.border : theme.dangerDim}`,
-        opacity: saving ? 0.6 : 1,
-        transition: 'opacity .15s',
-        flexWrap: 'wrap',
       }}
     >
       <div
+        className="scheduler-room-row"
         style={{
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
-          flexShrink: 0,
-          background: statusColor,
-        }}
-      />
-      <span
-        style={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: theme.text,
-          fontFamily: theme.fontMono,
-          flex: 1,
-          minWidth: 90,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '10px 16px',
+          borderRadius: 8,
+          opacity: saving ? 0.6 : 1,
+          transition: 'opacity .15s',
+          flexWrap: 'wrap',
         }}
       >
-        {room}
-      </span>
-      {allCamerasInactive && (
-        <span style={{ fontSize: 10, color: theme.warning }}>⚠ no camera</span>
-      )}
-      {!enabled && (
-        <span style={{ fontSize: 10, color: theme.danger, fontWeight: 700 }}>
-          EXCLUDED ALL DAY
+        <div
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            flexShrink: 0,
+            background: statusColor,
+          }}
+        />
+        <span
+          style={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: theme.text,
+            fontFamily: theme.fontMono,
+            flex: 1,
+            minWidth: 90,
+          }}
+        >
+          {room}
         </span>
-      )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-        <Toggle
-          value={forenoon}
-          onChange={(v) => handleToggle('forenoon', v)}
-          label="Forenoon"
-        />
-        <Toggle
-          value={afternoon}
-          onChange={(v) => handleToggle('afternoon', v)}
-          label="Afternoon"
-        />
+        {allCamerasInactive && (
+          <span style={{ fontSize: 10, color: theme.warning }}>⚠ no camera</span>
+        )}
+        {!enabled && (
+          <span style={{ fontSize: 10, color: theme.danger, fontWeight: 700 }}>
+            EXCLUDED ALL DAY
+          </span>
+        )}
+        {/* The count is read straight off the stored override, so a room with
+            slots switched off says so without the grid having to be opened. */}
+        <button
+          type="button"
+          onClick={() => setShowSlots((v) => !v)}
+          style={{
+            padding: '4px 10px',
+            fontSize: 11,
+            fontWeight: 600,
+            borderRadius: 6,
+            cursor: 'pointer',
+            background: 'transparent',
+            border: `1px solid ${offSlots ? theme.warning : theme.border}`,
+            color: offSlots ? theme.warning : theme.accent,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {showSlots ? '▾' : '▸'} Slots
+          {offSlots > 0 ? ` (${offSlots} off)` : ''}
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+          <Toggle
+            value={forenoon}
+            onChange={(v) => handleToggle('forenoon', v)}
+            label="Forenoon"
+          />
+          <Toggle
+            value={afternoon}
+            onChange={(v) => handleToggle('afternoon', v)}
+            label="Afternoon"
+          />
+        </div>
       </div>
+      {/* Mounted only while open, so opening the Rooms tab does not fire one
+          timetable lookup per room — there are dozens of them. */}
+      {showSlots && (
+        <div style={{ borderTop: `1px solid ${theme.border}` }}>
+          <RoomSlotGrid
+            room={room}
+            onChanged={onSlotsChanged}
+            showToast={showToast}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -1699,7 +2099,7 @@ export default function SchedulerPage() {
         <div>
           <SectionHead
             title="Room Participation"
-            sub="All rooms with an active camera are auto-included. Switch each room on for the forenoon (Periods 1–4, starting before 12:30) and the afternoon (lunch onwards, 12:30 or later) independently — turning both off excludes the room all day."
+            sub="All rooms with an active camera are auto-included. Switch each room on for the forenoon (Periods 1–4, starting before 12:30) and the afternoon (lunch onwards, 12:30 or later) independently — turning both off excludes the room all day. Open Slots for a finer cut: the room's week as the timetable has it, with one switch per class."
             color={theme.accent}
           />
           {cameraRooms.length === 0 ? (
@@ -1727,6 +2127,10 @@ export default function SchedulerPage() {
                     override={override}
                     allCamerasInactive={!hasActiveCamera}
                     onSave={upsertRoom}
+                    onSlotsChanged={(includedRooms) =>
+                      setConfig((p) => ({ ...p, includedRooms }))
+                    }
+                    showToast={showToast}
                   />
                 );
               })}

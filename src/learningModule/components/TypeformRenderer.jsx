@@ -47,9 +47,9 @@ function buildSteps(form) {
   return { steps, totalQuestions: flatIndex };
 }
 
-export default function TypeformRenderer({ form, existingResponse, onSubmit, submitting, canUploadFiles, classId, onProgress, isFullscreen }) {
+export default function TypeformRenderer({ form, existingResponse, onSubmit, submitting, canUploadFiles, uploadFiles, classId, onProgress, isFullscreen }) {
   const toast = useToast();
-  const { answers, patch, uploading, handleUpload } = useFormAnswers(form, existingResponse);
+  const { answers, patch, uploading, handleUpload } = useFormAnswers(form, existingResponse, { uploadFiles });
   const { steps, totalQuestions } = useMemo(() => buildSteps(form), [form]);
   const [stepIndex, setStepIndex] = useState(0);
   const lastPinged = useRef(null);

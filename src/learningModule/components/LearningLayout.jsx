@@ -476,9 +476,14 @@ export default function LearningLayout() {
 
   const load = useCallback(async () => {
     try {
-      // Claiming invites first means a student who was added by email before
-      // they had an account lands straight in their classes.
-      await lmApi.claimInvites().catch(() => {});
+      /* Claiming invites is what puts a student who was added by email before
+         they had an account straight into their classes. It used to be awaited
+         *in front of* the three reads below, which cost every load of the module
+         a whole round trip in series — and all but the first load of an
+         account's life has nothing to claim. It now runs alongside them, and the
+         class list is asked again only when it actually claimed something, which
+         is the one case where the first answer could be short a class. */
+      const claiming = lmApi.claimInvites().catch(() => null);
       const [profile, summary, myClasses] = await Promise.all([
         lmApi.me(),
         lmApi.overview(),
@@ -489,6 +494,11 @@ export default function LearningLayout() {
       setMe(profile);
       setOverview(summary);
       setClasses(myClasses);
+
+      const claimed = await claiming;
+      if (claimed?.claimed > 0) {
+        setClasses(await lmApi.listClasses().catch(() => myClasses));
+      }
 
       /* Asked for separately, and only by the handful of accounts that have one
          of these dashboards. It is deliberately not a field on `/me`: that is

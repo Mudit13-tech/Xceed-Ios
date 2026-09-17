@@ -11,7 +11,7 @@ import {
 import { Link as RouterLink, useParams } from 'react-router-dom';
 
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, StatTile, TableSkeleton } from '../components/common';
 import { relativeTime } from '../format';
 
 /**
@@ -116,7 +116,7 @@ export default function LmAdminFacultyClasses() {
     load();
   }, [load]);
 
-  if (loading) return <Loading label="Loading classes..." />;
+  if (loading) return <Loading label="Loading classes..." skeleton={<TableSkeleton rows={6} columns={5} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   const { faculty, classes } = data;

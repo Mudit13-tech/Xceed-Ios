@@ -42,10 +42,15 @@ import PublishQuizModal from '../components/PublishQuizModal';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
 import QuizPreviewModal from '../components/QuizPreviewModal';
 import RichTextEditor from '../components/RichTextEditor';
-import { CopyLinkButton, ErrorState, Loading, SectionCard } from '../components/common';
-import { duplicateOptionIndexes, questionsWithDuplicateOptions } from '../questionRules';
+import { CopyLinkButton, ErrorState, FormSkeleton, Loading, SectionCard } from '../components/common';
+import {
+  duplicateOptionIndexes,
+  questionsWithDuplicateOptions,
+  questionsWithUnreachableImages,
+} from '../questionRules';
 import { toDateTimeInput } from '../format';
 import { LmIcon } from '../components/Icon';
+import DeleteButton from '../components/DeleteButton';
 
 const BLANK_QUESTION = {
   question: '',
@@ -156,9 +161,7 @@ function QuestionCard({ question, index, sections, onChange, onRemove, onDuplica
           <Button size="xs" variant="ghost" onClick={onDuplicate}>
             Duplicate
           </Button>
-          <Button size="xs" variant="ghost" colorScheme="red" onClick={onRemove}>
-            Delete
-          </Button>
+          <DeleteButton size="xs" label="Delete question" onClick={onRemove} />
         </HStack>
       </Flex>
 
@@ -507,7 +510,7 @@ export default function QuizEditor({ mode = 'questions' }) {
     if (wentLive) navigate(`/learning/class/${classId}/quizzes`);
   };
 
-  if (loading) return <Loading />;
+  if (loading) return <Loading label="Loading…" skeleton={<FormSkeleton />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!quiz) return null;
 
@@ -557,6 +560,16 @@ export default function QuizEditor({ mode = 'questions' }) {
   const setSettings = (changes) => set({ settings: { ...quiz.settings, ...changes } });
   const settings = quiz.settings;
   const methodology = methodologyOf(settings);
+
+  /* Questions whose pictures are hosted somewhere this paper's students cannot
+     reach. Only asked of a Safe Exam Browser paper: everywhere else the image
+     loads exactly as intended and a warning would be inventing a rule the
+     browser does not have. `window.location.origin` is what makes an image
+     served from this installation count as reachable — the URL filter admits
+     this host, so it admits its own pictures. */
+  const offOriginImages = settings.requireSafeExamBrowser
+    ? questionsWithUnreachableImages(quiz.questions, window.location.origin)
+    : [];
 
   const addQuestion = () =>
     set({
@@ -1147,7 +1160,9 @@ export default function QuizEditor({ mode = 'questions' }) {
                           />
                           <Text fontSize="xs" color="lmFg.muted">
                             Taken at moments no one can predict, spread across the paper, and stored with
-                            the quiz. 0 turns them off.
+                            the quiz. 0 turns them off — the camera is still watched, and a frame is kept
+                            every few minutes either way; what these add is a picture at a moment nobody
+                            could have arranged for.
                           </Text>
                         </HStack>
                         <Text fontSize="xs" color="lmHue.orange700" pl={6} mt={1}>
@@ -1431,7 +1446,28 @@ export default function QuizEditor({ mode = 'questions' }) {
                         quizId,
                         collaboratorEmails.split(/[\s,;]+/).filter(Boolean),
                       );
-                      toast({ status: 'success', title: `${result.collaborators.length} collaborator(s) set` });
+                      /* Rejections are named rather than left to be noticed.
+                         The server keeps only addresses that resolve to an
+                         account with standing in this class — see
+                         setCollaborators — and an address it drops would
+                         otherwise just vanish from the list with no reason
+                         given, which reads as the save having failed. */
+                      const dropped = result.rejected || [];
+                      toast({
+                        status: dropped.length ? 'warning' : 'success',
+                        duration: dropped.length ? 9000 : undefined,
+                        isClosable: dropped.length > 0,
+                        title: `${result.collaborators.length} collaborator(s) set`,
+                        description: dropped.length
+                          ? `Not added: ${dropped
+                              .map((entry) =>
+                                entry.reason === 'no_account'
+                                  ? `${entry.email} (no account on XCEED)`
+                                  : `${entry.email} (not teaching staff, and not in this class)`,
+                              )
+                              .join('; ')}`
+                          : undefined,
+                      });
                       load();
                     } catch (err) {
                       toast({ status: 'error', title: err.message });
@@ -1495,6 +1531,30 @@ export default function QuizEditor({ mode = 'questions' }) {
           <TabPanels>
             {/* ---------- questions ---------- */}
             <TabPanel px={0}>
+              {/* An image the exam browser will refuse to fetch.
+                  Shown here, beside the questions it names, rather than saved for
+                  the publish that refuses it: the fault is invisible to everyone
+                  who can fix it — the picture loads perfectly in this editor, in
+                  Preview, and for every student sitting in an ordinary browser —
+                  and the only people who see the blank space are in a hall
+                  halfway through the paper. */}
+              {offOriginImages.length > 0 && (
+                <Alert status="warning" borderRadius="md" mb={4} alignItems="flex-start">
+                  <AlertIcon />
+                  <Box fontSize="sm">
+                    <Text fontWeight="600">
+                      Question{offOriginImages.length > 1 ? 's' : ''} {offOriginImages.join(', ')}{' '}
+                      link{offOriginImages.length > 1 ? '' : 's'} to an image on another site
+                    </Text>
+                    <Text fontSize="xs" mt={1}>
+                      This paper requires Safe Exam Browser, which only fetches from this site — so
+                      those pictures would be a blank space for every student sitting in it, while
+                      looking fine to you here. Insert the image with the editor&apos;s image button
+                      instead of linking to it, which embeds it in the question.
+                    </Text>
+                  </Box>
+                </Alert>
+              )}
               {quiz.questions.map((question, index) => (
                 <QuestionCard
                   key={question._id || index}

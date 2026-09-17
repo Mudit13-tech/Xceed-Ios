@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { lazyWithPreload, registerRouteTree } from '../routePreload';
+import { lazyWithPreload, registerRouteTree, warmUpRoutes } from '../routePreload';
 
 // The three shells stay eager: they are on the path to every screen below, so
 // deferring them would only add a second round trip in front of each page. Every
@@ -304,3 +304,18 @@ registerRouteTree(LEARNING_ROUTES, '/learning');
 export default function LearningRoutes() {
   return LEARNING_ROUTES;
 }
+
+// The class tabs where the coursework lives — the ones students and staff move
+// between all day — fetched in the background once the module is open (see
+// useIdleRouteWarmup in App.jsx). Everything else, sidebar pages included, is
+// left to load on hover or click.
+warmUpRoutes([
+  Stream,
+  Material,
+  Quizzes,
+  Notebooks,
+  Shorts,
+  Tutorials,
+  Assignments,
+  Forms,
+]);

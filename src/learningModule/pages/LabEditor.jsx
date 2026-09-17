@@ -22,7 +22,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { ErrorState, Loading, SectionCard } from '../components/common';
+import { ErrorState, FormSkeleton, Loading, SectionCard } from '../components/common';
 import RichTextEditor from '../components/RichTextEditor';
 import CircuitCanvas from '../components/lab/CircuitCanvas';
 import {
@@ -39,6 +39,7 @@ import {
   rotateComponent,
   updateComponent,
 } from '../components/lab/benchOps';
+import DeleteButton from '../components/DeleteButton';
 
 /**
  * Setting up an experiment.
@@ -141,7 +142,7 @@ export default function LabEditor() {
     }
   };
 
-  if (loading) return <Loading label="Loading the experiment…" />;
+  if (loading) return <Loading label="Loading the experiment…" skeleton={<FormSkeleton />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!lab) return null;
 
@@ -625,16 +626,11 @@ export default function LabEditor() {
                     />
                   </Td>
                   <Td px={1}>
-                    <Button
+                    <DeleteButton
                       size="xs"
-                      variant="ghost"
-                      colorScheme="red"
-                      onClick={() =>
-                        set({ readings: lab.readings.filter((_, i) => i !== index) })
-                      }
-                    >
-                      ✕
-                    </Button>
+                      label="Remove reading"
+                      onClick={() => set({ readings: lab.readings.filter((_, i) => i !== index) })}
+                    />
                   </Td>
                 </Tr>
               ))}

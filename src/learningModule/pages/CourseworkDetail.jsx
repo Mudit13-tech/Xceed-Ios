@@ -24,7 +24,7 @@ import { AttachmentList, AttachmentPicker } from '../components/Attachments';
 import CommentThread from '../components/CommentThread';
 import MaterialModal from '../components/MaterialModal';
 import RichText from '../components/RichText';
-import { DueBadge, ErrorState, Loading, SectionCard, StateBadge } from '../components/common';
+import { DueBadge, ErrorState, Loading, SectionCard, SectionCardSkeleton, StateBadge } from '../components/common';
 import { courseworkMeta, formatDateTime } from '../format';
 import { LmIcon } from '../components/Icon';
 
@@ -200,7 +200,7 @@ export default function CourseworkDetail() {
     staleTime: 5 * 60 * 1000,
   });
 
-  if (loading) return <Loading />;
+  if (loading) return <Loading label="Loading…" skeleton={<SectionCardSkeleton lines={4} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!item) return null;
 

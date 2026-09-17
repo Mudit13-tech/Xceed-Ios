@@ -22,7 +22,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import lmApi from '../api/lmApi';
 import { csvFilename, exportCsv } from '../csv';
-import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, StatTile, TableSkeleton } from '../components/common';
 
 /**
  * Subjects & faculty — what the department has been allocated to teach.
@@ -117,7 +117,7 @@ export default function LmHodSubjects({ variant = 'hod' }) {
     [rows, type],
   );
 
-  if (loading) return <Loading label="Loading subjects…" />;
+  if (loading) return <Loading label="Loading subjects…" skeleton={<TableSkeleton rows={6} columns={5} />} />;
   if (error) return <ErrorState error={error} onRetry={() => load(dept, session)} />;
 
   const { filters = {}, totals = {}, faculty = [], scope = {} } = data;

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Box, Text } from '@chakra-ui/react';
 import createDOMPurify from 'dompurify';
 import Markdown from './Markdown';
@@ -127,8 +127,32 @@ purify.addHook('afterSanitizeAttributes', (node) => {
     if (/^data:/i.test(src) && !/^data:image\/(?:png|jpe?g|gif|webp);base64,/i.test(src)) {
       node.removeAttribute('src');
     }
+    /* Something to say when the picture does not arrive.
+     *
+     * An <img> that fails renders as nothing at all — no box, no icon, on most
+     * browsers not even a gap — and in an exam that is the worst possible
+     * failure: a question written *about* a diagram reads as a question with no
+     * diagram, and a student has no way to tell a picture that is missing from
+     * one that was never meant to be there. They answer what they can see, and
+     * nobody finds out until the marks are queried.
+     *
+     * Alt text is the part of this that needs no JavaScript and cannot race the
+     * load, so it is set here; the effect below adds the visible frame. */
+    if (!node.getAttribute('alt')) node.setAttribute('alt', IMAGE_MISSING_LABEL);
   }
 });
+
+/**
+ * What stands in for a picture that did not load.
+ *
+ * Deliberately says the image is missing rather than naming a cause: the causes
+ * are a locked-down browser refusing an off-site address, a connection that
+ * dropped for one request, and a link that has rotted, and a student cannot act
+ * differently on any of them. What they can act on is knowing there is something
+ * they are not seeing — which is the difference between raising a hand and
+ * answering a question they have only half of.
+ */
+const IMAGE_MISSING_LABEL = 'Image could not be loaded — tell your invigilator';
 
 const PROSE_STYLES = {
   p: { mb: 2, lineHeight: 1.7, wordBreak: 'break-word', overflowWrap: 'anywhere' },
@@ -142,6 +166,26 @@ const PROSE_STYLES = {
   strong: { fontWeight: 700 },
   a: { color: 'blue.600', textDecoration: 'underline', wordBreak: 'break-all' },
   img: { maxWidth: '100%', height: 'auto', borderRadius: 'md', my: 2 },
+  /* A picture that did not load, shown as a labelled gap. Without this the alt
+     text sits in the paragraph flow looking like something the teacher wrote. */
+  'img[data-lm-image-failed]': {
+    display: 'block',
+    width: 'fit-content',
+    maxWidth: '100%',
+    minWidth: '14rem',
+    minHeight: '3rem',
+    px: 3,
+    py: 2,
+    my: 2,
+    fontSize: 'xs',
+    fontStyle: 'italic',
+    color: 'lmFg.muted',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: 'lmBorder.base',
+    borderRadius: 'md',
+    bg: 'lmBg.sunken',
+  },
   blockquote: {
     borderLeftWidth: '4px',
     borderColor: 'gray.300',
@@ -193,17 +237,43 @@ const PROSE_STYLES = {
  */
 export default function RichText({ children, fallback = null, markdown = false, ...rest }) {
   const source = String(children ?? '');
+  const hostRef = useRef(null);
 
   const html = useMemo(() => {
     if (!HTML_PATTERN.test(source)) return null;
     return purify.sanitize(source, SANITISE_CONFIG);
   }, [source]);
 
+  /* Mark the images that did not arrive, so the alt text above is shown in
+     something a reader recognises as a gap rather than as a stray line of prose.
+     
+     Both halves matter and the second is the one that is easy to miss: an image
+     may have failed *before* this effect runs — a `data:` src the sanitiser
+     stripped fails immediately, and a cached failure can resolve within the same
+     tick — and an `error` event that has already fired will never fire again. A
+     complete image with no intrinsic width is exactly that case. */
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || html === null) return undefined;
+
+    const images = [...host.querySelectorAll('img')];
+    const mark = (img) => img.setAttribute('data-lm-image-failed', 'true');
+    const onError = (event) => mark(event.target);
+
+    images.forEach((img) => {
+      if (!img.getAttribute('src') || (img.complete && img.naturalWidth === 0)) mark(img);
+      else img.addEventListener('error', onError);
+    });
+
+    return () => images.forEach((img) => img.removeEventListener('error', onError));
+  }, [html]);
+
   if (!source.trim()) return fallback;
 
   if (html !== null) {
     return (
       <Box
+        ref={hostRef}
         className="lm-richtext"
         sx={PROSE_STYLES}
         color="lmFg.body"

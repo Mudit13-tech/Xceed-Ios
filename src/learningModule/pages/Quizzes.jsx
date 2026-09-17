@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link as RouterLink, useNavigate, useOutletContext } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   AlertIcon,
@@ -48,7 +49,7 @@ import AttendanceControl from '../components/attendanceControl';
 import AccessCodeButton from '../components/AccessCodeButton';
 import RoomCodeButton from '../components/RoomCodeButton';
 import ExamCodes from '../components/ExamCodes';
-import { CopyLinkButton, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { CopyLinkButton, EmptyState, ErrorState, Loading, SectionCard, WorkListSkeleton } from '../components/common';
 import PublishQuizModal from '../components/PublishQuizModal';
 import QuizPreviewModal from '../components/QuizPreviewModal';
 import { formatDateTime, relativeTime } from '../format';
@@ -1184,9 +1185,26 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
  */
 export default function Quizzes() {
   const { classId, isTeacher } = useOutletContext();
-  const [quizzes, setQuizzes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  /* Cached and shared, the way every other tab in the class reads its list.
+     This one still fetched from scratch on arrival behind a full-page spinner,
+     so coming back to it after opening a paper meant watching the class's
+     quizzes load again — the one screen staff switch away from and back to most
+     during an exam. */
+  const {
+    data: quizzes = [],
+    isLoading: loading,
+    error,
+    refetch: load,
+  } = useQuery({
+    queryKey: ['learning', 'quizzes', classId],
+    queryFn: () => lmApi.listQuizzes(classId),
+    // Keeps the list on screen through a background refresh, so a revisit shows
+    // yesterday's cards immediately and updates them in place.
+    placeholderData: (prev) => prev,
+    // Short, because the live counts on these cards are read during a sitting.
+    // The live panel and the row's own refresh ask again when they need to.
+    staleTime: 30 * 1000,
+  });
   const [publishing, setPublishing] = useState(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const publishDialog = useDisclosure();
@@ -1195,11 +1213,10 @@ export default function Quizzes() {
   const toast = useToast();
 
   const openPreview = async (quiz) => {
-    if (quiz.questions && Array.isArray(quiz.questions)) {
-      setPreviewQuiz(quiz);
-      previewDialog.onOpen();
-      return;
-    }
+    // Always from the server. The list carries a paper's shape, not its
+    // questions — see WITHOUT_QUESTION_BODIES on the endpoint — so the row in
+    // hand has nothing to preview, and reading its stub questions would have
+    // opened an empty paper.
     try {
       const fullQuiz = await lmApi.getQuiz(classId, quiz._id);
       setPreviewQuiz(fullQuiz);
@@ -1208,21 +1225,6 @@ export default function Quizzes() {
       toast({ status: 'error', title: 'Could not load quiz preview', description: err.message });
     }
   };
-
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setQuizzes(await lmApi.listQuizzes(classId));
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [classId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   // Publishing goes through the dialog — it is where the two clocks are set and
   // where the link comes back. Unpublishing needs neither, so it stays direct.
@@ -1252,7 +1254,10 @@ export default function Quizzes() {
     }
   };
 
-  if (loading) return <Loading label="Loading quizzes…" />;
+  // Only on the very first visit. Afterwards placeholderData keeps the previous
+  // cards up while the refresh runs behind them, so switching to this tab never
+  // flashes a spinner over a list that is already known.
+  if (loading && !quizzes.length) return <Loading label="Loading quizzes…" skeleton={<WorkListSkeleton />} />;
 
   return (
     <Box>

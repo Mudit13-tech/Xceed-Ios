@@ -22,12 +22,15 @@ const listFormResponses = vi.fn();
 const getFormSummary = vi.fn();
 const deleteFormResponse = vi.fn();
 const formResponsesCsvUrl = vi.fn(() => 'https://api.test/classes/c1/forms/f1/responses.csv');
+const formResponsesZipUrl = vi.fn(() => 'https://api.test/classes/c1/forms/f1/responses.zip');
 vi.mock('../api/lmApi', () => ({
   default: {
     listFormResponses: (...a) => listFormResponses(...a),
     getFormSummary: (...a) => getFormSummary(...a),
     deleteFormResponse: (...a) => deleteFormResponse(...a),
     formResponsesCsvUrl: (...a) => formResponsesCsvUrl(...a),
+    formResponsesZipUrl: (...a) => formResponsesZipUrl(...a),
+    attachmentUrl: (attachment) => `https://api.test${attachment.url}`,
   },
 }));
 
@@ -69,6 +72,13 @@ it('shows the CSV export link pointing at the form', async () => {
   expect(link).toHaveAttribute('href', 'https://api.test/classes/c1/forms/f1/responses.csv');
 });
 
+it('offers every response, files included, as one zip', async () => {
+  await open();
+  const link = screen.getByRole('link', { name: /download all \(zip\)/i });
+  expect(link).toHaveAttribute('href', 'https://api.test/classes/c1/forms/f1/responses.zip');
+  expect(formResponsesZipUrl).toHaveBeenCalledWith('c1', 'f1');
+});
+
 it('renders the per-option counts in the summary tab', async () => {
   await open();
   // Chakra keeps every TabPanel mounted (just hidden), and the same question
@@ -92,6 +102,30 @@ describe('individual responses', () => {
     const responsesPanel = within((await screen.findAllByRole('tabpanel'))[0]);
     fireEvent.click(await responsesPanel.findByText('Asha'));
     expect(await responsesPanel.findByText('Circuits')).toBeInTheDocument();
+  });
+
+  it('links each uploaded file so the teacher can open it', async () => {
+    listFormResponses.mockResolvedValue({
+      form: {
+        ...form,
+        questions: [...form.questions, { _id: 'q2', type: 'file_upload', title: 'Your report' }],
+      },
+      responses: [
+        response({
+          answers: [
+            { questionId: 'q1', selectedOptions: ['Circuits'] },
+            { questionId: 'q2', attachments: [{ name: 'report.pdf', url: '/uploads/lm/report.pdf', sizeBytes: 2048 }] },
+          ],
+        }),
+      ],
+    });
+    await open();
+    fireEvent.click(screen.getByRole('tab', { name: /individual responses/i }));
+    const responsesPanel = within((await screen.findAllByRole('tabpanel'))[0]);
+    fireEvent.click(await responsesPanel.findByText('Asha'));
+    const link = await responsesPanel.findByRole('link', { name: /report\.pdf/i });
+    expect(link).toHaveAttribute('href', 'https://api.test/uploads/lm/report.pdf');
+    expect(responsesPanel.getByRole('button', { name: /download report\.pdf/i })).toBeInTheDocument();
   });
 
   it('deletes a response after confirmation and reloads the list', async () => {

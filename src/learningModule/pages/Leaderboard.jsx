@@ -28,7 +28,7 @@ import {
 } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
-import { buttonTextStyles, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { buttonTextStyles, EmptyState, ErrorState, Loading, SectionCard, StatRowSkeleton, TableSkeleton } from '../components/common';
 import { formatDate } from '../format';
 import { LmIcon } from '../components/Icon';
 
@@ -231,7 +231,7 @@ function StudentPoints({ classId, student, onClose }) {
           {error ? (
             <ErrorState error={error} />
           ) : isLoading || !data ? (
-            <Loading label="Adding it up…" />
+            <Loading label="Adding it up…" minH="120px" skeleton={<TableSkeleton rows={3} columns={3} title={false} />} />
           ) : (
             <VStack align="stretch" spacing={5}>
               <SimpleGrid columns={3} spacing={3}>
@@ -592,7 +592,7 @@ export default function Leaderboard() {
     await Promise.all([loadWeek(), loadClass(), loadFull()]);
   }, [loadWeek, loadClass, loadFull]);
 
-  if (loading) return <Loading label="Counting up…" />;
+  if (loading) return <Loading label="Counting up…" skeleton={<><StatRowSkeleton count={4} /><Box mt={4}><TableSkeleton rows={8} columns={4} /></Box></>} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   // Staff earn nothing and appear on neither table, so showing them "where you

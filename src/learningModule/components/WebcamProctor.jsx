@@ -49,13 +49,43 @@ const BLOCKED_WHY = {
 };
 const RETRY_STEADY_MS = 15000;
 
+/**
+ * How often the watch looks, and how often it keeps what it saw.
+ *
+ * Two minutes rather than twenty seconds. The check is the most frequent
+ * request a sitting makes — more frequent than the heartbeat beside it, which
+ * the server deliberately keeps thin — and on a slow uplink the ones carrying a
+ * picture compete with the student's own answer for the connection. Six checks
+ * an hour instead of a hundred and eighty is the same watch at a fraction of
+ * the traffic: what it is looking for (an empty chair, a second face, a covered
+ * camera) does not resolve in twenty seconds, so nothing it can actually catch
+ * is caught by asking more often.
+ *
+ * `reviewEveryTicks` is counted in those ticks, so a kept frame lands every ten
+ * minutes. That is chosen against `WEBCAM_THUMBNAIL_CAP` on the server, which
+ * keeps the last eight: an ordinary hour-long paper produces the opening frame
+ * plus six, which fits without evicting anything.
+ */
 export default function WebcamProctor({
   active,
   onReport,
-  intervalMs = 20000,
-  reviewEveryTicks = 9,
+  intervalMs = 120000,
+  reviewEveryTicks = 5,
   snapshotCount = 0,
   snapshotWindowMs = 0,
+  /**
+   * Whether the student's own answer is on the wire right now.
+   *
+   * A picture is the only report this component sends that is big enough to
+   * matter, and a student on a slow uplink pressing Next while one is going out
+   * waits for it — the browser has a handful of connections and one upstream,
+   * and a few kilobytes of JPEG ahead of the answer is a few hundred
+   * milliseconds of nothing happening on screen. So a frame that comes due
+   * while an answer is in flight is *deferred* rather than skipped: the paper
+   * gets the connection, and the picture is taken on the next tick. Evidence is
+   * delayed by minutes at worst, and never lost.
+   */
+  isBusy,
 }) {
   const videoRef = useRef(null);
   const reportRef = useRef(onReport);
@@ -65,6 +95,10 @@ export default function WebcamProctor({
      `detectionAvailable`, and a snapshot sent with a bare `false` would tell the
      server a browser that *can* detect faces cannot. */
   const detectionRef = useRef(false);
+  // Read inside the tick rather than depended on, so a paper that re-renders
+  // once a second does not tear down and rebuild the interval.
+  const busyRef = useRef(isBusy);
+  busyRef.current = isBusy;
   /* What the corner is showing: 'starting' until a frame is flowing, 'live'
      once it is, 'blocked' when the camera could not be opened.
 
@@ -96,6 +130,10 @@ export default function WebcamProctor({
     let ticks = 0;
     let attempts = 0;
     let reportedBlocked = false;
+    // A periodic frame that has come due but not yet been taken, because the
+    // student was saving an answer when its tick arrived. Deferred, not
+    // dropped — it goes out on the next tick that finds the wire free.
+    let reviewDue = false;
 
     const report = (payload) => {
       try {
@@ -191,23 +229,37 @@ export default function WebcamProctor({
         }
         ticks += 1;
         const count = await detect();
-        if (detector.available) {
-          const flagged = count === 0 || count > 1;
-          report({
-            faceCount: count,
-            detectionAvailable: true,
-            image: flagged ? captureThumbnail(videoRef.current) || undefined : undefined,
-          });
-        } else {
-          // No browser detection: send only the odd frame for a human to read,
-          // never a guessed flag — and infrequently, so it stays cheap.
-          const keep = ticks % reviewEveryTicks === 0;
-          report({
-            faceCount: null,
-            detectionAvailable: false,
-            ...(keep ? { type: 'review', image: captureThumbnail(videoRef.current) || undefined } : {}),
-          });
-        }
+
+        /* A frame the detector itself objects to: an empty chair, or a second
+           face. Only where the browser can actually tell — a guess is never
+           reported as a flag. */
+        const flagged = detector.available && (count === 0 || count > 1);
+
+        /* The periodic frame for a human to read, now kept on *every* browser
+           rather than only where detection is missing.
+
+           It used to be the fallback for a browser that could not detect faces,
+           because a sitting's routine record came from the random snapshots
+           instead. With those off, a well-behaved student on a browser that
+           *can* detect faces would leave exactly one picture for the whole
+           paper — the opening frame — and nothing at all showing they were
+           still the person in the chair an hour later. The periodic frame is
+           that record now, so it has to run everywhere. */
+        if (!flagged && ticks % reviewEveryTicks === 0) reviewDue = true;
+
+        // Held over while the student's own answer is on the wire; see `isBusy`.
+        const keepReview = reviewDue && !busyRef.current?.();
+        if (keepReview) reviewDue = false;
+
+        report({
+          faceCount: detector.available ? count : null,
+          detectionAvailable: detector.available,
+          // A flagged frame is labelled by the server from what was seen; only
+          // the periodic one names itself.
+          ...(keepReview && !flagged ? { type: 'review' } : {}),
+          image:
+            flagged || keepReview ? captureThumbnail(videoRef.current) || undefined : undefined,
+        });
       };
 
       timer = setInterval(tick, intervalMs);
@@ -250,12 +302,30 @@ export default function WebcamProctor({
     const timers = [];
     let cancelled = false;
 
-    const take = (tries = 0) => {
+    const take = (tries = 0, held = 0) => {
       if (cancelled) return;
+
+      /* Held over while the student's own answer is on the wire.
+
+         This is the largest thing a sitting uploads — 480px and lightly
+         compressed, because a face that has to be *recognised* is worth the
+         pixels — so on a slow uplink it is the one report an answer would
+         genuinely queue behind, which the student feels as the paper hanging
+         after pressing Next. Waiting a few seconds costs the record nothing:
+         the moment is still one nobody could have arranged for, which is the
+         only property that matters here. Counted separately from `tries` so a
+         student answering steadily cannot spend the retries meant for a camera
+         that has not started, and bounded so a permanently busy page still
+         eventually takes its picture rather than silently taking none. */
+      if (held < 6 && busyRef.current?.()) {
+        timers.push(setTimeout(() => take(tries, held + 1), 3000));
+        return;
+      }
+
       const image = captureThumbnail(videoRef.current, { maxWidth: 480, quality: 0.6 });
       if (!image) {
         // No frame yet. Try again shortly, a handful of times, then let it go.
-        if (tries < 5) timers.push(setTimeout(() => take(tries + 1), 6000));
+        if (tries < 5) timers.push(setTimeout(() => take(tries + 1, held), 6000));
         return;
       }
       try {

@@ -19,7 +19,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, StatRowSkeleton, StatTile, ThreadListSkeleton } from '../components/common';
 import { LmIcon } from '../components/Icon';
 import { formatDate, formatDateTime, relativeTime } from '../format';
 
@@ -90,7 +90,7 @@ export default function Feedback() {
     load();
   }, [load]);
 
-  if (loading) return <Loading label="Opening the feedback box…" />;
+  if (loading) return <Loading label="Opening the feedback box…" skeleton={<><StatRowSkeleton count={4} /><Box mt={4}><ThreadListSkeleton count={4} header={false} /></Box></>} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!data) return null;
 

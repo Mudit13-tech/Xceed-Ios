@@ -17,7 +17,7 @@ import {
   useColorModeValue,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading } from '../components/common';
+import { EmptyState, ErrorState, Loading, TableSkeleton } from '../components/common';
 
 function GradebookGrid({ classId, isTeacher }) {
   const [data, setData] = useState(null);
@@ -50,7 +50,7 @@ function GradebookGrid({ classId, isTeacher }) {
     load();
   }, [load]);
 
-  if (loading) return <Loading label="Building the gradebook…" />;
+  if (loading) return <Loading label="Building the gradebook…" skeleton={<TableSkeleton rows={8} columns={6} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!data?.coursework?.length) {
     return <EmptyState icon="grades" title="No graded work yet" description="Assignments and quizzes appear here once they are assigned." />;

@@ -13,7 +13,6 @@ import {
   IconButton,
   Input,
   SimpleGrid,
-  Spinner,
   Text,
   Textarea,
   VStack,
@@ -23,7 +22,7 @@ import {
 import { FiArrowDown, FiArrowUp } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
-import { ErrorState, Loading } from '../components/common';
+import { BusyDots, ErrorState, Loading, SectionCardSkeleton } from '../components/common';
 import RichText from '../components/RichText';
 import ShortResults from '../components/ShortResults';
 import StageBar from '../components/StageBar';
@@ -101,7 +100,7 @@ function TitleCard({ state, cardBg }) {
       </HStack>
 
       <HStack justify="center" spacing={3} mt={8}>
-        <Spinner size="sm" speed="0.9s" color="purple.400" />
+        <BusyDots color="purple.400" label="Waiting for the faculty" />
         <Text fontWeight="600">
           {first ? 'Waiting for your faculty to launch the short…' : 'Waiting for the next question…'}
         </Text>
@@ -352,7 +351,7 @@ export default function ShortPlay() {
   if (!state) {
     return (
       <PlayShell>
-        <Loading label="Joining…" />
+        <Loading label="Joining…" skeleton={<SectionCardSkeleton lines={4} />} />
       </PlayShell>
     );
   }

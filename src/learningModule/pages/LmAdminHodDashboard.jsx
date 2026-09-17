@@ -21,7 +21,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import lmApi from '../api/lmApi';
 import { csvFilename, exportCsv } from '../csv';
-import { EmptyState, ErrorState, Loading, SectionCard, StatTile, StatTileSkeleton } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, StatTile, StatTileSkeleton, TableSkeleton } from '../components/common';
 import {
   ActivityTrendChart,
   DonutChart,
@@ -374,7 +374,7 @@ export default function LmAdminHodDashboard({ variant = 'hod' }) {
           <StatTileSkeleton />
           <StatTileSkeleton />
         </SimpleGrid>
-        <Loading label={config.loadingLabel} minH="120px" />
+        <Loading label={config.loadingLabel} minH="120px" skeleton={<TableSkeleton rows={4} columns={4} title={false} />} />
       </VStack>
     );
   }

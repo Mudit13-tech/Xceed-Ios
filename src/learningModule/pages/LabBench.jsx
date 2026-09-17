@@ -22,7 +22,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { ErrorState, Loading, SectionCard } from '../components/common';
+import { ErrorState, Loading, SectionCard, SectionCardSkeleton } from '../components/common';
 import CircuitCanvas from '../components/lab/CircuitCanvas';
 import {
   ChipReadings,
@@ -281,7 +281,7 @@ export default function LabBench() {
     setSelectedId((current) => (current === id ? null : current));
   };
 
-  if (loading) return <Loading label="Setting up the bench…" />;
+  if (loading) return <Loading label="Setting up the bench…" skeleton={<SectionCardSkeleton lines={4} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!lab) return null;
 

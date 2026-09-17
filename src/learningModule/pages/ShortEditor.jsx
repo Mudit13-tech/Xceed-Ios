@@ -30,12 +30,14 @@ import {
 import { FiArrowDown, FiArrowUp, FiCopy, FiTrash2 } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
-import { ErrorState, Loading, SectionCard } from '../components/common';
+import { ErrorState, FormSkeleton, Loading, SectionCard } from '../components/common';
 import RichTextEditor from '../components/RichTextEditor';
 import { isRichTextEmpty } from '../richTextUtils';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
 import { Link as RouterLink } from 'react-router-dom';
 import { LmIcon } from '../components/Icon';
+import AutosaveStatus from '../components/AutosaveStatus';
+import useEditorAutosave from '../hooks/useEditorAutosave';
 
 /**
  * Authoring surface for a Short.
@@ -603,6 +605,26 @@ export default function ShortEditor() {
 
   const problems = useMemo(() => validate(slides), [slides]);
 
+  // The deck exactly as the server wants it. Shared by the Save button and the
+  // autosave, so the two can never drift into sending different documents.
+  const payload = useMemo(
+    () =>
+      short && {
+        title: short.title,
+        description: short.description,
+        settings: short.settings,
+        slides: slides.map((slide, order) => ({
+          ...slide,
+          _key: undefined,
+          order,
+          // Blank means "no key", which the server stores as null. Sending '' as
+          // a number would coerce to 0 and mark 0 as the correct answer.
+          correctNumber: slide.correctNumber === '' ? null : Number(slide.correctNumber),
+        })),
+      },
+    [short, slides],
+  );
+
   const patchSlide = (index, patch) =>
     setSlides((current) => current.map((slide, i) => (i === index ? { ...slide, ...patch } : slide)));
 
@@ -620,27 +642,17 @@ export default function ShortEditor() {
    *   starts straight after the save; the class is notified in-app only.
    * @returns {Promise<boolean>} whether the deck actually reached the server.
    */
-  const save = async ({ thenPresent = false } = {}) => {
+  const save = async ({ thenPresent = false, quiet = false } = {}) => {
     if (problems.length) {
-      toast({ status: 'warning', title: problems[0] });
+      if (!quiet) toast({ status: 'warning', title: problems[0] });
       return false;
     }
-    setSaving(true);
+    if (!quiet) setSaving(true);
     setServerProblems([]);
     try {
-      await lmApi.updateShort(classId, shortId, {
-        title: short.title,
-        description: short.description,
-        settings: short.settings,
-        slides: slides.map((slide, order) => ({
-          ...slide,
-          _key: undefined,
-          order,
-          // Blank means "no key", which the server stores as null. Sending '' as
-          // a number would coerce to 0 and mark 0 as the correct answer.
-          correctNumber: slide.correctNumber === '' ? null : Number(slide.correctNumber),
-        })),
-      });
+      await lmApi.updateShort(classId, shortId, payload);
+      if (quiet) return true;
+      autosave.markSaved();
       toast({ status: 'success', title: 'Saved' });
 
       if (thenPresent) {
@@ -656,15 +668,25 @@ export default function ShortEditor() {
       await load();
       return true;
     } catch (err) {
+      if (quiet) throw err;
       setServerProblems(err.payload?.errors || [err.message]);
       toast({ status: 'error', title: err.message });
       return false;
     } finally {
-      setSaving(false);
+      if (!quiet) setSaving(false);
     }
   };
 
-  if (loading) return <Loading label="Loading short…" />;
+  /* A short has no published state — it is shown live from a session rather
+     than handed out — so there is nothing here to pause for. Only a deck that
+     would fail validation is held back, and the banner already says why. */
+  const autosave = useEditorAutosave({
+    payload,
+    active: !loading && !error && !problems.length,
+    save: () => save({ quiet: true }),
+  });
+
+  if (loading) return <Loading label="Loading short…" skeleton={<FormSkeleton />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   const setSetting = (key, value) =>
@@ -673,9 +695,12 @@ export default function ShortEditor() {
   return (
     <VStack align="stretch" spacing={5}>
       <Flex gap={3} wrap="wrap" align="center">
-        <Heading size="md" flex="1">
+        <Heading size="md">
           Edit short
         </Heading>
+        <Box flex="1">
+          <AutosaveStatus {...autosave} />
+        </Box>
         <Button size="sm" variant="ghost" onClick={() => navigate(`/learning/class/${classId}/shorts`)}>
           Back
         </Button>

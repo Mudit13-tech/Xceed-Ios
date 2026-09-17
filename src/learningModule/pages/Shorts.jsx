@@ -25,6 +25,7 @@ import { useQuery } from '@tanstack/react-query';
 import { EmptyState, ErrorState, Loading, SectionCard, ShortsListSkeleton } from '../components/common';
 import { relativeTime } from '../format';
 import { LmIcon } from '../components/Icon';
+import DeleteButton from '../components/DeleteButton';
 
 /**
  * The class's Shorts — decks of instant questions run live from the front of the
@@ -331,9 +332,7 @@ export default function Shorts() {
                     >
                       Reports
                     </Button>
-                    <Button size="sm" variant="ghost" colorScheme="red" onClick={() => remove(short)}>
-                      Delete
-                    </Button>
+                    <DeleteButton label="Delete short" onClick={() => remove(short)} />
                   </HStack>
                 ) : (
                   short.liveSession ? (

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Box, Button, Divider, Flex, Heading, Text, useDisclosure } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading } from '../components/common';
+import { EmptyState, ErrorState, Loading, WorkListSkeleton } from '../components/common';
 import FormCard from '../components/FormCard';
 import FormPreviewModal from '../components/FormPreviewModal';
 import { LmIcon } from '../components/Icon';
@@ -59,7 +59,7 @@ export default function Forms() {
     }
   };
 
-  if (loading) return <Loading label="Loading forms…" />;
+  if (loading) return <Loading label="Loading forms…" skeleton={<WorkListSkeleton />} />;
 
   const groups = CATEGORY_GROUPS.map((group) => ({
     ...group,

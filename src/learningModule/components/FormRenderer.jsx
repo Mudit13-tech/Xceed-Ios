@@ -12,11 +12,9 @@ import { buildAnswerPayload, isMissing, QuestionField, useFormAnswers } from './
  *
  * Shared between the class-scoped fill page and the public link-mode page —
  * both need identical question rendering, and only differ in how the form
- * and the submit call are fetched. `canUploadFiles` is false in link mode: the
- * shared attachment endpoint sits behind class membership (`loadClass`), which
- * a signed-out link guest does not have, so a file-upload question is shown
- * read-only there rather than pretending to accept a file that would 403 —
- * and is not held against the respondent when it is required (see isAnswered).
+ * and the submit call are fetched. Link mode passes `uploadFiles`, because the
+ * class-scoped attachment endpoint sits behind class membership (`loadClass`),
+ * which a link guest does not have — see useFormAnswers.
  */
 
 function QuestionCardField({ question, answer, patch, classId, canUploadFiles, uploading, handleUpload, isFullscreen }) {
@@ -46,9 +44,9 @@ function QuestionCardField({ question, answer, patch, classId, canUploadFiles, u
   );
 }
 
-export default function FormRenderer({ form, existingResponse, onSubmit, submitting, canUploadFiles, classId, isFullscreen }) {
+export default function FormRenderer({ form, existingResponse, onSubmit, submitting, canUploadFiles, uploadFiles, classId, isFullscreen }) {
   const toast = useToast();
-  const { answers, patch, uploading, handleUpload } = useFormAnswers(form, existingResponse);
+  const { answers, patch, uploading, handleUpload } = useFormAnswers(form, existingResponse, { uploadFiles });
 
   const submit = async () => {
     const missing = form.questions.find((question) =>

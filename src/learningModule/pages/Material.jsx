@@ -93,7 +93,7 @@ function MaterialRow({ item, classId, isTeacher, onChanged, onEdit }) {
               <MenuItem {...buttonTextStyles} onClick={() => onEdit(item)}>
                 Edit
               </MenuItem>
-              <MenuItem color="red.600" onClick={remove}>
+              <MenuItem color="red.600" icon={<LmIcon name="delete" size={15} />} onClick={remove}>
                 Delete
               </MenuItem>
             </MenuList>

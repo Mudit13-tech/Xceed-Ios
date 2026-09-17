@@ -40,10 +40,11 @@ import {
 import lmApi from '../api/lmApi';
 import Markdown from '../components/Markdown';
 import RichTextEditor from '../components/RichTextEditor';
-import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { EmptyState, ErrorState, FormSkeleton, Loading, SectionCard, SectionCardSkeleton, WorkListSkeleton } from '../components/common';
 import { formatDate, relativeTime } from '../format';
 import { duplicateOptionIndexes } from '../questionRules';
 import { LmIcon } from '../components/Icon';
+import DeleteButton from '../components/DeleteButton';
 
 const prettySize = (bytes) => (bytes ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : '');
 
@@ -315,7 +316,7 @@ function NewSessionModal({ isOpen, onClose, classId, onCreated }) {
                   </Alert>
                 )}
                 {recordings === null ? (
-                  <Loading minH="120px" label="Fetching recordings…" />
+                  <Loading minH="120px" label="Fetching recordings…" skeleton={<SectionCardSkeleton lines={3} title={false} />} />
                 ) : recordings.length === 0 ? (
                   <EmptyState
                     icon="audio"
@@ -419,9 +420,7 @@ function QuestionEditor({ question, index, onChange, onRemove }) {
             onChange={(e) => set('marks', Number(e.target.value) || 1)}
             aria-label="Marks"
           />
-          <Button size="xs" variant="ghost" colorScheme="red" onClick={onRemove}>
-            <LmIcon name="close" size={13} />
-          </Button>
+          <DeleteButton size="xs" label="Remove question" onClick={onRemove} />
         </HStack>
       </Flex>
 
@@ -592,7 +591,7 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
     }
   };
 
-  if (loading) return <Loading label="Loading session…" />;
+  if (loading) return <Loading label="Loading session…" skeleton={<FormSkeleton fields={3} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!session) return null;
 
@@ -624,6 +623,7 @@ function SessionWorkspace({ classId, sessionId, topics, onChanged, onClose }) {
           size="sm"
           variant="outline"
           colorScheme="red"
+          leftIcon={<LmIcon name="delete" size={15} />}
           onClick={async () => {
             // eslint-disable-next-line no-alert
             if (!window.confirm('Delete this session and everything generated from it?')) return;
@@ -1152,7 +1152,7 @@ function StudentLibrary({ classId }) {
       .finally(() => setLoading(false));
   }, [classId]);
 
-  if (loading) return <Loading />;
+  if (loading) return <Loading label="Loading…" skeleton={<SectionCardSkeleton lines={4} />} />;
   if (!sessions.length) {
     return (
       <EmptyState
@@ -1230,7 +1230,7 @@ export default function AiStudio() {
   }, [load]);
 
   if (!isTeacher) return <StudentLibrary classId={classId} />;
-  if (loading) return <Loading label="Opening AI Studio…" />;
+  if (loading) return <Loading label="Opening AI Studio…" skeleton={<WorkListSkeleton count={4} />} />;
 
   if (activeId) {
     return (
