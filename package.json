@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "deploy:ota": "node scripts/deploy-ota.cjs",
+    "ota:manual": "powershell -NoProfile -ExecutionPolicy Bypass -File ./manual-ota-update.ps1",
     "drift": "node build/amsDrift.mjs",
     "setup:git": "node build/gitMergeSetup.mjs",
     "prepare": "node build/gitMergeSetup.mjs",
