@@ -343,11 +343,28 @@ $refs = @('main')
 
 & git show-ref --verify --quiet refs/heads/ams-update
 if ($LASTEXITCODE -eq 0) {
-    & git fetch origin ams-update:ams-update 2>&1 | Out-Null
-    if ($LASTEXITCODE -eq 0) {
+    # Read the relationship before acting on it. `git fetch origin
+    # ams-update:ams-update` fails on a branch that is *ahead* of origin exactly
+    # as it does on one that has forked - updating it would be a rewind - so
+    # treating a failed fetch as "forked" would skip pushing ams-update in the
+    # one case it most has to be pushed: straight after a local sync, when the
+    # "Automated AMS Sync" commit exists nowhere else.
+    $amsCounts = (& git rev-list --left-right --count ams-update...origin/ams-update) -split '\s+'
+    $amsAhead = [int]$amsCounts[0]
+    $amsBehind = [int]$amsCounts[1]
+
+    if ($amsBehind -eq 0) {
         $refs += 'ams-update'
+    } elseif ($amsAhead -eq 0) {
+        & git fetch origin ams-update:ams-update 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Note "Fast-forwarded local ams-update to origin's ($amsBehind commit(s))."
+            $refs += 'ams-update'
+        } else {
+            Write-Warn "Could not fast-forward ams-update - pushing main only."
+        }
     } else {
-        Write-Warn "Local ams-update could not be fast-forwarded to origin's - the two have forked."
+        Write-Warn "Local ams-update has forked from origin's ($amsAhead ahead, $amsBehind behind)."
         Write-Warn "Pushing main only. Reconcile it with a merge, never a force:"
         Write-Host "      git checkout ams-update; git merge origin/ams-update" -ForegroundColor Cyan
         Write-Host "      git checkout main; git merge ams-update" -ForegroundColor Cyan
