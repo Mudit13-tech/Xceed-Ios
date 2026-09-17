@@ -51,6 +51,19 @@ export {
   lazyWithPreload,
   registerRouteTree,
   preloadPath,
+  /* The background warm-up, taken from upstream unchanged — and worth saying
+     why, because "fetches pages nobody opened" is the thing the rest of this
+     file exists to stop. It is the bounded opposite of what pointerover was
+     doing: a fixed list a module queues only once someone has actually opened
+     that module (the eight class tabs, in LearningRoutes.jsx), started 3s after
+     load, three at a time on idle callbacks, and skipped outright on saveData
+     and 2G. On a phone those tabs are the next tap, not a link a finger swept
+     past mid-scroll. An override that dropped these would also have to be a
+     no-op re-export, since App.jsx and LearningRoutes.jsx both call them — a
+     silent behaviour fork carried forever, bought against a cost this shape
+     does not have. */
+  warmUpRoutes,
+  useIdleRouteWarmup,
   __resetPreloadRegistry,
 } from './routePreload';
 
