@@ -142,8 +142,9 @@ describe('a reopened sitting in the student quiz list', () => {
 
     renderWithProviders(<Quizzes />);
 
-    await waitFor(() => expect(listQuizzes).toHaveBeenCalled());
+    // On the rendered row rather than on the call: the list is a cached query
+    // now, so the fetch resolving and the cards being on screen are two ticks.
+    expect(await screen.findByText(/^Completed$/)).toBeTruthy();
     expect(screen.queryByRole('link', { name: /resume test/i })).toBeNull();
-    expect(screen.getByText(/^Completed$/)).toBeTruthy();
   });
 });

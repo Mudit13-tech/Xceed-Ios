@@ -37,7 +37,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { ErrorState, Loading, SectionCard } from '../components/common';
+import { ErrorState, FormSkeleton, Loading, SectionCard } from '../components/common';
 import RichText from '../components/RichText';
 import RichTextEditor from '../components/RichTextEditor';
 import Equation from '../components/Equation';
@@ -45,9 +45,12 @@ import TableBuilderModal from '../components/TableBuilderModal';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
 import { formatAnswerValue, toDateTimeInput } from '../format';
 import { LmIcon } from '../components/Icon';
+import AutosaveStatus from '../components/AutosaveStatus';
+import useEditorAutosave from '../hooks/useEditorAutosave';
 import { AddQuestionMenu, FixedQuestionFields } from '../components/QuestionTypeFields';
 import QuestionTypeBadge from '../components/QuestionTypeBadge';
 import { QUESTION_TYPES, isFixedType, questionMarks, withType } from '../questionTypes';
+import DeleteButton from '../components/DeleteButton';
 
 // Integer by default: a question asking for "a 7 Ω resistor" is the common
 // case, and a teacher who wants decimals says so, rather than having to turn
@@ -202,9 +205,7 @@ function VariableRow({ variable, onChange, onRemove }) {
         </FormLabel>
         <Input size="sm" value={variable.unit} placeholder="Ω" onChange={(e) => set('unit', e.target.value)} />
       </FormControl>
-      <Button size="sm" variant="ghost" colorScheme="red" onClick={onRemove}>
-        ✕
-      </Button>
+      <DeleteButton label="Remove variable" onClick={onRemove} />
     </Flex>
   );
 }
@@ -308,9 +309,7 @@ function AnswerRow({ classId, answer, variableNames, onChange, onRemove }) {
           </FormLabel>
           <Input size="sm" type="number" value={answer.marks} onChange={(e) => set('marks', Number(e.target.value))} />
         </FormControl>
-        <Button size="sm" variant="ghost" colorScheme="red" onClick={onRemove}>
-          ✕
-        </Button>
+        <DeleteButton label="Remove answer" onClick={onRemove} />
       </Flex>
       {check.error && (
         <Text fontSize="xs" color="red.600" mt={2}>
@@ -402,9 +401,7 @@ function ConstraintRow({ classId, constraint, variableNames, index, onChange, on
           isInvalid={Boolean(check.error)}
           onChange={(event) => onChange(event.target.value)}
         />
-        <Button size="sm" variant="ghost" colorScheme="red" onClick={onRemove}>
-          ✕
-        </Button>
+        <DeleteButton label="Remove constraint" onClick={onRemove} />
       </Flex>
       {check.error && (
         <Text fontSize="xs" color="red.600" mt={1} ml="26px">
@@ -660,9 +657,7 @@ function SolutionVariableRow({ variable, onChange, onRemove }) {
         </FormLabel>
         <Input size="sm" value={variable.unit} placeholder="kVA" onChange={(e) => set('unit', e.target.value)} />
       </FormControl>
-      <Button size="sm" variant="ghost" colorScheme="red" onClick={onRemove}>
-        ✕
-      </Button>
+      <DeleteButton label="Remove variable" onClick={onRemove} />
     </Flex>
   );
 }
@@ -845,9 +840,7 @@ function QuestionCard({ classId, tutorialId, question, index, onChange, onRemove
             <option value="medium">Medium</option>
             <option value="hard">Hard</option>
           </Select>
-          <Button size="sm" variant="ghost" colorScheme="red" onClick={onRemove}>
-            Delete
-          </Button>
+          <DeleteButton label="Delete question" onClick={onRemove} />
         </HStack>
       </Flex>
 
@@ -933,9 +926,7 @@ function QuestionCard({ classId, tutorialId, question, index, onChange, onRemove
             <Button size="xs" variant="outline" onClick={() => setTableEdit({ key: table.key })}>
               Edit table
             </Button>
-            <Button size="xs" variant="ghost" colorScheme="red" onClick={() => removeTable(table.key)}>
-              Delete
-            </Button>
+            <DeleteButton size="xs" label="Delete table" onClick={() => removeTable(table.key)} />
           </Flex>
 
           <Box bg="lmBg.card" borderRadius="md">
@@ -1081,16 +1072,11 @@ function QuestionCard({ classId, tutorialId, question, index, onChange, onRemove
                 }
               />
             </HStack>
-            <Button
+            <DeleteButton
               size="xs"
-              variant="ghost"
-              colorScheme="red"
-              onClick={() =>
-                set('parts', question.parts.filter((_, i) => i !== partIndex))
-              }
-            >
-              Remove part
-            </Button>
+              label="Remove part"
+              onClick={() => set('parts', question.parts.filter((_, i) => i !== partIndex))}
+            />
           </Flex>
 
           <FormControl mb={2}>
@@ -1361,6 +1347,17 @@ export default function TutorialEditor() {
   const tutorialRef = useRef(tutorial);
   tutorialRef.current = tutorial;
 
+  /** The tutorial exactly as the server wants it. */
+  const toPayload = (doc) => ({
+    title: doc.title,
+    description: doc.description,
+    topicId: doc.topicId,
+    questions: doc.questions,
+    settings: doc.settings,
+  });
+
+  const payload = useMemo(() => tutorial && toPayload(tutorial), [tutorial]);
+
   /**
    * Pushes a corrected question through to every paper already issued.
    *
@@ -1416,22 +1413,22 @@ export default function TutorialEditor() {
     setOpenQuestion(tutorial.questions.length);
   };
 
-  const save = async () => {
+  const save = async ({ quiet = false } = {}) => {
     const current = tutorialRef.current;
     if (!current) return false;
-    setSaving(true);
+    if (!quiet) setSaving(true);
     try {
-      await lmApi.updateTutorial(classId, tutorialId, {
-        title: current.title,
-        description: current.description,
-        topicId: current.topicId,
-        questions: current.questions,
-        settings: current.settings,
-      });
+      await lmApi.updateTutorial(classId, tutorialId, toPayload(current));
+      // Adopting the server's copy replaces everything on screen, which is fine
+      // when a teacher pressed Save and is watching, and is not fine thirty
+      // seconds after they stopped typing.
+      if (quiet) return true;
+      autosave.markSaved();
       toast({ status: 'success', title: 'Tutorial saved' });
       await load();
       return true;
     } catch (err) {
+      if (quiet) throw err;
       toast({
         status: 'error',
         title: err.message,
@@ -1440,9 +1437,18 @@ export default function TutorialEditor() {
       });
       return false;
     } finally {
-      setSaving(false);
+      if (!quiet) setSaving(false);
     }
   };
+
+  /* Paused once published: students can be part-way through, and an edit
+     reaching them thirty seconds after it was typed is not something anyone
+     asked for. Save still works, and so does the publish that precedes it. */
+  const autosave = useEditorAutosave({
+    payload,
+    active: !loading && !error && !tutorial?.published,
+    save: () => save({ quiet: true }),
+  });
 
   const publish = async () => {
     if (!(await save())) return;
@@ -1460,7 +1466,7 @@ export default function TutorialEditor() {
     }
   };
 
-  if (loading) return <Loading />;
+  if (loading) return <Loading label="Loading…" skeleton={<FormSkeleton />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!tutorial) return null;
 
@@ -1478,8 +1484,11 @@ export default function TutorialEditor() {
           </Button>
           <Text fontSize="sm" color="lmFg.muted" mt={1}>
             {tutorial.questions.length} questions · {totalMarks} marks
-            {dirty ? ' · unsaved changes' : ''}
           </Text>
+          <AutosaveStatus
+            {...autosave}
+            pausedReason={tutorial.published ? 'this tutorial is published' : undefined}
+          />
         </Box>
         <HStack wrap="wrap" spacing={2} justify="flex-end">
           {/* Save first: the import appends to the stored tutorial and this page

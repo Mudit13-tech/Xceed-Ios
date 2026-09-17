@@ -565,12 +565,33 @@ export default function SetupManual({ standalone = false }) {
 
                     <Heading id="leaving">Students leaving, and deleting a class</Heading>
                     <P>
-                        A student can leave a class on their own. At the bottom of the People tab, under
-                        <strong> Your enrolment</strong>, is a <strong>Leave class</strong> button; they are asked to
-                        confirm, the class disappears from their dashboard, and they lose access to its stream,
-                        material, assignments and grades. Work they have already submitted stays with you. Getting
-                        back in takes the class code or a fresh invitation — and your approval, if the class
-                        requires it.
+                        A student can leave a class on their own, and has to confirm it with a one-time code
+                        emailed to them. That way nobody can remove them using a session left signed in on a
+                        shared computer.
+                    </P>
+                    <SectionTitle>How a student leaves a class</SectionTitle>
+                    <Steps items={[
+                        {
+                            title: 'Open the class and go to the People tab',
+                            body: 'From the Learning dashboard, click the class, then People.',
+                        },
+                        {
+                            title: 'Click “Leave class” under Your enrolment',
+                            body: 'The Your enrolment box is at the bottom of the page. A dialog opens that says what leaving takes away.',
+                        },
+                        {
+                            title: 'Click “Send code”',
+                            body: 'A six-digit code is emailed to the student’s address. It is valid for ten minutes, and “Resend code” sends a new one.',
+                            image: { src: shotOtpMail, alt: 'An XCEED one-time code email', width: 480 },
+                        },
+                        {
+                            title: 'Type the code and click “Leave class”',
+                            body: 'The class disappears from their dashboard, and they lose access to its stream, material, assignments and grades. After five wrong codes the code is cancelled and a new one has to be requested.',
+                        },
+                    ]} />
+                    <P>
+                        Work they have already submitted stays with you. Getting back in takes the class code
+                        or a fresh invitation — and your approval, if the class requires it.
                     </P>
                     <P>
                         Teachers do not get that button. The owner cannot leave their own class, and a co-teacher

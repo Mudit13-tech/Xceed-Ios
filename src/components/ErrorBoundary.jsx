@@ -29,6 +29,13 @@ class ErrorBoundaryImpl extends React.Component {
     console.error('[ErrorBoundary]', error, info?.componentStack);
   }
 
+  // Clearing the flag rather than being rebuilt around it — see the wrapper.
+  componentDidUpdate(prevProps) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false });
+    }
+  }
+
   render() {
     if (!this.state.hasError) return this.props.children;
 
@@ -90,12 +97,20 @@ class ErrorBoundaryImpl extends React.Component {
 }
 
 /**
- * Remounts the boundary whenever the route changes, by keying it on the
- * pathname — otherwise a crash leaves `hasError` stuck true, and clicking a
- * still-working navbar link to escape would just show the same fallback for
- * the new page too, since the class instance survives the navigation.
+ * Clears a stuck error whenever the route changes — otherwise `hasError` stays
+ * true, and clicking a still-working navbar link to escape would just show the
+ * same fallback for the new page too, since the class instance survives the
+ * navigation.
+ *
+ * The pathname is handed down as an ordinary prop, not as `key`. It was a `key`
+ * first, and because this boundary wraps the entire route table in App.jsx, a
+ * changed URL threw away and rebuilt every mounted component under it — layout
+ * shells included. That is what made the learning module's rail drop back to
+ * its skeleton and re-read `me`, `overview` and the class list on every click
+ * (#2413). Resetting one boolean does the same job for the case the key was
+ * there for, and leaves the tree alone for every other navigation.
  */
 export default function ErrorBoundary({ children }) {
   const location = useLocation();
-  return <ErrorBoundaryImpl key={location.pathname}>{children}</ErrorBoundaryImpl>;
+  return <ErrorBoundaryImpl resetKey={location.pathname}>{children}</ErrorBoundaryImpl>;
 }

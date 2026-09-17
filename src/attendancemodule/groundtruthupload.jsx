@@ -320,6 +320,10 @@ export default function GroundTruthUpload({ fixedDepartment = '' }) {
     const [zipUploading,  setZipUploading]  = useState(false);
     const [zipResult,     setZipResult]     = useState(null);
     const [zipReplaceConfirm, setZipReplaceConfirm] = useState(false);
+    // 'append' keeps the photos already in the batch and only touches the roll
+    // numbers in the ZIP; 'overwrite' wipes the batch first. Append is the
+    // default because it is the recoverable one.
+    const [zipMode,       setZipMode]       = useState('append');
     const [rollNo,        setRollNo]        = useState('');
     const [studentPhoto,  setStudentPhoto]  = useState(null);
     const [photoUploading, setPhotoUploading] = useState(false);
@@ -497,7 +501,10 @@ export default function GroundTruthUpload({ fixedDepartment = '' }) {
         if (!batchName) { showToast('Please select a Batch', 'error'); return; }
         if (!zipFile)   { showToast('Please select a ZIP file', 'error'); return; }
 
-        if (batchPhotoCount > 0 && !zipReplaceConfirm) {
+        // Only an overwrite destroys anything, so only an overwrite of a batch
+        // that already holds photos needs confirming. An append reports the
+        // roll numbers it replaced once it is done.
+        if (zipMode === 'overwrite' && batchPhotoCount > 0 && !zipReplaceConfirm) {
             setZipReplaceConfirm(true);
             return;
         }
@@ -514,8 +521,7 @@ export default function GroundTruthUpload({ fixedDepartment = '' }) {
         formData.append('zipFile', zipFile);
 
         try {
-            const replaceQuery = batchPhotoCount > 0 ? '?replace=true' : '';
-            const res = await fetch(`${UPLOAD_BASE}/upload-zip/${encodeURIComponent(batchName)}${replaceQuery}`, {
+            const res = await fetch(`${UPLOAD_BASE}/upload-zip/${encodeURIComponent(batchName)}?mode=${zipMode}`, {
                 method: 'POST',
                 credentials: 'include',
                 body: formData,
@@ -523,7 +529,14 @@ export default function GroundTruthUpload({ fixedDepartment = '' }) {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Upload failed');
             setZipResult(data);
-            showToast(`Extracted ${data.extractedImages} photos for ${data.extractedFolders} students!`);
+            // On an append, lead with what the operator cannot see in the photo
+            // count: how many existing students this ZIP overwrote.
+            showToast(
+                data.mode === 'append' && data.replacedStudents > 0
+                    ? `Added ${data.addedStudents} new, replaced ${data.replacedStudents} existing student photo${data.replacedStudents === 1 ? '' : 's'}`
+                    : `Extracted ${data.extractedImages} photos for ${data.extractedFolders} students!`,
+                data.mode === 'append' && data.replacedStudents > 0 ? 'warning' : 'success',
+            );
             setZipFile(null);
 
             if (data.embeddingJob) {
@@ -546,10 +559,12 @@ export default function GroundTruthUpload({ fixedDepartment = '' }) {
                 );
             }
 
-            if (batchPhotoCount > 0) {
-                setBatchPhotoCount(data.extractedFolders || 0); // Replaced
+            if (data.mode === 'overwrite') {
+                setBatchPhotoCount(data.extractedFolders || 0);
             } else {
-                setBatchPhotoCount(c => (c ?? 0) + (data.extractedFolders || 0));
+                // Only the new roll numbers grow the batch; the replaced ones
+                // were already counted.
+                setBatchPhotoCount(c => (c ?? 0) + (data.addedStudents ?? data.extractedFolders ?? 0));
             }
 
         } catch (err) {
@@ -780,6 +795,51 @@ export default function GroundTruthUpload({ fixedDepartment = '' }) {
                                     onChange={e => setZipFile(e.target.files[0])}
                                     style={{ display: 'block', width: '100%', padding: 10, background: T.bg, borderRadius: 7, border: `1px solid ${T.border}`, color: T.text, marginBottom: 14, fontSize: 13 }}
                                 />
+
+                                {/* ── Append vs Overwrite ───────────────── */}
+                                <fieldset style={{ border: `1px solid ${T.border}`, borderRadius: 7, padding: '10px 12px', marginBottom: 14 }}>
+                                    <legend style={{ ...styles.label, padding: '0 6px', marginBottom: 0 }}>If this batch already has photos</legend>
+                                    {[
+                                        {
+                                            value: 'append',
+                                            title: 'Append',
+                                            hint: 'Keep existing photos. A roll number already in the batch is replaced by the one in the ZIP.',
+                                        },
+                                        {
+                                            value: 'overwrite',
+                                            title: 'Overwrite',
+                                            hint: 'Delete every existing photo and embedding for this batch first.',
+                                        },
+                                    ].map(opt => (
+                                        <label
+                                            key={opt.value}
+                                            style={{
+                                                display: 'flex', alignItems: 'flex-start', gap: 9,
+                                                padding: '7px 2px', cursor: zipUploading ? 'not-allowed' : 'pointer',
+                                                opacity: zipUploading ? 0.6 : 1,
+                                            }}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="zipUploadMode"
+                                                value={opt.value}
+                                                checked={zipMode === opt.value}
+                                                disabled={zipUploading}
+                                                onChange={() => setZipMode(opt.value)}
+                                                style={{ marginTop: 2, accentColor: T.accent, cursor: 'inherit' }}
+                                            />
+                                            <span style={{ minWidth: 0 }}>
+                                                <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: opt.value === 'overwrite' ? T.danger : T.text }}>
+                                                    {opt.title}
+                                                </span>
+                                                <span style={{ display: 'block', fontSize: 11.5, color: T.textMuted, lineHeight: 1.45 }}>
+                                                    {opt.hint}
+                                                </span>
+                                            </span>
+                                        </label>
+                                    ))}
+                                </fieldset>
+
                                 <button
                                     onClick={handleZipUpload}
                                     disabled={zipUploading || !batchName || !zipFile}
@@ -793,6 +853,26 @@ export default function GroundTruthUpload({ fixedDepartment = '' }) {
                                 {zipResult && (
                                     <div style={{ marginTop: 14, padding: '10px 14px', background: T.successDim, borderRadius: 7, border: `1px solid rgba(16,185,129,.25)`, fontSize: 13, color: T.success, fontWeight: 600 }}>
                                         ✓ {zipResult.extractedImages} photos extracted for {zipResult.extractedFolders} students
+                                        {zipResult.mode === 'append' && (
+                                            <span style={{ display: 'block', marginTop: 3, fontWeight: 500 }}>
+                                                Appended to the batch — {zipResult.addedStudents} new, {zipResult.replacedStudents} replaced.
+                                            </span>
+                                        )}
+                                        {zipResult.mode === 'overwrite' && (
+                                            <span style={{ display: 'block', marginTop: 3, fontWeight: 500 }}>
+                                                Previous photos and embeddings for this batch were removed.
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                                {zipResult?.mode === 'append' && zipResult.replacedRollNos?.length > 0 && (
+                                    <div style={{ marginTop: 10, padding: 10, background: T.warningDim, borderRadius: 7, border: `1px solid rgba(245,158,11,.25)` }}>
+                                        <div style={{ fontSize: 12, color: '#b45309', fontWeight: 700, marginBottom: 5 }}>
+                                            Replaced {zipResult.replacedRollNos.length} existing photo{zipResult.replacedRollNos.length === 1 ? '' : 's'}:
+                                        </div>
+                                        <div style={{ fontSize: 11.5, color: '#b45309', fontFamily: T.fontMono, maxHeight: 120, overflowY: 'auto', lineHeight: 1.6, wordBreak: 'break-all' }}>
+                                            {zipResult.replacedRollNos.join(', ')}
+                                        </div>
                                     </div>
                                 )}
                                 {zipResult?.errors?.length > 0 && (
@@ -1201,10 +1281,14 @@ export default function GroundTruthUpload({ fixedDepartment = '' }) {
                 <div className="erp-modal-overlay">
                     <div className="erp-modal-box">
                         <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 8, fontFamily: T.fontBody }}>
-                            Replace Existing Batch?
+                            Overwrite Existing Batch?
                         </div>
                         <div style={{ fontSize: 13.5, color: T.textMuted, lineHeight: 1.55, marginBottom: 22, fontFamily: T.fontBody }}>
-                            Uploading a new ZIP file will replace the existing ERP photos and embeddings for this batch. Do you want to continue?
+                            This will delete all {batchPhotoCount} existing ERP photo{batchPhotoCount === 1 ? '' : 's'} and the embeddings
+                            for <strong style={{ color: T.text, fontFamily: T.fontMono }}>{batchName}</strong>, then extract the ZIP into the
+                            empty batch. This cannot be undone.
+                            <br /><br />
+                            To keep the existing photos and only replace the roll numbers present in the ZIP, cancel and choose <strong style={{ color: T.text }}>Append</strong> instead.
                         </div>
                         <div className="erp-modal-actions" style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                             <button
@@ -1217,7 +1301,7 @@ export default function GroundTruthUpload({ fixedDepartment = '' }) {
                                 onClick={executeZipUpload}
                                 style={{ background: '#ef4444', border: 'none', color: '#fff', padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: T.fontBody }}
                             >
-                                Yes, Replace
+                                Yes, Overwrite
                             </button>
                         </div>
                     </div>

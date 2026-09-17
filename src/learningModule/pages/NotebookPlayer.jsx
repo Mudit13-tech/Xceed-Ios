@@ -17,7 +17,7 @@ import {
 import { FiFastForward, FiMaximize, FiPlay, FiRefreshCw, FiSquare } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
-import { DeadlineCountdown, ErrorState, Loading } from '../components/common';
+import { DeadlineCountdown, ErrorState, Loading, SectionCardSkeleton } from '../components/common';
 import NotebookCell from '../components/NotebookCell';
 import RichText from '../components/RichText';
 import useNotebookKernel from '../hooks/useNotebookKernel';
@@ -590,7 +590,7 @@ export default function NotebookPlayer() {
   const cardBg = useColorModeValue('white', 'gray.800');
   const overlayBg = useColorModeValue('gray.50', 'gray.900');
 
-  if (loading) return <Loading label="Opening the notebook…" />;
+  if (loading) return <Loading label="Opening the notebook…" skeleton={<SectionCardSkeleton lines={4} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   const kernelBadge =

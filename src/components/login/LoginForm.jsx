@@ -5,6 +5,7 @@ import FormHeader from './FormHeader'
 import { isSafeExamBrowser } from '../../learningModule/sebDiagnosis'
 import getEnvironment from '../../getenvironment'
 import { redirectTargetFrom } from '../../authRedirect'
+import { writeLocal } from '../../utils/safeStorage'
 import {
   Box,
   Button,
@@ -141,7 +142,12 @@ const LoginForm = () => {
       }
 
       if (responseData.token) {
-        localStorage.setItem('token', responseData.token)
+        /* Kept if the browser will keep it, and the sign-in still stands if it
+           will not: the same token arrives as an httpOnly cookie, which is what
+           a Safe Exam Browser profile with `removeLocalStorage` on is left with.
+           A bare setItem throws there, which used to turn a successful login
+           into an error on the last line before the redirect. */
+        writeLocal('token', responseData.token)
       }
 
       // Clear the cache to prevent stale 401 errors from instantly kicking the user back out

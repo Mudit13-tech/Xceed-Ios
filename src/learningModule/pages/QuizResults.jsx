@@ -48,7 +48,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, SectionCardSkeleton, StatRowSkeleton, StatTile, TableSkeleton } from '../components/common';
 import { LmIcon } from '../components/Icon';
 import QuizReview from '../components/QuizReview';
 import { richTextToPlain } from '../richTextUtils';
@@ -65,6 +65,7 @@ import {
   nameOf,
   useSecondTick,
 } from '../components/liveExam';
+import DeleteButton from '../components/DeleteButton';
 import { useTerminationAlerts } from '../../mobile/useTerminationAlerts';
 
 const duration = (seconds) => {
@@ -185,15 +186,7 @@ function AttemptActions({ attempt, onAct, showContinue = true, hideResultsContro
           Restart
         </Button>
       )}
-      <Button
-        size="xs"
-        variant="ghost"
-        colorScheme="red"
-        onClick={() => onAct('delete')}
-      >
-        <LmIcon name="delete" size={13} style={{ marginRight: 4 }} />
-        Delete
-      </Button>
+      <DeleteButton size="xs" label="Delete response" onClick={() => onAct('delete')} />
     </HStack>
   );
 }
@@ -248,7 +241,7 @@ function AttemptAnswersModal({ attempt, classId, onClose }) {
         <ModalBody pb={6}>
           <ErrorState error={error} />
           {!data && !error ? (
-            <Loading label="Loading the paper…" />
+            <Loading label="Loading the paper…" minH="160px" skeleton={<SectionCardSkeleton lines={5} title={false} />} />
           ) : review.length === 0 ? (
             <EmptyState
               icon="assignment"
@@ -1428,6 +1421,321 @@ function TimingPanel({ report }) {
   );
 }
 
+/* ─────────────────────────── webcam gallery ───────────────────────────
+ *
+ * The pictures a sitting produced, kept reachable after it ends.
+ *
+ * Live control shows these too, but only while the student is still writing or
+ * while a camera flag is standing — both of which are gone by the time anyone
+ * is arguing about a paper. The evidence outlives the sitting, so the place to
+ * read it is the results page, where the rest of the aftermath already lives.
+ *
+ * Ordered by roll number, because that is the order a hall is seated in and the
+ * order the list an invigilator is holding is written in.
+ */
+
+/** Roll numbers sort as numbers where they contain one, as text otherwise. */
+const byRollNumber = (a, b) => {
+  const aRoll = String(a.rollNumber ?? '').trim();
+  const bRoll = String(b.rollNumber ?? '').trim();
+  const aNum = Number.parseFloat(aRoll.replace(/[^0-9.]/g, ''));
+  const bNum = Number.parseFloat(bRoll.replace(/[^0-9.]/g, ''));
+  if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) return aNum - bNum;
+  if (!Number.isNaN(aNum)) return -1;
+  if (!Number.isNaN(bNum)) return 1;
+  return aRoll.localeCompare(bRoll);
+};
+
+/**
+ * One student's pictures, fetched when the row is opened and not before.
+ *
+ * Two kinds sit side by side and are labelled as such, because they mean
+ * different things. The random stills are the routine record — proof of who sat
+ * the paper, taken whether or not anything was wrong. The flagged frames are
+ * the ones a proctoring rule kept, and they already travel inline on the
+ * attempt, so only the stills need fetching.
+ *
+ * On demand rather than eagerly, for the reason Live control gives: these are
+ * photographs of students, and a hall of two hundred sittings would otherwise
+ * pull six hundred images into a page someone left open on a desk. Every object
+ * URL made here is revoked when the row closes.
+ */
+function WebcamRow({ attempt, classId, defaultOpen }) {
+  const cam = attempt.webcam || {};
+  const stills = useMemo(() => (cam.snapshots || []).filter((shot) => shot.file), [cam.snapshots]);
+  const flagged = useMemo(() => (cam.thumbnails || []).filter((thumb) => thumb.image), [cam.thumbnails]);
+  const [open, setOpen] = useState(Boolean(defaultOpen));
+  const [urls, setUrls] = useState([]);
+  const [failed, setFailed] = useState(0);
+
+  useEffect(() => {
+    if (!open) {
+      setUrls([]);
+      setFailed(0);
+      return undefined;
+    }
+    let cancelled = false;
+    const made = [];
+    (async () => {
+      let lost = 0;
+      for (const shot of stills) {
+        try {
+          // Sequential on purpose: a row of thumbnails is not worth opening
+          // several connections for, and they appear as they arrive.
+          // eslint-disable-next-line no-await-in-loop
+          const url = await lmApi.webcamSnapshot(classId, attempt._id, shot.file);
+          if (cancelled) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          made.push(url);
+          setUrls([...made]);
+        } catch {
+          // One picture that will not load is not a reason to lose the rest —
+          // say how many are missing and show what there is.
+          lost += 1;
+          if (!cancelled) setFailed(lost);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      made.forEach((url) => URL.revokeObjectURL(url));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, classId, attempt._id, stills]);
+
+  const total = stills.length + flagged.length;
+
+  return (
+    <Box borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" p={3}>
+      <Flex align="center" gap={3} wrap="wrap">
+        <Badge fontSize="0.7rem" colorScheme="blue" minW="64px" textAlign="center">
+          {attempt.rollNumber || 'no roll'}
+        </Badge>
+        <Box flex="1" minW="160px">
+          <Text fontSize="sm" fontWeight="600">
+            {nameOf(attempt)}
+          </Text>
+          <Text fontSize="xs" color="lmFg.subtle" wordBreak="break-all">
+            {attempt.studentEmail || 'no email on file'}
+          </Text>
+        </Box>
+        <HStack spacing={2} wrap="wrap">
+          {cam.flaggedAt && !cam.clearedAt && (
+            <Badge fontSize="0.6rem" colorScheme="red" variant="solid">
+              camera flag
+            </Badge>
+          )}
+          {cam.clearedAt && (
+            <Badge fontSize="0.6rem" colorScheme="green">
+              flag cleared
+            </Badge>
+          )}
+          {cam.unavailableReason && (
+            <Badge fontSize="0.6rem" colorScheme="orange">
+              no camera
+            </Badge>
+          )}
+          {cam.waivedByName && (
+            <Badge fontSize="0.6rem" colorScheme="purple">
+              waived
+            </Badge>
+          )}
+          <Text fontSize="xs" color="lmFg.muted">
+            {stills.length} still{stills.length === 1 ? '' : 's'}
+            {flagged.length > 0 ? ` · ${flagged.length} flagged frame${flagged.length === 1 ? '' : 's'}` : ''}
+          </Text>
+          <Button size="xs" variant="outline" onClick={() => setOpen((was) => !was)}>
+            {open ? 'Hide' : 'Show'} images
+          </Button>
+        </HStack>
+      </Flex>
+
+      {open && (
+        <Box mt={3}>
+          {stills.length > 0 && (
+            <>
+              <Text fontSize="xs" fontWeight="700" color="lmFg.subtle" textTransform="uppercase" mb={1}>
+                Random stills
+              </Text>
+              <HStack spacing={2} wrap="wrap" align="flex-start" mb={flagged.length > 0 ? 3 : 0}>
+                {urls.map((url, i) => (
+                  <Box key={stills[i]?.file || i} textAlign="center">
+                    <Box
+                      as="img"
+                      src={url}
+                      alt={`Webcam still of ${nameOf(attempt)} taken ${relativeTime(stills[i]?.at)}`}
+                      title={formatDateTime(stills[i]?.at)}
+                      w="132px"
+                      h="99px"
+                      objectFit="cover"
+                      borderRadius="md"
+                      borderWidth="1px"
+                      // The self-view a student saw was mirrored; matching it
+                      // here is what makes a face recognisable to whoever is
+                      // comparing it against the person in the seat.
+                      transform="scaleX(-1)"
+                    />
+                    <Text fontSize="0.6rem" color="lmFg.muted" mt={0.5}>
+                      {relativeTime(stills[i]?.at)}
+                    </Text>
+                  </Box>
+                ))}
+                {urls.length + failed < stills.length && (
+                  <Text fontSize="xs" color="lmFg.muted">
+                    loading…
+                  </Text>
+                )}
+                {failed > 0 && (
+                  <Text fontSize="xs" color="lmFg.muted">
+                    {failed} could not be loaded
+                  </Text>
+                )}
+              </HStack>
+            </>
+          )}
+
+          {flagged.length > 0 && (
+            <>
+              <Text fontSize="xs" fontWeight="700" color="lmFg.subtle" textTransform="uppercase" mb={1}>
+                Flagged frames
+              </Text>
+              <HStack spacing={2} wrap="wrap" align="flex-start">
+                {flagged.map((thumb, i) => (
+                  <Box key={`${thumb.at}-${i}`} textAlign="center">
+                    <Box
+                      as="img"
+                      src={thumb.image}
+                      alt={`Flagged webcam frame of ${nameOf(attempt)} (${thumb.type || 'flagged'})`}
+                      title={formatDateTime(thumb.at)}
+                      w="132px"
+                      h="99px"
+                      objectFit="cover"
+                      borderRadius="md"
+                      borderWidth="1px"
+                      borderColor="red.300"
+                      transform="scaleX(-1)"
+                    />
+                    <Text fontSize="0.6rem" color="lmFg.muted" mt={0.5}>
+                      {(thumb.type || 'flagged').replace(/_/g, ' ')} · {relativeTime(thumb.at)}
+                    </Text>
+                  </Box>
+                ))}
+              </HStack>
+            </>
+          )}
+
+          {total === 0 && (
+            <Text fontSize="xs" color="lmFg.muted">
+              No images were kept for this sitting.
+            </Text>
+          )}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * The webcam tab: every sitting that produced an image, by roll number.
+ *
+ * Sittings with no pictures at all are left out rather than listed empty — a
+ * paper sat without a camera, or before snapshots were switched on, has nothing
+ * to show and would only pad the list. The count of those is stated instead, so
+ * a short list does not read as a missing one.
+ */
+function WebcamGallery({ attempts, classId }) {
+  const [search, setSearch] = useState('');
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
+
+  const withImages = useMemo(
+    () =>
+      (attempts || [])
+        .filter((attempt) => {
+          const cam = attempt.webcam || {};
+          return (
+            (cam.snapshots || []).some((shot) => shot.file)
+            || (cam.thumbnails || []).some((thumb) => thumb.image)
+          );
+        })
+        .sort(byRollNumber),
+    [attempts],
+  );
+
+  const rows = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return withImages.filter((attempt) => {
+      if (flaggedOnly && !attempt.webcam?.flaggedAt) return false;
+      if (!query) return true;
+      const roll = String(attempt.rollNumber || '').toLowerCase();
+      const name = (attempt.studentName || attempt.studentEmail || '').toLowerCase();
+      return roll.includes(query) || name.includes(query);
+    });
+  }, [withImages, search, flaggedOnly]);
+
+  const withoutImages = (attempts || []).length - withImages.length;
+
+  if (withImages.length === 0) {
+    return (
+      <EmptyState
+        icon="camera"
+        title="No webcam images"
+        description="Images appear here once a paper with webcam proctoring has been sat. Check the test requires a webcam and keeps at least one snapshot."
+      />
+    );
+  }
+
+  return (
+    <SectionCard
+      title={`Webcam images (${withImages.length} sitting${withImages.length === 1 ? '' : 's'})`}
+      subtitle="Photographs of students taken during the sitting, listed by roll number. Open only the ones you need — this page may be on a screen others can see."
+    >
+      <Flex justify="space-between" align="center" gap={3} mb={4} wrap="wrap">
+        <Checkbox size="sm" isChecked={flaggedOnly} onChange={(e) => setFlaggedOnly(e.target.checked)}>
+          <Text fontSize="xs">Only sittings with a camera flag</Text>
+        </Checkbox>
+        <InputGroup size="xs" maxW="240px">
+          <InputLeftElement pointerEvents="none" color="lmFg.faint">
+            <LmIcon name="search" size={13} />
+          </InputLeftElement>
+          <Input
+            placeholder="Search roll number or name..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            borderRadius="md"
+          />
+        </InputGroup>
+      </Flex>
+
+      {rows.length === 0 ? (
+        <Text fontSize="sm" color="lmFg.muted">
+          No sitting matches that.
+        </Text>
+      ) : (
+        <Stack spacing={2}>
+          {rows.map((attempt) => (
+            <WebcamRow
+              key={attempt._id}
+              attempt={attempt}
+              classId={classId}
+              // A search narrowed to a single student is someone looking for
+              // that student: open it rather than making them click again.
+              defaultOpen={rows.length === 1 && search.trim() !== ''}
+            />
+          ))}
+        </Stack>
+      )}
+
+      {withoutImages > 0 && (
+        <Text fontSize="xs" color="lmFg.muted" mt={3}>
+          {withoutImages} other sitting{withoutImages === 1 ? '' : 's'} produced no images.
+        </Text>
+      )}
+    </SectionCard>
+  );
+}
+
 export default function QuizResults() {
   const outlet = useOutletContext();
   const params = useParams();
@@ -1578,6 +1886,21 @@ export default function QuizResults() {
   // signal, not something an invigilator needs pulled to the front of the page.
   const timingFlagCount = (timingAnomalies?.flags || []).filter((flag) => flag.kind === 'fast').length;
 
+  // How many sittings actually produced a picture — the badge on the webcam
+  // tab, so a paper that was not proctored by camera does not send anyone into
+  // an empty tab to find that out.
+  const webcamSittingCount = useMemo(
+    () =>
+      (attempts || []).filter((attempt) => {
+        const cam = attempt.webcam || {};
+        return (
+          (cam.snapshots || []).some((shot) => shot.file)
+          || (cam.thumbnails || []).some((thumb) => thumb.image)
+        );
+      }).length,
+    [attempts],
+  );
+
   const filteredAttempts = useMemo(() => {
     if (!attempts) return [];
     return attempts.filter((item) => {
@@ -1658,7 +1981,7 @@ export default function QuizResults() {
     return false;
   }, [results, quiz, summary, data?.serverTime]);
 
-  if (loading) return <Loading />;
+  if (loading) return <Loading label="Loading results…" skeleton={<><StatRowSkeleton count={4} /><Box mt={4}><TableSkeleton rows={8} columns={6} /></Box></>} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!data) return null;
 
@@ -1856,6 +2179,14 @@ export default function QuizResults() {
           </Tab>
           {perSection.length > 0 && <Tab fontSize="sm">Sections</Tab>}
           <Tab fontSize="sm">Distribution</Tab>
+          <Tab fontSize="sm">
+            Webcam
+            {webcamSittingCount > 0 && (
+              <Badge ml={2} colorScheme="purple" fontSize="0.6rem">
+                {webcamSittingCount}
+              </Badge>
+            )}
+          </Tab>
         </TabList>
 
         <TabPanels>
@@ -2258,6 +2589,11 @@ export default function QuizResults() {
                 )}
               </HStack>
             </SectionCard>
+          </TabPanel>
+
+          {/* ---- webcam images ---- */}
+          <TabPanel px={0}>
+            <WebcamGallery attempts={attempts} classId={classId} />
           </TabPanel>
         </TabPanels>
       </Tabs>

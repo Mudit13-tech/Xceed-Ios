@@ -51,4 +51,64 @@ export function questionsWithDuplicateOptions(questions) {
     .filter(Boolean);
 }
 
+
+/* ─────────────────── images a locked-down browser cannot fetch ───────────── */
+
+/** Every `src` in a question — its text, its options and its explanation. */
+export function imageSources(question) {
+  const html = [
+    question?.question,
+    question?.explanation,
+    ...(Array.isArray(question?.options) ? question.options : []),
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return [...String(html).matchAll(/<img[^>]+src=["']([^"']+)["']/gi)].map((match) => match[1]);
+}
+
+/**
+ * Whether a student inside Safe Exam Browser could fetch this image.
+ *
+ * The settings file this module issues runs SEB's URL filter with its content
+ * filter on and one rule, admitting this installation and nothing else — it is
+ * there so a link pasted into a paper cannot become a way out of the kiosk, and
+ * the content filter half applies to every request the page makes rather than
+ * only to navigation. So a picture hosted anywhere else never leaves the
+ * machine.
+ *
+ * The failure it produces is the reason this warning exists: the paper opens,
+ * the text is all there, and the diagram the question is *about* is a blank
+ * space — for the students in SEB only. Everyone else, the teacher included,
+ * sees it perfectly.
+ *
+ * `data:` survives (the bytes are already in the page — this is what the
+ * editor's own image button produces) and so does anything served from this
+ * origin.
+ */
+export function isReachableImage(src, sameOrigin = '') {
+  const value = String(src || '').trim();
+  if (!value) return true;
+  if (/^data:/i.test(value)) return true;
+  if (value.startsWith('/') && !value.startsWith('//')) return true;
+  if (!/^(?:https?:)?\/\//i.test(value)) return true;
+
+  if (!sameOrigin) return false;
+  try {
+    const host = new URL(value, /^https?:/i.test(value) ? undefined : 'https:').host;
+    return host === String(sameOrigin).replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+  } catch {
+    return false;
+  }
+}
+
+/** 1-based numbers of the questions carrying an image SEB would refuse to fetch. */
+export function questionsWithUnreachableImages(questions, sameOrigin = '') {
+  return (questions || [])
+    .map((question, index) =>
+      imageSources(question).some((src) => !isReachableImage(src, sameOrigin)) ? index + 1 : null,
+    )
+    .filter(Boolean);
+}
+
 export { CHOICE_TYPES };

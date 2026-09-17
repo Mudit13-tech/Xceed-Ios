@@ -26,11 +26,18 @@ const seen = new Set();
  * `React.lazy`, plus a `preload()` that starts the import early.
  *
  * The import is memoised here rather than left to `lazy`, so preloading and
- * rendering share one request no matter which happens first.
+ * rendering share one request no matter which happens first. A failed import is
+ * forgotten, not kept: otherwise one dropped request during a background warm-up
+ * would leave that page unopenable until the tab was reloaded.
  */
 export function lazyWithPreload(load) {
   let started;
-  const preload = () => (started || (started = load()));
+  const preload = () =>
+    started ||
+    (started = load().catch((err) => {
+      started = undefined;
+      throw err;
+    }));
   const Component = lazy(() => preload());
   Component.preload = preload;
   return Component;
@@ -156,9 +163,100 @@ export function useLinkPreloading() {
   }, []);
 }
 
+/*
+ * Background warm-up: once the page someone came for has loaded, the main tabs
+ * of the section they are in are fetched while the browser has nothing better
+ * to do, so a later click finds its page already downloaded even without a
+ * hover to predict it (a phone has no hover). Only what a module lists through
+ * `warmUpRoutes` is fetched — not the whole route table, which is most of the
+ * 18 MB that splitting exists to keep off a student's first minute. Chunks go a
+ * few at a time, each round waiting for an idle moment.
+ */
+const WARM_CONCURRENCY = 3;
+// Past the first paint and the page's own data requests.
+const WARM_START_DELAY_MS = 3000;
+
+const warmQueue = [];
+let warmEnabled = false;
+let warmCursor = 0;
+let warmWorkers = 0;
+
+function whenIdle(callback) {
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(callback, { timeout: 2000 });
+  } else {
+    setTimeout(callback, 50);
+  }
+}
+
+// One worker: take the next listed page, wait for it, go again when idle. The
+// queue can grow while this runs, and the cursor simply picks that up.
+function warmNext() {
+  if (!warmEnabled || warmCursor >= warmQueue.length) {
+    warmWorkers -= 1;
+    return;
+  }
+  const preload = warmQueue[warmCursor];
+  warmCursor += 1;
+  let pending;
+  try {
+    pending = Promise.resolve(preload());
+  } catch {
+    pending = Promise.resolve();
+  }
+  // A failure is left for the real navigation to retry; the warm-up moves on.
+  pending.catch(() => {}).then(() => whenIdle(warmNext));
+}
+
+function scheduleWarmUp() {
+  if (!warmEnabled) return;
+  while (warmWorkers < WARM_CONCURRENCY && warmCursor < warmQueue.length) {
+    warmWorkers += 1;
+    whenIdle(warmNext);
+  }
+}
+
+/**
+ * Lists pages (components from `lazyWithPreload`) for the background warm-up.
+ * Call it at module level beside a route table, so a module's tabs are queued
+ * when — and only if — someone has opened that module.
+ */
+export function warmUpRoutes(components) {
+  for (const component of components) {
+    const preload = component?.preload;
+    if (typeof preload === 'function' && !warmQueue.includes(preload)) {
+      warmQueue.push(preload);
+    }
+  }
+  scheduleWarmUp();
+}
+
+/**
+ * Starts the background warm-up a few seconds after the app has loaded. Call it
+ * once, at the top of the app. Skipped on metered and 2G connections, for the
+ * same reason as hover preloading.
+ */
+export function useIdleRouteWarmup(delayMs = WARM_START_DELAY_MS) {
+  useEffect(() => {
+    if (!connectionAllowsPreload()) return undefined;
+    const timer = setTimeout(() => {
+      warmEnabled = true;
+      scheduleWarmUp();
+    }, delayMs);
+    return () => {
+      clearTimeout(timer);
+      warmEnabled = false;
+    };
+  }, [delayMs]);
+}
+
 // Test seam. The registry is module state on purpose — nested routers add to it
 // as they load — which leaves tests needing a way back to empty.
 export function __resetPreloadRegistry() {
   registry.length = 0;
   seen.clear();
+  warmQueue.length = 0;
+  warmEnabled = false;
+  warmCursor = 0;
+  warmWorkers = 0;
 }

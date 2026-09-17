@@ -1,11 +1,14 @@
 import React from 'react';
 import { Route, Routes } from 'react-router-dom';
+import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   __resetPreloadRegistry,
   lazyWithPreload,
   preloadPath,
   registerRouteTree,
+  useIdleRouteWarmup,
+  warmUpRoutes,
 } from '../routePreload';
 
 // A stand-in for a page chunk: records that the import was asked for, and how
@@ -19,6 +22,7 @@ function stubPage(name) {
 
 afterEach(() => {
   __resetPreloadRegistry();
+  vi.useRealTimers();
 });
 
 describe('preloadPath', () => {
@@ -112,5 +116,78 @@ describe('preloadPath', () => {
     );
 
     expect(preloadPath('/eager')).toBe(0);
+  });
+});
+
+describe('lazyWithPreload', () => {
+  it('asks again after a failed import instead of keeping the failure', async () => {
+    const load = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce({ default: () => null });
+    const Page = lazyWithPreload(load);
+
+    await expect(Page.preload()).rejects.toThrow('network');
+    await expect(Page.preload()).resolves.toBeTruthy();
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('useIdleRouteWarmup', () => {
+  it('fetches only the listed pages, after the delay, including ones listed later', async () => {
+    vi.useFakeTimers();
+    const [A, B, Unlisted, Late] = [stubPage('a'), stubPage('b'), stubPage('x'), stubPage('late')];
+    registerRouteTree(
+      <Routes>
+        <Route path="/a" element={<A />} />
+        <Route path="/b" element={<B />} />
+        <Route path="/x" element={<Unlisted />} />
+      </Routes>,
+    );
+    warmUpRoutes([A, B]);
+
+    renderHook(() => useIdleRouteWarmup(1000));
+    await vi.advanceTimersByTimeAsync(500);
+    expect(A.load).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(A.load).toHaveBeenCalledTimes(1);
+    expect(B.load).toHaveBeenCalledTimes(1);
+    expect(Unlisted.load).not.toHaveBeenCalled();
+
+    // A module whose chunk arrives after the queue has drained still gets warmed.
+    warmUpRoutes([Late, A]);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(Late.load).toHaveBeenCalledTimes(1);
+    expect(A.load).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps going past a chunk that fails', async () => {
+    vi.useFakeTimers();
+    const Broken = lazyWithPreload(vi.fn(() => Promise.reject(new Error('404'))));
+    const Fine = stubPage('fine');
+    warmUpRoutes([Broken, Fine]);
+
+    renderHook(() => useIdleRouteWarmup(0));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(Fine.load).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing when the user has asked to save data', async () => {
+    vi.useFakeTimers();
+    const original = navigator.connection;
+    Object.defineProperty(navigator, 'connection', {
+      value: { saveData: true },
+      configurable: true,
+    });
+    try {
+      const Page = stubPage('page');
+      warmUpRoutes([Page]);
+      renderHook(() => useIdleRouteWarmup(0));
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(Page.load).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(navigator, 'connection', { value: original, configurable: true });
+    }
   });
 });

@@ -26,6 +26,7 @@ import {
 import {
   lazyWithPreload,
   registerRouteTree,
+  useIdleRouteWarmup,
   useLinkPreloading,
 } from './routePreload';
 const Timetable = lazyWithPreload(() => import('./timetableadmin/timetable'));
@@ -279,14 +280,26 @@ const _routeFallbackStyle = `
 }
 `;
 
+// Most chunk fetches finish well inside this, and a bar that appears for a few
+// frames and vanishes reads as a glitch line above the page rather than as
+// progress. Only a fetch that is actually slow gets to show it.
+const ROUTE_FALLBACK_DELAY_MS = 400;
+
 let _rfStyleInjected = false;
 function RouteFallback() {
+  const [visible, setVisible] = React.useState(false);
+  React.useEffect(() => {
+    const timer = setTimeout(() => setVisible(true), ROUTE_FALLBACK_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
   if (!_rfStyleInjected && typeof document !== 'undefined') {
     const tag = document.createElement('style');
     tag.textContent = _routeFallbackStyle;
     document.head.appendChild(tag);
     _rfStyleInjected = true;
   }
+  if (!visible) return null;
   return (
     <div
       style={{ padding: '48px 24px' }}
@@ -730,9 +743,20 @@ function App() {
   // Starts a page's chunk when a link to it is hovered or focused, so the
   // fallback below has usually nothing left to wait for by the time it clicks.
   useLinkPreloading();
+  // And fetches the main tabs a module lists (warmUpRoutes) in the background
+  // once the first page has settled, so a tap with no hover before it finds its
+  // page ready.
+  useIdleRouteWarmup();
 
   return (
-    <Router>
+    /* Navigations go through `React.startTransition`, which is what keeps the
+       page already on screen up while the next one's chunk is still coming
+       down. Without it a click on a link whose chunk had not been fetched
+       suspended the boundary below and replaced the entire app — header, rail
+       and class switcher included — with the 4px loading bar, for as long as
+       the download took (#2413). React Router has done this under the flag
+       since 6.13; it is the default in v7. */
+    <Router future={{ v7_startTransition: true }}>
       <MobileShell />
       {/* <div className="app"> */}
 

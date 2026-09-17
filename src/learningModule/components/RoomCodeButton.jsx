@@ -12,7 +12,7 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
-  Spinner,
+  Skeleton,
   Text,
   useClipboard,
   useToast,
@@ -96,10 +96,7 @@ export default function RoomCodeButton({ classId, quiz, onDone }) {
             </Text>
 
             {loading && !code ? (
-              <HStack color="lmFg.muted" fontSize="sm">
-                <Spinner size="sm" />
-                <Text>Loading the current code…</Text>
-              </HStack>
+              <Skeleton height="32px" width="140px" borderRadius="md" aria-label="Loading the current code…" />
             ) : code ? (
               <Box borderWidth="1px" borderColor="lmHue.blue200" bg="lmHue.blue50" borderRadius="md" p={4}>
                 <Text fontSize="xs" color="lmFg.muted" mb={1}>

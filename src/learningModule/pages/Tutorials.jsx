@@ -12,10 +12,11 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, WorkListSkeleton } from '../components/common';
 import { toDateTimeInput } from '../format';
 import PaperPreviewModal from '../components/PaperPreviewModal';
 import { LmIcon } from '../components/Icon';
+import DeleteButton from '../components/DeleteButton';
 
 /**
  * Whether this row has a deadline to show: one already saved, or one the
@@ -114,7 +115,7 @@ export default function Tutorials() {
     }
   };
 
-  if (loading) return <Loading label="Loading tutorials…" />;
+  if (loading) return <Loading label="Loading tutorials…" skeleton={<WorkListSkeleton />} />;
 
   return (
     <Box>
@@ -280,9 +281,7 @@ export default function Tutorials() {
                     >
                       {tutorial.published ? 'Unpublish' : 'Publish'}
                     </Button>
-                    <Button size="sm" variant="ghost" colorScheme="red" onClick={() => remove(tutorial)}>
-                      ✕
-                    </Button>
+                    <DeleteButton label="Delete tutorial" onClick={() => remove(tutorial)} />
                   </>
                 ) : (
                   <Button

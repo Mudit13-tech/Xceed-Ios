@@ -10,7 +10,6 @@ import {
   IconButton,
   Image,
   ListItem,
-  Spinner,
   Table,
   Tbody,
   Td,
@@ -24,6 +23,7 @@ import {
   useColorMode,
   useColorModeValue,
 } from '@chakra-ui/react';
+import { BusyDots } from './common';
 import {
   FiAlertCircle,
   FiArrowDown,
@@ -244,7 +244,7 @@ function CellStatus({ running, cell }) {
   if (running) {
     return (
       <HStack spacing={1.5} color="blue.400" flexShrink={0}>
-        <Spinner size="xs" speed="0.7s" />
+        <BusyDots size="4px" label="Running" />
         <Text fontSize="xs" fontWeight="500">
           Running…
         </Text>
@@ -474,7 +474,7 @@ function TestCasesEditorPanel({
             <Button
               size="xs"
               colorScheme="purple"
-              leftIcon={testing ? <Spinner size="xs" /> : <FiPlay />}
+              leftIcon={testing ? <BusyDots size="4px" label="Testing" /> : <FiPlay />}
               isLoading={testing}
               onClick={onRunTestCases}
             >
@@ -941,7 +941,7 @@ export default function NotebookCell({
                   size="xs"
                   colorScheme={testSummary?.passedAll ? 'green' : 'purple'}
                   variant="solid"
-                  leftIcon={testing ? <Spinner size="xs" /> : <FiCheckSquare />}
+                  leftIcon={testing ? <BusyDots size="4px" label="Testing" /> : <FiCheckSquare />}
                   isLoading={testing}
                   isDisabled={!canRun || testing || running}
                   onClick={() => onRunTests(cell)}

@@ -15,14 +15,14 @@ import {
   InputGroup,
   InputRightAddon,
   Progress,
-  Spinner,
   Text,
   Tooltip,
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { BusyDots, ErrorState, Loading, SectionCard, SectionCardSkeleton, StatTile } from '../components/common';
 import RichText from '../components/RichText';
+import QuestionHint from '../components/QuestionHint';
 import ChoiceAnswerInput from '../components/ChoiceAnswerInput';
 import QuestionTypeBadge from '../components/QuestionTypeBadge';
 import { hasAnswer, isChoiceQuestion } from '../questionTypes';
@@ -42,7 +42,7 @@ const answerId = (questionId, key) => `${questionId}:${key}`;
  * before submission this is a nudge and not a mark.
  */
 function LiveVerdict({ verdict, busy }) {
-  if (busy) return <Spinner size="xs" color="lmFg.faint" />;
+  if (busy) return <BusyDots size="4px" color="lmFg.faint" label="Checking your answer" />;
   if (!verdict) return null;
 
   if (verdict.checkable === false) {
@@ -312,7 +312,7 @@ export default function AssignmentPlayer() {
     }
   };
 
-  if (loading) return <Loading label="Preparing your questions…" />;
+  if (loading) return <Loading label="Preparing your questions…" skeleton={<SectionCardSkeleton lines={4} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!assignment) return null;
 
@@ -472,16 +472,7 @@ export default function AssignmentPlayer() {
             </HStack>
           )}
 
-          {question.hint && !submitted && (
-            <Flex fontSize="xs" color="blue.600" mb={3} gap={1}>
-              <Box color="orange.400">
-                <LmIcon name="tip" size={18} />
-              </Box>
-              <RichText fontSize="xs" color="blue.600">
-                {question.hint}
-              </RichText>
-            </Flex>
-          )}
+          {!submitted && <QuestionHint hint={question.hint} />}
 
           {/* Grouped by sub-question when the question has parts. The answer
               slots are untouched — each still carries its own marks and its own

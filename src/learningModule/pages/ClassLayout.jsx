@@ -16,7 +16,7 @@ import {
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { loginPathFor } from '../../authRedirect';
-import { ErrorState, Loading } from '../components/common';
+import { ClassShellSkeleton, ErrorState, Loading } from '../components/common';
 import { LmIcon } from '../components/Icon';
 import useStableNavigate from '../hooks/useStableNavigate';
 import NotificationPreferencesModal from '../components/NotificationPreferencesModal';
@@ -96,7 +96,7 @@ export default function ClassLayout() {
     });
   }, [classId]);
 
-  if (loading) return <Loading label="Opening class…" minH="360px" />;
+  if (loading) return <Loading label="Opening class…" minH="360px" skeleton={<ClassShellSkeleton />} />;
   if (error) {
     return (
       <Box>

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Button, SimpleGrid, HStack, Spinner, Text } from '@chakra-ui/react';
+import { Box, Button, SimpleGrid, HStack, Text } from '@chakra-ui/react';
+import { BusyDots } from './common';
 import { keyframes } from '@emotion/react';
 
 /**
@@ -137,7 +138,7 @@ export default function CodeKeypad({
 
         {/* The verdict, beside the row rather than under it: the tick lands on
             the same line the eye is already on when the last box fills. */}
-        {status === 'checking' && <Spinner size="sm" color="lmFg.faint" aria-label="Checking the code" />}
+        {status === 'checking' && <BusyDots color="lmFg.faint" label="Checking the code" />}
         {status === 'verified' && (
           <Box
             w="32px"

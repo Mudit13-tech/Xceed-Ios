@@ -1,11 +1,24 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
-import { Alert, AlertIcon, Badge, Box, Button, HStack, Heading, Text, VStack, useToast } from '@chakra-ui/react';
+import {
+  Alert,
+  AlertIcon,
+  Badge,
+  Box,
+  Button,
+  HStack,
+  Heading,
+  Text,
+  VStack,
+  useToast,
+} from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { DeadlineCountdown, ErrorState, Loading, requestFullscreen, useIsFullscreen } from '../components/common';
+import { DeadlineCountdown, ErrorState, Loading, requestFullscreen, SectionCardSkeleton, useIsFullscreen } from '../components/common';
 import { formatDateTime } from '../format';
 import FormRenderer from '../components/FormRenderer';
 import TypeformRenderer from '../components/TypeformRenderer';
+import { RespondentResults } from '../components/FormSummary';
+import { answerText } from './FormResponses';
 
 /** A class member filling in (or re-filling) a published form. */
 export default function FormFill() {
@@ -19,6 +32,7 @@ export default function FormFill() {
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [justSubmitted, setJustSubmitted] = useState(false);
+  const [submittedAnswers, setSubmittedAnswers] = useState(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -38,17 +52,21 @@ export default function FormFill() {
   const isFullscreen = useIsFullscreen();
 
   useEffect(() => {
-    // Fallback for a direct link/bookmark, where the "Fill in" click (which
-    // already tried this, still inside its user gesture) never happened.
     if (state?.form?.settings?.autoFullscreen && !document.fullscreenElement) {
       requestFullscreen();
     }
   }, [state]);
 
+  const loadResults = useCallback(
+    () => lmApi.getFormSummaryForRespondent(classId, formId),
+    [classId, formId],
+  );
+
   const submit = async (answers) => {
     setSubmitting(true);
     try {
       await lmApi.submitFormResponse(classId, formId, answers);
+      setSubmittedAnswers(answers);
       setJustSubmitted(true);
       toast({ status: 'success', title: 'Response recorded' });
     } catch (err) {
@@ -58,11 +76,11 @@ export default function FormFill() {
     }
   };
 
-  if (loading) return <Loading label="Loading form…" />;
+  if (loading) return <Loading label="Loading form…" skeleton={<SectionCardSkeleton lines={4} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!state) return null;
 
-  const { form, existingResponse } = state;
+  const { form, existingResponse, respondent } = state;
   const oneAtATime = form.settings?.displayMode === 'one_at_a_time';
 
   if (justSubmitted) {
@@ -70,6 +88,24 @@ export default function FormFill() {
       <VStack align="stretch" spacing={4} maxW="640px">
         <Heading size="md">Thanks!</Heading>
         <Text>Your response to &ldquo;{form.title}&rdquo; has been recorded.</Text>
+        {form.settings?.showSummaryToRespondents && submittedAnswers && (
+          <Box>
+            <Heading size="sm" mb={3}>Your answers</Heading>
+            <VStack align="stretch" spacing={2}>
+              {form.questions.map((question) => {
+                const byQuestion = new Map((submittedAnswers || []).map((a) => [String(a.questionId), a]));
+                const answer = byQuestion.get(String(question._id));
+                return (
+                  <Box key={question._id} borderBottomWidth="1px" borderColor="lmBorder.subtle" pb={2}>
+                    <Text fontSize="xs" color="lmFg.muted">{question.title}</Text>
+                    <Text fontSize="sm">{answerText(question, answer)}</Text>
+                  </Box>
+                );
+              })}
+            </VStack>
+          </Box>
+        )}
+        {form.settings?.showSummaryToRespondents && <RespondentResults load={loadResults} />}
         <Box>
           {form.settings?.oneResponsePerPerson && (
             <Button
@@ -78,6 +114,7 @@ export default function FormFill() {
               mr={2}
               onClick={async () => {
                 setJustSubmitted(false);
+                setSubmittedAnswers(null);
                 setLoading(true);
                 await load();
               }}
@@ -108,6 +145,11 @@ export default function FormFill() {
         {form.description && (
           <Text fontSize="sm" color="lmFg.muted" mt={1}>
             {form.description}
+          </Text>
+        )}
+        {form.settings?.collectEmail && respondent?.email && (
+          <Text fontSize="sm" color="lmFg.muted" mt={2}>
+            Your response will be recorded against <strong>{respondent.email}</strong>.
           </Text>
         )}
         {!form.closed && existingResponse && (

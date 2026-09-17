@@ -31,9 +31,11 @@ import {
 import { FiArrowDown, FiArrowUp, FiCopy, FiTrash2 } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
-import { CopyLinkButton, ErrorState, Loading, SectionCard } from '../components/common';
+import { CopyLinkButton, ErrorState, FormSkeleton, Loading, SectionCard } from '../components/common';
 import FormPreviewModal from '../components/FormPreviewModal';
 import { LmIcon } from '../components/Icon';
+import AutosaveStatus from '../components/AutosaveStatus';
+import useEditorAutosave from '../hooks/useEditorAutosave';
 
 /**
  * Authoring surface for a form — a Google-Forms-like builder. Entirely
@@ -451,6 +453,21 @@ export default function FormEditor() {
 
   const problems = useMemo(() => validate(questions), [questions]);
 
+  // The form exactly as the server wants it. Shared by the Save button and the
+  // autosave, so the two can never drift into sending different documents.
+  const payload = useMemo(
+    () =>
+      form && {
+        title: form.title,
+        description: form.description,
+        category: form.category === 'assignment' ? 'assignment' : 'normal',
+        settings: form.settings,
+        sections: sections.map((section, order) => ({ ...section, order })),
+        questions: questions.map((question, order) => ({ ...question, _key: undefined, order })),
+      },
+    [form, sections, questions],
+  );
+
   const patchQuestion = (index, patch) =>
     setQuestions((current) => current.map((question, i) => (i === index ? { ...question, ...patch } : question)));
 
@@ -463,35 +480,44 @@ export default function FormEditor() {
       return next;
     });
 
-  const save = async () => {
+  const save = async ({ quiet = false } = {}) => {
     if (questions.length && problems.length) {
-      toast({ status: 'warning', title: problems[0] });
+      if (!quiet) toast({ status: 'warning', title: problems[0] });
       return false;
     }
-    setSaving(true);
+    if (!quiet) setSaving(true);
     setServerProblems([]);
     try {
-      const updated = await lmApi.updateForm(classId, formId, {
-        title: form.title,
-        description: form.description,
-        category: form.category === 'assignment' ? 'assignment' : 'normal',
-        settings: form.settings,
-        sections: sections.map((section, order) => ({ ...section, order })),
-        questions: questions.map((question, order) => ({ ...question, _key: undefined, order })),
-      });
+      const updated = await lmApi.updateForm(classId, formId, payload);
+      // Adopting the server's copy replaces everything on screen, which is fine
+      // when a teacher pressed Save and is watching, and is not fine thirty
+      // seconds after they stopped typing — it would pull the sentence they are
+      // part-way through out from under them.
+      if (quiet) return true;
       setForm(updated);
       if (updated.questions) setQuestions(withKeys(updated.questions));
       if (updated.sections) setSections(withSectionIds(updated.sections));
+      autosave.markSaved();
       toast({ status: 'success', title: 'Saved' });
       return true;
     } catch (err) {
+      if (quiet) throw err;
       setServerProblems(err.payload?.errors || [err.message]);
       toast({ status: 'error', title: err.message });
       return false;
     } finally {
-      setSaving(false);
+      if (!quiet) setSaving(false);
     }
   };
+
+  /* Paused once published: students can be filling the form in, and an edit
+     reaching them thirty seconds after it was typed is not something anyone
+     asked for. Save and Unpublish both still work. */
+  const autosave = useEditorAutosave({
+    payload,
+    active: !loading && !error && !form?.published && !(questions.length && problems.length),
+    save: () => save({ quiet: true }),
+  });
 
   const togglePublish = async () => {
     // The server refuses this too; checking here saves a round trip and says
@@ -511,7 +537,7 @@ export default function FormEditor() {
     }
   };
 
-  if (loading) return <Loading label="Loading form…" />;
+  if (loading) return <Loading label="Loading form…" skeleton={<FormSkeleton />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   const setSetting = (key, value) =>
@@ -527,9 +553,12 @@ export default function FormEditor() {
   return (
     <VStack align="stretch" spacing={5}>
       <Flex gap={3} wrap="wrap" align="center">
-        <Heading size="md" flex="1">
+        <Heading size="md">
           Edit form
         </Heading>
+        <Box flex="1">
+          <AutosaveStatus {...autosave} pausedReason={form.published ? 'this form is published' : undefined} />
+        </Box>
         {form.published && form.shareCode && (
           <CopyLinkButton to={`/learning/form/link/${form.shareCode}`} />
         )}
@@ -713,8 +742,16 @@ export default function FormEditor() {
                 'A second submission overwrites the first rather than adding a new row.',
                 true,
               ],
-              ['collectEmail', 'Ask respondents to confirm their email', ''],
-              ['showSummaryToRespondents', 'Let respondents see the summary after submitting', ''],
+              [
+                'collectEmail',
+                'Record an email address with each response',
+                'Signed-in respondents are shown the address on their account. Anyone answering through a share link is asked for one before the form opens.',
+              ],
+              [
+                'showSummaryToRespondents',
+                'Let respondents see the summary after submitting',
+                'Shows the per-question totals once they have answered — no names, and not the drop-off figures on this page. Written answers are shown as given, so leave this off if a question invites anything personal.',
+              ],
             ].map(([key, label, hint, defaultOn]) => (
               <FormControl key={key} display="flex" alignItems="flex-start" gap={3}>
                 <Switch

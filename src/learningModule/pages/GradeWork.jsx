@@ -20,7 +20,7 @@ import {
 import lmApi from '../api/lmApi';
 import { AttachmentList } from '../components/Attachments';
 import CommentThread from '../components/CommentThread';
-import { ErrorState, Loading, SectionCard, StatTile, StateBadge } from '../components/common';
+import { ErrorState, Loading, SectionCard, StateBadge, StatTile, TableSkeleton } from '../components/common';
 import { formatDateTime, initials } from '../format';
 
 /**
@@ -116,7 +116,7 @@ export default function GradeWork() {
     });
   };
 
-  if (loading) return <Loading label="Loading student work…" />;
+  if (loading) return <Loading label="Loading student work…" skeleton={<TableSkeleton rows={6} columns={5} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!data) return null;
 

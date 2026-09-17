@@ -15,7 +15,8 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, WorkListSkeleton } from '../components/common';
+import DeleteButton from '../components/DeleteButton';
 
 /**
  * The class's virtual lab experiments.
@@ -92,7 +93,7 @@ export default function Labs() {
     }
   };
 
-  if (loading) return <Loading label="Loading experiments…" />;
+  if (loading) return <Loading label="Loading experiments…" skeleton={<WorkListSkeleton />} />;
 
   return (
     <Box>
@@ -215,9 +216,7 @@ export default function Labs() {
                     >
                       {lab.published ? 'Unpublish' : 'Publish'}
                     </Button>
-                    <Button size="sm" variant="ghost" colorScheme="red" onClick={() => remove(lab)}>
-                      ✕
-                    </Button>
+                    <DeleteButton label="Delete lab" onClick={() => remove(lab)} />
                   </>
                 ) : (
                   <Button

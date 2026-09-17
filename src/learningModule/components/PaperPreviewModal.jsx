@@ -16,9 +16,9 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
-  Spinner,
   Text,
 } from '@chakra-ui/react';
+import { SectionCardSkeleton } from './common';
 import lmApi from '../api/lmApi';
 import RichText from './RichText';
 import { formatAnswerValue } from '../format';
@@ -117,8 +117,8 @@ export default function PaperPreviewModal({ isOpen, onClose, classId, kind = 'tu
 
           {busy && !samples ? (
             <HStack py={6} justify="center">
-              <Spinner size="sm" />
-              <Text fontSize="sm" color="lmFg.muted">
+              <SectionCardSkeleton lines={4} title={false} width="100%" />
+              <Text fontSize="sm" color="lmFg.muted" srOnly>
                 Rolling sample papers…
               </Text>
             </HStack>

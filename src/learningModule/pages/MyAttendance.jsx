@@ -36,7 +36,7 @@ import {
 
 import getEnvironment from '../../getenvironment';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, TableSkeleton } from '../components/common';
 import MyGroundTruthPhotos from '../components/MyGroundTruthPhotos';
 import StudentAttendanceMap from '../components/StudentAttendanceMap';
 import { relativeTime } from '../format';
@@ -204,7 +204,7 @@ export default function MyAttendance() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (state.loading && !profile) return <Loading label="Loading your attendance…" />;
+  if (state.loading && !profile) return <Loading label="Loading your attendance…" skeleton={<TableSkeleton rows={8} columns={5} />} />;
   if (state.error && !profile) return <ErrorState error={state.error} onRetry={load} />;
 
   const { records = [], reasons = [], rollNo, windowDays } = state.data || {};

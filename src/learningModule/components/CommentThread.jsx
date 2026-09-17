@@ -5,7 +5,6 @@ import {
   Button,
   Flex,
   HStack,
-  IconButton,
   Text,
   Textarea,
   useToast,
@@ -13,6 +12,7 @@ import {
 import lmApi from '../api/lmApi';
 import { relativeTime } from '../format';
 import { LmIcon } from './Icon';
+import DeleteButton from './DeleteButton';
 
 /**
  * Comment list + composer, reused for class comments on stream posts and
@@ -120,12 +120,9 @@ export default function CommentThread({
             </Text>
           </Box>
           {(canModerate || String(comment.authorId) === String(currentUserId)) && (
-            <IconButton
+            <DeleteButton
               size="xs"
-              variant="ghost"
-              colorScheme="gray"
-              aria-label="Delete comment"
-              icon={<LmIcon name="close" size={13} />}
+              label="Delete comment"
               onClick={() => remove(comment._id)}
               flexShrink={0}
             />

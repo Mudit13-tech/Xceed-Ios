@@ -16,7 +16,7 @@ import {
   useColorModeValue,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { DueBadge, EmptyState, ErrorState, Loading, StateBadge } from '../components/common';
+import { DueBadge, EmptyState, ErrorState, Loading, StateBadge, WorkListSkeleton } from '../components/common';
 import { courseworkMeta } from '../format';
 import { LmIcon } from '../components/Icon';
 
@@ -90,7 +90,7 @@ export default function Todo() {
     queryFn: () => lmApi.todo(),
   });
 
-  if (loading) return <Loading label="Gathering your work…" />;
+  if (loading) return <Loading label="Gathering your work…" skeleton={<WorkListSkeleton count={5} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   const { assigned = [], missing = [], done = [], toReview = [] } = data || {};

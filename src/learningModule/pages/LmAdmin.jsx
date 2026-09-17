@@ -18,9 +18,10 @@ import {
 import { Link as RouterLink } from 'react-router-dom';
 
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, StatTile, WorkListSkeleton } from '../components/common';
 import { relativeTime } from '../format';
 import { sebDiagnosis } from '../sebDiagnosis';
+import { LmIcon } from '../components/Icon';
 
 /**
  * The lm-admin dashboard: what the module looks like right now, platform-wide.
@@ -166,7 +167,7 @@ function SharedSebCard() {
       subtitle="One .seb file and its Config Key for every exam in the institution. A quiz that uploads its own still uses its own."
     >
       {state === null ? (
-        <Loading label="Checking…" />
+        <Loading label="Checking…" skeleton={<WorkListSkeleton />} />
       ) : (
         <>
           {/* Itemised, because "not working" has two causes and an administrator
@@ -471,7 +472,7 @@ function SebInstallerCard() {
       data-testid="seb-installer-card"
     >
       {state === null ? (
-        <Loading label="Checking…" />
+        <Loading label="Checking…" skeleton={<WorkListSkeleton />} />
       ) : (
         <Stack spacing={3}>
           <SebInstallerRow
@@ -553,7 +554,7 @@ function DeletionRequestsCard({ requests, onRefresh }) {
               <Button size="sm" variant="outline" onClick={() => restore(klass._id)}>
                 Restore
               </Button>
-              <Button size="sm" colorScheme="red" onClick={() => permanentlyDelete(klass._id, klass.name)}>
+              <Button size="sm" colorScheme="red" leftIcon={<LmIcon name="delete" size={15} />} onClick={() => permanentlyDelete(klass._id, klass.name)}>
                 Delete permanently
               </Button>
             </HStack>
@@ -585,7 +586,7 @@ export default function LmAdmin() {
     load();
   }, [load]);
 
-  if (loading) return <Loading label="Loading admin dashboard…" />;
+  if (loading) return <Loading label="Loading admin dashboard…" skeleton={<WorkListSkeleton />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   const { courses, people, bugs, feedback, deletionRequests } = summary;

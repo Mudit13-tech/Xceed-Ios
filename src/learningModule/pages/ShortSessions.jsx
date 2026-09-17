@@ -18,7 +18,7 @@ import {
 } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading } from '../components/common';
+import { EmptyState, ErrorState, Loading, TableSkeleton } from '../components/common';
 import { formatDateTime, relativeTime } from '../format';
 
 /**
@@ -51,7 +51,7 @@ export default function ShortSessions() {
     load();
   }, [load]);
 
-  if (loading) return <Loading label="Loading sessions…" />;
+  if (loading) return <Loading label="Loading sessions…" skeleton={<TableSkeleton rows={6} columns={5} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   return (

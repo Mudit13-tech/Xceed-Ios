@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 
 import { renderWithProviders } from '../../test/renderWithProviders';
 
@@ -38,12 +38,13 @@ vi.mock('../hooks/useShortStream', () => ({
 
 const getTutorial = vi.fn();
 const myTutorialAttempt = vi.fn();
+const checkTutorialAnswer = vi.fn();
 vi.mock('../api/lmApi', () => ({
   default: {
     getTutorial: (...a) => getTutorial(...a),
     myTutorialAttempt: (...a) => myTutorialAttempt(...a),
     saveTutorialAttempt: vi.fn(),
-    checkTutorialAnswer: vi.fn(),
+    checkTutorialAnswer: (...a) => checkTutorialAnswer(...a),
     submitTutorialAttempt: vi.fn(),
     tutorialLiveStreamUrl: () => 'https://example.test/live/stream',
     tutorialLiveState: vi.fn(),
@@ -109,4 +110,31 @@ it('shows only the opened question, the Live badge, and a waiting line for the r
   // …and there is a standing "waiting for the next question" line because one
   // of the two questions is still closed.
   expect(screen.getByText(/waiting for the teacher to open the next question/i)).toBeInTheDocument();
+});
+
+it('shows the worked solution mid-session only once the server releases it', async () => {
+  getTutorial.mockResolvedValue(tutorial);
+  const sitting = liveSitting();
+  sitting.attempt.questions[0].solution = '';
+  myTutorialAttempt.mockResolvedValue(sitting);
+  // A correct answer on a question the room is still on releases its solution.
+  checkTutorialAnswer.mockResolvedValue({
+    checkable: true,
+    correct: true,
+    checksUsed: 1,
+    checksAllowed: 0,
+    solution: '<p>Multiply V by I.</p>',
+  });
+
+  const { default: TutorialPlayer } = await import('../pages/TutorialPlayer');
+  renderWithProviders(<TutorialPlayer />);
+
+  await screen.findByText(/opened question/i);
+  expect(screen.queryByText(/worked solution/i)).not.toBeInTheDocument();
+
+  fireEvent.change(screen.getByPlaceholderText(/your answer/i), { target: { value: '90' } });
+  fireEvent.click(screen.getByRole('button', { name: /^check$/i }));
+
+  expect(await screen.findByText(/multiply v by i/i)).toBeInTheDocument();
+  expect(screen.getByText(/worked solution/i)).toBeInTheDocument();
 });

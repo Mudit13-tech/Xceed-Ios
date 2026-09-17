@@ -15,7 +15,6 @@ import {
   InputGroup,
   InputRightAddon,
   Progress,
-  Spinner,
   Text,
   Tooltip,
   useToast,
@@ -23,8 +22,9 @@ import {
 import lmApi from '../api/lmApi';
 import useShortStream from '../hooks/useShortStream';
 import AssignmentUploads from '../components/AssignmentUploads';
-import { ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { BusyDots, ErrorState, Loading, SectionCard, SectionCardSkeleton, StatTile } from '../components/common';
 import RichText from '../components/RichText';
+import QuestionHint from '../components/QuestionHint';
 import ChoiceAnswerInput from '../components/ChoiceAnswerInput';
 import QuestionTypeBadge from '../components/QuestionTypeBadge';
 import { hasAnswer, isChoiceQuestion } from '../questionTypes';
@@ -43,7 +43,7 @@ const answerId = (questionId, key) => `${questionId}:${key}`;
  * before submission this is a nudge and not a mark.
  */
 function LiveVerdict({ verdict, busy }) {
-  if (busy) return <Spinner size="xs" color="lmFg.faint" />;
+  if (busy) return <BusyDots size="4px" color="lmFg.faint" label="Checking your answer" />;
   if (!verdict) return null;
 
   if (verdict.checkable === false) {
@@ -168,7 +168,9 @@ export default function TutorialPlayer() {
       try {
         const [detail, sitting] = await Promise.all([
           lmApi.getTutorial(classId, tutorialId),
-          lmApi.myTutorialAttempt(classId, tutorialId),
+          // A merge is the live stream nudging this player, not the student
+          // arriving: it reviews what is on file rather than starting anything.
+          lmApi.myTutorialAttempt(classId, tutorialId, { review: merge }),
         ]);
         setTutorial(detail);
         setAttempt(sitting.attempt);
@@ -306,6 +308,20 @@ export default function TutorialPlayer() {
           ...(Array.isArray(raw) ? { selected: raw } : { raw }),
         });
         setVerdicts((prev) => ({ ...prev, [id]: result }));
+        // Getting the whole question right releases its worked solution in a
+        // live session; drop it in without waiting for a refresh.
+        if (result?.solution) {
+          setAttempt((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  questions: prev.questions.map((q) =>
+                    q.questionId === question.questionId ? { ...q, solution: result.solution } : q,
+                  ),
+                }
+              : prev,
+          );
+        }
       } catch {
         // Silent. A failed check must not read as a wrong answer, and the student
         // can still submit — marking happens server-side either way.
@@ -338,7 +354,7 @@ export default function TutorialPlayer() {
     }
   };
 
-  if (loading) return <Loading label="Preparing your questions…" />;
+  if (loading) return <Loading label="Preparing your questions…" skeleton={<SectionCardSkeleton lines={4} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!tutorial) return null;
 
@@ -528,7 +544,7 @@ export default function TutorialPlayer() {
       {isLive && openQuestions.length === 0 && !liveEnded && (
         <SectionCard>
           <Flex align="center" gap={3}>
-            <Spinner size="sm" color="teal.400" />
+            <BusyDots color="teal.400" label="Waiting for the teacher" />
             <Text fontSize="sm" color="lmFg.subtle">
               Waiting for your teacher to open the first question…
             </Text>
@@ -565,16 +581,7 @@ export default function TutorialPlayer() {
             </HStack>
           )}
 
-          {question.hint && !submitted && (
-            <Flex fontSize="xs" color="blue.600" mb={3} gap={1}>
-              <Box color="orange.400">
-                <LmIcon name="tip" size={18} />
-              </Box>
-              <RichText fontSize="xs" color="blue.600">
-                {question.hint}
-              </RichText>
-            </Flex>
-          )}
+          {!submitted && <QuestionHint hint={question.hint} />}
 
           {/* Grouped by sub-question when the question has parts. The answer
               slots are untouched — each still carries its own marks and its own
@@ -705,7 +712,10 @@ export default function TutorialPlayer() {
             </Box>
           ))}
 
-          {submitted && question.solution && (
+          {/* The server decides when this is released (after submitting, or in a
+              live session once attempted and either solved or moved past), so
+              whatever it sends is shown — including mid-paper. */}
+          {question.solution && (
             <>
               <Divider my={3} />
               <Text fontSize="xs" fontWeight="600" color="lmFg.subtle" mb={1}>
@@ -720,7 +730,7 @@ export default function TutorialPlayer() {
 
       {moreToCome && (
         <Flex align="center" gap={3} px={2} mb={4} color="lmFg.muted">
-          <Spinner size="xs" color="teal.400" />
+          <BusyDots color="teal.400" size="4px" label="Waiting for the teacher" />
           <Text fontSize="sm">Waiting for the teacher to open the next question…</Text>
         </Flex>
       )}

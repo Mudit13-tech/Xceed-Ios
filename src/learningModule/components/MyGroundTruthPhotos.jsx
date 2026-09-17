@@ -25,7 +25,7 @@ import {
 } from '@chakra-ui/react';
 
 import getEnvironment from '../../getenvironment';
-import { EmptyState, ErrorState, Loading, SectionCard } from './common';
+import { EmptyState, ErrorState, Loading, SectionCard, SectionCardSkeleton } from './common';
 import { formatDate, relativeTime } from '../format';
 
 /**
@@ -554,7 +554,7 @@ export default function MyGroundTruthPhotos() {
     }
   };
 
-  if (state.loading && !state.data) return <Loading label="Loading your photos…" />;
+  if (state.loading && !state.data) return <Loading label="Loading your photos…" skeleton={<SectionCardSkeleton lines={4} />} />;
 
   if (state.error) {
     if (state.error.code === 'NOT_ON_ERP_ROSTER') {

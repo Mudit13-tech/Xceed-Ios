@@ -22,9 +22,10 @@ import {
 } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, TableSkeleton } from '../components/common';
 import { formatDateTime, relativeTime } from '../format';
 import { githubIssueUrl } from '../githubIssue';
+import DeleteButton from '../components/DeleteButton';
 
 /**
  * "Something is broken" — or "this would be better if".
@@ -169,16 +170,15 @@ function ReportForm({ classes, pointsPerReport, onSent }) {
         {screenshot && (
           <Box mt={2} position="relative" display="inline-block">
             <Image src={screenshot} maxH="120px" borderRadius="md" borderWidth="1px" />
-            <Button
+            <DeleteButton
               size="xs"
-              colorScheme="red"
+              label="Remove screenshot"
+              variant="solid"
               position="absolute"
               top={1}
               right={1}
               onClick={() => setScreenshot(null)}
-            >
-              ✕
-            </Button>
+            />
           </Box>
         )}
       </Box>
@@ -400,7 +400,7 @@ export default function BugReports() {
     load();
   }, [load]);
 
-  if (loading) return <Loading label="Loading…" />;
+  if (loading) return <Loading label="Loading…" skeleton={<TableSkeleton rows={6} columns={5} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   const form = (

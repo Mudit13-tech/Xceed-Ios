@@ -137,7 +137,23 @@ function FilterBlock({
             .then(data => {
                 const details = Array.isArray(data.subjectDetails) ? data.subjectDetails : [];
                 if (details.length) {
-                    setSubjects(details);
+                    // A subject taught across several timetable sessions has one
+                    // Subject document per session, so `subjectDetails` can list
+                    // the same abbreviation more than once — collapse to one
+                    // dropdown entry per name, preferring whichever copy has a
+                    // subCode, then the most recently created document.
+                    const byName = new Map();
+                    for (const s of details) {
+                        const key = String(s.subName || s.subjectFullName || '').trim().toLowerCase();
+                        const existing = byName.get(key);
+                        if (!existing) { byName.set(key, s); continue; }
+                        const hasCode = (v) => !!String(v.subCode || '').trim();
+                        const better = hasCode(s) !== hasCode(existing)
+                            ? hasCode(s)
+                            : String(s._id) > String(existing._id);
+                        if (better) byName.set(key, s);
+                    }
+                    setSubjects([...byName.values()]);
                     return;
                 }
                 // Fallback: no matching Subject doc found (e.g. it was never

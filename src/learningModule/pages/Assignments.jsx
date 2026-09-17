@@ -16,12 +16,13 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, WorkListSkeleton } from '../components/common';
 import { toDateTimeInput } from '../format';
 import FormCard from '../components/FormCard';
 import FormPreviewModal from '../components/FormPreviewModal';
 import PaperPreviewModal from '../components/PaperPreviewModal';
 import { LmIcon } from '../components/Icon';
+import DeleteButton from '../components/DeleteButton';
 
 /**
  * Lists the class's parameterised assignments — the ones where every student
@@ -144,7 +145,7 @@ export default function Assignments() {
     }
   };
 
-  if (loading) return <Loading label="Loading assignments…" />;
+  if (loading) return <Loading label="Loading assignments…" skeleton={<WorkListSkeleton />} />;
 
   return (
     <Box>
@@ -326,9 +327,7 @@ export default function Assignments() {
                     >
                       {assignment.published ? 'Unpublish' : 'Publish'}
                     </Button>
-                    <Button size="sm" variant="ghost" colorScheme="red" onClick={() => remove(assignment)}>
-                      Delete
-                    </Button>
+                    <DeleteButton label="Delete assignment" onClick={() => remove(assignment)} />
                   </>
                 ) : (
                   <Button

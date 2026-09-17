@@ -143,8 +143,8 @@ describe('typing a placeholder declares the variable', () => {
     typePrompt('{{R}}');
     await waitFor(() => expect(screen.getByDisplayValue('R')).toBeInTheDocument());
 
-    // The ✕ on the variable row.
-    await userEvent.click(screen.getAllByRole('button', { name: '✕' })[0]);
+    // The delete icon on the variable row.
+    await userEvent.click(screen.getAllByRole('button', { name: 'Remove variable' })[0]);
     expect(screen.queryByDisplayValue('R')).not.toBeInTheDocument();
 
     // Editing the prompt again must not resurrect it.

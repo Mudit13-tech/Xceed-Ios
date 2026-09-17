@@ -3,6 +3,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Badge, Box, Button, Flex, HStack, Heading, Text } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { CopyLinkButton, DeadlineCountdown, SectionCard, requestFullscreen } from './common';
+import DeleteButton from './DeleteButton';
 
 /**
  * One form in a list. Shared by the Forms tab and the Assignments tab — a form
@@ -68,10 +69,8 @@ export default function FormCard({ form, classId, isTeacher, onDeleted, onPrevie
               >
                 Responses
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                colorScheme="red"
+              <DeleteButton
+                label="Delete form"
                 onClick={async () => {
                   // eslint-disable-next-line no-alert
                   if (!window.confirm(`Delete "${form.title}"? This cannot be undone.`)) return;
@@ -83,9 +82,7 @@ export default function FormCard({ form, classId, isTeacher, onDeleted, onPrevie
                     window.alert(err.message);
                   }
                 }}
-              >
-                Delete
-              </Button>
+              />
             </>
           ) : (
             <Button

@@ -21,7 +21,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, TableSkeleton } from '../components/common';
 import CircuitCanvas from '../components/lab/CircuitCanvas';
 import { eng } from '../components/lab/format';
 
@@ -90,7 +90,7 @@ export default function LabResults() {
     }
   };
 
-  if (loading) return <Loading label="Loading submissions…" />;
+  if (loading) return <Loading label="Loading submissions…" skeleton={<TableSkeleton rows={6} columns={5} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!data) return null;
 

@@ -23,7 +23,7 @@ import {
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import RichText from '../components/RichText';
-import { ErrorState, Loading } from '../components/common';
+import { ErrorState, Loading, SectionCardSkeleton } from '../components/common';
 import { LmIcon } from '../components/Icon';
 
 const TYPE_LABEL = {
@@ -93,7 +93,7 @@ export default function QuizPreviewPage() {
     loadQuiz();
   }, [loadQuiz]);
 
-  if (loading) return <Loading label="Loading quiz preview…" />;
+  if (loading) return <Loading label="Loading quiz preview…" skeleton={<SectionCardSkeleton lines={4} />} />;
   if (error) return <ErrorState error={error} onRetry={loadQuiz} />;
   if (!quiz) return null;
 

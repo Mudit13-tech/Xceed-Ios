@@ -25,7 +25,7 @@ import {
 import { FiDownload, FiUpload } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
-import { DeadlineCountdown, ErrorState, Loading, SectionCard } from '../components/common';
+import { DeadlineCountdown, ErrorState, FormSkeleton, Loading, SectionCard } from '../components/common';
 import HintTooltip from '../components/HintTooltip';
 import NotebookCell from '../components/NotebookCell';
 import ImportQuestionsModal from '../components/ImportQuestionsModal';
@@ -607,7 +607,7 @@ export default function NotebookEditor() {
     return () => clearInterval(timer);
   }, [dirty]);
 
-  if (loading) return <Loading label="Loading notebook…" />;
+  if (loading) return <Loading label="Loading notebook…" skeleton={<FormSkeleton />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   const setSetting = (key, value) =>
