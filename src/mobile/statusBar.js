@@ -1,5 +1,7 @@
-import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
+
+import { colorMode, watchColorMode } from './colorMode';
+import { isIosApp } from './platform';
 
 /**
  * Keep the app's own header out from under the status bar.
@@ -79,6 +81,38 @@ import { StatusBar, Style } from '@capacitor/status-bar';
  * The only call that does work is the one that finds the plugin has just
  * reset it.
  *
+ *
+ * Why the clock and battery were invisible
+ * ----------------------------------------
+ * Turning the overlay off is what creates the strip in the first place. From
+ * the same plugin source:
+ *
+ *     private var backgroundColor = UIColor.black
+ *
+ *     func setOverlaysWebView(_ overlay: Bool) {
+ *         ...
+ *         } else {
+ *             initializeBackgroundViewIfNeeded()   // uses backgroundColor
+ *
+ * So iOS stops drawing the status bar over the page and the plugin puts its own
+ * view behind it — a **black** one, because `StatusBarConfig.backgroundColor`
+ * defaults to black and capacitor.config.json says nothing about it. Meanwhile
+ * this file asked for `Style.Light`, whose name reads like "a light status bar"
+ * and means the opposite: light *background*, therefore **dark glyphs**
+ * (`.darkContent`). Black glyphs on a black strip. The clock, the battery and
+ * the signal bars were being drawn the whole time, in the one colour that
+ * cannot be seen against what is behind them.
+ *
+ * Both halves are now set together, from the app's own colour mode, so they
+ * cannot disagree again: the strip takes the page background the app is already
+ * showing (gray.50 or gray.900 — see PAGE_BACKGROUND), and the glyph style is
+ * derived from that same choice rather than written down separately.
+ *
+ * `handleViewDidAppear` above re-applies `config.backgroundColor` too, so the
+ * colour is reset to black by exactly the presentations that reset the overlay
+ * — which is why it is asserted inside apply(), and gets the reset defences
+ * already built here for free.
+ *
  * Note for anyone tempted to add a debounce here: an earlier version of this
  * fix had one, and the debounce was the bug. The reset arrives *as* a resize a
  * fraction after the one the dismissal animation produces, so a settle window
@@ -87,6 +121,25 @@ import { StatusBar, Style } from '@capacitor/status-bar';
  * that is safe.
  */
 
+/**
+ * The strip's colour, per colour mode: the page background the app is already
+ * drawing underneath its header (`useColorModeValue('gray.50', 'gray.900')` in
+ * learningModule/components/LearningLayout.jsx), so the status bar reads as the
+ * top of the page rather than a band bolted above it.
+ *
+ * Literals rather than theme lookups because this runs outside React, before
+ * any provider exists, and because of the plugin method it is handed to:
+ *
+ *     guard let hexString = call.options["color"] as? String,
+ *           let color = UIColor.capacitor.color(fromHex: hexString)
+ *     else { return }        // <- resolves nothing
+ *
+ * A colour it cannot parse leaves the promise pending for ever. Two constants
+ * cannot go wrong, and the call is made last in apply() so that even if one
+ * somehow did, it could not starve the two calls that matter more.
+ */
+const PAGE_BACKGROUND = { light: '#F7FAFC', dark: '#171923' };
+
 // Set once the listeners are installed, so a second configureStatusBar() call
 // does not stack another set of them.
 let watching = false;
@@ -94,9 +147,16 @@ let watching = false;
 let queued = false;
 
 async function apply() {
+  const mode = colorMode();
   try {
     await StatusBar.setOverlaysWebView({ overlay: false });
-    await StatusBar.setStyle({ style: Style.Light });
+    // Style is named for the background it is meant to sit on, not for the ink:
+    // Style.Light is dark glyphs for a light background, Style.Dark is light
+    // glyphs for a dark one. Derived from `mode` rather than chosen separately,
+    // because choosing it separately is how it came to contradict the colour
+    // behind it.
+    await StatusBar.setStyle({ style: mode === 'dark' ? Style.Dark : Style.Light });
+    await StatusBar.setBackgroundColor({ color: PAGE_BACKGROUND[mode] });
   } catch (error) {
     // A device without a configurable status bar is not a reason to fail
     // boot -- the app is entirely usable with the header where it was.
@@ -131,6 +191,12 @@ function watchForReset() {
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', reapply);
   }
+
+  // The moon/sun button in the header changes an attribute and nothing else --
+  // no resize, no viewDidAppear -- so none of the listeners around this one
+  // would hear it, and the strip would keep the old mode's colour until the
+  // next transition happened to repaint it.
+  watchColorMode(() => { void apply(); });
 
   // Returning from the background raises viewDidAppear too, and does not
   // always change the height on the way out and back.
@@ -171,7 +237,7 @@ function watchForReset() {
  * first call.
  */
 export async function configureStatusBar() {
-  if (Capacitor.getPlatform() !== 'ios') return;
+  if (!isIosApp()) return;
   await apply();
   watchForReset();
 }
