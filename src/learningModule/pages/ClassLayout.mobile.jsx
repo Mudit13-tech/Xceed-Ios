@@ -16,6 +16,14 @@
  * in one place and a tab added upstream appears here for free. Run
  * `npm run drift` to see what has changed in it.
  *
+ * The cost of the override is that this copy stops inheriting upstream work
+ * on the data layer, and that cost is real: the AMS sync that landed with this
+ * merge added a staleTime to the class query, a preload of the first few tabs'
+ * chunks, and a skeleton for the loading state -- three performance changes
+ * that would simply not have reached iOS. They are carried across by hand
+ * below. `npm run drift` reports what has changed in the AMS copy since, and
+ * it is worth reading before every release rather than after one.
+ *
  * The tab row is rebuilt here rather than reused because the desktop row is
  * sized for a pointer: 14px labels in a strip that a thumb has to land on
  * between two others. Its behaviour — which tabs a role sees, the accent that
@@ -30,7 +38,8 @@ import AmsClassLayout, { TABS } from './ClassLayout';
 import lmApi from '../api/lmApi';
 import { loginPathFor } from '../../authRedirect';
 import { isIosApp } from '../../mobile/platform';
-import { ErrorState, Loading } from '../components/common';
+import { preloadPath } from '../../routePreload';
+import { ClassShellSkeleton, ErrorState, Loading } from '../components/common';
 import IosClassHeader from '../components/IosClassHeader';
 import SubjectAttendanceStrip from '../components/SubjectAttendanceStrip';
 import useStableNavigate from '../hooks/useStableNavigate';
@@ -46,6 +55,10 @@ function IosClassLayout() {
     queryKey: ['learning', 'class', classId],
     queryFn: () => lmApi.getClass(classId),
     retry: false, // Don't retry on 401s so we can redirect immediately
+    // The class name, cover colour and settings don't change mid-session.
+    // 2 min keeps the header instant on every tab switch without hiding a
+    // rename or cover-colour change for longer than a meeting lasts.
+    staleTime: 2 * 60 * 1000,
   });
 
   useEffect(() => {
@@ -54,7 +67,19 @@ function IosClassLayout() {
     }
   }, [error, navigate]);
 
-  if (loading) return <Loading label="Opening class…" minH="360px" />;
+  // The moment a class opens, the user is very likely to click one of the
+  // first few tabs (Stream → Material → Shorts are the most-visited). Kick
+  // off the chunk fetches now — before the hover — so the download is
+  // already done (or well under way) by the time the click arrives.
+  useEffect(() => {
+    if (!classId) return;
+    const tabs = ['', 'material', 'shorts', 'quizzes', 'tutorials', 'assignments'];
+    tabs.forEach((tab) => {
+      preloadPath(`/learning/class/${classId}${tab ? `/${tab}` : ''}`);
+    });
+  }, [classId]);
+
+  if (loading) return <Loading label="Opening class…" minH="360px" skeleton={<ClassShellSkeleton />} />;
   if (error) {
     return (
       <Box>
