@@ -9,6 +9,7 @@ import { isInAppRoute, savePendingRoute } from '../utils/deepLink';
 import { setupOtaUpdater } from '../utils/otaUpdater';
 import { initializePushNotifications } from '../utils/pushNotifications';
 import { configureStatusBar } from './statusBar';
+import { setupSwipeBack } from './swipeBack';
 import { loadUiFonts } from './deferredFonts';
 import { setupSafeArea } from './safeArea';
 
@@ -66,6 +67,19 @@ function NativeAppListeners() {
     configureStatusBar();
     setupSafeArea();
   }, []);
+
+  // The iOS counterpart to the backButton listener below: that event only ever
+  // arrives on Android, so without this there is no way back from a screen
+  // whose own header does not offer one. Reads the same refs, so the two
+  // affordances cannot drift apart on where "back" leads. See ./swipeBack.js.
+  React.useEffect(
+    () =>
+      setupSwipeBack({
+        getPath: () => locationRef.current,
+        goBack: () => navigateRef.current(-1),
+      }),
+    [],
+  );
 
   React.useEffect(() => {
     let backButtonListener = null;
