@@ -24,7 +24,7 @@ import {
 } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
-import { ErrorState, Loading, SectionCard, StatTile, buttonTextStyles } from '../components/common';
+import { buttonTextStyles, ErrorState, Loading, SectionCard, StatTile, TableSkeleton } from '../components/common';
 import { formatDateTime } from '../format';
 import { richTextToPlain } from '../richTextUtils';
 import ShortResults from '../components/ShortResults';
@@ -59,7 +59,7 @@ export default function ShortReport() {
     load();
   }, [load]);
 
-  if (loading) return <Loading label="Loading report…" />;
+  if (loading) return <Loading label="Loading report…" skeleton={<TableSkeleton rows={6} columns={5} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   const { short, session, slides, summary, leaderboard, maxScore, hasGradableSlides } = report;

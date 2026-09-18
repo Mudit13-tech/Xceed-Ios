@@ -17,7 +17,6 @@ import {
   Table,
   Tbody,
   Td,
-  Spinner,
   Text,
   Th,
   Thead,
@@ -25,6 +24,7 @@ import {
   Tr,
   VStack,
 } from '@chakra-ui/react';
+import { BusyDots } from '../common';
 import SketchEditor from './SketchEditor';
 import { symbolFor } from './symbols';
 import { deviceSummary, eng, phase, QUANTITY_COLOR } from './format';
@@ -435,7 +435,7 @@ export function RunStatus({ lastRun, running, result }) {
   if (running) {
     return (
       <Flex align="center" gap={2} mb={2} px={2} py={1} borderRadius="md" bg="lmHue.blue50">
-        <Spinner size="xs" color="lmHue.blue700" />
+        <BusyDots size="4px" label="Solving" />
         <Text fontSize="xs" color="lmHue.blue700" fontWeight="600">
           Solving…
         </Text>

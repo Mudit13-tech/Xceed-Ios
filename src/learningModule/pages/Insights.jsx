@@ -16,7 +16,7 @@ import {
   useColorModeValue,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, SectionCardSkeleton, StatRowSkeleton, StatTile } from '../components/common';
 import { relativeTime } from '../format';
 
 export default function Insights() {
@@ -43,7 +43,7 @@ export default function Insights() {
     load();
   }, [load]);
 
-  if (loading) return <Loading label="Crunching class data…" />;
+  if (loading) return <Loading label="Crunching class data…" skeleton={<><StatRowSkeleton count={4} /><Box mt={4}><SectionCardSkeleton lines={4} mb={4} /><SectionCardSkeleton lines={4} /></Box></>} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!data) return null;
 

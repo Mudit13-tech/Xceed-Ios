@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   Box,
-  Button,
   Checkbox,
   HStack,
   Input,
@@ -15,6 +14,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
+import DeleteButton from './DeleteButton';
 
 /**
  * Answer-shaping and per-type field rendering shared by both student-facing
@@ -31,8 +31,14 @@ export const answerFor = (question, existing) => ({
   attachments: existing?.attachments || [],
 });
 
-/** Whether `answer` counts as filled in for `question` — ignores `question.required` on purpose, so callers decide when that check applies (e.g. "require every question" in one-at-a-time mode). */
-export const isAnswered = (question, answer) => {
+/**
+ * Whether `answer` counts as filled in for `question` — ignores `question.required` on purpose, so callers decide when that check applies (e.g. "require every question" in one-at-a-time mode).
+ *
+ * With `canUploadFiles: false` a file-upload question always counts as
+ * answered: a respondent with no way to attach a file would otherwise be
+ * unable to advance or submit.
+ */
+export const isAnswered = (question, answer, { canUploadFiles = true } = {}) => {
   switch (question.type) {
     case 'short_answer':
     case 'paragraph':
@@ -46,13 +52,13 @@ export const isAnswered = (question, answer) => {
     case 'date':
       return Boolean(answer.dateValue);
     case 'file_upload':
-      return answer.attachments.length > 0;
+      return !canUploadFiles || answer.attachments.length > 0;
     default:
       return true;
   }
 };
 
-export const isMissing = (question, answer) => question.required && !isAnswered(question, answer);
+export const isMissing = (question, answer, options) => question.required && !isAnswered(question, answer, options);
 
 /** Builds the payload shape the fill/submit endpoints expect. */
 export const buildAnswerPayload = (questions, answers) =>
@@ -68,8 +74,14 @@ export const buildAnswerPayload = (questions, answers) =>
     };
   });
 
-/** Local state + upload handling shared by both renderers. */
-export function useFormAnswers(form, existingResponse) {
+/**
+ * Local state + upload handling shared by both renderers.
+ *
+ * `uploadFiles(files)` overrides where a file goes: the class-scoped upload by
+ * default, the share link's own upload for a link respondent (FormLinkJoin),
+ * who has no class membership for the default to accept.
+ */
+export function useFormAnswers(form, existingResponse, { uploadFiles } = {}) {
   const toast = useToast();
   const existingByQuestion = new Map((existingResponse?.answers || []).map((a) => [String(a.questionId), a]));
   const [answers, setAnswers] = useState(() =>
@@ -87,7 +99,7 @@ export function useFormAnswers(form, existingResponse) {
     const key = String(question._id);
     setUploading((current) => ({ ...current, [key]: true }));
     try {
-      const { attachments } = await lmApi.uploadFiles(classId, files);
+      const { attachments } = uploadFiles ? await uploadFiles(files) : await lmApi.uploadFiles(classId, files);
       patch(key, { attachments: [...answers[key].attachments, ...attachments] });
     } catch (err) {
       toast({ status: 'error', title: err.message });
@@ -202,8 +214,7 @@ export function QuestionField({ question, answer, onChange, canUploadFiles, uplo
     if (!canUploadFiles) {
       return (
         <Text fontSize={scaleLabelSize === 'md' ? 'md' : 'sm'} color="lmFg.muted">
-          File attachments are not available when responding via a shared link — open this form from the class to
-          attach a file.
+          File attachments are not available here.
         </Text>
       );
     }
@@ -215,14 +226,11 @@ export function QuestionField({ question, answer, onChange, canUploadFiles, uplo
             {answer.attachments.map((file, i) => (
               <HStack key={`${file.url}-${i}`} justify="space-between">
                 <Text>{file.name}</Text>
-                <Button
+                <DeleteButton
                   size={size === 'lg' ? 'sm' : 'xs'}
-                  variant="ghost"
-                  colorScheme="red"
+                  label="Remove attachment"
                   onClick={() => onChange({ attachments: answer.attachments.filter((_, idx) => idx !== i) })}
-                >
-                  Remove
-                </Button>
+                />
               </HStack>
             ))}
           </VStack>

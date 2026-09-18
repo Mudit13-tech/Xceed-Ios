@@ -16,11 +16,11 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
-  Spinner,
   Text,
   VStack,
   useToast,
 } from '@chakra-ui/react';
+import { FormSkeleton } from './common';
 import lmApi from '../api/lmApi';
 import { looksLikeEmail, EMAIL_AS_NAME_MESSAGE } from '../displayName';
 
@@ -145,9 +145,7 @@ export default function EditIdentityModal({ isOpen, onClose, onSaved }) {
         <ModalCloseButton isDisabled={saving} />
         <ModalBody>
           {loading ? (
-            <VStack py={6}>
-              <Spinner />
-            </VStack>
+            <FormSkeleton fields={2} header={false} />
           ) : (
             <VStack align="stretch" spacing={4}>
               <Alert status="warning" borderRadius="md" fontSize="sm">

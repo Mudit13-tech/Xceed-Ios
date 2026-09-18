@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Badge, Box, Button, Flex, HStack, Heading, IconButton,useColorModeValue, Text } from '@chakra-ui/react';
+import { Badge, Box, Button, Flex, HStack, Heading, useColorModeValue, Text } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { buttonTextStyles, EmptyState, ErrorState, Loading } from '../components/common';
+import { buttonTextStyles, EmptyState, ErrorState, Loading, ThreadListSkeleton } from '../components/common';
 import { notificationIcon, relativeTime } from '../format';
 import NotificationPreferencesModal from '../components/NotificationPreferencesModal';
 import { LmIcon } from '../components/Icon';
+import DeleteButton from '../components/DeleteButton';
 
 export default function Notifications() {
   const [items, setItems] = useState([]);
@@ -49,7 +50,7 @@ export default function Notifications() {
     else load();
   };
 
-  if (loading) return <Loading />;
+  if (loading) return <Loading label="Loading notifications…" skeleton={<ThreadListSkeleton count={6} />} />;
 
   return (
     <Box>
@@ -146,11 +147,9 @@ export default function Notifications() {
                 </Text>
               </HStack>
             </Box>
-            <IconButton
+            <DeleteButton
               size="xs"
-              variant="ghost"
-              aria-label="Dismiss notification"
-              icon={<LmIcon name="close" size={14} />}
+              label="Delete notification"
               onClick={async () => {
                 await lmApi.deleteNotification(notification._id).catch(() => {});
                 load();

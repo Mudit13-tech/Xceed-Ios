@@ -45,7 +45,9 @@ const API = `${apiUrl}/api/v1/helpdesk`;
 /* ── styling ──────────────────────────────────────────────────────────────
    Plain CSS in one string, the same approach as GuidePage: this is a public
    page reachable while signed out, and it should not depend on a theme
-   provider or pull a component library into the route's chunk.
+   provider or pull a component library into the route's chunk. Chakra's
+   existing toggle sets data-theme on the document, which selects our dark
+   palette without adding a second theme state to this page.
 
    ## Colour carries the module
 
@@ -67,12 +69,31 @@ const API = `${apiUrl}/api/v1/helpdesk`;
 
 const CSS = `
 .hd { --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f8fafc;
+      --surface:#fff; --surface-alt:#f1f5f9; --avatar-bg:#e2e8f0;
+      --detail:#334155; --secondary:#475569; --control-line:#cbd5e1;
       --brand:#4f46e5; --brand-dark:#4338ca; --brand-bg:#eef2ff;
-      --accent:#4f46e5; --accent-dark:#4338ca; --accent-bg:#eef2ff;
+      --accent:var(--brand); --accent-dark:var(--brand-dark); --accent-bg:var(--brand-bg);
       --ok:#059669; --ok-bg:#ecfdf5; --warn:#b45309; --warn-bg:#fffbeb;
       --bad:#dc2626; --bad-bg:#fef2f2; --info:#0369a1; --info-bg:#f0f9ff;
+      --warn-text:#78350f; --info-text:#075985; --info-line:#bae6fd;
+      --bad-text:#991b1b; --bad-line:#fecaca; --focus-ring:rgba(79,70,229,.13);
       font-family:'Inter','Segoe UI',system-ui,sans-serif; color:var(--ink);
       background:var(--bg); min-height:100vh; }
+[data-theme='dark'] .hd {
+  --ink:#f1f5f9; --muted:#94a3b8; --line:#334155; --bg:#0f172a;
+  --surface:#1e293b; --surface-alt:#334155; --avatar-bg:#334155;
+  --detail:#e2e8f0; --secondary:#cbd5e1; --control-line:#64748b;
+  --brand-dark:#a5b4fc; --brand-bg:#252a52;
+  --ok-bg:#12372e; --warn-bg:#3b2a16; --bad-bg:#3d2027; --info-bg:#153349;
+  --warn-text:#fde68a; --info-text:#bae6fd; --info-line:#0369a1;
+  --bad-text:#fecaca; --bad-line:#b91c1c; --focus-ring:rgba(165,180,252,.3);
+}
+/* Resolve module colours on their own wrapper, so nested replies and choices
+   keep their category's palette when the document theme changes. */
+.hd-module { --accent:var(--module-accent); --accent-dark:var(--module-heading);
+             --accent-bg:var(--module-bg); }
+[data-theme='dark'] .hd-module { --accent-dark:var(--module-heading-dark);
+                               --accent-bg:var(--module-bg-dark); }
 .hd *{box-sizing:border-box;}
 .hd-wrap{max-width:860px;margin:0 auto;padding:clamp(12px,3vw,24px) clamp(12px,4vw,20px) 96px;}
 
@@ -99,10 +120,10 @@ const CSS = `
 .hd-dot{width:28px;height:28px;border-radius:9px;flex:0 0 auto;margin-top:2px;
   display:flex;align-items:center;justify-content:center;font-size:14px;
   background:var(--accent-bg);color:var(--accent-dark);}
-.hd-msg.me .hd-dot{background:#e2e8f0;color:#475569;}
+.hd-msg.me .hd-dot{background:var(--avatar-bg);color:var(--secondary);}
 /* min-width:0 is what lets a wide table inside a bubble scroll in its own box
    instead of pushing the whole page sideways on a phone. */
-.hd-bubble{background:#fff;border:1px solid var(--line);border-radius:14px;
+.hd-bubble{background:var(--surface);border:1px solid var(--line);border-radius:14px;
   padding:clamp(11px,3.4vw,14px) clamp(12px,3.8vw,16px);min-width:0;
   max-width:calc(100% - 44px);box-shadow:0 1px 2px rgba(15,23,42,.04);
   overflow-wrap:anywhere;}
@@ -127,13 +148,13 @@ const CSS = `
 .s-bad .hd-badge{background:var(--bad);} .s-bad{background:var(--bad-bg);}
 .s-info .hd-badge{background:var(--info);} .s-info{background:var(--info-bg);}
 .hd-check-label{font-weight:650;margin-right:4px;}
-.hd-check-detail{color:#334155;}
+.hd-check-detail{color:var(--detail);}
 
 .hd-steps{margin:0 0 12px;padding-left:20px;font-size:.88rem;line-height:1.65;}
 .hd-steps li{margin-bottom:6px;}
 .hd-steps li::marker{color:var(--accent);font-weight:700;}
 .hd-note{background:var(--warn-bg);border-left:3px solid var(--warn);border-radius:0 8px 8px 0;
-  padding:10px 13px;margin:0 0 12px;font-size:.85rem;line-height:1.6;color:#78350f;}
+  padding:10px 13px;margin:0 0 12px;font-size:.85rem;line-height:1.6;color:var(--warn-text);}
 
 .hd-links{display:flex;flex-direction:column;gap:8px;margin:0 0 12px;}
 .hd-link{display:block;border:1px solid var(--line);background:var(--accent-bg);
@@ -141,12 +162,12 @@ const CSS = `
 .hd-link:hover{border-color:var(--accent);}
 .hd-link-label{display:block;font-weight:700;font-size:.88rem;color:var(--accent-dark);}
 .hd-link-label::after{content:' →';}
-.hd-link-desc{display:block;font-size:.8rem;color:#475569;line-height:1.55;margin-top:3px;}
+.hd-link-desc{display:block;font-size:.8rem;color:var(--secondary);line-height:1.55;margin-top:3px;}
 
 .hd-tablewrap{overflow-x:auto;margin:0 0 12px;border:1px solid var(--line);border-radius:10px;
   -webkit-overflow-scrolling:touch;}
 .hd-table{border-collapse:collapse;width:100%;font-size:.83rem;min-width:340px;}
-.hd-table th{background:#f1f5f9;text-align:left;padding:8px 11px;font-weight:700;
+.hd-table th{background:var(--surface-alt);text-align:left;padding:8px 11px;font-weight:700;
   border-bottom:1px solid var(--line);white-space:nowrap;}
 .hd-table td{padding:8px 11px;border-bottom:1px solid var(--line);line-height:1.5;vertical-align:top;}
 .hd-table tr:last-child td{border-bottom:none;}
@@ -156,7 +177,7 @@ const CSS = `
    a shelf to reach for, not the page's subject, so it reads as a row of labels
    rather than as a row of buttons competing with the questions. */
 .hd-manuals{margin:0 0 18px;padding:12px 14px;border:1px solid var(--line);
-  border-left:4px solid var(--brand);border-radius:12px;background:#fff;}
+  border-left:4px solid var(--brand);border-radius:12px;background:var(--surface);}
 .hd-manuals p{margin:0 0 8px;font-size:.68rem;font-weight:800;text-transform:uppercase;
   letter-spacing:.09em;color:var(--muted);}
 .hd-manuals-list{display:flex;flex-wrap:wrap;gap:6px 14px;}
@@ -177,20 +198,20 @@ const CSS = `
   display:flex;align-items:center;gap:7px;}
 .hd-group-title::before{content:'';width:14px;height:3px;border-radius:2px;background:var(--accent);}
 .hd-chips{display:flex;flex-wrap:wrap;gap:8px;}
-.hd-chip{background:#fff;border:1px solid #cbd5e1;border-radius:999px;
-  padding:9px 15px;font-size:.85rem;font-weight:600;color:#334155;cursor:pointer;
+.hd-chip{background:var(--surface);border:1px solid var(--control-line);border-radius:999px;
+  padding:9px 15px;font-size:.85rem;font-weight:600;color:var(--detail);cursor:pointer;
   font-family:inherit;transition:all .12s;text-align:left;max-width:100%;}
 .hd-chip:hover:not(:disabled){border-color:var(--accent);color:var(--accent-dark);
   background:var(--accent-bg);}
 .hd-chip:disabled{opacity:.5;cursor:not-allowed;}
 
 /* ── action cards ── */
-.hd-action{border:1px solid var(--line);border-radius:12px;background:#fff;
+.hd-action{border:1px solid var(--line);border-radius:12px;background:var(--surface);
   padding:14px;margin:0 0 10px;}
-.hd-action.primary{border-color:var(--accent);background:linear-gradient(180deg,#fff,var(--accent-bg));}
+.hd-action.primary{border-color:var(--accent);background:linear-gradient(180deg,var(--surface),var(--accent-bg));}
 .hd-action h3{margin:0 0 8px;font-size:.92rem;font-weight:750;color:var(--accent-dark);}
-.hd-notice{background:var(--info-bg);border:1px solid #bae6fd;border-radius:8px;
-  padding:10px 12px;margin:0 0 12px;font-size:.82rem;line-height:1.6;color:#075985;
+.hd-notice{background:var(--info-bg);border:1px solid var(--info-line);border-radius:8px;
+  padding:10px 12px;margin:0 0 12px;font-size:.82rem;line-height:1.6;color:var(--info-text);
   display:flex;gap:8px;}
 /* Only the mark is fixed-width. The rule used to select every span in the
    notice, which caught the text as well and made it refuse to wrap — a
@@ -199,25 +220,25 @@ const CSS = `
 .hd-notice span:first-child{flex:0 0 auto;}
 .hd-notice span+span{flex:1 1 auto;min-width:0;}
 .hd-field{margin:0 0 10px;}
-.hd-field label{display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:#334155;}
+.hd-field label{display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--detail);}
 .hd-field .hd-help{display:block;font-weight:400;color:var(--muted);margin-top:2px;font-size:.75rem;}
-.hd-input{width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px 11px;
-  font-size:.88rem;font-family:inherit;color:var(--ink);background:#fff;}
+.hd-input{width:100%;border:1px solid var(--control-line);border-radius:8px;padding:10px 11px;
+  font-size:.88rem;font-family:inherit;color:var(--ink);background:var(--surface);}
 textarea.hd-input{min-height:120px;resize:vertical;line-height:1.6;}
-.hd-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.13);}
+.hd-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--focus-ring);}
 .hd-btn{background:var(--accent);color:#fff;border:none;border-radius:9px;
   padding:11px 18px;font-size:.87rem;font-weight:700;cursor:pointer;font-family:inherit;}
 .hd-btn:hover:not(:disabled){filter:brightness(.93);}
 .hd-btn:disabled{opacity:.55;cursor:not-allowed;}
-.hd-btn.ghost{background:#fff;color:#334155;border:1px solid #cbd5e1;}
-.hd-btn.ghost:hover:not(:disabled){background:#f1f5f9;filter:none;}
+.hd-btn.ghost{background:var(--surface);color:var(--detail);border:1px solid var(--control-line);}
+.hd-btn.ghost:hover:not(:disabled){background:var(--surface-alt);filter:none;}
 .hd-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
 
-.hd-error{background:var(--bad-bg);border:1px solid #fecaca;color:#991b1b;
+.hd-error{background:var(--bad-bg);border:1px solid var(--bad-line);color:var(--bad-text);
   border-radius:8px;padding:9px 12px;font-size:.83rem;margin:0 0 10px;line-height:1.55;}
 
 /* ── gate ── */
-.hd-gate{background:#fff;border:1px solid var(--line);border-radius:16px;
+.hd-gate{background:var(--surface);border:1px solid var(--line);border-radius:16px;
   padding:clamp(16px,4.5vw,22px);box-shadow:0 1px 3px rgba(15,23,42,.05);}
 .hd-gate h2{margin:0 0 6px;font-size:clamp(1rem,3.8vw,1.05rem);font-weight:780;}
 .hd-gate p{margin:0 0 14px;color:var(--muted);font-size:clamp(.82rem,3.1vw,.86rem);line-height:1.6;}
@@ -297,25 +318,44 @@ const MANUALS = [
    an unknown name falls back to the house indigo rather than disappearing. */
 
 const MODULE_STYLE = {
-  'Account and registration': { accent: '#4f46e5', dark: '#4338ca', bg: '#eef2ff' },
-  'Learning module': { accent: '#059669', dark: '#047857', bg: '#ecfdf5' },
-  Timetable: { accent: '#d97706', dark: '#b45309', bg: '#fffbeb' },
-  Attendance: { accent: '#0284c7', dark: '#0369a1', bg: '#f0f9ff' },
-  Certificates: { accent: '#7c3aed', dark: '#6d28d9', bg: '#f5f3ff' },
-  Conferences: { accent: '#e11d48', dark: '#be123c', bg: '#fff1f2' },
-  'XCEED team': { accent: '#0d9488', dark: '#0f766e', bg: '#f0fdfa' },
+  'Account and registration': {
+    accent: '#4f46e5', heading: '#4338ca', bg: '#eef2ff', darkHeading: '#a5b4fc', darkBg: '#252a52',
+  },
+  'Learning module': {
+    accent: '#059669', heading: '#047857', bg: '#ecfdf5', darkHeading: '#6ee7b7', darkBg: '#12372e',
+  },
+  Timetable: {
+    accent: '#d97706', heading: '#b45309', bg: '#fffbeb', darkHeading: '#fcd34d', darkBg: '#3b2a16',
+  },
+  Attendance: {
+    accent: '#0284c7', heading: '#0369a1', bg: '#f0f9ff', darkHeading: '#7dd3fc', darkBg: '#153349',
+  },
+  Certificates: {
+    accent: '#7c3aed', heading: '#6d28d9', bg: '#f5f3ff', darkHeading: '#c4b5fd', darkBg: '#30234e',
+  },
+  Conferences: {
+    accent: '#e11d48', heading: '#be123c', bg: '#fff1f2', darkHeading: '#fda4af', darkBg: '#3d2027',
+  },
+  'XCEED team': {
+    accent: '#0d9488', heading: '#0f766e', bg: '#f0fdfa', darkHeading: '#5eead4', darkBg: '#133834',
+  },
 };
 
-const DEFAULT_STYLE = { accent: '#4f46e5', dark: '#4338ca', bg: '#eef2ff' };
+const DEFAULT_STYLE = MODULE_STYLE['Account and registration'];
 
 const styleFor = (category) => MODULE_STYLE[category] || DEFAULT_STYLE;
 
-/** The three custom properties every accented thing reads. Set on a wrapper and
- *  inherited, so one object colours a card, its chips and the answer they
- *  produce without a single extra class name. */
+/** Both palettes live on the module wrapper; CSS selects the heading and tint
+ *  for the document's theme. The solid accent stays suitable for white buttons. */
 const accentVars = (category) => {
   const style = styleFor(category);
-  return { '--accent': style.accent, '--accent-dark': style.dark, '--accent-bg': style.bg };
+  return {
+    '--module-accent': style.accent,
+    '--module-heading': style.heading,
+    '--module-bg': style.bg,
+    '--module-heading-dark': style.darkHeading,
+    '--module-bg-dark': style.darkBg,
+  };
 };
 
 /**
@@ -351,7 +391,7 @@ function QuestionMenu({ menu, open, onOpen, onAsk, busy, asked }) {
     return (
       <div>
         {menu.map((entry) => (
-          <div className="hd-group" key={entry.category} style={accentVars(entry.category)}>
+          <div className="hd-group hd-module" key={entry.category} style={accentVars(entry.category)}>
             <p className="hd-group-title">{entry.category}</p>
             <div className="hd-chips">{entry.topics.map(chip)}</div>
           </div>
@@ -361,7 +401,7 @@ function QuestionMenu({ menu, open, onOpen, onAsk, busy, asked }) {
   }
 
   return (
-    <div className="hd-group" style={accentVars(open)}>
+    <div className="hd-group hd-module" style={accentVars(open)}>
       <p className="hd-group-title">More about {open.toLowerCase()}</p>
       <div className="hd-chips">{rest.map(chip)}</div>
       <div className="hd-row" style={{ marginTop: 12 }}>
@@ -982,7 +1022,7 @@ export default function HelpdeskPage() {
                     <div className="hd-preview-list">
                       {menu.map((group) => (
                         <div
-                          className="hd-preview-item"
+                          className="hd-preview-item hd-module"
                           key={group.category}
                           style={accentVars(group.category)}
                         >
@@ -1033,7 +1073,7 @@ export default function HelpdeskPage() {
             {thread.map((message, index) =>
               message.side === 'me' ? (
                 <div
-                  className="hd-msg me"
+                  className="hd-msg me hd-module"
                   key={index}
                   style={accentVars(message.category)}
                   ref={message === last ? latestRef : null}
@@ -1047,7 +1087,7 @@ export default function HelpdeskPage() {
                 </div>
               ) : (
                 <div
-                  className="hd-turn"
+                  className="hd-turn hd-module"
                   key={index}
                   style={accentVars(message.category)}
                   ref={message === last ? latestRef : null}

@@ -23,11 +23,12 @@ function Toast({ toast }) {
     if (!toast) return null;
     return (
         <div style={{
-            position: 'fixed', top: 96, left: '50%', transform: 'translateX(-50%)', zIndex: 9000, whiteSpace: 'nowrap',
+            position: 'fixed', top: 96, left: '50%', transform: 'translateX(-50%)', zIndex: 9000,
             padding: '12px 24px', borderRadius: 8, fontSize: '13px', fontWeight: 700,
             background: toast.type === 'error' ? theme.danger : theme.success,
             color: '#ffffff',
             border: 'none',
+            maxWidth: 'calc(100vw - 24px)', wordBreak: 'break-word',
             boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
         }}>{toast.msg}</div>
     );
@@ -136,7 +137,23 @@ function FilterBlock({
             .then(data => {
                 const details = Array.isArray(data.subjectDetails) ? data.subjectDetails : [];
                 if (details.length) {
-                    setSubjects(details);
+                    // A subject taught across several timetable sessions has one
+                    // Subject document per session, so `subjectDetails` can list
+                    // the same abbreviation more than once — collapse to one
+                    // dropdown entry per name, preferring whichever copy has a
+                    // subCode, then the most recently created document.
+                    const byName = new Map();
+                    for (const s of details) {
+                        const key = String(s.subName || s.subjectFullName || '').trim().toLowerCase();
+                        const existing = byName.get(key);
+                        if (!existing) { byName.set(key, s); continue; }
+                        const hasCode = (v) => !!String(v.subCode || '').trim();
+                        const better = hasCode(s) !== hasCode(existing)
+                            ? hasCode(s)
+                            : String(s._id) > String(existing._id);
+                        if (better) byName.set(key, s);
+                    }
+                    setSubjects([...byName.values()]);
                     return;
                 }
                 // Fallback: no matching Subject doc found (e.g. it was never

@@ -18,7 +18,7 @@ import {
 } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
-import { ErrorState, Loading, SectionCard } from '../components/common';
+import { ErrorState, Loading, SectionCard, WorkListSkeleton } from '../components/common';
 import { LmIcon } from '../components/Icon';
 
 /**
@@ -56,7 +56,7 @@ export default function PointsGuide() {
     load();
   }, [load]);
 
-  if (loading) return <Loading label="Reading the rules…" />;
+  if (loading) return <Loading label="Reading the rules…" skeleton={<WorkListSkeleton />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   const earned = new Set((mine?.badges || []).map((badge) => badge.id));

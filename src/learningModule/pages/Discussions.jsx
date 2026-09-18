@@ -26,9 +26,10 @@ import {
 
 import lmApi from '../api/lmApi';
 import CommentThread from '../components/CommentThread';
-import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, ThreadListSkeleton } from '../components/common';
 import { relativeTime } from '../format';
 import { LmIcon } from '../components/Icon';
+import DeleteButton from '../components/DeleteButton';
 
 /**
  * The class forum.
@@ -200,9 +201,7 @@ function Thread({ discussion, classId, isTeacher, onChanged }) {
               </>
             )}
             {discussion.canDelete && (
-              <Button size="xs" variant="ghost" colorScheme="red" onClick={remove}>
-                Remove
-              </Button>
+              <DeleteButton size="xs" label="Delete discussion" onClick={remove} />
             )}
           </HStack>
 
@@ -253,7 +252,7 @@ export default function Discussions() {
     load();
   }, [load]);
 
-  if (loading) return <Loading label="Loading the forum…" />;
+  if (loading) return <Loading label="Loading the forum…" skeleton={<ThreadListSkeleton />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   // A deep link from a notification opens straight onto its thread.

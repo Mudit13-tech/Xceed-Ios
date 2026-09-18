@@ -25,68 +25,10 @@ import {
 } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { AttachmentList } from '../components/Attachments';
+import { EmptyState, ErrorState, Loading, SectionCard, StatTile, TableSkeleton } from '../components/common';
 import { formatDateTime } from '../format';
-
-const CHOICE_TYPES = ['multiple_choice', 'checkboxes', 'dropdown'];
-
-function ChoiceSummary({ entry }) {
-  const total = Object.values(entry.counts).reduce((a, b) => a + b, 0) || 1;
-  return (
-    <VStack align="stretch" spacing={2}>
-      {Object.entries(entry.counts).map(([option, count]) => (
-        <Box key={option}>
-          <Flex justify="space-between" fontSize="sm" mb={1}>
-            <Text noOfLines={1}>{option}</Text>
-            <Text color="lmFg.muted">{count}</Text>
-          </Flex>
-          <Progress value={(count / total) * 100} size="sm" borderRadius="full" colorScheme="teal" />
-        </Box>
-      ))}
-    </VStack>
-  );
-}
-
-function ScaleSummary({ entry }) {
-  const total = Object.values(entry.counts).reduce((a, b) => a + b, 0) || 1;
-  return (
-    <VStack align="stretch" spacing={2}>
-      {entry.average !== null && (
-        <Text fontSize="sm" color="lmFg.muted">
-          Average: {entry.average}
-        </Text>
-      )}
-      {Object.entries(entry.counts).map(([value, count]) => (
-        <Box key={value}>
-          <Flex justify="space-between" fontSize="sm" mb={1}>
-            <Text>{value}</Text>
-            <Text color="lmFg.muted">{count}</Text>
-          </Flex>
-          <Progress value={(count / total) * 100} size="sm" borderRadius="full" colorScheme="blue" />
-        </Box>
-      ))}
-    </VStack>
-  );
-}
-
-function TextSummary({ entry }) {
-  if (!entry.answers.length) {
-    return (
-      <Text fontSize="sm" color="lmFg.muted">
-        No answers yet.
-      </Text>
-    );
-  }
-  return (
-    <VStack align="stretch" spacing={1} maxH="220px" overflowY="auto">
-      {entry.answers.map((answer, i) => (
-        <Text key={i} fontSize="sm" borderBottomWidth="1px" borderColor="lmBorder.subtle" pb={1}>
-          {String(answer)}
-        </Text>
-      ))}
-    </VStack>
-  );
-}
+import FormSummary from '../components/FormSummary';
 
 function formatDuration(seconds) {
   if (seconds === null || seconds === undefined) return '—';
@@ -119,28 +61,17 @@ function DropOffFunnel({ summary }) {
   );
 }
 
-function SummaryTab({ summary }) {
+export function SummaryTab({ summary }) {
   if (!summary) return null;
   return (
     <VStack align="stretch" spacing={4}>
       <DropOffFunnel summary={summary} />
-      {summary.summary.map((entry) => (
-        <SectionCard key={entry.questionId} title={entry.title} subtitle={`${entry.answered} response(s)`}>
-          {CHOICE_TYPES.includes(entry.type) && <ChoiceSummary entry={entry} />}
-          {entry.type === 'linear_scale' && <ScaleSummary entry={entry} />}
-          {entry.type === 'file_upload' && (
-            <Text fontSize="sm" color="lmFg.muted">
-              {entry.answered} file(s) attached.
-            </Text>
-          )}
-          {['short_answer', 'paragraph', 'date'].includes(entry.type) && <TextSummary entry={entry} />}
-        </SectionCard>
-      ))}
+      <FormSummary summary={summary.summary} />
     </VStack>
   );
 }
 
-const answerText = (question, answer) => {
+export const answerText = (question, answer) => {
   if (!answer) return '—';
   switch (question.type) {
     case 'short_answer':
@@ -206,14 +137,24 @@ function ResponsesTab({ classId, formId, form, responses, onDeleted }) {
             </AccordionButton>
             <AccordionPanel>
               <VStack align="stretch" spacing={2} mb={2}>
-                {form.questions.map((question) => (
-                  <Box key={question._id}>
-                    <Text fontSize="xs" color="lmFg.muted">
-                      {question.title}
-                    </Text>
-                    <Text fontSize="sm">{answerText(question, byQuestion.get(String(question._id)))}</Text>
-                  </Box>
-                ))}
+                {form.questions.map((question) => {
+                  const answer = byQuestion.get(String(question._id));
+                  // An uploaded file is only useful to the teacher as something
+                  // they can open — the name alone left no way to reach it.
+                  const files = question.type === 'file_upload' ? answer?.attachments || [] : [];
+                  return (
+                    <Box key={question._id}>
+                      <Text fontSize="xs" color="lmFg.muted">
+                        {question.title}
+                      </Text>
+                      {files.length ? (
+                        <AttachmentList attachments={files} compact />
+                      ) : (
+                        <Text fontSize="sm">{answerText(question, answer)}</Text>
+                      )}
+                    </Box>
+                  );
+                })}
               </VStack>
               <Button size="xs" colorScheme="red" variant="outline" onClick={() => remove(response)}>
                 Delete this response
@@ -257,7 +198,7 @@ export default function FormResponses() {
     load();
   }, [load]);
 
-  if (loading) return <Loading label="Loading responses…" />;
+  if (loading) return <Loading label="Loading responses…" skeleton={<TableSkeleton rows={6} columns={5} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!form) return null;
 
@@ -276,6 +217,15 @@ export default function FormResponses() {
           </Button>
           <Button as="a" href={lmApi.formResponsesCsvUrl(classId, formId)} size="sm" variant="outline">
             Download CSV
+          </Button>
+          <Button
+            as="a"
+            href={lmApi.formResponsesZipUrl(classId, formId)}
+            size="sm"
+            variant="outline"
+            title="The CSV, plus a folder for each respondent with their answers and uploaded files"
+          >
+            Download all (ZIP)
           </Button>
         </HStack>
       </Flex>

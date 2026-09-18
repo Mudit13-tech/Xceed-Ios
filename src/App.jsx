@@ -26,6 +26,7 @@ import {
 import {
   lazyWithPreload,
   registerRouteTree,
+  useIdleRouteWarmup,
   useLinkPreloading,
 } from './routePreload';
 const Timetable = lazyWithPreload(() => import('./timetableadmin/timetable'));
@@ -254,11 +255,59 @@ const MLFineTuning = lazyWithPreload(() => import('./attendancemodule/MLFineTuni
  * Inline styles and no component library on purpose: this is the one thing that
  * has to render before anything else has loaded, on the slow connection that
  * made splitting worth doing in the first place.
+ *
+ * The shimmer uses a CSS animation injected once via a <style> tag — no deps,
+ * no import, and it survives rendering before Chakra or anything else is ready.
+ * The bar mirrors the skeleton shimmer already used inside the learning module,
+ * giving a consistent "loading" signal across the whole app.
  */
+const _routeFallbackStyle = `
+@keyframes _rfShimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position:  600px 0; }
+}
+._rfBar {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    #e8e8e8 25%,
+    #f5f5f5 50%,
+    #e8e8e8 75%
+  );
+  background-size: 1200px 100%;
+  animation: _rfShimmer 1.4s ease-in-out infinite;
+}
+`;
+
+// Most chunk fetches finish well inside this, and a bar that appears for a few
+// frames and vanishes reads as a glitch line above the page rather than as
+// progress. Only a fetch that is actually slow gets to show it.
+const ROUTE_FALLBACK_DELAY_MS = 400;
+
+let _rfStyleInjected = false;
 function RouteFallback() {
+  const [visible, setVisible] = React.useState(false);
+  React.useEffect(() => {
+    const timer = setTimeout(() => setVisible(true), ROUTE_FALLBACK_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!_rfStyleInjected && typeof document !== 'undefined') {
+    const tag = document.createElement('style');
+    tag.textContent = _routeFallbackStyle;
+    document.head.appendChild(tag);
+    _rfStyleInjected = true;
+  }
+  if (!visible) return null;
   return (
-    <div style={{ padding: 48, textAlign: 'center', color: '#666' }} role="status" aria-live="polite">
-      Loading…
+    <div
+      style={{ padding: '48px 24px' }}
+      role="status"
+      aria-live="polite"
+      aria-label="Loading page"
+    >
+      <div className="_rfBar" style={{ maxWidth: 480, margin: '0 auto' }} />
     </div>
   );
 }
@@ -694,9 +743,20 @@ function App() {
   // Starts a page's chunk when a link to it is hovered or focused, so the
   // fallback below has usually nothing left to wait for by the time it clicks.
   useLinkPreloading();
+  // And fetches the main tabs a module lists (warmUpRoutes) in the background
+  // once the first page has settled, so a tap with no hover before it finds its
+  // page ready.
+  useIdleRouteWarmup();
 
   return (
-    <Router>
+    /* Navigations go through `React.startTransition`, which is what keeps the
+       page already on screen up while the next one's chunk is still coming
+       down. Without it a click on a link whose chunk had not been fetched
+       suspended the boundary below and replaced the entire app — header, rail
+       and class switcher included — with the 4px loading bar, for as long as
+       the download took (#2413). React Router has done this under the flag
+       since 6.13; it is the default in v7. */
+    <Router future={{ v7_startTransition: true }}>
       <MobileShell />
       {/* <div className="app"> */}
 

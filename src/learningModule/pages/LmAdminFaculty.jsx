@@ -14,7 +14,6 @@ import {
   Link as RouterLinkStyle,
   Select,
   SimpleGrid,
-  Spinner,
   Table,
   Tbody,
   Td,
@@ -30,7 +29,7 @@ import {
 import { Link as RouterLink } from 'react-router-dom';
 
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, StatTile, TableSkeleton } from '../components/common';
 
 /**
  * Faculty accounts, for an lm-admin.
@@ -158,10 +157,7 @@ function ImportFromMasterCard({ onImported }) {
   if (!preview) {
     return (
       <SectionCard title="Import from timetable master faculty">
-        <HStack spacing={3} color="lmFg.muted" fontSize="sm">
-          <Spinner size="sm" />
-          <Text>Reading the master faculty list…</Text>
-        </HStack>
+        <TableSkeleton rows={3} columns={4} title={false} />
       </SectionCard>
     );
   }
@@ -422,7 +418,7 @@ export default function LmAdminFaculty() {
     return () => clearTimeout(timer);
   }, [load, search, selectedDept]);
 
-  if (loading) return <Loading label="Loading faculty…" />;
+  if (loading) return <Loading label="Loading faculty…" skeleton={<TableSkeleton rows={6} columns={5} />} />;
   if (error) return <ErrorState error={error} onRetry={() => load(search, selectedDept)} />;
 
   const { totals, faculty, truncated } = data;

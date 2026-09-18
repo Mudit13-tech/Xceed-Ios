@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import {
   Badge,
@@ -10,6 +10,7 @@ import {
   Code,
   Collapse,
   Divider,
+  Spinner,
   Switch,
   Table,
   Tbody,
@@ -22,7 +23,7 @@ import {
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import useShortStream from '../hooks/useShortStream';
-import { ErrorState, Loading, SectionCard } from '../components/common';
+import { ErrorState, Loading, SectionCard, SectionCardSkeleton } from '../components/common';
 import RichText from '../components/RichText';
 import QuestionTypeBadge from '../components/QuestionTypeBadge';
 import { decimalPlacesHint } from '../format';
@@ -58,9 +59,9 @@ const previewText = (html, max = 90) => {
  * is exactly what a teacher talking the room through a question needs, and it is
  * what this shows.
  */
-function QuestionDetail({ question }) {
+const QuestionDetail = memo(function QuestionDetail({ question }) {
   return (
-    <Box mt={2} p={3} bg="lmBg.sunken" borderRadius="md">
+    <Box mt={2} p={3} bg="lmBg.sunken" borderRadius="md" overflowX="auto">
       <RichText fontSize="sm">{question.prompt}</RichText>
 
       {/* The options of an MCQ/MSQ, lettered to match the answer key below. */}
@@ -115,7 +116,7 @@ function QuestionDetail({ question }) {
           <Text fontWeight="600" minW="90px">
             {answer.label}
           </Text>
-          <Code fontSize="sm">
+          <Code fontSize="sm" whiteSpace="pre-wrap" wordBreak="break-word" maxW="100%">
             {answer.formula}
             {answer.unit ? ` ${answer.unit}` : ''}
           </Code>
@@ -144,14 +145,35 @@ function QuestionDetail({ question }) {
       )}
     </Box>
   );
-}
+});
+
+/**
+ * The same value back for as long as its content is unchanged.
+ *
+ * Every frame from the board stream is freshly parsed JSON, so a student
+ * pressing Check hands back a new object for every question and every row even
+ * though almost nothing changed. Keying on the serialised form lets the memoised
+ * rows below skip the re-render, which is most of the page.
+ */
+const useStableValue = (value) => {
+  const key = JSON.stringify(value ?? null);
+  return useMemo(() => JSON.parse(key), [key]);
+};
 
 function ProgressCell({ cell }) {
-  if (!cell) return <Td textAlign="center" color="lmFg.faint">·</Td>;
+  if (!cell) {
+    return (
+      <Td textAlign="center" color="lmFg.faint" px={2}>
+        ·
+      </Td>
+    );
+  }
   const done = cell.complete;
   return (
     <Td
       textAlign="center"
+      px={2}
+      whiteSpace="nowrap"
       bg={done ? 'green.50' : cell.answered ? 'orange.50' : undefined}
       fontWeight={done ? '700' : '400'}
       color={done ? 'green.700' : undefined}
@@ -162,6 +184,161 @@ function ProgressCell({ cell }) {
   );
 }
 
+// The name column stays put while the question columns scroll sideways, so a
+// wide board on a narrow screen still says whose row you are reading.
+const stickyColumn = {
+  position: 'sticky',
+  left: 0,
+  zIndex: 1,
+  bg: 'lmBg.surface',
+  minW: { base: '110px', md: '160px' },
+  maxW: { base: '140px', md: '240px' },
+};
+
+/** One student's row. Re-rendered only when that student's numbers change. */
+const StudentRowView = memo(function StudentRowView({ student, openedIndexes }) {
+  const byIndex = new Map((student.perQuestion || []).map((cell) => [cell.index, cell]));
+  return (
+    <Tr>
+      <Td {...stickyColumn} px={2}>
+        <Text fontSize="sm" noOfLines={1} title={student.name || student.email}>
+          {student.name || student.email}
+        </Text>
+      </Td>
+      {openedIndexes.map((index) => (
+        <ProgressCell key={index} cell={byIndex.get(index)} />
+      ))}
+      <Td textAlign="center" fontWeight="600" px={2} whiteSpace="nowrap">
+        {student.totalCorrect}/{student.totalSlots}
+      </Td>
+    </Tr>
+  );
+});
+
+/**
+ * Stabilises the row's data first: the object is new on every frame of the
+ * stream, so comparing by identity alone would re-render every row every time.
+ */
+function StudentRow({ student, openedIndexes }) {
+  const stable = useStableValue(student);
+  return <StudentRowView student={stable} openedIndexes={openedIndexes} />;
+}
+
+/**
+ * The question list's columns. Fixed widths on a wide screen, so every prompt
+ * starts at the same place whatever its type badge says; on a phone each row
+ * stacks instead — badges, then the prompt at full width, then the controls.
+ */
+const questionGrid = {
+  display: 'grid',
+  columnGap: 3,
+  rowGap: 1,
+  alignItems: 'center',
+  gridTemplateColumns: { base: 'auto minmax(0, 1fr)', md: '44px 210px minmax(0, 1fr) 230px' },
+  gridTemplateAreas: {
+    base: `"num type" "prompt prompt" "controls controls"`,
+    md: `"num type prompt controls"`,
+  },
+};
+
+/** Column headings, shown only where the row is laid out as columns. */
+function QuestionListHeader() {
+  return (
+    <Box
+      {...questionGrid}
+      display={{ base: 'none', md: 'grid' }}
+      pb={2}
+      borderBottomWidth="1px"
+      borderColor="lmBorder.subtle"
+      fontSize="xs"
+      fontWeight="700"
+      color="lmFg.muted"
+      textTransform="uppercase"
+      letterSpacing="wide"
+    >
+      <Text gridArea="num">#</Text>
+      <Text gridArea="type">Type</Text>
+      <Text gridArea="prompt">Question</Text>
+      <Text gridArea="controls" textAlign="right">
+        Controls
+      </Text>
+    </Box>
+  );
+}
+
+/** One row of the question list. */
+const QuestionRow = memo(function QuestionRow({
+  question,
+  index,
+  open,
+  shown,
+  hintOn,
+  hintPending,
+  hintDisabled,
+  onToggle,
+  onHint,
+}) {
+  const dim = open ? 1 : 0.5;
+  return (
+    <Box py={2} borderTopWidth={index === 0 ? 0 : '1px'} borderColor="lmBorder.subtle">
+      <Box {...questionGrid}>
+        <Badge gridArea="num" colorScheme={open ? 'green' : 'gray'} w="38px" textAlign="center" opacity={dim}>
+          Q{index + 1}
+        </Badge>
+        <Box gridArea="type" minW={0} opacity={dim}>
+          <QuestionTypeBadge
+            type={question.type}
+            maxW="100%"
+            overflow="hidden"
+            textOverflow="ellipsis"
+            verticalAlign="middle"
+          />
+        </Box>
+        <Box gridArea="prompt" minW={0} opacity={dim}>
+          <Text fontSize="sm" noOfLines={{ base: 2, md: 1 }} title={previewText(question.prompt, 400)}>
+            {previewText(question.prompt) || <em>(no preview)</em>}
+          </Text>
+          <Text fontSize="xs" color="lmFg.muted">
+            {question.slotCount} answer{question.slotCount === 1 ? '' : 's'}
+            {question.partCount ? ` · ${question.partCount} parts` : ''}
+          </Text>
+        </Box>
+        <HStack gridArea="controls" spacing={2} justify={{ base: 'space-between', md: 'flex-end' }}>
+          <Button size="xs" variant="ghost" onClick={() => onToggle(index)} aria-expanded={shown}>
+            {shown ? 'Hide question' : 'Show question'}
+          </Button>
+          <HStack spacing={2}>
+            <Text fontSize="xs" color="lmFg.muted">
+              Hint
+            </Text>
+            {hintPending && <Spinner size="xs" color="blue.400" />}
+            <Switch
+              size="sm"
+              colorScheme="blue"
+              aria-label={`Hint for question ${index + 1}`}
+              isChecked={hintOn}
+              isDisabled={hintDisabled}
+              onChange={(e) => onHint(index, e.target.checked)}
+            />
+          </HStack>
+        </HStack>
+      </Box>
+      {/* Below the row, so the full prompt gets the card's width rather than
+          one column of it. Unmounted while closed: a hidden panel would
+          otherwise re-render with every frame of the board. */}
+      <Collapse in={shown} animateOpacity unmountOnExit>
+        <QuestionDetail question={question} />
+      </Collapse>
+    </Box>
+  );
+});
+
+const withoutKey = (object, key) => {
+  const next = { ...object };
+  delete next[key];
+  return next;
+};
+
 export default function TutorialPresent() {
   const { classId } = useOutletContext();
   const { tutorialId } = useParams();
@@ -171,7 +348,13 @@ export default function TutorialPresent() {
   const [sessionId, setSessionId] = useState(null);
   const [starting, setStarting] = useState(true);
   const [startError, setStartError] = useState(null);
-  const [busy, setBusy] = useState(false);
+  // What is in flight. Opening a question and ending are exclusive; hint
+  // switches are tracked per question so flipping one never locks the rest.
+  const [pending, setPending] = useState('');
+  const [hintPending, setHintPending] = useState({});
+  // The hint state the teacher just asked for, shown until the server answers
+  // so the switch moves under their finger instead of a round trip later.
+  const [hintWanted, setHintWanted] = useState({});
   // Which questions the teacher has expanded. Local, not on the session: it is
   // what *this* teacher is reading, not something the room should follow.
   const [shown, setShown] = useState({});
@@ -207,37 +390,72 @@ export default function TutorialPresent() {
     enabled: Boolean(streamUrl),
   });
 
-  const control = async (action, extra) => {
-    setBusy(true);
-    try {
-      const { session } = await lmApi.controlTutorialSession(classId, sessionId, { action, ...extra });
-      merge(session);
-    } catch (err) {
-      toast({ status: 'error', title: err.message });
-    } finally {
-      setBusy(false);
-    }
+  const control = useCallback(
+    async (action, extra) => {
+      try {
+        const { session } = await lmApi.controlTutorialSession(classId, sessionId, { action, ...extra });
+        merge(session);
+      } catch (err) {
+        toast({ status: 'error', title: err.message });
+      }
+    },
+    [classId, sessionId, merge, toast],
+  );
+
+  const openNext = async () => {
+    // Guarded as well as disabled: a double tap must not skip a question.
+    if (pending) return;
+    setPending('openNext');
+    await control('openNext');
+    setPending('');
   };
+
+  const toggleShown = useCallback((index) => setShown((prev) => ({ ...prev, [index]: !prev[index] })), []);
+
+  const setHint = useCallback(
+    async (index, on) => {
+      setHintWanted((prev) => ({ ...prev, [index]: on }));
+      setHintPending((prev) => ({ ...prev, [index]: true }));
+      await control('setHint', { index, on });
+      // Success or not, the board is the truth from here: the merged session on
+      // success, the unchanged one on failure (which snaps the switch back).
+      setHintWanted((prev) => withoutKey(prev, index));
+      setHintPending((prev) => withoutKey(prev, index));
+    },
+    [control],
+  );
 
   const end = async () => {
     // eslint-disable-next-line no-alert
     if (!window.confirm('End this live session? Students keep whatever they have answered.')) return;
+    setPending('end');
     try {
       await lmApi.endTutorialSession(classId, sessionId);
       navigate(`/learning/class/${classId}/tutorial/${tutorialId}/results`);
     } catch (err) {
       toast({ status: 'error', title: err.message });
+      setPending('');
     }
   };
 
-  if (starting) return <Loading label="Starting the live session…" />;
-  if (startError) return <ErrorState error={startError} onRetry={start} />;
-  if (!state) return <Loading label="Connecting to the board…" />;
+  // Stabilised before any early return, so the hooks run in the same order on
+  // every render.
+  const questions = useStableValue(state?.questions || []);
+  const hints = useStableValue(state?.hints || []);
+  const openedCount = state?.openedCount || 0;
+  const openedIndexes = useMemo(
+    () => questions.slice(0, openedCount).map((question) => question.index),
+    [questions, openedCount],
+  );
 
-  const openedCount = state.openedCount || 0;
+  if (starting) return <Loading label="Starting the live session…" skeleton={<SectionCardSkeleton lines={4} />} />;
+  if (startError) return <ErrorState error={startError} onRetry={start} />;
+  if (!state) return <Loading label="Connecting to the board…" skeleton={<SectionCardSkeleton lines={4} />} />;
+
   const questionCount = state.questionCount || 0;
-  const openedQuestions = (state.questions || []).slice(0, openedCount);
   const ended = state.status === 'ended';
+  const students = state.students || [];
+  const cardPadding = { base: 3, md: 5 };
 
   return (
     <Box>
@@ -245,10 +463,18 @@ export default function TutorialPresent() {
         ← Back to tutorials
       </Button>
 
-      <Flex justify="space-between" align="flex-start" gap={3} mb={4} wrap="wrap">
-        <Box>
-          <HStack>
-            <Heading size="md">{state.title}</Heading>
+      <Flex
+        direction={{ base: 'column', md: 'row' }}
+        justify="space-between"
+        align={{ base: 'stretch', md: 'flex-start' }}
+        gap={3}
+        mb={4}
+      >
+        <Box minW={0}>
+          <HStack align="center" wrap="wrap">
+            <Heading size="md" wordBreak="break-word">
+              {state.title}
+            </Heading>
             <Badge colorScheme={ended ? 'gray' : 'red'} variant="solid">
               {ended ? 'Ended' : 'Live'}
             </Badge>
@@ -258,17 +484,47 @@ export default function TutorialPresent() {
             {state.participantCount === 1 ? '' : 's'} joined
           </Text>
         </Box>
-        <HStack wrap="wrap" spacing={2}>
+        <HStack spacing={2} flexShrink={0}>
           <Button
-            size="sm"
+            size={{ base: 'md', md: 'sm' }}
+            flex={{ base: 1, md: 'initial' }}
             colorScheme="teal"
-            onClick={() => control('openNext')}
-            isDisabled={busy || ended || openedCount >= questionCount}
+            onClick={openNext}
+            aria-label={
+              openedCount > 0 && openedCount < questionCount
+                ? `Open next question (Q${openedCount + 1})`
+                : undefined
+            }
+            isLoading={pending === 'openNext'}
+            loadingText="Opening…"
+            isDisabled={Boolean(pending) || ended || openedCount >= questionCount}
           >
-            {openedCount === 0 ? 'Open first question' : 'Open next question'}
+            {openedCount === 0
+              ? 'Open first question'
+              : openedCount >= questionCount
+                ? 'All questions open'
+                : (
+                  <>
+                    {/* Half a phone's width fits "Open Q5" but not the full label. */}
+                    <Box as="span" display={{ base: 'none', md: 'inline' }}>
+                      Open next question (Q{openedCount + 1})
+                    </Box>
+                    <Box as="span" display={{ base: 'inline', md: 'none' }}>
+                      Open Q{openedCount + 1}
+                    </Box>
+                  </>
+                )}
           </Button>
           {!ended && (
-            <Button size="sm" variant="outline" colorScheme="red" onClick={end}>
+            <Button
+              size={{ base: 'md', md: 'sm' }}
+              flex={{ base: 1, md: 'initial' }}
+              variant="outline"
+              colorScheme="red"
+              onClick={end}
+              isLoading={pending === 'end'}
+              isDisabled={Boolean(pending)}
+            >
               End session
             </Button>
           )}
@@ -277,58 +533,22 @@ export default function TutorialPresent() {
 
       {/* The question list: what is open, and a per-question hint switch the
           teacher flips live for the one part the room is stuck on. */}
-      <SectionCard title="Questions" mb={4}>
-        {(state.questions || []).map((question, index) => {
-          const open = index < openedCount;
-          return (
-            <Box
-              key={question.index}
-              py={2}
-              borderTopWidth={index === 0 ? 0 : '1px'}
-              borderColor="lmBorder.subtle"
-            >
-              <Flex align="center" gap={3} opacity={open ? 1 : 0.5}>
-              <Badge colorScheme={open ? 'green' : 'gray'} minW="34px" textAlign="center">
-                Q{index + 1}
-              </Badge>
-              <QuestionTypeBadge type={question.type} flexShrink={0} />
-              <Box flex="1" minW={0}>
-                <Text fontSize="sm" noOfLines={1}>
-                  {previewText(question.prompt) || <em>(no preview)</em>}
-                </Text>
-                <Text fontSize="xs" color="lmFg.muted">
-                  {question.slotCount} answer{question.slotCount === 1 ? '' : 's'}
-                  {question.partCount ? ` · ${question.partCount} parts` : ''}
-                </Text>
-              </Box>
-              <HStack>
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => setShown((open) => ({ ...open, [index]: !open[index] }))}
-                >
-                  {shown[index] ? 'Hide question' : 'Show question'}
-                </Button>
-                <Text fontSize="xs" color="lmFg.muted">
-                  Hint
-                </Text>
-                <Switch
-                  size="sm"
-                  colorScheme="blue"
-                  isChecked={Boolean((state.hints || [])[index])}
-                  isDisabled={busy || ended || !question.hasHint}
-                  onChange={(e) => control('setHint', { index, on: e.target.checked })}
-                />
-              </HStack>
-              </Flex>
-              {/* Outside the row, so the full prompt gets the card's width
-                  rather than the sliver left beside the controls. */}
-              <Collapse in={Boolean(shown[index])} animateOpacity>
-                <QuestionDetail question={question} />
-              </Collapse>
-            </Box>
-          );
-        })}
+      <SectionCard title="Questions" mb={4} p={cardPadding}>
+        <QuestionListHeader />
+        {questions.map((question, index) => (
+          <QuestionRow
+            key={question.index}
+            question={question}
+            index={index}
+            open={index < openedCount}
+            shown={Boolean(shown[index])}
+            hintOn={index in hintWanted ? hintWanted[index] : Boolean(hints[index])}
+            hintPending={Boolean(hintPending[index])}
+            hintDisabled={Boolean(hintPending[index]) || ended || !question.hasHint}
+            onToggle={toggleShown}
+            onHint={setHint}
+          />
+        ))}
         {!ended && openedCount < questionCount && (
           <Text fontSize="xs" color="lmFg.muted" mt={2}>
             {questionCount - openedCount} question{questionCount - openedCount === 1 ? '' : 's'} still to open.
@@ -344,61 +564,53 @@ export default function TutorialPresent() {
           title={`Not joined (${state.notJoined.length})`}
           subtitle="On the roster but not in this session. They can only start the tutorial while you are presenting — anyone still here when you end it will need you to present again."
           mb={4}
+          p={cardPadding}
         >
-          <HStack wrap="wrap" spacing={2}>
+          <Flex wrap="wrap" gap={2} maxH="160px" overflowY="auto">
             {state.notJoined.map((student) => (
-              <Badge key={student.studentId} colorScheme="orange" variant="subtle">
+              <Badge key={student.studentId} colorScheme="orange" variant="subtle" textTransform="none">
                 {student.name || student.email}
               </Badge>
             ))}
-          </HStack>
+          </Flex>
         </SectionCard>
       )}
 
       {/* Per-student progress across the opened questions — the live "answer now"
           board. Each cell is correct/total answer slots, green when complete. */}
-      <SectionCard title="Student progress">
+      <SectionCard title={`Student progress${students.length ? ` (${students.length})` : ''}`} p={cardPadding}>
         {openedCount === 0 ? (
           <Text fontSize="sm" color="lmFg.muted">
             Open the first question to start the board.
           </Text>
-        ) : (state.students || []).length === 0 ? (
+        ) : students.length === 0 ? (
           <Text fontSize="sm" color="lmFg.muted">
             No students have opened the tutorial yet.
           </Text>
         ) : (
-          <Box overflowX="auto">
+          // Scrolls inside its own box with the header pinned, so a long roster
+          // does not push the controls above off screen.
+          <Box overflow="auto" maxH={{ base: '60vh', md: '70vh' }}>
             <Table size="sm" variant="simple">
-              <Thead>
+              <Thead position="sticky" top={0} zIndex={2} bg="lmBg.surface">
                 <Tr>
-                  <Th>Student</Th>
-                  {openedQuestions.map((question, index) => (
-                    <Th key={question.index} textAlign="center">
+                  <Th {...stickyColumn} px={2} zIndex={3}>
+                    Student
+                  </Th>
+                  {openedIndexes.map((index) => (
+                    <Th key={index} textAlign="center" px={2}>
                       Q{index + 1}
                     </Th>
                   ))}
-                  <Th textAlign="center">Total</Th>
+                  <Th textAlign="center" px={2}>
+                    Total
+                  </Th>
                 </Tr>
               </Thead>
               <Tbody>
-                {(state.students || []).map((student) => {
-                  const byIndex = new Map((student.perQuestion || []).map((cell) => [cell.index, cell]));
-                  return (
-                    <Tr key={String(student.studentId)}>
-                      <Td>
-                        <Text fontSize="sm" noOfLines={1}>
-                          {student.name}
-                        </Text>
-                      </Td>
-                      {openedQuestions.map((question) => (
-                        <ProgressCell key={question.index} cell={byIndex.get(question.index)} />
-                      ))}
-                      <Td textAlign="center" fontWeight="600">
-                        {student.totalCorrect}/{student.totalSlots}
-                      </Td>
-                    </Tr>
-                  );
-                })}
+                {students.map((student) => (
+                  <StudentRow key={String(student.studentId)} student={student} openedIndexes={openedIndexes} />
+                ))}
               </Tbody>
             </Table>
           </Box>

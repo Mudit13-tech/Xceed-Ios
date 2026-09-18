@@ -21,6 +21,7 @@ import People from '../pages/People';
 vi.mock('../api/lmApi', () => ({
   default: {
     listMembers: vi.fn(),
+    requestLeaveCode: vi.fn(),
     leaveClass: vi.fn(),
   },
 }));
@@ -67,6 +68,7 @@ beforeEach(() => {
     teachers: [{ _id: 't1', name: 'Dr. Rao', role: 'teacher', status: 'active' }],
     students: [{ _id: 's1', name: 'Asha', role: 'student', status: 'active' }],
   });
+  lmApi.requestLeaveCode.mockResolvedValue({ sent: true, email: 'asha@nitj.ac.in' });
   lmApi.leaveClass.mockResolvedValue({ left: true });
 });
 
@@ -87,17 +89,47 @@ describe('leaving a class from People', () => {
     expect(lmApi.leaveClass).not.toHaveBeenCalled();
   });
 
-  it('leaves the class and returns to the dashboard once confirmed', async () => {
+  const sendCodeAndEnter = async (dialog, code = '123456') => {
+    fireEvent.click(within(dialog).getByRole('button', { name: /send code/i }));
+    const input = await within(dialog).findByPlaceholderText(/6-digit code/i);
+    fireEvent.change(input, { target: { value: code } });
+  };
+
+  it('does not offer to leave until a code has been sent', async () => {
     const dialog = await openLeaveDialog();
+
+    expect(within(dialog).queryByRole('button', { name: /^leave class$/i })).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: /send code/i }));
+
+    await waitFor(() => expect(lmApi.requestLeaveCode).toHaveBeenCalledWith('c1'));
+    expect(await within(dialog).findByText(/Sent to asha@nitj.ac.in/)).toBeInTheDocument();
+    // A code is needed before the leave button does anything.
+    expect(within(dialog).getByRole('button', { name: /^leave class$/i })).toBeDisabled();
+    expect(lmApi.leaveClass).not.toHaveBeenCalled();
+  });
+
+  it('leaves the class with the code and returns to the dashboard', async () => {
+    const dialog = await openLeaveDialog();
+    await sendCodeAndEnter(dialog, '123456');
     fireEvent.click(within(dialog).getByRole('button', { name: /^leave class$/i }));
 
-    await waitFor(() => expect(lmApi.leaveClass).toHaveBeenCalledWith('c1'));
+    await waitFor(() => expect(lmApi.leaveClass).toHaveBeenCalledWith('c1', '123456'));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/learning', { replace: true }));
   });
 
-  it('keeps the student in the class when the server refuses', async () => {
-    lmApi.leaveClass.mockRejectedValue(new Error('Transfer ownership before leaving your own class.'));
+  it('stays on the send step when the code cannot be sent', async () => {
+    lmApi.requestLeaveCode.mockRejectedValue(new Error('The code could not be sent.'));
     const dialog = await openLeaveDialog();
+    fireEvent.click(within(dialog).getByRole('button', { name: /send code/i }));
+
+    await waitFor(() => expect(lmApi.requestLeaveCode).toHaveBeenCalled());
+    expect(within(dialog).queryByPlaceholderText(/6-digit code/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps the student in the class when the server refuses the code', async () => {
+    lmApi.leaveClass.mockRejectedValue(new Error('That code is not right.'));
+    const dialog = await openLeaveDialog();
+    await sendCodeAndEnter(dialog);
     fireEvent.click(within(dialog).getByRole('button', { name: /^leave class$/i }));
 
     await waitFor(() => expect(lmApi.leaveClass).toHaveBeenCalled());

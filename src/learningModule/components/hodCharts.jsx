@@ -321,7 +321,7 @@ export function DonutChart({ data, height = 240, emptyMessage = 'Nothing to show
           strokeWidth={2}
           label={({ name, value }) => `${name} ${Math.round((value / total) * 100)}%`}
           labelLine={false}
-          style={{ fontSize: 11, fill: axis }}
+          style={{ fontSize: 11 }}
         >
           {slices.map((slice, i) => (
             <Cell key={slice.name} fill={slice.color || series[i % series.length]} />

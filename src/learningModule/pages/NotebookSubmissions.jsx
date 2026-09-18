@@ -24,14 +24,7 @@ import {
 import { FiFastForward, FiPlay, FiRefreshCw, FiSquare } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
-import {
-  DeadlineCountdown,
-  EmptyState,
-  ErrorState,
-  Loading,
-  SectionCard,
-  StatTile,
-} from '../components/common';
+import { DeadlineCountdown, EmptyState, ErrorState, Loading, SectionCard, StatTile, TableSkeleton } from '../components/common';
 import NotebookCell from '../components/NotebookCell';
 import useNotebookKernel from '../hooks/useNotebookKernel';
 import { formatDateTime } from '../format';
@@ -286,7 +279,7 @@ export default function NotebookSubmissions() {
     setRunCells((current) => current.map((cell) => ({ ...cell, runCount: 0 })));
   }, [stop]);
 
-  if (loading) return <Loading label="Loading submissions…" />;
+  if (loading) return <Loading label="Loading submissions…" skeleton={<TableSkeleton rows={6} columns={5} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   return (

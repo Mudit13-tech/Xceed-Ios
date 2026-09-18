@@ -7,7 +7,6 @@ import shotEditor from '../manualAssets/assignments/editor.png';
 import shotPreview from '../manualAssets/assignments/preview.png';
 import shotPlayer from '../manualAssets/assignments/player.png';
 import shotResults from '../manualAssets/assignments/results.png';
-import shotImport from '../manualAssets/assignments/import.png';
 
 // ── design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -112,7 +111,6 @@ const TABS = [
     { id: 'create',   label: 'Create & Author',   icon: 'edit' },
     { id: 'types',    label: 'Question Types',    icon: 'quiz' },
     { id: 'settings', label: 'Settings',          icon: 'settings' },
-    { id: 'import',   label: 'Import a Paper',    icon: 'assignment' },
     { id: 'student',  label: 'What Students See', icon: 'preview' },
     { id: 'grade',    label: 'Grading & Results', icon: 'success' },
     { id: 'gotchas',  label: 'Gotchas',           icon: 'warning' },
@@ -132,17 +130,31 @@ function TabOverview() {
                 questions alongside those — see the Question Types tab.
             </Note>
 
-            <Shot src={shotList} alt="Assignments list for a class"
-                caption="The Assignments tab. Note the subtitle — this module is not file/text coursework; it's formula-graded numeric problems." />
+            <Shot src={shotList} alt="Numerical Assignments list for a class"
+                caption="The Numerical Assignments tab. Auto-marked questions at the top; document hand-ins, which are forms, sit under Document Submissions below them." />
 
-            <SectionTitle>Not the Same as "Coursework"</SectionTitle>
+            <SectionTitle>Document Hand-ins Are Forms</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
-                If you're looking for open-ended, file-or-text submissions with a rubric and manual grading,
-                that's the separate <strong>Coursework</strong> area of the class, not this one. Assignments
-                here means auto-graded questions with an answer the system can mark itself — formula questions
-                where every student sees different numbers, plus multiple-choice, multiple-answer and plain
-                numerical ones.
+                The class tab is called <strong>Numerical Assignments</strong> because everything authored here
+                has an answer the system can mark itself — formula questions where every student sees
+                different numbers, plus multiple-choice, multiple-answer and plain numerical ones. Students
+                type or tick their answers directly; they cannot upload a file to one of these.
             </div>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
+                For work handed in as a document — a PDF report, a scanned answer sheet — use a{' '}
+                <strong>form</strong> with its category set to <strong>Assignment</strong>. A note at the top of
+                the tab says so, and the tab has a second section for them:
+                <ul style={{ margin: '6px 0 0 0', paddingLeft: 18 }}>
+                    <li><strong>Document Submissions</strong>, below your numerical assignments, lists every assignment form in the class with the same Copy link, Edit, Preview, Responses and Delete buttons as the Forms tab. Students see them here too, with a Fill in button.</li>
+                    <li><strong>+ New document assignment</strong> creates one in a click: a draft form in the Assignment category with a single required File upload question, opened in the form editor.</li>
+                    <li>An assignment form needs a submission deadline before it can be published, and students are emailed about it as a new assignment. It is collected, not marked — you read the files yourself, and no gradebook row is created.</li>
+                </ul>
+            </div>
+            <Note type="info">
+                Document hand-ins are covered in full in the{' '}
+                <a href="/learning/formsmanual" target="_blank" rel="noreferrer" style={{ color: 'inherit', fontWeight: 700 }}>Forms manual</a>,
+                under Assignment Forms.
+            </Note>
 
             <SectionTitle>How This Differs from a Tutorial</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9 }}>
@@ -151,7 +163,7 @@ function TabOverview() {
                     <li><strong>Instant feedback defaults off</strong>, and turning it on is a deliberate trade-off you make per assignment (see Settings).</li>
                     <li>There is no separate "results release" gate — a submission is marked and visible the moment it lands.</li>
                 </ul>
-                Everything else — variables, formulas, tolerances, the editor, the paper-import pipeline —
+                Everything else — variables, formulas, tolerances, the editor —
                 is identical to Tutorials. If a step below feels familiar, that's why.
             </div>
         </div>
@@ -174,8 +186,9 @@ function TabCreate() {
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                     <li><strong>Prompt</strong> — write the question and just <em>type</em> <code>{'{{R}}'}</code> where a value belongs; the variable is declared for you as you type it. The toolbar buttons remain for dropping an existing variable at the cursor. Placeholders typed into a hint, a sub-question or the worked solution count too.</li>
-                    <li><strong>Variables</strong> — Integer (the default), Decimal, or From a list, each with a range/step and a unit. A row you delete stays deleted, even with its placeholder still in the text.</li>
+                    <li><strong>Variables</strong> — Integer (the default), Decimal, or From a list, each with a range/step and a unit. A row you delete stays deleted, even with its placeholder still in the text. The names <code>i</code>, <code>j</code>, <code>e</code> and <code>pi</code> are refused on save: the formula engine already uses them for the imaginary unit and the constants, and a variable of that name would silently take their place in every formula. Use <code>i_1</code> or similar — capital <code>I</code> for a current is fine. A question saved before this rule keeps working until it is next saved.</li>
                     <li><strong>Answers</strong> — a formula, evaluated per student; set <strong>Tol %</strong> and/or <strong>Tol ±</strong> (whichever is looser wins).</li>
+                    <li><strong>Complex answers</strong> — a formula may work out to a complex number: write <code>R + i*X</code> (<code>j</code> works too), or <code>polar(10, 45)</code> for a magnitude and an angle in degrees. Students may answer in either form, <code>3+4i</code> or <code>polar(5, 45)</code>, and are marked on how far their value lies from the key, against the same tolerance. <code>10∠45</code> is read the same way, but ∠ is on no keyboard — write <code>polar()</code> in anything students see. The editor&apos;s formula reference lists the functions that go with it: <code>abs</code> (the modulus), <code>re</code>, <code>im</code>, <code>conj</code> and <code>arg</code>.</li>
                     <li><strong>Decimals</strong> — how many decimal places the student must give, per answer, defaulting to 2 dp. It appears on their paper, the answer key is stated to that precision, and Results repeats it so a near-miss reads as rounding rather than a wrong method. <em>Exact</em> leaves the value unrounded.</li>
                     <li><strong>Reads as</strong> — each formula is echoed back below its box as a typeset equation, built from the same parsed formula the server evaluates. A mistyped formula usually looks wrong long before its value does.</li>
                     <li><strong>Sub-questions</strong> — optional parts sharing the same drawn variables, each independently marked. Not auto-lettered; give them your own labels if you want them.</li>
@@ -197,8 +210,8 @@ function TabCreate() {
                 caption="Roll samples before publishing — different draws with their computed answers, so you catch a bad formula before a class sees it." />
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    <li><strong>Roll samples</strong>, under each question, shows the numbers two students would get for <em>that</em> question, sub-questions nested under the stem with their own answers.</li>
-                    <li><strong>Work it out for values you choose</strong> — when you already know the answer for a particular set of values, type them in and check the question agrees, instead of rolling until they come up. It runs the same evaluation students are marked against.</li>
+                    <li><strong>Roll samples</strong>, under each question, shows the numbers two students would get for <em>that</em> question, sub-questions nested under the stem with their own answers, and the worked solution under each sample.</li>
+                    <li><strong>Work it out for values you choose</strong> — when you already know the answer for a particular set of values, type them in and check the question agrees, instead of rolling until they come up. It runs the same evaluation students are marked against, and shows the worked solution for those values too.</li>
                     <li><strong>Preview</strong>, on the assignment&apos;s card in the list, rolls three complete papers end to end.</li>
                 </ul>
             </div>
@@ -377,32 +390,6 @@ function TabSettings() {
     );
 }
 
-function TabImport() {
-    return (
-        <div>
-            <Note type="key">
-                Identical pipeline to Tutorials: read the paper, choose variables, derive answers, merge —
-                and the merge always produces an <strong>unpublished</strong> assignment you still have to
-                open, check, and release yourself.
-            </Note>
-
-            <Shot src={shotImport} alt="Reviewing an imported assignment draft, with verified and mismatched answer badges"
-                caption="One verified answer (green — reproduced the paper's own printed value) and one mismatch (red) in the same import. Treat the mismatch as a hold, not a suggestion." />
-
-            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
-                <ol style={{ margin: 0, paddingLeft: 18 }}>
-                    <li><strong>Upload</strong> one or more PDF/image files via <strong><LmIcon name="assignment" size={13} /> Import from a paper</strong>.</li>
-                    <li><strong><LmIcon name="ai" size={13} /> Suggest variables</strong> — the model proposes which numbers to turn into variables, showing what the paper originally used.</li>
-                    <li><strong><LmIcon name="ai" size={13} /> Derive answers from the paper</strong> — writes the formula and checks it by substituting the paper's own numbers back in.</li>
-                    <li>Read every verification badge: <strong style={{ color: '#166534' }}>✓ matches the paper</strong>, or one of the not-yet-trustworthy states (mismatch / not checkable / will not parse). <strong>Nothing blocks merging an unverified answer</strong> — this is a check for you to act on, not a safeguard the system enforces.</li>
-                    <li><strong>Roll samples</strong> here shows the answer key alongside the draws — deliberately, since this screen is teacher-only.</li>
-                    <li><strong>Merge</strong> your selected questions into a new, unpublished assignment.</li>
-                </ol>
-            </div>
-        </div>
-    );
-}
-
 function TabStudent() {
     return (
         <div>
@@ -412,6 +399,7 @@ function TabStudent() {
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                     <li>Every question is labelled with its <strong>type</strong>, in that type&apos;s colour — so a student knows before reading on whether to tick one option or several.</li>
                     <li>On a random-variable question, students see their own drawn values and may type an unevaluated expression (e.g. <code>2*pi*3</code>) instead of a decimal.</li>
+                    <li>The same note tells them how to type a complex answer: <code>3+4i</code> (<code>j</code> works too) or <code>polar(5, 45)</code> — magnitude, then angle in degrees.</li>
                     <li>A <strong>multiple-choice</strong> question shows its options lettered A, B, C… with radio buttons, so a second pick replaces the first; a <strong>multiple-answers</strong> question uses checkboxes. Clicking anywhere on an option picks it. Ticks are kept by <em>Save progress</em> and come back on reload.</li>
                     <li>The right options are shown only <strong>after the deadline</strong>, and only with <em>Show the worked solution after the deadline</em> on — then they are outlined green and marked <strong>correct</strong>, with a wrong pick outlined red. Submitting alone reveals nothing, so the first student to finish cannot pass the key on.</li>
                     <li><strong>Submitting asks for confirmation and warns marking is immediate</strong> — "Submit this assignment? Your answers will be marked immediately." Once accepted, it's final for that attempt.</li>
@@ -502,16 +490,17 @@ function TabGotchas() {
         'The due date can be set in two places (the editor\'s Settings, or the list page\'s inline picker at publish time) and they don\'t automatically agree — the list page\'s value wins whenever you publish from there.',
         'Submitting is explicitly a one-way door for the student, and marking happens instantly — there\'s no teacher "release grades" step gating what they see afterward.',
         'Grading by hand is limited to one additive/subtractive adjustment plus a feedback note per attempt — no rubric, no per-criterion scoring. A wrong key is fixed for everyone with Re-evaluate in the editor, which re-marks and moves the gradebook.',
-        'Preview — both in the editor and in the import screen — always rolls against the saved server copy, never unsaved changes in front of you.',
+        'Preview always rolls against the saved server copy, never unsaved changes in front of you.',
         'A constraint that excludes too much (or is contradictory) doesn\'t error up front — it only ever shows up as an "unanswerable question" warning after a draw, in Preview or in Results.',
         'The rich-text prompt editor can silently corrupt a hand-typed {{variable}} placeholder with embedded formatting — always use the Insert variable buttons.',
-        'Import verification badges are advisory only; nothing stops a still-unverified or mismatched answer from being merged and later published to the class.',
-        'This is not the same feature as "Coursework" — if you want file/text submissions with a rubric, look there instead.',
+        'Students cannot upload a file to a numerical assignment. For a PDF or other document hand-in, use + New document assignment (a form in the Assignment category) — it is listed under Document Submissions on this tab, but it is collected, not marked, and adds nothing to the gradebook.',
         'Only "Numerical with random variables" gives each student different numbers. MCQ, MSQ and plain Numerical questions are the same for the whole class, so an answer passed along works for them — weigh that on work that counts.',
         'A multiple-answers question has no partial credit: one missed or one extra tick scores zero, exactly as in a quiz.',
         'A paper is fixed when a student first opens it, and there is only one attempt — questions added, re-keyed or changed to another type afterwards reach existing papers only through Re-evaluate.',
         'Negative marking and shuffled options or question order, available in quizzes, are not available in assignments.',
         'Re-evaluate keeps an earlier Adjust marks on top of the re-mark, in the score and the gradebook. An adjustment you made to cover a wrong key will count twice once the key is fixed — set it back to 0 after re-evaluating.',
+        'i, j, e and pi cannot be variable names — they are the imaginary unit and the constants, and a variable would silently replace them in every formula. Rename to i_1 or similar; capital I is allowed.',
+        'Set polar answers as polar(magnitude, angle in degrees). 10∠45 parses too, but no student can type ∠.',
     ];
     return (
         <div>
@@ -553,7 +542,6 @@ export default function AssignmentManual({ standalone = false }) {
         create:   <TabCreate />,
         types:    <TabTypes />,
         settings: <TabSettings />,
-        import:   <TabImport />,
         student:  <TabStudent />,
         grade:    <TabGrade />,
         gotchas:  <TabGotchas />,
@@ -579,7 +567,7 @@ export default function AssignmentManual({ standalone = false }) {
                             color: '#fff',
                         }}><LmIcon name="geometry" size={16} /></div>
                         <span style={{ fontSize: 14, fontWeight: 700, color: '#fed7aa' }}>
-                            Assignments — Teacher Manual
+                            Numerical Assignments — Teacher Manual
                         </span>
                     </div>
                     {isAuthenticated && (
@@ -605,7 +593,7 @@ export default function AssignmentManual({ standalone = false }) {
                         color: '#fff',
                     }}><LmIcon name="geometry" size={21} /></div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <div className="agm-title" style={{ fontWeight: 800, color: T.text }}>Assignments — Teacher Manual</div>
+                        <div className="agm-title" style={{ fontWeight: 800, color: T.text }}>Numerical Assignments — Teacher Manual</div>
                         <div className="agm-subtitle" style={{ color: T.textMuted, marginTop: 2 }}>
                             Assessed numerical work, formula-graded per student · XCEED Learning
                         </div>

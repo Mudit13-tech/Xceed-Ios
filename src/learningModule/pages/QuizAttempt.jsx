@@ -20,7 +20,7 @@ import {
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import RichText from '../components/RichText';
-import { ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { ErrorState, Loading, SectionCard, SectionCardSkeleton, StatTile } from '../components/common';
 import useProctoring from '../hooks/useProctoring';
 import useQuizCountdown from '../hooks/useQuizCountdown';
 import useAnswerAutosave from '../hooks/useAnswerAutosave';
@@ -186,6 +186,15 @@ export default function QuizAttempt() {
   // the sitting is the one screen that has to identify itself without leaning
   // on the class page around it.
   const [banner, setBanner] = useState({ title: '', subject: '', facultyName: '' });
+  /**
+   * Whether staff waived the camera for this student on this paper.
+   *
+   * Carried on the quiz rather than read off the attempt because a sequential
+   * sitting never receives an attempt document while it runs — the question
+   * endpoint is the whole reply — so the attempt's own `webcam.waivedByName`
+   * cannot reach this screen. See `webcamExempt` in the server's `getQuiz`.
+   */
+  const [webcamExempt, setWebcamExempt] = useState(false);
   const [attempt, setAttempt] = useState(null);
   const [paper, setPaper] = useState(null);        // all_at_once
   const [current, setCurrent] = useState(null);    // one_at_a_time
@@ -194,6 +203,18 @@ export default function QuizAttempt() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState('');
+  /**
+   * Whether something of the student's own is on the wire — an answer being
+   * committed, a submit, or a draft the autosave is banking.
+   *
+   * Handed to the webcam watch so a periodic frame that falls due mid-save is
+   * deferred to the next tick rather than uploaded alongside the answer. A ref
+   * with a stable reader, not the state itself: the paper re-renders once a
+   * second while the countdown ticks, and a changing prop there would rebuild
+   * the watch's interval every time.
+   */
+  const answerInFlightRef = useRef(false);
+  const answerInFlight = useCallback(() => answerInFlightRef.current, []);
   const [notice, setNotice] = useState(null);
   // Set when Submit is pressed with questions still blank: the confirmation is
   // rendered inline rather than as a modal, because a Chakra modal portals to
@@ -335,6 +356,13 @@ export default function QuizAttempt() {
     save: (entries) => lmApi.saveAttemptDraft(classId, attemptId, entries, { keepalive: true }),
   });
 
+  /* Kept current on every render — the webcam watch reads it through
+     `answerInFlight` at the moment a frame falls due, not at the moment this
+     component last rendered. Both signals count: `busy` is an answer or a
+     submit the student is waiting on, and a saving autosave is a draft already
+     on the same uplink. */
+  answerInFlightRef.current = Boolean(busy) || autosave.status === 'saving';
+
   // A permanent autosave failure reached outside a click — the connection was
   // fine right up until the moment it wasn't. Same reconciliation as every
   // other way this attempt can end from under the student.
@@ -373,6 +401,7 @@ export default function QuizAttempt() {
       const quiz = await lmApi.getQuiz(classId, quizId);
       setSettings(quiz.settings);
       setBanner({ title: quiz.title, subject: quiz.subject, facultyName: quiz.facultyName });
+      setWebcamExempt(Boolean(quiz.webcamExempt));
 
       if (quiz.settings.deliveryMode === 'one_at_a_time') {
         const done = await loadSequential();
@@ -766,7 +795,7 @@ export default function QuizAttempt() {
   const pending = attempt?.resultsPending;
 
   let content;
-  if (loading) content = <Loading label="Loading your paper…" />;
+  if (loading) content = <Loading label="Loading your paper…" skeleton={<SectionCardSkeleton lines={4} />} />;
   else if (error?.payload?.code === 'SESSION_CONFLICT') {
     /* ---- second screen ----
        Deliberately not an ErrorState with a Retry button: retrying is exactly
@@ -1384,11 +1413,24 @@ export default function QuizAttempt() {
       {/* The webcam watch, when the paper requires one. Runs for the length of
           the sitting, reports what it sees, and its self-view floats over the
           stage. Fire-and-forget reporting — a failed report must never stall the
-          paper. */}
+          paper.
+
+          Not for a student the teacher has waived. The waiver is what let them
+          start without a camera at all, and asking for one here anyway put the
+          watch on its retry ramp reporting `blocked` — which, after two of
+          them, raised the very student staff had already ruled on as a camera
+          flag in Live control, and sent an invigilator to their desk for it. */}
       <WebcamProctor
-        active={sitting && Boolean(settings?.requireWebcam)}
+        active={sitting && Boolean(settings?.requireWebcam) && !webcamExempt}
+        /* Off unless a teacher has asked for them on this paper. The periodic
+           review frame is the routine record now — see WebcamProctor — and a
+           snapshot is several times the size of one, taken larger and less
+           compressed, which on a slow uplink is the upload an answer would
+           have to queue behind. `?? 0`, so a paper that never decided gets
+           none rather than the three it used to get by default. */
         snapshotCount={Number(settings?.webcamSnapshotCount ?? 3)}
         snapshotWindowMs={snapshotWindowMs}
+        isBusy={answerInFlight}
         onReport={(body) => {
           lmApi.recordWebcamCheck(classId, attemptId, body).catch(() => {});
         }}

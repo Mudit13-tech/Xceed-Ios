@@ -93,7 +93,7 @@ function MaterialRow({ item, classId, isTeacher, onChanged, onEdit }) {
               <MenuItem {...buttonTextStyles} onClick={() => onEdit(item)}>
                 Edit
               </MenuItem>
-              <MenuItem color="red.600" onClick={remove}>
+              <MenuItem color="red.600" icon={<LmIcon name="delete" size={15} />} onClick={remove}>
                 Delete
               </MenuItem>
             </MenuList>
@@ -124,6 +124,10 @@ export default function Material() {
   } = useQuery({
     queryKey: ['learning', 'material', classId],
     queryFn: () => lmApi.listCoursework(classId, { workType: 'material' }),
+    // Keep the previous list on screen while a background refresh runs,
+    // so switching to this tab never shows a skeleton after the first visit.
+    placeholderData: (prev) => prev,
+    staleTime: 2 * 60 * 1000,
   });
 
   const openNew = () => {
@@ -141,7 +145,10 @@ export default function Material() {
 
   const { grouped, untopiced } = groupByTopic(items, topics);
 
-  if (loading) return <MaterialListSkeleton />;
+  // Only block with the skeleton on the very first load — while items is truly
+  // absent. On subsequent visits placeholderData keeps the old list visible
+  // while the background refresh runs silently.
+  if (loading && !items.length) return <MaterialListSkeleton />;
 
   return (
     <Flex gap={6} align="flex-start" direction={{ base: 'column', lg: 'row' }}>

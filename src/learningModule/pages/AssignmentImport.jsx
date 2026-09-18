@@ -25,9 +25,10 @@ import {
 import lmApi from '../api/lmApi';
 import RichText from '../components/RichText';
 import RichTextEditor from '../components/RichTextEditor';
-import { ErrorState, Loading, SectionCard } from '../components/common';
+import { ErrorState, FormSkeleton, Loading, SectionCard } from '../components/common';
 import { formatAnswerValue } from '../format';
 import { LmIcon } from '../components/Icon';
+import DeleteButton from '../components/DeleteButton';
 
 /**
  * Building a parameterised assignment from a photographed or scanned paper.
@@ -111,7 +112,7 @@ function VariableRow({ variable, onChange, onRemove }) {
           <FormLabel fontSize="xs" mb={1}>Unit</FormLabel>
           <Input size="sm" value={variable.unit || ''} onChange={(e) => set('unit', e.target.value)} />
         </FormControl>
-        <Button size="xs" variant="ghost" colorScheme="red" onClick={onRemove}>Remove</Button>
+        <DeleteButton size="xs" label="Remove variable" onClick={onRemove} />
       </Flex>
 
       <Flex gap={3} mt={2} wrap="wrap" fontSize="xs" color="lmFg.subtle">
@@ -491,7 +492,7 @@ export default function AssignmentImport() {
     }
   };
 
-  if (loading) return <Loading label="Loading the draft…" />;
+  if (loading) return <Loading label="Loading the draft…" skeleton={<FormSkeleton />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
   if (!draft) return null;
 

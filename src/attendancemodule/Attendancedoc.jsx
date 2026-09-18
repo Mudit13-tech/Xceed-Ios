@@ -127,6 +127,7 @@ export default function Attendancedoc() {
                     background: toast.type === 'error' ? theme.danger : theme.success,
                     color: '#ffffff',
                     border: 'none',
+                    maxWidth: 'calc(100vw - 24px)', wordBreak: 'break-word',
                 }}>
                     {toast.msg}
                 </div>
@@ -340,7 +341,7 @@ export default function Attendancedoc() {
                     )}
 
                     {/* Attendance Table */}
-                    <div style={{ ...styles.card, padding: 0, overflow: 'hidden' }}>
+                    <div style={{ ...styles.card, padding: 0, overflowX: 'auto' }}>
                         <table className="ams-table">
                             <thead>
                                 <tr>

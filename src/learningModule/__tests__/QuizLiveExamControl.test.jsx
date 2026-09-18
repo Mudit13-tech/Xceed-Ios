@@ -82,6 +82,15 @@ const shutOut = (overrides = {}) => ({
   ...overrides,
 });
 
+/** The clock ran out 10 minutes ago; the server submitted the paper for them. */
+const timeUp = (overrides = {}) => ({
+  ...shutOut({ _id: 'a5', studentName: 'Meera Nair', studentEmail: 'meera@example.com' }),
+  rollNumber: '21EC005',
+  status: 'expired',
+  terminationReason: '',
+  ...overrides,
+});
+
 const writingWithoutSeb = (overrides = {}) => ({
   _id: 'a2',
   studentName: 'Vikram Iyer',
@@ -137,8 +146,11 @@ const listedLive = (quiz, attempts) => [
     stats: { attempts: attempts.length, avg: null, lastSubmittedAt: null },
     live: {
       writing: attempts.filter((a) => a.status === 'in_progress').length,
-      submitted: 0,
-      shutOut: attempts.filter((a) => a.status === 'terminated' || a.status === 'expired').length,
+      // Finished is finished, however the paper ended: a timed-out sitting was
+      // sat to the clock and submitted by the server.
+      submitted: attempts.filter((a) => a.status === 'submitted' || a.status === 'expired').length,
+      timedOut: attempts.filter((a) => a.status === 'expired').length,
+      shutOut: attempts.filter((a) => a.status === 'terminated').length,
       offSeb: attempts.filter((a) => a.status === 'in_progress' && a.sebBypassed).length,
     },
     sittingNow: attempts.filter((a) => a.status === 'in_progress').length,
@@ -225,6 +237,40 @@ describe('the live exam control panel', () => {
     );
 
     expect(within(dialog).getByText('No clock')).toBeTruthy();
+  });
+
+  it('lists a paper that ran out of time under Time up, not Shut out', async () => {
+    /* The two used to share the Shut out card, on the reasoning that both are
+       put right by letting the student back in. That is the remedy, not the
+       event: an expired sitting is the server submitting for somebody whose
+       clock stopped, which is how a timed exam ends. Filing it under Shut out
+       put a red alert on every paper that simply finished. */
+    const dialog = await openPanel(resultsFixture(quizWith(), [timeUp()]));
+
+    expect(within(dialog).getByText(/time up \(1\)/i)).toBeTruthy();
+    expect(within(dialog).getByText(/shut out \(0\)/i)).toBeTruthy();
+    expect(within(dialog).getByText('meera@example.com')).toBeTruthy();
+    // Counted as finished in the header, beside the papers handed in by hand.
+    expect(within(dialog).getByText('Submitted').nextSibling.textContent).toBe('1');
+    expect(within(dialog).getByText('Shut out').nextSibling.textContent).toBe('0');
+  });
+
+  it('still offers Let in on a timed-out sitting', async () => {
+    // The one thing the old shared card got right: "they lost twenty minutes to
+    // a dead laptop, give it back" is asked of exactly these rows, so moving
+    // them out of Shut out must not take the control away with them.
+    const dialog = await openPanel(resultsFixture(quizWith(), [timeUp()]));
+
+    expect(within(dialog).getByRole('button', { name: /let in/i })).toBeTruthy();
+  });
+
+  it('keeps a terminated and a timed-out sitting in their own lists', async () => {
+    const dialog = await openPanel(resultsFixture(quizWith(), [shutOut(), timeUp()]));
+
+    expect(within(dialog).getByText(/shut out \(1\)/i)).toBeTruthy();
+    expect(within(dialog).getByText(/time up \(1\)/i)).toBeTruthy();
+    expect(within(dialog).getByText('Submitted').nextSibling.textContent).toBe('1');
+    expect(within(dialog).getByText('Shut out').nextSibling.textContent).toBe('1');
   });
 
   it('lists a shut-out student by email, with when the paper ended', async () => {

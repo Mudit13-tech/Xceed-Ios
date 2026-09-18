@@ -29,6 +29,38 @@ export function evaluateOutputMatch(actual, expected) {
 }
 
 /**
+ * The text a test case is judged on: what the cell visibly produced.
+ *
+ * That is its printed output followed by the value of its last expression, the
+ * same two things the cell shows the student, in the same order. Judging only
+ * one of them made the verdict depend on how the answer was written rather than
+ * on what it was — the last value used to count only when nothing was printed.
+ *
+ * `result` is the kernel's rendering of that value. For Python it is the
+ * `repr`, so a returned string reads `'True'` with its quotes and a boolean
+ * reads `True`, exactly as the cell displays them. C has no last expression;
+ * its kernel reports an exit status there, which is not program output, and the
+ * caller passes null for it.
+ */
+export function cellOutputText(stdout, result) {
+  const text = stdout || '';
+  if (result === null || result === undefined) return text;
+  const separator = text && !text.endsWith('\n') ? '\n' : '';
+  return `${text}${separator}${result}`;
+}
+
+/**
+ * Words in an expected output that spell a boolean the way Python never prints
+ * one — `true`, `FALSE` — so the editor can warn before every correct answer
+ * fails on a capital letter. A warning and not a refusal: printing the word
+ * `true` is a perfectly good thing for a program to do on purpose.
+ */
+export function misspelledPythonBooleans(expected) {
+  const words = normalizeOutput(expected).split(/[^A-Za-z]+/);
+  return [...new Set(words.filter((word) => /^(true|false)$/i.test(word) && word !== 'True' && word !== 'False'))];
+}
+
+/**
  * SHA-256 of a normalized output, as lowercase hex.
  *
  * The counterpart of `hashOutput` on the server, and the two must agree
@@ -96,10 +128,14 @@ export async function runCellTestCases({
       onProgress(i, testCases.length);
     }
 
+    // Chunks are joined exactly as they arrive. Both kernels already carry the
+    // program's own newlines, and a chunk boundary is only where a batch
+    // happened to be flushed — a line printed in two writes, or a pause
+    // mid-program, must not grow a line break the student never printed.
     let collectedStdout = '';
     const onOutput = (chunk) => {
-      if (chunk.type === 'stdout' || chunk.type === 'result') {
-        collectedStdout += (chunk.text || '') + '\n';
+      if (chunk.type === 'stdout') {
+        collectedStdout += chunk.text || '';
       }
     };
 
@@ -112,8 +148,7 @@ export async function runCellTestCases({
         prelude: isC ? prelude : [],
       });
 
-      // If the cell produced a result expression, append if not already captured
-      const outputText = collectedStdout || (result !== null && result !== undefined ? String(result) : '');
+      const outputText = cellOutputText(collectedStdout, isC ? null : result);
       // eslint-disable-next-line no-await-in-loop
       const passed = !error && (await evaluateAgainstCase(outputText, tc));
 

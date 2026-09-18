@@ -9,8 +9,6 @@ import {
   Heading,
   Menu,
   MenuButton,
-  MenuDivider,
-  MenuGroup,
   MenuItem,
   MenuList,
   Text,
@@ -21,11 +19,12 @@ import {
 import { FiChevronDown, FiDownload, FiUpload } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
-import { DeadlineCountdown, EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { DeadlineCountdown, EmptyState, ErrorState, Loading, SectionCard, WorkListSkeleton } from '../components/common';
 import { formatDate, relativeTime } from '../format';
 import { LmIcon } from '../components/Icon';
 import { SAMPLE_NOTEBOOK_CELLS } from '../sampleNotebook';
 import { countTestCases, downloadNotebookFile, parseNotebookFile } from '../notebookTransfer';
+import DeleteButton from '../components/DeleteButton';
 
 /**
  * The class's coding notebooks.
@@ -242,7 +241,7 @@ export default function Notebooks() {
     }
   };
 
-  if (loading) return <Loading label="Loading notebooks…" />;
+  if (loading) return <Loading label="Loading notebooks…" skeleton={<WorkListSkeleton />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   return (
@@ -305,15 +304,8 @@ export default function Notebooks() {
               New notebook
             </MenuButton>
             <MenuList>
-              <MenuGroup title="Blank">
-                <MenuItem onClick={() => create('python')}>Python notebook</MenuItem>
-                <MenuItem onClick={() => create('c')}>C notebook</MenuItem>
-              </MenuGroup>
-              <MenuDivider />
-              <MenuGroup title="Sample with hidden test cases">
-                <MenuItem onClick={() => openSample('python')}>Python sample</MenuItem>
-                <MenuItem onClick={() => openSample('c')}>C sample</MenuItem>
-              </MenuGroup>
+              <MenuItem onClick={() => create('python')}>Python notebook</MenuItem>
+              <MenuItem onClick={() => create('c')}>C notebook</MenuItem>
             </MenuList>
           </Menu>
         )}
@@ -451,7 +443,7 @@ export default function Notebooks() {
                       size="sm"
                       colorScheme="purple"
                     >
-                      {isTeacher ? 'Open' : notebook.myStatus === 'not-started' ? 'Start' : 'Continue'}
+                      {isTeacher ? 'Preview' : notebook.myStatus === 'not-started' ? 'Start' : 'Continue'}
                     </Button>
                     {isTeacher && (
                       <>
@@ -479,9 +471,7 @@ export default function Notebooks() {
                         >
                           Submissions
                         </Button>
-                        <Button size="sm" variant="ghost" colorScheme="red" onClick={() => remove(notebook)}>
-                          Delete
-                        </Button>
+                        <DeleteButton label="Delete notebook" onClick={() => remove(notebook)} />
                       </>
                     )}
                   </HStack>
@@ -549,7 +539,7 @@ export default function Notebooks() {
                             size="sm"
                             colorScheme="purple"
                           >
-                            {isTeacher ? 'Open' : notebook.myStatus === 'not-started' ? 'Start' : 'Continue'}
+                            {isTeacher ? 'Preview' : notebook.myStatus === 'not-started' ? 'Start' : 'Continue'}
                           </Button>
                           {isTeacher && (
                             <>
@@ -577,9 +567,7 @@ export default function Notebooks() {
                               >
                                 Submissions
                               </Button>
-                              <Button size="sm" variant="ghost" colorScheme="red" onClick={() => remove(notebook)}>
-                                Delete
-                              </Button>
+                              <DeleteButton label="Delete notebook" onClick={() => remove(notebook)} />
                             </>
                           )}
                         </HStack>

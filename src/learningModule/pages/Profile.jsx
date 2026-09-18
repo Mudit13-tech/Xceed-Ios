@@ -13,7 +13,7 @@ import {
 } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, SectionCardSkeleton, StatRowSkeleton } from '../components/common';
 import { formatDate } from '../format';
 
 /**
@@ -87,7 +87,7 @@ export default function Profile() {
     load();
   }, [load]);
 
-  if (loading) return <Loading label="Adding it all up…" />;
+  if (loading) return <Loading label="Adding it all up…" skeleton={<><StatRowSkeleton count={3} columns={{ base: 3 }} /><Box mt={4}><SectionCardSkeleton lines={4} mb={4} /><SectionCardSkeleton lines={3} /></Box></>} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   if (!profile.sessions.length) {

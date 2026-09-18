@@ -22,7 +22,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading } from './common';
+import { EmptyState, ErrorState, Loading, SectionCardSkeleton } from './common';
 
 /**
  * Taking questions out of another paper.
@@ -240,7 +240,7 @@ export default function ImportQuestionsModal({
               </HStack>
 
               {loading ? (
-                <Loading label="Loading…" />
+                <Loading label="Loading…" skeleton={<SectionCardSkeleton lines={4} />} />
               ) : (
                 itemId && (
                   <Box>

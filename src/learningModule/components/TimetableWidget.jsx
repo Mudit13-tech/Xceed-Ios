@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Spinner, Text, VStack } from '@chakra-ui/react';
+import { Box, Text, VStack } from '@chakra-ui/react';
+import { TimetableSkeleton } from './common';
 import getEnvironment from '../../getenvironment';
 import ViewTimetable from '../../timetableadmin/viewtt';
 
@@ -139,10 +140,7 @@ export default function TimetableWidget({ me }) {
 
   if (loading) {
     return (
-      <VStack p={6} spacing={4}>
-        <Spinner color="purple.500" />
-        <Text color="lmFg.muted">Loading your timetable...</Text>
-      </VStack>
+      <TimetableSkeleton />
     );
   }
 

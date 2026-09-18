@@ -31,9 +31,11 @@ import {
 import { FiArrowDown, FiArrowUp, FiCopy, FiTrash2 } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
-import { CopyLinkButton, ErrorState, Loading, SectionCard } from '../components/common';
+import { CopyLinkButton, ErrorState, FormSkeleton, Loading, SectionCard } from '../components/common';
 import FormPreviewModal from '../components/FormPreviewModal';
 import { LmIcon } from '../components/Icon';
+import AutosaveStatus from '../components/AutosaveStatus';
+import useEditorAutosave from '../hooks/useEditorAutosave';
 
 /**
  * Authoring surface for a form — a Google-Forms-like builder. Entirely
@@ -57,6 +59,11 @@ const QUESTION_TYPES = [
 ];
 
 const HAS_OPTIONS = ['multiple_choice', 'checkboxes', 'dropdown'];
+
+const DEADLINE_REQUIRED = 'An assignment form needs a submission deadline before it can be published.';
+
+// Mirrors formController.missingAssignmentDeadline.
+const deadlineMissing = (form) => form?.category === 'assignment' && !form?.settings?.dueDate;
 
 // A section needs a stable id the moment it is created client-side, so a
 // question can be assigned to it before the form is ever saved — any 24-hex
@@ -383,6 +390,8 @@ function ShareLink({ form, classId }) {
 
   if (!form.published) return null;
 
+  const hasFileQuestion = (form.questions || []).some((question) => question.type === 'file_upload');
+
   return (
     <SectionCard title="Share">
       <VStack align="stretch" spacing={2}>
@@ -391,6 +400,13 @@ function ShareLink({ form, classId }) {
             ? 'Anyone with this link can respond, signed in or not.'
             : 'This link only accepts a signed-in member of this class.'}
         </Text>
+        {hasFileQuestion && (
+          <Alert status="info" borderRadius="md" fontSize="sm" alignItems="flex-start">
+            <AlertIcon />
+            File uploads are not available through this link, so file-upload questions are skipped for anyone
+            responding here — even required ones. Students who open the form from the class can still attach files.
+          </Alert>
+        )}
         <HStack>
           <Input size="sm" value={shareUrl} isReadOnly />
           <Button size="sm" onClick={onCopy} leftIcon={<FiCopy />}>
@@ -404,7 +420,6 @@ function ShareLink({ form, classId }) {
 
 export default function FormEditor() {
   const { classId, klass } = useOutletContext();
-  const topics = klass?.topics || [];
   const { formId } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
@@ -438,6 +453,21 @@ export default function FormEditor() {
 
   const problems = useMemo(() => validate(questions), [questions]);
 
+  // The form exactly as the server wants it. Shared by the Save button and the
+  // autosave, so the two can never drift into sending different documents.
+  const payload = useMemo(
+    () =>
+      form && {
+        title: form.title,
+        description: form.description,
+        category: form.category === 'assignment' ? 'assignment' : 'normal',
+        settings: form.settings,
+        sections: sections.map((section, order) => ({ ...section, order })),
+        questions: questions.map((question, order) => ({ ...question, _key: undefined, order })),
+      },
+    [form, sections, questions],
+  );
+
   const patchQuestion = (index, patch) =>
     setQuestions((current) => current.map((question, i) => (i === index ? { ...question, ...patch } : question)));
 
@@ -450,37 +480,52 @@ export default function FormEditor() {
       return next;
     });
 
-  const save = async () => {
+  const save = async ({ quiet = false } = {}) => {
     if (questions.length && problems.length) {
-      toast({ status: 'warning', title: problems[0] });
+      if (!quiet) toast({ status: 'warning', title: problems[0] });
       return false;
     }
-    setSaving(true);
+    if (!quiet) setSaving(true);
     setServerProblems([]);
     try {
-      const updated = await lmApi.updateForm(classId, formId, {
-        title: form.title,
-        description: form.description,
-        topicId: form.topicId || null,
-        settings: form.settings,
-        sections: sections.map((section, order) => ({ ...section, order })),
-        questions: questions.map((question, order) => ({ ...question, _key: undefined, order })),
-      });
+      const updated = await lmApi.updateForm(classId, formId, payload);
+      // Adopting the server's copy replaces everything on screen, which is fine
+      // when a teacher pressed Save and is watching, and is not fine thirty
+      // seconds after they stopped typing — it would pull the sentence they are
+      // part-way through out from under them.
+      if (quiet) return true;
       setForm(updated);
       if (updated.questions) setQuestions(withKeys(updated.questions));
       if (updated.sections) setSections(withSectionIds(updated.sections));
+      autosave.markSaved();
       toast({ status: 'success', title: 'Saved' });
       return true;
     } catch (err) {
+      if (quiet) throw err;
       setServerProblems(err.payload?.errors || [err.message]);
       toast({ status: 'error', title: err.message });
       return false;
     } finally {
-      setSaving(false);
+      if (!quiet) setSaving(false);
     }
   };
 
+  /* Paused once published: students can be filling the form in, and an edit
+     reaching them thirty seconds after it was typed is not something anyone
+     asked for. Save and Unpublish both still work. */
+  const autosave = useEditorAutosave({
+    payload,
+    active: !loading && !error && !form?.published && !(questions.length && problems.length),
+    save: () => save({ quiet: true }),
+  });
+
   const togglePublish = async () => {
+    // The server refuses this too; checking here saves a round trip and says
+    // which field to fill in.
+    if (!form.published && deadlineMissing(form)) {
+      toast({ status: 'warning', title: DEADLINE_REQUIRED });
+      return;
+    }
     if (!form.published && !(await save())) return;
     try {
       const result = await lmApi.publishForm(classId, formId, { publish: !form.published });
@@ -492,18 +537,28 @@ export default function FormEditor() {
     }
   };
 
-  if (loading) return <Loading label="Loading form…" />;
+  if (loading) return <Loading label="Loading form…" skeleton={<FormSkeleton />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   const setSetting = (key, value) =>
     setForm((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
 
+  const isAssignment = form.category === 'assignment';
+  const bannerProblems = [...new Set([
+    ...problems,
+    ...serverProblems,
+    ...(deadlineMissing(form) ? [DEADLINE_REQUIRED] : []),
+  ])];
+
   return (
     <VStack align="stretch" spacing={5}>
       <Flex gap={3} wrap="wrap" align="center">
-        <Heading size="md" flex="1">
+        <Heading size="md">
           Edit form
         </Heading>
+        <Box flex="1">
+          <AutosaveStatus {...autosave} pausedReason={form.published ? 'this form is published' : undefined} />
+        </Box>
         {form.published && form.shareCode && (
           <CopyLinkButton to={`/learning/form/link/${form.shareCode}`} />
         )}
@@ -522,11 +577,11 @@ export default function FormEditor() {
         </Button>
       </Flex>
 
-      {(problems.length > 0 || serverProblems.length > 0) && (
+      {bannerProblems.length > 0 && (
         <Alert status="warning" borderRadius="md" alignItems="flex-start">
           <AlertIcon />
           <VStack align="stretch" spacing={0} fontSize="sm">
-            {[...new Set([...problems, ...serverProblems])].map((problem) => (
+            {bannerProblems.map((problem) => (
               <Text key={problem}>{problem}</Text>
             ))}
           </VStack>
@@ -550,19 +605,25 @@ export default function FormEditor() {
           </FormControl>
 
           <FormControl maxW="320px">
-            <FormLabel fontSize="sm">Topic</FormLabel>
+            <FormLabel fontSize="sm">Category</FormLabel>
             <Select
-              value={form.topicId || ''}
-              onChange={(event) => setForm({ ...form, topicId: event.target.value })}
+              value={isAssignment ? 'assignment' : 'normal'}
+              onChange={(event) => setForm({ ...form, category: event.target.value })}
             >
-              <option value="">No topic</option>
-              {topics.map((topic) => (
-                <option key={topic._id} value={topic._id}>
-                  {topic.name}
-                </option>
-              ))}
+              <option value="normal">Normal form</option>
+              <option value="assignment">Assignment</option>
             </Select>
           </FormControl>
+
+          <Alert status="info" borderRadius="md" fontSize="sm" alignItems="flex-start">
+            <AlertIcon />
+            <Box>
+              If you want students to upload a document as their submission, use this form, add a{' '}
+              <strong>File upload</strong> question and choose the category <strong>Assignment</strong>.
+              An assignment form needs a submission deadline, appears on both the Forms and Assignments
+              tabs, and students are mailed about it as a new assignment.
+            </Box>
+          </Alert>
 
           <Divider />
 
@@ -640,8 +701,8 @@ export default function FormEditor() {
           )}
 
           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
-            <FormControl>
-              <FormLabel fontSize="sm">Submission deadline (optional)</FormLabel>
+            <FormControl isRequired={isAssignment} isInvalid={deadlineMissing(form)}>
+              <FormLabel fontSize="sm">Submission deadline{isAssignment ? '' : ' (optional)'}</FormLabel>
               <Input
                 type="datetime-local"
                 value={toDatetimeLocal(form.settings?.dueDate)}
@@ -649,7 +710,11 @@ export default function FormEditor() {
                   setSetting('dueDate', event.target.value ? new Date(event.target.value).toISOString() : null)
                 }
               />
-              <FormHelperText fontSize="xs">Leave blank to keep this form open indefinitely.</FormHelperText>
+              <FormHelperText fontSize="xs">
+                {isAssignment
+                  ? 'Required for an assignment — students see it as the due date.'
+                  : 'Leave blank to keep this form open indefinitely.'}
+              </FormHelperText>
             </FormControl>
             {form.settings?.dueDate && (
               <FormControl>
@@ -677,8 +742,16 @@ export default function FormEditor() {
                 'A second submission overwrites the first rather than adding a new row.',
                 true,
               ],
-              ['collectEmail', 'Ask respondents to confirm their email', ''],
-              ['showSummaryToRespondents', 'Let respondents see the summary after submitting', ''],
+              [
+                'collectEmail',
+                'Record an email address with each response',
+                'Signed-in respondents are shown the address on their account. Anyone answering through a share link is asked for one before the form opens.',
+              ],
+              [
+                'showSummaryToRespondents',
+                'Let respondents see the summary after submitting',
+                'Shows the per-question totals once they have answered — no names, and not the drop-off figures on this page. Written answers are shown as given, so leave this off if a question invites anything personal.',
+              ],
             ].map(([key, label, hint, defaultOn]) => (
               <FormControl key={key} display="flex" alignItems="flex-start" gap={3}>
                 <Switch

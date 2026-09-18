@@ -10,7 +10,6 @@ import {
   IconButton,
   Image,
   ListItem,
-  Spinner,
   Table,
   Tbody,
   Td,
@@ -24,6 +23,7 @@ import {
   useColorMode,
   useColorModeValue,
 } from '@chakra-ui/react';
+import { BusyDots } from './common';
 import {
   FiAlertCircle,
   FiArrowDown,
@@ -38,6 +38,7 @@ import {
   FiLock,
   FiPlay,
   FiPlus,
+  FiRefreshCw,
   FiSquare,
   FiTerminal,
   FiTrash2,
@@ -51,6 +52,7 @@ import { Prec } from '@codemirror/state';
 import HintTooltip from './HintTooltip';
 import RichText from './RichText';
 import { EXAMPLE_CELL } from '../sampleNotebook';
+import { misspelledPythonBooleans } from '../utils/testRunner';
 
 /**
  * One notebook cell: source on top, output underneath.
@@ -129,6 +131,41 @@ function OutputBlock({ outputs, onClear }) {
   );
 }
 
+const FACULTY_UPDATE_TEXT = {
+  changed: 'Your teacher changed this cell after you started. Check your answer against the new version.',
+  kept: 'Your teacher changed this question after you started. Your code was kept — check it still answers the new version, and run it again.',
+  added: 'Your teacher added this cell after you started.',
+  removed: 'Your teacher removed this cell from the notebook. Your code is kept here so nothing is lost.',
+};
+
+/**
+ * The strip on a cell the teacher changed, added or removed since the student
+ * started — set by the server when it brings their copy up to date.
+ */
+function FacultyUpdateNote({ update, show }) {
+  const bg = useColorModeValue('orange.50', 'rgba(237,137,54,0.12)');
+  const border = useColorModeValue('orange.200', 'orange.700');
+  if (!update || !show) return null;
+
+  const at = update.at ? new Date(update.at) : null;
+  const when = at && !Number.isNaN(at.getTime()) ? ` · ${at.toLocaleString()}` : '';
+  const text =
+    update.kind === 'changed' && update.keptOwnCode
+      ? FACULTY_UPDATE_TEXT.kept
+      : FACULTY_UPDATE_TEXT[update.kind] || FACULTY_UPDATE_TEXT.changed;
+
+  return (
+    <Flex role="note" align="flex-start" gap={2} px={3} py={1.5} bg={bg} borderBottomWidth="1px" borderColor={border} fontSize="xs">
+      <Box as="span" color="orange.500" mt="2px" flexShrink={0}>
+        <FiRefreshCw aria-hidden />
+      </Box>
+      <Text as="span">
+        <b>Updated by faculty{when}.</b> {text}
+      </Text>
+    </Flex>
+  );
+}
+
 function MarkdownCell({ cell, index, total, locked, readOnly, onChange, onMove, onDelete }) {
   const { colorMode } = useColorMode();
   const border = useColorModeValue('gray.200', 'whiteAlpha.200');
@@ -136,9 +173,12 @@ function MarkdownCell({ cell, index, total, locked, readOnly, onChange, onMove, 
 
   const [editing, setEditing] = useState(() => !locked && !String(cell.source || '').trim());
 
+  const flagged = Boolean(cell.facultyUpdate) && !readOnly;
+
   if (locked) {
     return (
-      <Box borderWidth="1px" borderColor={border} borderRadius="md" overflow="hidden">
+      <Box borderWidth="1px" borderColor={flagged ? 'orange.300' : border} borderRadius="md" overflow="hidden">
+        <FacultyUpdateNote update={cell.facultyUpdate} show={!readOnly} />
         <Box px={4} py={3}>
           <RichText markdown>{cell.source}</RichText>
         </Box>
@@ -147,7 +187,8 @@ function MarkdownCell({ cell, index, total, locked, readOnly, onChange, onMove, 
   }
 
   return (
-    <Box borderWidth="1px" borderColor={border} borderRadius="md" overflow="hidden">
+    <Box borderWidth="1px" borderColor={flagged ? 'orange.300' : border} borderRadius="md" overflow="hidden">
+      <FacultyUpdateNote update={cell.facultyUpdate} show={!readOnly} />
       <Flex align="center" gap={2} px={3} py={1} bg={gutter} borderBottomWidth="1px" borderColor={border}>
         <Badge fontSize="2xs">markdown</Badge>
         <Box flex="1" />
@@ -203,7 +244,7 @@ function CellStatus({ running, cell }) {
   if (running) {
     return (
       <HStack spacing={1.5} color="blue.400" flexShrink={0}>
-        <Spinner size="xs" speed="0.7s" />
+        <BusyDots size="4px" label="Running" />
         <Text fontSize="xs" fontWeight="500">
           Running…
         </Text>
@@ -433,7 +474,7 @@ function TestCasesEditorPanel({
             <Button
               size="xs"
               colorScheme="purple"
-              leftIcon={testing ? <Spinner size="xs" /> : <FiPlay />}
+              leftIcon={testing ? <BusyDots size="4px" label="Testing" /> : <FiPlay />}
               isLoading={testing}
               onClick={onRunTestCases}
             >
@@ -458,6 +499,14 @@ function TestCasesEditorPanel({
         the input arrives and exactly what to print. The rest stay hidden — their expected output is
         never sent to the student&apos;s browser, only a checksum of it.
       </Text>
+      {!isC && (
+        <Text fontSize="2xs" opacity={0.7} mb={3}>
+          Only the text is compared, never the type: <Code fontSize="2xs">print(True)</Code> and{' '}
+          <Code fontSize="2xs">print(&quot;True&quot;)</Code> both print <Code fontSize="2xs">True</Code>. If a
+          function must return a real boolean, have the cell print <Code fontSize="2xs">repr(result)</Code>, which
+          shows a string with its quotes.
+        </Text>
+      )}
 
       {testCases.length === 0 ? (
         <Text fontSize="xs" fontStyle="italic" opacity={0.6} py={1}>
@@ -533,6 +582,13 @@ function TestCasesEditorPanel({
                     value={tc.output || ''}
                     onChange={(e) => updateTestCase(idx, { output: e.target.value })}
                   />
+                  {!isC && misspelledPythonBooleans(tc.output).length > 0 && (
+                    <Text fontSize="2xs" color="orange.500" mt={1}>
+                      Python prints booleans as <b>True</b> / <b>False</b>. If{' '}
+                      {misspelledPythonBooleans(tc.output).map((word) => `"${word}"`).join(', ')} comes from printing a
+                      boolean, no answer will ever match it.
+                    </Text>
+                  )}
                 </Box>
               </Flex>
             </Box>
@@ -824,7 +880,13 @@ export default function NotebookCell({
   const testSummary = cell.testSummary;
 
   return (
-    <Box borderWidth="1px" borderColor={border} borderRadius="md" overflow="hidden">
+    <Box
+      borderWidth="1px"
+      borderColor={cell.facultyUpdate && !readOnly ? 'orange.300' : border}
+      borderRadius="md"
+      overflow="hidden"
+    >
+      <FacultyUpdateNote update={cell.facultyUpdate} show={!readOnly} />
       <Flex align="center" gap={2} px={3} py={1.5} bg={gutter} borderBottomWidth="1px" borderColor={border} wrap="wrap">
         <HintTooltip label={running ? 'Stop the kernel' : 'Run this cell'}>
           <IconButton
@@ -879,7 +941,7 @@ export default function NotebookCell({
                   size="xs"
                   colorScheme={testSummary?.passedAll ? 'green' : 'purple'}
                   variant="solid"
-                  leftIcon={testing ? <Spinner size="xs" /> : <FiCheckSquare />}
+                  leftIcon={testing ? <BusyDots size="4px" label="Testing" /> : <FiCheckSquare />}
                   isLoading={testing}
                   isDisabled={!canRun || testing || running}
                   onClick={() => onRunTests(cell)}

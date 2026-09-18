@@ -1,123 +1,21 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link as RouterLink, useNavigate, useOutletContext } from 'react-router-dom';
-import { Badge, Box, Button, Divider, Flex, HStack, Heading, Text, useDisclosure } from '@chakra-ui/react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import { Box, Button, Divider, Flex, Heading, Text, useDisclosure } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import {
-  CopyLinkButton,
-  DeadlineCountdown,
-  EmptyState,
-  ErrorState,
-  Loading,
-  SectionCard,
-  TopicManager,
-  groupByTopic,
-} from '../components/common';
+import { EmptyState, ErrorState, Loading, WorkListSkeleton } from '../components/common';
+import FormCard from '../components/FormCard';
 import FormPreviewModal from '../components/FormPreviewModal';
 import { LmIcon } from '../components/Icon';
-import { requestFullscreen } from '../components/common';
 
-function FormCard({ form, classId, isTeacher, onDeleted, onPreview }) {
-  return (
-    <SectionCard mb={3}>
-      <Flex align="center" gap={4} wrap="wrap">
-        <Box flex="1" minW="220px">
-          <HStack>
-            <Heading size="sm">{form.title}</Heading>
-            {isTeacher && (
-              <Badge colorScheme={form.published ? 'green' : 'gray'}>
-                {form.published ? 'Published' : 'Draft'}
-              </Badge>
-            )}
-            {isTeacher && form.settings?.accessMode === 'anyone' && (
-              <Badge colorScheme="purple">Anyone with the link</Badge>
-            )}
-            {form.closed && <Badge colorScheme="red">Closed</Badge>}
-            {!form.closed && form.dueDate && <DeadlineCountdown dueDate={form.dueDate} prefix="Closes in" />}
-          </HStack>
-          {form.description && (
-            <Text fontSize="sm" color="lmFg.subtle" noOfLines={2} mt={1}>
-              {form.description}
-            </Text>
-          )}
-          <Text fontSize="xs" color="lmFg.muted" mt={1}>
-            {form.questions?.length ?? form.questionCount ?? 0} question(s)
-            {isTeacher
-              ? form.settings?.accessMode === 'class'
-                ? ` · ${form.responseCount ?? 0}/${form.enrolledCount ?? 0} students filled`
-                : ` · ${form.responseCount ?? 0} response(s)`
-              : ''}
-          </Text>
-          {!isTeacher && form.responded && <Badge colorScheme="green" mt={1}>Responded</Badge>}
-        </Box>
+// A form's category, not the class's Material topics: an Assignment form is a
+// hand-in that is also listed on the Assignments tab; a Normal form is
+// everything else.
+const CATEGORY_GROUPS = [
+  { key: 'assignment', title: 'Assignment', hint: 'Also listed on the Assignments tab.' },
+  { key: 'normal', title: 'Normal form' },
+];
 
-        <HStack>
-          {isTeacher ? (
-            <>
-              {form.published && form.shareCode && (
-                <CopyLinkButton to={`/learning/form/link/${form.shareCode}`} size="sm" />
-              )}
-              <Button
-                as={RouterLink}
-                to={`/learning/class/${classId}/form/${form._id}/edit`}
-                size="sm"
-                variant="outline"
-              >
-                Edit
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                colorScheme="purple"
-                onClick={() => onPreview(form)}
-              >
-                Preview
-              </Button>
-              <Button
-                as={RouterLink}
-                to={`/learning/class/${classId}/form/${form._id}/responses`}
-                size="sm"
-                variant="outline"
-              >
-                Responses
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                colorScheme="red"
-                onClick={async () => {
-                  if (!window.confirm(`Delete "${form.title}"? This cannot be undone.`)) return;
-                  try {
-                    await lmApi.deleteForm(classId, form._id);
-                    onDeleted();
-                  } catch (err) {
-                    window.alert(err.message);
-                  }
-                }}
-              >
-                Delete
-              </Button>
-            </>
-          ) : (
-            <Button
-              as={RouterLink}
-              to={`/learning/class/${classId}/form/${form._id}`}
-              size="sm"
-              colorScheme="teal"
-              isDisabled={form.closed}
-              onClick={() => {
-                // Fired synchronously inside the click, so it still counts as
-                // a user gesture by the time the form itself has loaded.
-                if (form.autoFullscreen) requestFullscreen();
-              }}
-            >
-              {form.closed ? 'Closed' : form.responded ? 'View / edit response' : 'Fill in'}
-            </Button>
-          )}
-        </HStack>
-      </Flex>
-    </SectionCard>
-  );
-}
+const categoryOf = (form) => (form.category === 'assignment' ? 'assignment' : 'normal');
 
 /**
  * Lists the class's forms — a Google-Forms-like builder, entirely separate
@@ -125,15 +23,13 @@ function FormCard({ form, classId, isTeacher, onDeleted, onPreview }) {
  * graded.
  */
 export default function Forms() {
-  const { classId, klass, isTeacher, reloadClass } = useOutletContext();
+  const { classId, klass, isTeacher } = useOutletContext();
   const [forms, setForms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
   const previewDialog = useDisclosure();
   const [previewForm, setPreviewForm] = useState(null);
-
-  const topics = klass?.topics || [];
 
   const load = useCallback(async () => {
     setError(null);
@@ -163,113 +59,82 @@ export default function Forms() {
     }
   };
 
-  const afterTopicsChanged = async () => {
-    await load();
-    reloadClass?.();
-  };
+  if (loading) return <Loading label="Loading forms…" skeleton={<WorkListSkeleton />} />;
 
-  if (loading) return <Loading label="Loading forms…" />;
-
-  const { grouped, untopiced } = groupByTopic(forms, topics);
+  const groups = CATEGORY_GROUPS.map((group) => ({
+    ...group,
+    items: forms.filter((form) => categoryOf(form) === group.key),
+  })).filter((group) => group.items.length > 0);
 
   return (
-    <Flex gap={6} align="flex-start" direction={{ base: 'column', lg: 'row' }}>
-      <Box flex="1" minW={0} order={{ base: 2, lg: 1 }} w="100%">
-        <Flex justify="space-between" align="flex-start" mb={4} gap={3} wrap="wrap">
-          <Box>
-            <Heading size="md">Forms</Heading>
-            <Text fontSize="sm" color="lmFg.muted">
-              Surveys, feedback and sign-ups — share with the class or with anyone holding the link.
-            </Text>
-          </Box>
-          {isTeacher && (
-            <>
-              <Button as="a" href="/learning/formsmanual" target="_blank" rel="noreferrer" variant="ghost" size="sm">
-                <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
-              Manual
-              </Button>
-              <Button colorScheme="teal" onClick={create}>
-                + New form
-              </Button>
-            </>
-          )}
-        </Flex>
-
-        <ErrorState error={error} onRetry={load} />
-
-        {forms.length === 0 ? (
-          <EmptyState
-            icon="form"
-            title="No forms yet"
-            description={
-              isTeacher
-                ? 'Build a short answer, choice, scale or file-upload form and share it with the class or a wider link.'
-                : 'Your teacher has not shared any forms yet.'
-            }
-            action={
-              isTeacher ? (
-                <Button colorScheme="teal" onClick={create}>
-                  Create your first form
-                </Button>
-              ) : null
-            }
-          />
-        ) : (
+    <Box>
+      <Flex justify="space-between" align="flex-start" mb={4} gap={3} wrap="wrap">
+        <Box>
+          <Heading size="md">Forms</Heading>
+          <Text fontSize="sm" color="lmFg.muted">
+            Surveys, feedback, sign-ups and document hand-ins — share with the class or with anyone holding the link.
+          </Text>
+        </Box>
+        {isTeacher && (
           <>
-            {grouped.map((group) => (
-              <Box key={group.topic._id} mb={6}>
-                <Heading size="sm" color="lmFg.body" mb={2}>
-                  {group.topic.name}
-                </Heading>
-                <Divider mb={3} />
-                {group.items.map((form) => (
-                  <FormCard
-                    key={form._id}
-                    form={form}
-                    classId={classId}
-                    isTeacher={isTeacher}
-                    onDeleted={load}
-                    onPreview={(f) => {
-                      setPreviewForm(f);
-                      previewDialog.onOpen();
-                    }}
-                  />
-                ))}
-              </Box>
-            ))}
-            {untopiced.length > 0 && (
-              <Box>
-                {grouped.length > 0 && (
-                  <>
-                    <Heading size="sm" color="lmFg.body" mb={2}>
-                      Other
-                    </Heading>
-                    <Divider mb={3} />
-                  </>
-                )}
-                {untopiced.map((form) => (
-                  <FormCard
-                    key={form._id}
-                    form={form}
-                    classId={classId}
-                    isTeacher={isTeacher}
-                    onDeleted={load}
-                    onPreview={(f) => {
-                      setPreviewForm(f);
-                      previewDialog.onOpen();
-                    }}
-                  />
-                ))}
-              </Box>
-            )}
+            <Button as="a" href="/learning/formsmanual" target="_blank" rel="noreferrer" variant="ghost" size="sm">
+              <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
+              Manual
+            </Button>
+            <Button colorScheme="teal" onClick={create}>
+              + New form
+            </Button>
           </>
         )}
-      </Box>
+      </Flex>
 
-      {isTeacher && (
-        <Box w={{ base: '100%', lg: '260px' }} flexShrink={0} order={{ base: 1, lg: 2 }}>
-          <TopicManager classId={classId} topics={topics} onChanged={afterTopicsChanged} itemNoun="Forms" />
-        </Box>
+      <ErrorState error={error} onRetry={load} />
+
+      {forms.length === 0 ? (
+        <EmptyState
+          icon="form"
+          title="No forms yet"
+          description={
+            isTeacher
+              ? 'Build a short answer, choice, scale or file-upload form and share it with the class or a wider link.'
+              : 'Your teacher has not shared any forms yet.'
+          }
+          action={
+            isTeacher ? (
+              <Button colorScheme="teal" onClick={create}>
+                Create your first form
+              </Button>
+            ) : null
+          }
+        />
+      ) : (
+        groups.map((group) => (
+          <Box key={group.key} mb={6}>
+            <Heading size="sm" color="lmFg.body" mb={1}>
+              {group.title}
+            </Heading>
+            {group.hint && (
+              <Text fontSize="xs" color="lmFg.muted" mb={2}>
+                {group.hint}
+              </Text>
+            )}
+            <Divider mb={3} />
+            {group.items.map((form) => (
+              <FormCard
+                key={form._id}
+                form={form}
+                classId={classId}
+                isTeacher={isTeacher}
+                showCategory={false}
+                onDeleted={load}
+                onPreview={(f) => {
+                  setPreviewForm(f);
+                  previewDialog.onOpen();
+                }}
+              />
+            ))}
+          </Box>
+        ))
       )}
 
       <FormPreviewModal
@@ -280,6 +145,6 @@ export default function Forms() {
         subjectName={klass?.subject}
         facultyName={previewForm?.createdByName || klass?.ownerName}
       />
-    </Flex>
+    </Box>
   );
 }

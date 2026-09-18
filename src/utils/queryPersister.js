@@ -1,8 +1,13 @@
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { defaultShouldDehydrateQuery } from '@tanstack/react-query';
+import { safeLocalStorage } from './safeStorage';
 
 export const queryPersister = createSyncStoragePersister({
-  storage: window.localStorage,
+  /* Not `window.localStorage` itself: that property access throws in a browser
+     told to keep no site data, and this runs at import time — so the whole
+     bundle would fail to evaluate rather than the cache merely being lost. See
+     safeStorage. */
+  storage: safeLocalStorage,
   // A cache written under a different buster is discarded instead of restored.
   // Raised when the signed-in user stopped being persisted (see main.jsx), so
   // a browser still holding a previous session's identity on disk drops it on
@@ -11,15 +16,25 @@ export const queryPersister = createSyncStoragePersister({
 });
 
 /**
- * Query keys whose answer describes the signed-in person rather than content
- * everyone sees: the platform session, the learning module's own view of that
- * account, and that account's private attendance record. Matched by prefix, so
- * `['user', 'details']` is covered by `['user']`.
+ * Query keys that stay out of localStorage — either because the answer
+ * describes the signed-in person rather than content everyone sees (the
+ * platform session, the learning module's view of that account, that account's
+ * private attendance record), or because it carries something that must not
+ * outlive the sitting it belongs to. Matched by prefix, so `['user', 'details']`
+ * is covered by `['user']`.
  */
-const SESSION_SCOPED_KEYS = [
+const UNPERSISTED_KEYS = [
   ['user'],
   ['learning', 'me'],
   ['learning', 'profile'],
+  /**
+   * The quiz list, which a teacher is served with the room code and the Safe
+   * Exam Browser access code in the clear — the two codes that admit somebody
+   * to a locked-down paper from an ordinary browser. Cached in memory like every
+   * other class list, so switching tabs is still instant; just never written to
+   * the disk of a machine the next class sits down at.
+   */
+  ['learning', 'quizzes'],
 ];
 
 /**
@@ -40,6 +55,6 @@ const SESSION_SCOPED_KEYS = [
  */
 export const shouldPersistQuery = (query) =>
   defaultShouldDehydrateQuery(query) &&
-  !SESSION_SCOPED_KEYS.some((prefix) =>
+  !UNPERSISTED_KEYS.some((prefix) =>
     prefix.every((segment, index) => query.queryKey[index] === segment),
   );

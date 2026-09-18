@@ -23,12 +23,15 @@ vi.mock('react-router-dom', async () => {
 const joinFormByLink = vi.fn();
 const getFormByLink = vi.fn();
 const submitFormResponseByLink = vi.fn();
+const uploadFormFilesByLink = vi.fn();
 
 vi.mock('../api/lmApi', () => ({
   default: {
     joinFormByLink: (...a) => joinFormByLink(...a),
     getFormByLink: (...a) => getFormByLink(...a),
     submitFormResponseByLink: (...a) => submitFormResponseByLink(...a),
+    uploadFormFilesByLink: (...a) => uploadFormFilesByLink(...a),
+    pingFormProgressByLink: () => Promise.resolve({ recorded: true }),
     formGuest: {
       save: vi.fn(),
       token: () => null,
@@ -80,6 +83,64 @@ describe('FormLinkJoin', () => {
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
 
     expect((await screen.findAllByText('Public Feedback Form')).length).toBeGreaterThan(0);
+  });
+
+  describe('a required file-upload question', () => {
+    const fileForm = (displayMode) => ({
+      ...sampleForm,
+      questions: [{ _id: 'q1', type: 'file_upload', title: 'Attach your work', required: true, options: [] }],
+      settings: { accessMode: 'anyone', displayMode, requireSequentialAnswers: true },
+    });
+    const stored = { name: 'report.pdf', url: '/api/v1/learningmodule/files/dsp-abc123/1-report.pdf' };
+
+    beforeEach(() => {
+      joinFormByLink.mockResolvedValue({ formId: 'f1', guestToken: 'token123' });
+      submitFormResponseByLink.mockResolvedValue({ submitted: true });
+      uploadFormFilesByLink.mockResolvedValue({ attachments: [stored] });
+    });
+
+    const attach = async () => {
+      await screen.findByText('Attach your work');
+      const input = document.querySelector('input[type="file"]');
+      expect(input).not.toBeNull();
+      const file = new File(['%PDF-1.4'], 'report.pdf', { type: 'application/pdf' });
+      fireEvent.change(input, { target: { files: [file] } });
+      await waitFor(() => expect(uploadFormFilesByLink).toHaveBeenCalledWith('code123', [file], 'f1'));
+      expect(await screen.findByText('report.pdf')).toBeInTheDocument();
+    };
+
+    it('uploads through the share link and submits the stored file', async () => {
+      getFormByLink.mockResolvedValue({ form: fileForm('all_at_once'), existingResponse: null });
+      await open();
+
+      await attach();
+      fireEvent.click(screen.getByRole('button', { name: /submit/i }));
+      await waitFor(() =>
+        expect(submitFormResponseByLink).toHaveBeenCalledWith(
+          'code123',
+          [expect.objectContaining({ questionId: 'q1', attachments: [stored] })],
+          'f1',
+        ),
+      );
+    });
+
+    it('does not submit until a file is attached', async () => {
+      getFormByLink.mockResolvedValue({ form: fileForm('all_at_once'), existingResponse: null });
+      await open();
+
+      fireEvent.click(await screen.findByRole('button', { name: /submit/i }));
+      expect(await screen.findByText(/"Attach your work" is required/i)).toBeInTheDocument();
+      expect(submitFormResponseByLink).not.toHaveBeenCalled();
+    });
+
+    it('uploads in one-at-a-time mode too', async () => {
+      getFormByLink.mockResolvedValue({ form: fileForm('one_at_a_time'), existingResponse: null });
+      await open();
+
+      await attach();
+      fireEvent.click(await screen.findByRole('button', { name: /submit/i }));
+      await waitFor(() => expect(submitFormResponseByLink).toHaveBeenCalled());
+    });
   });
 
   it('redirects to login when form requires class membership (LOGIN_REQUIRED)', async () => {

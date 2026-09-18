@@ -127,15 +127,17 @@ export default function PendingActionsCard({ initialDepartment = '' }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
         <div style={{ fontSize: 17, fontWeight: 700 }}>Pending actions</div>
         
-        {/* Strictly Side-by-Side Dependent Filters */}
-        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'nowrap' }}>
-          
+        {/* Side-by-side on desktop; wraps to its own row on narrow screens
+            instead of pushing the batch selector off-screen (flexWrap was
+            'nowrap', so this row never broke and just overflowed). */}
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+
           {/* Step 1: Department Selector */}
           {fullAccess ? (
             <select
               value={department}
               onChange={handleDepartmentChange}
-              style={{ padding: '7px 12px', borderRadius: 8, border: `1px solid ${theme.border}`, fontFamily: theme.fontBody, fontSize: '13px' }}
+              style={{ padding: '7px 12px', borderRadius: 8, border: `1px solid ${theme.border}`, fontFamily: theme.fontBody, fontSize: '13px', minWidth: 0, maxWidth: '100%' }}
             >
               <option value="">All departments</option>
               {departments.map((d) => (
@@ -173,7 +175,9 @@ export default function PendingActionsCard({ initialDepartment = '' }) {
               fontFamily: theme.fontBody,
               fontSize: '13px',
               opacity: (fullAccess && !department) ? 0.6 : 1,
-              cursor: (fullAccess && !department) ? 'not-allowed' : 'pointer'
+              cursor: (fullAccess && !department) ? 'not-allowed' : 'pointer',
+              minWidth: 0,
+              maxWidth: '100%',
             }}
           >
             <option value="">

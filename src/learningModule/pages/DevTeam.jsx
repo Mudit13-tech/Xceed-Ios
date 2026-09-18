@@ -46,7 +46,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import lmApi from '../api/lmApi';
 import { serverFileLinkProps } from '../../utils/nativeCapabilities';
-import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, TableSkeleton } from '../components/common';
 import { formatDateTime, relativeTime } from '../format';
 import { LmIcon } from '../components/Icon';
 
@@ -1290,7 +1290,7 @@ export default function DevTeam() {
     load();
   }, [load]);
 
-  if (loading) return <Loading label="Loading…" />;
+  if (loading) return <Loading label="Loading…" skeleton={<TableSkeleton rows={6} columns={5} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   /* A server that has not been upgraded sends no eligibility block. Treating

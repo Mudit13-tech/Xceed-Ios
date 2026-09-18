@@ -17,7 +17,7 @@ import {
 import { FiFastForward, FiMaximize, FiPlay, FiRefreshCw, FiSquare } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
-import { DeadlineCountdown, ErrorState, Loading } from '../components/common';
+import { DeadlineCountdown, ErrorState, Loading, SectionCardSkeleton } from '../components/common';
 import NotebookCell from '../components/NotebookCell';
 import RichText from '../components/RichText';
 import useNotebookKernel from '../hooks/useNotebookKernel';
@@ -50,6 +50,12 @@ const AUTOSAVE_MS = 2500;
 let keySeq = 0;
 const clientKey = () => `cell-${(keySeq += 1)}`;
 const withKeys = (cells) => (cells || []).map((cell) => ({ ...cell, key: clientKey() }));
+
+/** "cell 2", "cells 2 and 5", "cells 1, 3 and 4". */
+const describeCells = (numbers) =>
+  numbers.length === 1
+    ? `cell ${numbers[0]}`
+    : `cells ${numbers.slice(0, -1).join(', ')} and ${numbers[numbers.length - 1]}`;
 
 export default function NotebookPlayer() {
   const { classId, isTeacher } = useOutletContext();
@@ -145,6 +151,13 @@ export default function NotebookPlayer() {
   }, [load]);
 
   const submitted = Boolean(attempt?.submittedAt);
+
+  // Cells the teacher changed since this student started, by position, so they
+  // can be pointed at them before handing the work in.
+  const updatedCellNumbers = useMemo(
+    () => cells.map((cell, index) => (cell.facultyUpdate ? index + 1 : null)).filter(Boolean),
+    [cells],
+  );
 
   /* ───────────────────────────── autosave ─────────────────────────────── */
 
@@ -469,7 +482,11 @@ export default function NotebookPlayer() {
     // page's doing, not the student's, so it is not recorded.
     ignoreFullscreenExitRef.current = true;
     // eslint-disable-next-line no-alert
-    const confirmed = window.confirm('Submit this notebook? You will not be able to edit it afterwards.');
+    const reminder = updatedCellNumbers.length
+      ? `Your faculty updated ${describeCells(updatedCellNumbers)} after you started. Kindly check all the completed answers before submitting.\n\n`
+      : '';
+    // eslint-disable-next-line no-alert
+    const confirmed = window.confirm(`${reminder}Submit this notebook? You will not be able to edit it afterwards.`);
     setTimeout(() => {
       ignoreFullscreenExitRef.current = false;
     }, 1000);
@@ -573,7 +590,7 @@ export default function NotebookPlayer() {
   const cardBg = useColorModeValue('white', 'gray.800');
   const overlayBg = useColorModeValue('gray.50', 'gray.900');
 
-  if (loading) return <Loading label="Opening the notebook…" />;
+  if (loading) return <Loading label="Opening the notebook…" skeleton={<SectionCardSkeleton lines={4} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   const kernelBadge =
@@ -762,6 +779,19 @@ export default function NotebookPlayer() {
           <Button size="xs" onClick={load}>
             Reload
           </Button>
+        </Alert>
+      )}
+
+      {!submitted && updatedCellNumbers.length > 0 && (
+        <Alert status="warning" borderRadius="md" fontSize="sm">
+          <AlertIcon />
+          <Box flex="1">
+            <Text fontWeight="600">Your faculty updated this notebook after you started.</Text>
+            <Text>
+              Changes are in {describeCells(updatedCellNumbers)}, marked &ldquo;Updated by faculty&rdquo; below.
+              Kindly check all the completed answers before submitting.
+            </Text>
+          </Box>
         </Alert>
       )}
 

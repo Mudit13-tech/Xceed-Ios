@@ -285,7 +285,7 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
                   {item.pinned ? 'Unpin' : 'Pin to top'}
                 </MenuItem>
               )}
-              <MenuItem color="red.600" onClick={remove}>
+              <MenuItem color="red.600" icon={<LmIcon name="delete" size={15} />} onClick={remove}>
                 Delete post
               </MenuItem>
             </MenuList>
@@ -430,6 +430,9 @@ export default function Stream() {
     queryKey: ['learning', 'stream', classId, debouncedSearch],
     queryFn: () => debouncedSearch ? lmApi.searchClass(classId, debouncedSearch) : lmApi.getStream(classId),
     placeholderData: (previousData) => previousData,
+    // Announcements don't arrive mid-session often enough to warrant an
+    // immediate re-fetch on every tab revisit. Background-refresh after 1 min.
+    staleTime: 60 * 1000,
   });
 
   if (loading && !data) return <AnnouncementStreamSkeleton />;

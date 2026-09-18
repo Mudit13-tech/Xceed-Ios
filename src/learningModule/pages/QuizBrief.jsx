@@ -14,7 +14,6 @@ import {
   ListIcon,
   ListItem,
   Input,
-  Spinner,
   Table,
   Tbody,
   Td,
@@ -31,7 +30,7 @@ import QuizStage from '../components/QuizStage';
 import CodeKeypad from '../components/CodeKeypad';
 import RichText from '../components/RichText';
 import { acquireCamera, releaseCamera } from '../webcam';
-import { ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { BusyDots, ErrorState, Loading, SectionCard, SectionCardSkeleton, StatTile } from '../components/common';
 import { LmIcon } from '../components/Icon';
 import { formatDateTime } from '../format';
 import useProctoring, { isMobileDevice } from '../hooks/useProctoring';
@@ -575,7 +574,7 @@ export default function QuizBrief() {
   const faculty = [brief?.facultyName, klass?.ownerName, brief?.createdByName].find(Boolean);
 
   let body;
-  if (loading) body = <Loading label="Loading test details…" />;
+  if (loading) body = <Loading label="Loading test details…" skeleton={<SectionCardSkeleton lines={4} />} />;
   else if (error) body = <ErrorState error={error} onRetry={load} />;
   else if (!brief) body = null;
   else {
@@ -1397,7 +1396,7 @@ export default function QuizBrief() {
               />
               {camState === 'prompting' && (
                 <HStack fontSize="sm" color="lmFg.muted">
-                  <Spinner size="sm" />
+                  <BusyDots label="Asking for your camera" />
                   <Text>Asking for your camera — choose “Allow”.</Text>
                 </HStack>
               )}

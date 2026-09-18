@@ -13,8 +13,7 @@ import {
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { LmIcon } from './Icon';
-import getEnvironment from '../../getenvironment';
-import { serverFileLinkProps } from '../../utils/nativeCapabilities';
+import DeleteButton from './DeleteButton';
 
 // Names from the module's icon set (see Icon.jsx), one per attachment kind.
 const ICONS = { file: 'attachment', link: 'link', video: 'video', audio: 'audio', note: 'document' };
@@ -31,49 +30,111 @@ const prettySize = (bytes) => {
   return `${value.toFixed(value < 10 && unit > 0 ? 1 : 0)} ${units[unit]}`;
 };
 
+/**
+ * Hands a fetched file to the browser as a download under its real name.
+ * The object URL is kept for a minute rather than revoked on the next tick as
+ * the CSV export does: Safari, iOS in particular, reads the blob after the click
+ * returns, and a URL revoked under it saves nothing.
+ */
+const saveBlob = (blob, filename) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60 * 1000);
+};
+
+/**
+ * One attachment: the name opens it in a new tab, and a file also gets a
+ * Download button. The button fetches with the session token instead of relying
+ * on the cookie a plain link carries, which an installed iOS app does not hand
+ * to the tab it opens — see lmApi.fetchAttachment.
+ */
+function AttachmentChip({ attachment, compact }) {
+  const toast = useToast();
+  const [saving, setSaving] = useState(false);
+  const label = attachment.name || attachment.url;
+
+  const download = async () => {
+    setSaving(true);
+    try {
+      const blob = await lmApi.fetchAttachment(attachment);
+      saveBlob(blob, attachment.name || attachment.url.split('/').pop());
+    } catch (error) {
+      const description =
+        error.status === 401
+          ? 'Your session has expired. Sign in again and retry.'
+          : error.status === 404
+            ? 'This file is no longer on the server.'
+            : error.message;
+      toast({ status: 'error', title: 'Download failed', description });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Flex
+      align="center"
+      borderWidth="1px"
+      borderColor="lmBorder.base"
+      borderRadius="md"
+      bg="lmBg.sunken"
+      maxW="280px"
+      _hover={{ borderColor: 'blue.400' }}
+    >
+      <Link
+        href={lmApi.attachmentUrl(attachment)}
+        isExternal
+        display="flex"
+        alignItems="center"
+        gap={2}
+        flex="1"
+        minW={0}
+        px={3}
+        py={compact ? 1 : 2}
+        _hover={{ textDecoration: 'none' }}
+      >
+        <Box color="lmFg.subtle">
+          <LmIcon name={ICONS[attachment.kind] || 'attachment'} size={16} />
+        </Box>
+        <Box overflow="hidden">
+          <Text fontSize="sm" noOfLines={1} color="lmHue.blue700">
+            {label}
+          </Text>
+          {attachment.sizeBytes ? (
+            <Text fontSize="xs" color="lmFg.muted">
+              {prettySize(attachment.sizeBytes)}
+            </Text>
+          ) : null}
+        </Box>
+      </Link>
+      {attachment.kind !== 'link' && (
+        <IconButton
+          size="sm"
+          variant="ghost"
+          mr={1}
+          aria-label={`Download ${label}`}
+          title="Download"
+          icon={<LmIcon name="download" size={15} />}
+          isLoading={saving}
+          onClick={download}
+        />
+      )}
+    </Flex>
+  );
+}
+
 /** Read-only chip list of a post's attachments. */
 export function AttachmentList({ attachments = [], compact = false }) {
   if (!attachments.length) return null;
   return (
     <Flex wrap="wrap" gap={2} mt={compact ? 1 : 3}>
       {attachments.map((attachment, index) => (
-        <Link
-          key={attachment._id || `${attachment.url}-${index}`}
-          // A pasted link is a web page and belongs in a browser. A file is
-          // ours, and in the app must not be reached by an anchor at all —
-          // `serverFileLinkProps` explains why, and sends it to the native
-          // downloader instead.
-          {...(attachment.kind === 'link'
-            ? { href: attachment.url, isExternal: true }
-            : serverFileLinkProps(lmApi.fileUrl(attachment.url), attachment.name))}
-          _hover={{ textDecoration: 'none', borderColor: 'blue.400' }}
-        >
-          <Flex
-            align="center"
-            gap={2}
-            borderWidth="1px"
-            borderColor="lmBorder.base"
-            borderRadius="md"
-            px={3}
-            py={compact ? 1 : 2}
-            bg="lmBg.sunken"
-            maxW="280px"
-          >
-            <Box color="lmFg.subtle">
-              <LmIcon name={ICONS[attachment.kind] || 'attachment'} size={16} />
-            </Box>
-            <Box overflow="hidden">
-              <Text fontSize="sm" noOfLines={1} color="lmHue.blue700">
-                {attachment.name || attachment.url}
-              </Text>
-              {attachment.sizeBytes ? (
-                <Text fontSize="xs" color="lmFg.muted">
-                  {prettySize(attachment.sizeBytes)}
-                </Text>
-              ) : null}
-            </Box>
-          </Flex>
-        </Link>
+        <AttachmentChip key={attachment._id || `${attachment.url}-${index}`} attachment={attachment} compact={compact} />
       ))}
     </Flex>
   );
@@ -112,13 +173,7 @@ export function AttachmentPicker({ attachments = [], onChange, disabled, classId
     Array.from(files).forEach((file) => form.append('files', file));
 
     const xhr = new XMLHttpRequest();
-    // Absolute, not relative. This is the one call in the module that does not
-    // go through lmApi — it needs XHR for upload progress — and a relative path
-    // resolves against wherever the page is served from. In the app that is
-    // xceed.learning.app, Capacitor's local asset server, which has no API to
-    // POST to: every attachment upload from a phone failed on it.
-    xhr.open('POST', `${getEnvironment()}/api/v1/learningmodule/classes/${targetClassId}/uploads`);
-    xhr.withCredentials = true;
+    xhr.open('POST', `/api/v1/learningmodule/classes/${targetClassId}/uploads`);
 
     // Copy auth token from existing requests
     const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
@@ -248,11 +303,9 @@ export function AttachmentPicker({ attachments = [], onChange, disabled, classId
               <Text fontSize="sm" noOfLines={1} maxW="200px">
                 {attachment.name}
               </Text>
-              <IconButton
+              <DeleteButton
                 size="xs"
-                variant="ghost"
-                aria-label="Remove attachment"
-                icon={<LmIcon name="close" size={13} />}
+                label="Remove attachment"
                 onClick={() => remove(index)}
                 isDisabled={disabled}
               />

@@ -314,7 +314,7 @@ function VisualTestCasesEditorMock() {
                 </div>
 
                 <div style={{ fontSize: 11, color: '#6b21a8', opacity: 0.8, marginBottom: 10 }}>
-                    Students will not see these inputs or expected outputs directly. They will click "Run Hidden Test Case" to test their code and receive Yes/No feedback.
+                    Students will not see these inputs or expected outputs directly. They will click &quot;Run Hidden Test Case&quot; to test their code and receive Yes/No feedback.
                 </div>
 
                 {/* Test Case Cards */}
@@ -567,7 +567,7 @@ function TabOverview() {
         <div>
             <Note type="key">
                 Coding notebooks are Python or C worksheets — prose and code cells, Jupyter-notebook-like —
-                that run <strong>entirely inside the student's own browser</strong>. Nothing to install, no
+                that run <strong>entirely inside the student&apos;s own browser</strong>. Nothing to install, no
                 server execution, and zero infrastructure load.
             </Note>
 
@@ -576,8 +576,8 @@ function TabOverview() {
 
             <SectionTitle>Python or C — Decided at Creation</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
-                Click <strong>New notebook</strong> and pick a <strong>Blank</strong> Python or C notebook, or a{' '}
-                <strong>Sample with hidden test cases</strong>. The sample is also on the Coding tab
+                Click <strong>New notebook</strong> and pick a blank <strong>Python notebook</strong> or{' '}
+                <strong>C notebook</strong>. The sample is on the sample notebook card at the top of the Coding tab
                 (<strong>Open Python sample</strong> / <strong>Open C sample</strong>): a worked exercise with a teacher
                 guide, starter code, a hidden setup cell, helper functions and hidden tests.
                 The language is <strong>locked in once published</strong>: switching it afterward is refused,
@@ -625,13 +625,29 @@ function TabCreate() {
                 caption="The editor's settings, shown here on the sample notebook. Packages and the Colab link appear for Python; a C notebook shows how C cells run instead." />
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    <li><strong>Packages</strong> (Python only) — PyPI packages not already bundled with the in-browser runtime. <code>numpy</code>, <code>pandas</code>, <code>matplotlib</code>, <code>scipy</code>, <code>sympy</code> and <code>scikit-learn</code> ship for free and don't need declaring. <strong>Packages only install at kernel start</strong> — adding one to an already-running kernel does nothing until restarted.</li>
+                    <li><strong>Packages</strong> (Python only) — PyPI packages not already bundled with the in-browser runtime. <code>numpy</code>, <code>pandas</code>, <code>matplotlib</code>, <code>scipy</code>, <code>sympy</code> and <code>scikit-learn</code> ship for free and don&apos;t need declaring. <strong>Packages only install at kernel start</strong> — adding one to an already-running kernel does nothing until restarted.</li>
                     <li><strong>Open in Colab link</strong> (Python only) — for workloads the browser kernel cannot run (TensorFlow, PyTorch, GPU). Must be a <code>colab.research.google.com</code> address.</li>
-                    <li><strong>Submission deadline</strong> — advisory only. Puts the exercise on the class calendar; late submissions are flagged.</li>
+                    <li><strong>Submission deadline</strong> — advisory only. Puts the exercise on the class calendar; late submissions are flagged. It also decides where the notebook is listed on the Coding tab: with a deadline it sits under <strong>Assignments</strong>, without one under <strong>Exercises</strong>.</li>
                     <li><strong>Let students add their own cells</strong> — toggle off to keep it a fixed worksheet.</li>
-                    <li><strong>Show your version after they submit</strong> — your reference cell sources appear under a student's work once submitted.</li>
+                    <li><strong>Show your version after they submit</strong> — your reference cell sources appear under a student&apos;s work once submitted.</li>
                     <li><strong>Students write code only in full screen</strong> — the notebook is covered until they enter full screen, and each exit is recorded. See <em>Full Screen &amp; Paste</em>.</li>
                     <li><strong>Block pasting into code cells</strong> — code must be typed; each blocked paste is recorded. See <em>Full Screen &amp; Paste</em>.</li>
+                </ul>
+            </div>
+
+            <SectionTitle>Editing After Students Have Started</SectionTitle>
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 12 }}>
+                A student&apos;s copy of the notebook is made the first time they open it. If you fix or extend the
+                notebook afterwards, the change reaches every copy that has <strong>not been submitted</strong>,
+                the next time the student opens it — without overwriting their work:
+                <ul style={{ margin: '6px 0 0 0', paddingLeft: 18 }}>
+                    <li><strong>Text cells and Locked cells</strong> always follow your version.</li>
+                    <li><strong>An unlocked code cell</strong> follows your version only while the student has left it as it was handed to them. Once they have typed in it, their code is kept. The same goes for its Input (stdin).</li>
+                    <li><strong>Cells you add</strong> appear in place, after the cell they follow in your notebook.</li>
+                    <li><strong>Cells you delete</strong> disappear — unless the student had written code in one, which is kept rather than thrown away.</li>
+                    <li>A cell whose code changed loses its old output and test results, so the student runs it again.</li>
+                    <li><strong>Submitted copies are never touched</strong> — they are what the student handed in.</li>
+                    <li>A student who has the notebook open in another tab is asked to reload rather than saving over the update.</li>
                 </ul>
             </div>
 
@@ -671,14 +687,14 @@ function TabTestCases() {
         <div>
             <Note type="purple">
                 <strong>Universal Hidden Test Cases:</strong> You can attach automated test cases (Input <code>stdin</code> &amp; Expected <code>stdout</code>)
-                to any code cell in both <strong>Python</strong> and <strong>C</strong> notebooks. They evaluate 100% inside the student's browser with
+                to any code cell in both <strong>Python</strong> and <strong>C</strong> notebooks. They evaluate 100% inside the student&apos;s browser with
                 instant <strong>Yes (Passed) / No (Failed)</strong> feedback while keeping test inputs and outputs completely confidential!
             </Note>
 
             <SectionTitle>How Hidden Test Cases Work</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.8, marginBottom: 12 }}>
                 When you create a coding assignment, students need a way to verify their code against edge cases without revealing the answers.
-                Hidden test cases solve this by running standard input/output assertions inside the browser's WebAssembly sandbox:
+                Hidden test cases solve this by running standard input/output assertions inside the browser&apos;s WebAssembly sandbox:
             </div>
 
             <div className="cdm-grid-3" style={{ marginBottom: 16 }}>
@@ -753,7 +769,7 @@ function TabTestCases() {
             </Step>
 
             <Step n="5" title="Provide Starter Prompt / Skeleton & Publish">
-                Once you have verified that all test cases pass with your reference solution, replace the cell's code with the starter code students begin from — the input-reading lines, function headers and <code>TODO</code> comments — and click <strong>Save</strong> or <strong>Publish</strong>.
+                Once you have verified that all test cases pass with your reference solution, replace the cell&apos;s code with the starter code students begin from — the input-reading lines, function headers and <code>TODO</code> comments — and click <strong>Save</strong> or <strong>Publish</strong>.
                 Your test cases remain saved in the notebook. <strong>Don&apos;t forget this step:</strong> whatever code is in the cell when you publish is exactly what every student receives.
             </Step>
 
@@ -962,7 +978,7 @@ function TabRuntime() {
     return (
         <div>
             <Note type="key">
-                Both runtimes execute inside a Web Worker in the student's own tab — never on the server.
+                Both runtimes execute inside a Web Worker in the student&apos;s own tab — never on the server.
                 Running arbitrary student code server-side is a remote-code-execution surface; executing in the browser
                 guarantees complete isolation with zero cloud hosting bills.
             </Note>
@@ -972,17 +988,17 @@ function TabRuntime() {
                 Real CPython compiled to WebAssembly. The first start downloads a few megabytes; students
                 are informed before clicking Start. <code>numpy</code>, <code>pandas</code>,
                 <code> matplotlib</code>, <code>scipy</code>, <code>sympy</code> and
-                <code> scikit-learn</code> have prebuilt browser versions and don't need declaring in
+                <code> scikit-learn</code> have prebuilt browser versions and don&apos;t need declaring in
                 Packages. <strong>TensorFlow, Keras, PyTorch, JAX, XGBoost, LightGBM, CatBoost and
                 Transformers have no browser build at all</strong> — point students at the Google Colab link for GPU/deep learning work.
-                <code>input()</code> reads from the cell's stdin box or the active test case.
+                <code>input()</code> reads from the cell&apos;s stdin box or the active test case.
             </div>
 
             <SectionTitle>C — Real clang, via WebAssembly</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 Real clang plus a linker and sysroot, roughly 50MB on first start (cached after that).
-                Warnings are enabled; <code>-Werror</code> is off so first-year exercises don't fail over unused variables.
-                <code>scanf</code>/<code>fgets</code> read from the cell's stdin box or active test cases.
+                Warnings are enabled; <code>-Werror</code> is off so first-year exercises don&apos;t fail over unused variables.
+                <code>scanf</code>/<code>fgets</code> read from the cell&apos;s stdin box or active test cases.
             </div>
 
             <Note type="warning">
@@ -1033,7 +1049,7 @@ function TabGrade() {
                 The table lists all enrolled students with:
                 <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
                     <li><strong>Status</strong> — Opened, In Progress, or Submitted (with late flags if submitted past due date).</li>
-                    <li><strong>Cells Run</strong> — "every cell ran" in green, or count of errored / unrun cells in yellow.</li>
+                    <li><strong>Cells Run</strong> — &quot;every cell ran&quot; in green, or count of errored / unrun cells in yellow.</li>
                     <li><strong>Test Cases</strong> — instant pass badge: <code>All Passed (N/N)</code> in green or <code>X/N Passed</code> in red.</li>
                     <li><strong>Full screen / paste</strong> — how many times the student left full screen and how many pastes were blocked, when those rules are on. <strong>Read</strong> lists each one with its time.</li>
                     <li><strong>Grade</strong> — points awarded out of max score.</li>
@@ -1044,7 +1060,7 @@ function TabGrade() {
                 caption="Reading a submission. Code, recorded output, and detailed Hidden Test Results breakdown, followed by the Grade and Feedback form." />
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    <li><strong>Detailed Test Diffs</strong> — when reading an expanded attempt, teachers can see the exact input, expected output, and student's actual output for failed test cases.</li>
+                    <li><strong>Detailed Test Diffs</strong> — when reading an expanded attempt, teachers can see the exact input, expected output, and student&apos;s actual output for failed test cases.</li>
                     <li><strong>Grade and Out of</strong> — enter numeric points; grades mirror directly into the class gradebook.</li>
                     <li><strong>Feedback</strong> — rich text comments shown back to the student on their notebook.</li>
                     <li><strong>Reopen</strong> — resets submission state to allow a student another attempt.</li>
@@ -1069,6 +1085,7 @@ function TabGotchas() {
         'Submission deadlines are advisory — assignments do not lock automatically at the deadline; late submissions are flagged.',
         'Full screen and paste blocking discourage copying but cannot make it impossible — a browser always lets people leave full screen. Treat the recorded counts as a prompt for a conversation, not proof.',
         'Whatever code is in a cell when you publish is what every student starts with — after testing your solution, put the starter code back.',
+        'A fix to starter code reaches a student only if they have not yet edited that cell. Anyone who already typed in it keeps their version — tell the class about the fix. Submitted notebooks are never updated.',
         'A notebook file (.xnb.json) contains the hidden test cases — share it only with other teachers.',
         'Deleting a notebook permanently removes all student attempts and submissions associated with it.',
     ];

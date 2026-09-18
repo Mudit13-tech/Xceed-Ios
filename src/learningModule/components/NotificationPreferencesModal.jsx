@@ -19,8 +19,8 @@ import {
   Flex,
   Select,
   useToast,
-  Spinner,
 } from '@chakra-ui/react';
+import { SectionCardSkeleton } from './common';
 import lmApi from '../api/lmApi';
 
 export default function NotificationPreferencesModal({
@@ -165,9 +165,7 @@ export default function NotificationPreferencesModal({
           )}
 
           {loading ? (
-            <Flex justify="center" align="center" py={10}>
-              <Spinner color="blue.500" size="lg" />
-            </Flex>
+            <SectionCardSkeleton lines={6} title={false} />
           ) : (
             <Stack spacing={4}>
               <FormControl display="flex" alignItems="center" justifyContent="space-between" bg="lmBg.sunken" p={3} borderRadius="lg">

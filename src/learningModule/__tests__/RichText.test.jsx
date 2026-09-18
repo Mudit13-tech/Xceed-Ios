@@ -120,3 +120,76 @@ describe('learningModule richTextUtils', () => {
     expect(richTextToPlain(null)).toBe('');
   });
 });
+
+/**
+ * A picture that does not arrive.
+ *
+ * An <img> that fails renders as nothing at all on most browsers — no box, no
+ * icon, not even a gap — and in an exam that is the worst failure available: a
+ * question written *about* a diagram reads as a question with no diagram, and a
+ * student cannot tell a missing picture from one that was never meant to be
+ * there. They answer what they can see, and nobody finds out until the marks are
+ * queried.
+ *
+ * The causes are several — Safe Exam Browser refusing an off-site address, a
+ * connection that dropped for one request, a link that has rotted — and a
+ * student can act on none of them. What they can act on is knowing that
+ * something is missing.
+ */
+describe('learningModule <RichText /> — an image that did not load', () => {
+  it('gives an unlabelled image something to say when it fails', () => {
+    const { container } = render(
+      <RichText>{'<p>Read the graph <img src="https://elsewhere.test/a.png"></p>'}</RichText>,
+    );
+
+    expect(container.querySelector('img')).toHaveAttribute(
+      'alt',
+      expect.stringContaining('could not be loaded'),
+    );
+  });
+
+  it("does not overwrite the teacher's own alt text", () => {
+    const { container } = render(
+      <RichText>{'<p><img src="https://elsewhere.test/a.png" alt="Ohm\'s law circuit"></p>'}</RichText>,
+    );
+
+    expect(container.querySelector('img')).toHaveAttribute('alt', "Ohm's law circuit");
+  });
+
+  it('marks an image whose src the sanitiser stripped', () => {
+    /* A `data:` type the renderer refuses — an iPhone HEIC, say — loses its src
+       and so can never fire an `error` event to be caught. It has to be marked
+       on sight, which is what the "no src" half of the effect is for. */
+    const { container } = render(
+      <RichText>{'<p><img src="data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="></p>'}</RichText>,
+    );
+
+    const img = container.querySelector('img');
+    expect(img).not.toHaveAttribute('src');
+    expect(img).toHaveAttribute('data-lm-image-failed', 'true');
+  });
+
+  it('marks an image that reports an error after rendering', () => {
+    const { container } = render(
+      <RichText>{'<p><img src="https://elsewhere.test/a.png"></p>'}</RichText>,
+    );
+
+    const img = container.querySelector('img');
+    // jsdom loads nothing, so the failure is delivered the way a browser would.
+    img.dispatchEvent(new Event('error'));
+
+    expect(img).toHaveAttribute('data-lm-image-failed', 'true');
+  });
+
+  it('leaves an image that loaded alone', () => {
+    const { container } = render(
+      <RichText>{'<p><img src="data:image/png;base64,iVBORw0KGgo=" alt="circuit"></p>'}</RichText>,
+    );
+
+    // jsdom never reports a natural width, so the assertion that matters is the
+    // one about a *loaded* image: it must not be marked merely for being there.
+    const img = container.querySelector('img');
+    expect(img).toHaveAttribute('src');
+    expect(img).toHaveAttribute('alt', 'circuit');
+  });
+});

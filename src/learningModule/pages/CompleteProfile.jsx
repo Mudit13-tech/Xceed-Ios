@@ -13,11 +13,11 @@ import {
   Input,
   InputGroup,
   InputLeftElement,
-  Spinner,
   Text,
   useColorModeValue,
   VStack,
 } from '@chakra-ui/react';
+import { FormSkeleton } from '../components/common';
 import { FiHash, FiUser, FiUserCheck } from 'react-icons/fi';
 import lmApi from '../api/lmApi';
 import { looksLikeEmail, EMAIL_AS_NAME_MESSAGE } from '../displayName';
@@ -176,9 +176,7 @@ export default function CompleteProfile({ onDone }) {
           )}
 
           {loading ? (
-            <Flex justify="center" py={6}>
-              <Spinner color={iconColor} />
-            </Flex>
+            <FormSkeleton fields={3} header={false} />
           ) : (
             <>
               <FormControl isRequired>

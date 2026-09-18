@@ -16,12 +16,26 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
-  Spinner,
   Text,
 } from '@chakra-ui/react';
+import { SectionCardSkeleton } from './common';
 import lmApi from '../api/lmApi';
 import RichText from './RichText';
 import { formatAnswerValue } from '../format';
+
+const CHOICE_TYPES = ['mcq', 'msq'];
+
+/** "A" for index 0, "B" for 1, … — how a choice answer reads on a mark sheet. */
+const optionLetter = (index) => (index < 26 ? String.fromCharCode(65 + index) : String(index + 1));
+
+/** "A, C" for a choice question's correct option indices, or "—" once none are set. */
+const formatChoiceAnswer = (expected) => {
+  const indices = (expected?.correct || [])
+    .map(Number)
+    .filter((index) => Number.isInteger(index) && index >= 0)
+    .sort((a, b) => a - b);
+  return indices.length ? indices.map(optionLetter).join(', ') : '—';
+};
 
 /**
  * Sample papers for a whole tutorial or assignment, end to end.
@@ -103,8 +117,8 @@ export default function PaperPreviewModal({ isOpen, onClose, classId, kind = 'tu
 
           {busy && !samples ? (
             <HStack py={6} justify="center">
-              <Spinner size="sm" />
-              <Text fontSize="sm" color="lmFg.muted">
+              <SectionCardSkeleton lines={4} title={false} width="100%" />
+              <Text fontSize="sm" color="lmFg.muted" srOnly>
                 Rolling sample papers…
               </Text>
             </HStack>
@@ -122,6 +136,40 @@ export default function PaperPreviewModal({ isOpen, onClose, classId, kind = 'tu
                         </Code>
                       ))}
                     </HStack>
+                    {CHOICE_TYPES.includes(question.type) && (question.options || []).length > 0 && (() => {
+                      const answer = (question.expected || []).find((expected) => (expected.partIndex ?? null) === null);
+                      const correctIndices = new Set((answer?.correct || []).map(Number));
+                      return (
+                        <List fontSize="sm" mt={2} spacing={1}>
+                          {question.options.map((option, optionIndex) => {
+                            const isCorrect = correctIndices.has(optionIndex);
+                            return (
+                              <ListItem
+                                key={optionIndex}
+                                p={1}
+                                borderRadius="md"
+                                bg={isCorrect ? 'lmHue.green50' : 'transparent'}
+                                borderWidth={isCorrect ? '1px' : '0'}
+                                borderColor="lmHue.green300"
+                              >
+                                <HStack align="flex-start" spacing={2}>
+                                  <Text fontWeight="700" color={isCorrect ? 'lmHue.green700' : 'lmFg.muted'}>
+                                    {optionLetter(optionIndex)}.
+                                  </Text>
+                                  <RichText>{option}</RichText>
+                                  {isCorrect && (
+                                    <Badge colorScheme="green" fontSize="2xs">
+                                      Correct
+                                    </Badge>
+                                  )}
+                                </HStack>
+                              </ListItem>
+                            );
+                          })}
+                        </List>
+                      );
+                    })()}
+
                     <HStack fontSize="xs" mt={1} wrap="wrap">
                       {/* textTransform on the badges below: a Badge uppercases its
                           content by default, which is right for a status word and
@@ -134,6 +182,8 @@ export default function PaperPreviewModal({ isOpen, onClose, classId, kind = 'tu
                             {expected.label}:{' '}
                             {expected.error
                               ? 'failed'
+                              : CHOICE_TYPES.includes(question.type)
+                              ? formatChoiceAnswer(expected)
                               : `${formatAnswerValue(expected.value, expected.decimals, expected.valueIm)} ${expected.unit}`}
                           </Badge>
                         ))}

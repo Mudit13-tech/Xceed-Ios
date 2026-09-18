@@ -68,9 +68,13 @@ function ClassCard({ klass, onOpen }) {
   const isTeacher = ['teacher', 'co-teacher'].includes(klass.myRole);
   const todayName = WEEKDAY_NAMES[new Date().getDay()];
   return (
-    <Box
+        <Box
       as="button"
       textAlign="left"
+      display="flex"
+      flexDirection="column"
+      alignItems="stretch"
+      width="100%"
       onClick={() => onOpen(klass)}
       bg={cardBg}
       borderWidth="1px"
@@ -696,6 +700,10 @@ export default function Dashboard() {
   } = useQuery({
     queryKey: ['learning', 'classes', 'active'],
     queryFn: () => lmApi.listClasses(),
+    // The class list doesn’t change during a typical session. 2 min avoids
+    // re-fetching (and re-showing skeletons) every time the user navigates
+    // back to the dashboard.
+    staleTime: 2 * 60 * 1000,
   });
 
   const {
@@ -706,6 +714,7 @@ export default function Dashboard() {
   } = useQuery({
     queryKey: ['learning', 'classes', 'archived'],
     queryFn: () => lmApi.listClasses('archived'),
+    staleTime: 2 * 60 * 1000,
   });
 
   const {
@@ -716,6 +725,7 @@ export default function Dashboard() {
   } = useQuery({
     queryKey: ['learning', 'classes', 'completed'],
     queryFn: () => lmApi.listClasses('completed'),
+    staleTime: 2 * 60 * 1000,
   });
 
   const loading = loadingClasses || loadingArchived || loadingCompleted;
@@ -788,9 +798,25 @@ export default function Dashboard() {
 
       {overview ? (
         <Grid templateColumns={{ base: '1fr 1fr', md: 'repeat(4, 1fr)' }} gap={4} mb={6}>
-          <StatTile label="Classes" value={overview.classCount} hint={`${overview.teachingCount} teaching`} />
+          <StatTile
+            label="Classes"
+            value={overview.classCount}
+            hint={overview.teachingCount > 0 ? `${overview.teachingCount} teaching` : undefined}
+          />
           <StatTile label="Pending work" value={overview.pendingWork} accent="orange.500" hint="Not turned in" />
-          <StatTile label="To review" value={overview.awaitingReview} accent="purple.500" hint="Student submissions" />
+          {/* "To review" is a teacher's queue — a student has no submissions
+              waiting on them, so it's swapped for their own standing: badges
+              earned this session, and points earned this week. */}
+          {overview.teachingCount > 0 ? (
+            <StatTile label="To review" value={overview.awaitingReview} accent="purple.500" hint="Student submissions" />
+          ) : (
+            <StatTile
+              label="Badges"
+              value={overview.sessionBadgeCount}
+              accent="purple.500"
+              hint={overview.weeklyPoints > 0 ? `+${overview.weeklyPoints} pts this week` : 'This session'}
+            />
+          )}
           <StatTile label="Due this week" value={overview.dueThisWeek} accent="red.500" />
         </Grid>
       ) : (

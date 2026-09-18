@@ -1,6 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useNavigate, useOutletContext } from 'react-router-dom';
 import {
+  Alert,
+  AlertIcon,
   Badge,
   Box,
   Button,
@@ -8,14 +10,19 @@ import {
   HStack,
   Heading,
   Input,
+  Link,
   Text,
+  useDisclosure,
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, WorkListSkeleton } from '../components/common';
 import { toDateTimeInput } from '../format';
+import FormCard from '../components/FormCard';
+import FormPreviewModal from '../components/FormPreviewModal';
 import PaperPreviewModal from '../components/PaperPreviewModal';
 import { LmIcon } from '../components/Icon';
+import DeleteButton from '../components/DeleteButton';
 
 /**
  * Lists the class's parameterised assignments — the ones where every student
@@ -37,13 +44,24 @@ export default function Assignments() {
   const [dueDates, setDueDates] = useState({});
   // The assignment whose sample papers are open, or null.
   const [previewing, setPreviewing] = useState(null);
+  // Forms with the Assignment category — document hand-ins, listed here as
+  // well as on the Forms tab.
+  const [formAssignments, setFormAssignments] = useState([]);
+  const [previewForm, setPreviewForm] = useState(null);
+  const formPreview = useDisclosure();
   const navigate = useNavigate();
   const toast = useToast();
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      setAssignments(await lmApi.listAssignments(classId));
+      // A failure listing forms must not hide the numerical assignments.
+      const [list, forms] = await Promise.all([
+        lmApi.listAssignments(classId),
+        Promise.resolve(lmApi.listForms(classId)).catch(() => []),
+      ]);
+      setAssignments(list);
+      setFormAssignments((forms || []).filter((form) => form.category === 'assignment'));
     } catch (err) {
       setError(err);
     } finally {
@@ -54,39 +72,6 @@ export default function Assignments() {
   useEffect(() => {
     load();
   }, [load]);
-
-
-  const fileRef = useRef(null);
-  const [importing, setImporting] = useState(false);
-
-  /**
-   * Uploads the pages, then asks the server to read them.
-   *
-   * Two requests rather than one multipart call: the upload handler already
-   * exists, already enforces the size and type rules and already stores files
-   * under names it minted, so one place stays responsible for what lands on disk.
-   */
-  const startImport = async (files) => {
-    if (!files.length) return;
-    setImporting(true);
-    try {
-      const { attachments } = await lmApi.uploadFiles(classId, files);
-      const draft = await lmApi.startAssignmentImport(classId, {
-        title: files.length === 1 ? files[0].name.replace(/\.[^.]+$/, '') : 'Imported assignment',
-        sources: attachments.map((file) => ({
-          name: file.name,
-          url: file.url,
-          mimeType: file.mimeType,
-        })),
-      });
-      navigate(`/learning/class/${classId}/assignment-import/${draft._id}`);
-    } catch (err) {
-      toast({ status: 'error', title: err.message, duration: 10000 });
-    } finally {
-      setImporting(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
-  };
 
   const create = async () => {
     try {
@@ -108,6 +93,19 @@ export default function Assignments() {
         ],
       });
       navigate(`/learning/class/${classId}/assignment/${created._id}/edit`);
+    } catch (err) {
+      toast({ status: 'error', title: err.message });
+    }
+  };
+
+  const createFormAssignment = async () => {
+    try {
+      const created = await lmApi.createForm(classId, {
+        title: 'Untitled assignment',
+        category: 'assignment',
+        questions: [{ type: 'file_upload', title: 'Upload your submission', required: true }],
+      });
+      navigate(`/learning/class/${classId}/form/${created._id}/edit`);
     } catch (err) {
       toast({ status: 'error', title: err.message });
     }
@@ -147,49 +145,55 @@ export default function Assignments() {
     }
   };
 
-  if (loading) return <Loading label="Loading assignments…" />;
+  if (loading) return <Loading label="Loading assignments…" skeleton={<WorkListSkeleton />} />;
 
   return (
     <Box>
-      <Flex justify="space-between" align="flex-start" mb={4} gap={3} wrap="wrap">
+      {/* Teachers land here looking for "an assignment" and may really want a
+          PDF hand-in, which this tab cannot take. Point them at Forms. */}
+      {isTeacher && (
+        <Alert status="info" borderRadius="md" fontSize="sm" mb={4} alignItems="flex-start">
+          <AlertIcon />
+          <Box>
+            <Text>
+              Here you can create <strong>numerical questions with random variables</strong> (every
+              student gets different values), <strong>MCQ</strong> or <strong>multiple choice</strong>{' '}
+              questions, or <strong>numerical questions that are the same for all students</strong>.
+              Students enter their answers directly.
+            </Text>
+            <Text mt={1}>
+              For a <strong>document upload</strong> assignment (e.g. students submit a PDF), use{' '}
+              <Link as={RouterLink} to={`/learning/class/${classId}/forms`} fontWeight="600">
+                Forms
+              </Link>{' '}
+              with the category set to <strong>Assignment</strong>, or use{' '}
+              <strong>+ New document assignment</strong> below. Those forms appear under Document
+              Submissions here as well as on the Forms tab.
+            </Text>
+          </Box>
+        </Alert>
+      )}
+
+      <Flex direction="column" align="flex-start" mb={4} gap={3}>
         <Box>
-          <Heading size="md">Assignments</Heading>
+          <Heading size="md">Numerical Assignments</Heading>
           <Text fontSize="sm" color="lmFg.muted">
             Assessed numerical work. Every student gets their own values, and answers are marked
             against a formula rather than a fixed key.
           </Text>
         </Box>
+        {/* Under the heading on the left, the same place and style as
+            "+ New document assignment" below. */}
         {isTeacher && (
-          <>
-            {/* Reads a photographed or scanned paper and proposes variables and
-                answer formulas, each checked against the paper's own numbers.
-                Its own pipeline, ending in an assignment — a tutorial draft
-                cannot land here and vice versa. */}
-            <Button
-              variant="outline"
-              colorScheme="purple"
-              isLoading={importing}
-              onClick={() => fileRef.current?.click()}
-            >
-              <LmIcon name="assignment" size={14} style={{ marginRight: 6 }} />
-              Import from a paper
+          <HStack spacing={2}>
+            <Button colorScheme="teal" variant="outline" onClick={create}>
+              + New assignment
             </Button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="application/pdf,image/png,image/jpeg,image/gif,image/webp"
-              multiple
-              style={{ display: 'none' }}
-              onChange={(event) => startImport([...event.target.files])}
-            />
             <Button as="a" href="/learning/assignmentmanual" target="_blank" rel="noreferrer" variant="ghost">
               <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
               Manual
             </Button>
-            <Button colorScheme="teal" onClick={create}>
-              + New assignment
-            </Button>
-          </>
+          </HStack>
         )}
       </Flex>
 
@@ -323,9 +327,7 @@ export default function Assignments() {
                     >
                       {assignment.published ? 'Unpublish' : 'Publish'}
                     </Button>
-                    <Button size="sm" variant="ghost" colorScheme="red" onClick={() => remove(assignment)}>
-                      ✕
-                    </Button>
+                    <DeleteButton label="Delete assignment" onClick={() => remove(assignment)} />
                   </>
                 ) : (
                   <Button
@@ -343,6 +345,51 @@ export default function Assignments() {
           </SectionCard>
         ))
       )}
+
+      {(isTeacher || formAssignments.length > 0) && (
+        <Box mt={8}>
+          <Flex direction="column" align="flex-start" mb={4} gap={3}>
+            <Box>
+              <Heading size="md">Document Submissions</Heading>
+              <Text fontSize="sm" color="lmFg.muted">
+                Forms with the Assignment category — students upload their work before the deadline.
+              </Text>
+            </Box>
+            {isTeacher && (
+              <Button colorScheme="teal" variant="outline" onClick={createFormAssignment}>
+                + New document assignment
+              </Button>
+            )}
+          </Flex>
+          {formAssignments.length === 0 ? (
+            <Text fontSize="sm" color="lmFg.muted">
+              None yet. A form whose category is set to Assignment shows up here.
+            </Text>
+          ) : (
+            formAssignments.map((form) => (
+              <FormCard
+                key={form._id}
+                form={form}
+                classId={classId}
+                isTeacher={isTeacher}
+                showCategory={false}
+                onDeleted={load}
+                onPreview={(f) => {
+                  setPreviewForm(f);
+                  formPreview.onOpen();
+                }}
+              />
+            ))
+          )}
+        </Box>
+      )}
+
+      <FormPreviewModal
+        isOpen={formPreview.isOpen}
+        onClose={formPreview.onClose}
+        form={previewForm}
+        classId={classId}
+      />
 
       <PaperPreviewModal
         isOpen={Boolean(previewing)}

@@ -1076,12 +1076,20 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
   const writing = attempts.filter((attempt) => attempt.status === 'in_progress');
   const offSeb = writing.filter((attempt) => attempt.sebBypassed);
   const onSeb = writing.filter((attempt) => attempt.sebVerified && !attempt.sebBypassed);
-  // Expired sittings sit alongside terminated ones: from the student's side
-  // both are "the test vanished", and both are put right the same way.
-  const submitted = attempts.filter((attempt) => attempt.status === 'submitted').length;
-  const lockedOut = attempts
-    .filter((attempt) => attempt.status === 'terminated' || attempt.status === 'expired')
-    .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
+  const byEndedAt = (a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0);
+
+  /* Finished, and how. Expired sittings used to be listed as shut out beside
+     the terminated ones, because both are put right by letting the student back
+     in — but that is the remedy the two share, not what happened. A paper whose
+     clock ran out was sat to the end and submitted by the server; nobody lost
+     it, there is nothing to put right, and calling it shut out turned the
+     ordinary end of every timed exam into a red alert. So they count as
+     completed, and keep their own list below — where the Let in control still
+     is, because "give them five more minutes" is a real thing to want and the
+     only place it was ever reachable. */
+  const timedOut = attempts.filter((attempt) => attempt.status === 'expired').sort(byEndedAt);
+  const submitted = attempts.filter((attempt) => attempt.status === 'submitted').length + timedOut.length;
+  const lockedOut = attempts.filter((attempt) => attempt.status === 'terminated').sort(byEndedAt);
 
   // One box over both lists. An invigilator searching mid-exam is holding a
   // name, not a category — they should not have to know whether that name is
@@ -1115,6 +1123,96 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
     } finally {
       setBusyId(null);
     }
+  };
+
+  /* One ended sitting, with the control to hand the paper back.
+   *
+   * Shared by the two lists below rather than written twice. They are different
+   * events — a termination is somebody thrown out, a timed-out paper is one that
+   * simply ran its course — but the row says the same things about both (who,
+   * which roll number, when it ended and why) and offers the same remedy, and
+   * two copies of this markup is how the two would come to disagree about which
+   * controls a finished paper still gets. */
+  const endedRow = (attempt) => {
+    const auto = minutesLostSinceTermination(quiz, attempt, now);
+    const minutes = minutesById[attempt._id] ?? String(auto);
+    return (
+      <Flex
+        key={attempt._id}
+        gap={3}
+        align={{ base: 'stretch', md: 'center' }}
+        direction={{ base: 'column', md: 'row' }}
+        borderWidth="1px"
+        borderRadius="md"
+        p={3}
+      >
+        <Box flex="1" minW={0}>
+          <Flex align="center" gap={2} wrap="wrap">
+            <Text fontSize="sm" fontWeight="600">
+              {nameOf(attempt)}
+            </Text>
+            <Badge
+              colorScheme={attempt.status === 'terminated' ? 'red' : 'orange'}
+              fontSize="0.6rem"
+            >
+              {attempt.status}
+            </Badge>
+            <AttemptFlags attempt={attempt} />
+          </Flex>
+          <RollNumber value={attempt.rollNumber} />
+          <Text fontSize="xs" color="lmFg.subtle">
+            {attempt.studentEmail || 'no email on file'}
+          </Text>
+          <Text fontSize="xs" color="lmFg.muted">
+            {attempt.submittedAt
+              ? `Ended ${relativeTime(attempt.submittedAt)} · ${formatDateTime(attempt.submittedAt)}`
+              : 'End time unknown'}
+            {attempt.terminationReason ? ` · ${attempt.terminationReason}` : ''}
+          </Text>
+        </Box>
+
+        {/* The whole control column, gone once the paper is over: the row keeps
+            every fact about the sitting — who, which roll number, when it ended
+            and why — and stops offering the one thing that is no longer this
+            panel's to give. */}
+        {!over && (
+          <HStack spacing={2} align="flex-end" w={{ base: '100%', md: 'auto' }}>
+            <FormControl w="110px" flexShrink={0}>
+              <FormLabel fontSize="xs" mb={1}>
+                Minutes
+              </FormLabel>
+              <NumberInput
+                size="sm"
+                min={1}
+                max={600}
+                value={minutes}
+                onChange={(value) =>
+                  setMinutesById((current) => ({ ...current, [attempt._id]: value }))
+                }
+              >
+                <NumberInputField />
+              </NumberInput>
+            </FormControl>
+            <Tooltip label={`Time left when it ended, plus the wait since — ${auto} min`}>
+              <Button
+                /* Bigger on a handset: this is pressed with a thumb, one-handed,
+                   while walking a hall, and a 32px target beside a number
+                   stepper was easy to miss. Back to `sm` from md up, where it
+                   sits in a row of small controls and is clicked. */
+                size={{ base: 'md', md: 'sm' }}
+                minH={{ base: '44px', md: 'auto' }}
+                colorScheme="purple"
+                onClick={() => letIn(attempt)}
+                isLoading={busyId === attempt._id}
+                flex={{ base: '1', md: 'none' }}
+              >
+                Let in
+              </Button>
+            </Tooltip>
+          </HStack>
+        )}
+      </Flex>
+    );
   };
 
   // The colour is a quiz setting, so it is written the way the editor writes it
@@ -1244,10 +1342,10 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
                way to reopen a sitting named rather than left to be hunted. */
             subtitle={
               over
-                ? 'Terminated or expired sittings. The exam is over, so they are no longer let back in from here — to reopen one, open Results and use the action beside the student.'
+                ? 'Sittings a proctoring rule closed. The exam is over, so they are no longer let back in from here — to reopen one, open Results and use the action beside the student.'
                 : graceLeftMs !== null
-                  ? `Terminated or expired sittings. The window has closed: Let in is available for another ${formatCountdown(graceLeftMs)}, then only from Results.`
-                  : 'Terminated or expired sittings. Letting one back in returns their paper with every answer intact.'
+                  ? `Sittings a proctoring rule closed. The window has closed: Let in is available for another ${formatCountdown(graceLeftMs)}, then only from Results.`
+                  : 'Sittings a proctoring rule closed. Letting one back in returns their paper with every answer intact.'
             }
             mb={4}
           >
@@ -1276,98 +1374,32 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
                     </FormHelperText>
                   </FormControl>
                 )}
-                <Stack spacing={3}>
-                  {lockedOut.filter(matches).map((attempt) => {
-                    const auto = minutesLostSinceTermination(quiz, attempt, now);
-                    const minutes = minutesById[attempt._id] ?? String(auto);
-                    return (
-                      <Flex
-                        key={attempt._id}
-                        gap={3}
-                        align={{ base: 'stretch', md: 'center' }}
-                        direction={{ base: 'column', md: 'row' }}
-                        borderWidth="1px"
-                        borderRadius="md"
-                        p={3}
-                      >
-                        <Box flex="1" minW={0}>
-                          <Flex align="center" gap={2} wrap="wrap">
-                            <Text fontSize="sm" fontWeight="600">
-                              {nameOf(attempt)}
-                            </Text>
-                            <Badge
-                              colorScheme={attempt.status === 'terminated' ? 'red' : 'orange'}
-                              fontSize="0.6rem"
-                            >
-                              {attempt.status}
-                            </Badge>
-                            <AttemptFlags attempt={attempt} />
-                          </Flex>
-                          <RollNumber value={attempt.rollNumber} />
-                          <Text fontSize="xs" color="lmFg.subtle">
-                            {attempt.studentEmail || 'no email on file'}
-                          </Text>
-                          <Text fontSize="xs" color="lmFg.muted">
-                            {attempt.submittedAt
-                              ? `Ended ${relativeTime(attempt.submittedAt)} · ${formatDateTime(
-                                  attempt.submittedAt,
-                                )}`
-                              : 'End time unknown'}
-                            {attempt.terminationReason ? ` · ${attempt.terminationReason}` : ''}
-                          </Text>
-                        </Box>
-
-                        {/* The whole control column, gone once the paper is
-                            over: the row keeps every fact about the sitting —
-                            who, which roll number, when it ended and why — and
-                            stops offering the one thing that is no longer this
-                            panel's to give. */}
-                        {!over && (
-                          <HStack spacing={2} align="flex-end" w={{ base: '100%', md: 'auto' }}>
-                            <FormControl w="110px" flexShrink={0}>
-                              <FormLabel fontSize="xs" mb={1}>
-                                Minutes
-                              </FormLabel>
-                              <NumberInput
-                                size="sm"
-                                min={1}
-                                max={600}
-                                value={minutes}
-                                onChange={(value) =>
-                                  setMinutesById((current) => ({ ...current, [attempt._id]: value }))
-                                }
-                              >
-                                <NumberInputField />
-                              </NumberInput>
-                            </FormControl>
-                            <Tooltip
-                              label={`Time left when it ended, plus the wait since — ${auto} min`}
-                            >
-                              <Button
-                                /* Bigger on a handset: this is pressed with a
-                                   thumb, one-handed, while walking a hall, and a
-                                   32px target beside a number stepper was easy to
-                                   miss. Back to `sm` from md up, where it sits in
-                                   a row of small controls and is clicked. */
-                                size={{ base: 'md', md: 'sm' }}
-                                minH={{ base: '44px', md: 'auto' }}
-                                colorScheme="purple"
-                                onClick={() => letIn(attempt)}
-                                isLoading={busyId === attempt._id}
-                                flex={{ base: '1', md: 'none' }}
-                              >
-                                Let in
-                              </Button>
-                            </Tooltip>
-                          </HStack>
-                        )}
-                      </Flex>
-                    );
-                  })}
-                </Stack>
+                <Stack spacing={3}>{lockedOut.filter(matches).map(endedRow)}</Stack>
               </>
             )}
           </SectionCard>
+
+          {/* ---- whose clock simply ran out ----
+              Its own card, below the terminations rather than folded in with
+              them. These papers were sat: the student wrote until the clock
+              stopped and the server submitted for them, which is how a timed
+              exam is meant to end — so they count as completed in the header
+              above and raise no alert on the quiz card. The Let in control is
+              still here, because "they lost twenty minutes to a dead laptop,
+              give it back" is asked of exactly these rows. */}
+          {timedOut.length > 0 && (
+            <SectionCard
+              title={`Time up (${timedOut.length})`}
+              subtitle={
+                over
+                  ? 'Papers submitted automatically when their time ran out. The exam is over; to give one more time now, open Results and use the action beside the student.'
+                  : 'Papers submitted automatically when their time ran out. Nothing needs doing — let one back in only if they are owed time they did not get.'
+              }
+              mb={4}
+            >
+              <Stack spacing={3}>{timedOut.filter(matches).map(endedRow)}</Stack>
+            </SectionCard>
+          )}
 
           {/* ---- who is on SEB ---- */}
           <SectionCard
@@ -1407,7 +1439,7 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
                     sideways scroll to read an email address. */}
                 <Stack spacing={3} display={{ base: 'flex', md: 'none' }}>
                   {offSeb.map((attempt) => {
-                    const total = attempt.questionCount || quiz.questions.length || 1;
+                    const total = attempt.questionCount || quiz.questionCount || quiz.questions?.length || 1;
                     const percent = Math.round((attempt.answeredCount / total) * 100);
                     return (
                       <MonitorCard key={attempt._id}>
@@ -1457,7 +1489,7 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
                     </Thead>
                     <Tbody>
                       {offSeb.map((attempt) => {
-                        const total = attempt.questionCount || quiz.questions.length || 1;
+                        const total = attempt.questionCount || quiz.questionCount || quiz.questions?.length || 1;
                         const percent = Math.round((attempt.answeredCount / total) * 100);
                         return (
                           <Tr key={attempt._id}>
@@ -1516,7 +1548,7 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
             ) : (
               <Stack spacing={2}>
                 {writing.filter(matches).map((attempt) => {
-                  const total = attempt.questionCount || quiz.questions.length || 1;
+                  const total = attempt.questionCount || quiz.questionCount || quiz.questions?.length || 1;
                   return (
                     <Flex
                       key={attempt._id}

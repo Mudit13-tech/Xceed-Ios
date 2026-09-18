@@ -1,4 +1,5 @@
 import getEnvironment from '../../getenvironment';
+import { readLocal } from '../../utils/safeStorage';
 import { sync as syncServerClock } from '../serverClock';
 
 // Every learning-module call goes through here so auth, error shape and the
@@ -153,12 +154,21 @@ export const quizSession = {
 /** `/classes/:classId/attempts/:attemptId/...` → the attempt id, or null. */
 const attemptIdIn = (path) => path.match(/\/attempts\/([a-f\d]{24})(?:\/|$)/i)?.[1] || null;
 
-async function request(path, { method = 'GET', body, raw = false, signal, keepalive = false, formId } = {}) {
+async function request(
+  path,
+  { method = 'GET', body, raw = false, signal, keepalive = false, formId, priority } = {},
+) {
   const options = {
     method,
     credentials: 'include',
     headers: {},
     signal,
+    /* Where the browser supports it, what this request may be made to wait
+       behind. Only ever `'low'`, and only for proctoring traffic carrying a
+       picture: the student's own answer and the paper's next question must
+       never queue behind a JPEG on a slow uplink. Unknown `fetch` init keys are
+       ignored, so a browser without Priority Hints simply behaves as before. */
+    ...(priority ? { priority } : {}),
     // For a request that has to survive the page tearing down under it — the
     // tab closing, or navigating away — while it is still in flight. An
     // ordinary fetch is aborted the moment the document unloads; a keepalive
@@ -169,7 +179,11 @@ async function request(path, { method = 'GET', body, raw = false, signal, keepal
     formId,
   };
 
-  const token = localStorage.getItem('token');
+  // Guarded like every other storage touch in this file — see `quizSession`
+  // below. A browser keeping no site data throws here rather than returning
+  // null, and this read is on every learning-module request, including every
+  // one a paper makes while it is being sat.
+  const token = readLocal('token');
   if (token) options.headers.Authorization = `Bearer ${token}`;
 
   // Sent alongside, not instead of: a signed-in user who also holds a guest
@@ -251,6 +265,38 @@ const lmApi = {
   LmApiError,
   fileUrl: (url) => (url?.startsWith('http') ? url : `${getEnvironment()}${url}`),
 
+  /* An attachment's own address, carrying its display name so the server hands
+     the file over as "Unit 3 Notes.pdf" rather than the random name it is
+     stored under (see uploadController.serveFile). `download` asks for a save
+     instead of the browser's viewer. A link is someone else's URL and passes
+     through untouched. */
+  attachmentUrl: (attachment, { download = false } = {}) => {
+    if (attachment.kind === 'link') return attachment.url;
+    const params = new URLSearchParams();
+    if (attachment.name) params.set('name', attachment.name);
+    if (download) params.set('download', '1');
+    const query = params.toString();
+    const joiner = attachment.url.includes('?') ? '&' : '?';
+    return lmApi.fileUrl(query ? `${attachment.url}${joiner}${query}` : attachment.url);
+  },
+
+  /* An attachment's bytes, fetched with the session token.
+     Following the plain link authenticates by cookie alone, and an installed
+     app on iOS does not share its cookies with the browser a new tab opens in,
+     so from there the link came back 401. This carries the bearer header like
+     every other call here, and works wherever the app itself does. */
+  fetchAttachment: async (attachment) => {
+    const url = attachment.url || '';
+    const prefix = '/api/v1/learningmodule';
+    if (url.startsWith(prefix)) {
+      const response = await request(url.slice(prefix.length), { raw: true });
+      return response.blob();
+    }
+    const response = await fetch(lmApi.fileUrl(url));
+    if (!response.ok) throw new LmApiError('Request failed', response.status, null);
+    return response.blob();
+  },
+
   /* account level */
   me: () => request('/me'),
   overview: () => request('/overview'),
@@ -311,7 +357,8 @@ const lmApi = {
   requestClassDeletion: (classId) => request(`/classes/${classId}/request-deletion`, { method: 'POST' }),
   joinByCode: (code) => request('/join', { method: 'POST', body: { code } }),
   previewCode: (code) => request(`/preview/${encodeURIComponent(code)}`),
-  leaveClass: (classId) => request(`/classes/${classId}/leave`, { method: 'POST', body: {} }),
+  requestLeaveCode: (classId) => request(`/classes/${classId}/leave/code`, { method: 'POST', body: {} }),
+  leaveClass: (classId, otp) => request(`/classes/${classId}/leave`, { method: 'POST', body: { otp } }),
 
   /* topics */
   listTopics: (classId) => request(`/classes/${classId}/topics`),
@@ -441,7 +488,16 @@ const lmApi = {
      Best-effort: the sitting must not stall on a failed report, so callers fire
      and forget. `image` is a small JPEG data URI, sent only on a flagged frame. */
   recordWebcamCheck: (classId, attemptId, body) =>
-    request(`/classes/${classId}/attempts/${attemptId}/webcam`, { method: 'POST', body: body || {} }),
+    request(`/classes/${classId}/attempts/${attemptId}/webcam`, {
+      method: 'POST',
+      body: body || {},
+      /* Decided here rather than at the call site, so a report carrying a
+         picture cannot be sent at full priority by forgetting to say so. A
+         bare check is two numbers and races nobody; one with a thumbnail is
+         kilobytes, and on a slow uplink it is the thing an answer would have
+         had to wait behind. */
+      ...(body?.image ? { priority: 'low' } : {}),
+    }),
 
   /* One random snapshot from a sitting, as an object URL the caller must revoke.
      Fetched rather than linked because the route is staff-only and this module
@@ -587,10 +643,22 @@ const lmApi = {
   // hand-written one buys nothing.
   // `detail` is a short note about the event — which key was pressed on a paper
   // under keyboard lockdown. The server caps and strips it before storing.
+  // `keepalive`, and this is the request that needs it most on the whole
+  // sitting. The three reports that end a paper — tab_switch, blur,
+  // fullscreen_exit — fire at the exact moment the document is going away, and
+  // one of the ways a student leaves the test screen is by closing the tab or
+  // navigating off it. An ordinary fetch is aborted when the document unloads,
+  // so that departure never reached the server: the student saw "your test has
+  // been closed" (the client latches it locally, without waiting for a reply),
+  // while the attempt stayed `in_progress` — missing from the teacher's shut-out
+  // list, and still offering a live Start button on the brief, because an
+  // attempt in progress is one the server will resume. A keepalive request is
+  // handed to the browser to finish on its own after the page is gone.
   recordViolation: (classId, attemptId, type, at, detail) =>
     request(`/classes/${classId}/attempts/${attemptId}/violation`, {
       method: 'POST',
       body: { type, ...(at ? { at } : {}), ...(detail ? { detail } : {}) },
+      keepalive: true,
     }),
   // Sent on a timer while a paper is open. Its absence is the signal — a client
   // that has had its reporting blocked stops sending these, and the server notes
@@ -714,8 +782,11 @@ const lmApi = {
       body: { formula, variables },
     }),
   formulaReference: (classId) => request(`/classes/${classId}/tutorials/formula-reference`),
-  myTutorialAttempt: (classId, tutorialId) =>
-    request(`/classes/${classId}/tutorials/${tutorialId}/attempt`),
+  // `review: true` pins the answer to the sitting already on file. Sent by the
+  // live stream's own refresh, which fires because the teacher opened the next
+  // question — never a reason to spend a submitted student's next attempt.
+  myTutorialAttempt: (classId, tutorialId, { review = false } = {}) =>
+    request(`/classes/${classId}/tutorials/${tutorialId}/attempt${review ? '?review=true' : ''}`),
   saveTutorialAttempt: (classId, attemptId, responses) =>
     request(`/classes/${classId}/tutorial-attempts/${attemptId}/save`, {
       method: 'POST',
@@ -1069,9 +1140,9 @@ const lmApi = {
   adminStudentImportStatus: (batchId) => request(`/admin/students/import-status/${batchId}`),
   /* Editing a student's name/email/dept from the directory. */
   adminUpdateStudent: (studentId, body) => request(`/admin/students/${studentId}`, { method: 'PATCH', body }),
-  /* Folds every student's dept to the timetable's own casing, merging
-     duplicates ("Computer Science..." / "COMPUTER SCIENCE...") left over from
-     before that fold applied to every write — the distribution's "fix" button. */
+  /* Settles every student's dept on one title-cased spelling, merging duplicates
+     ("Computer Science..." / "COMPUTER SCIENCE...") left over from before that
+     fold applied to every write — the distribution's "fix" button. */
   adminNormalizeStudentDepartments: () => request('/admin/students/normalize-departments', { method: 'POST' }),
 
   /* ---- discussion forum ---- */
@@ -1172,15 +1243,24 @@ const lmApi = {
   publishForm: (classId, formId, body) =>
     request(`/classes/${classId}/forms/${formId}/publish`, { method: 'POST', body: body || {} }),
   getFormForFill: (classId, formId) => request(`/classes/${classId}/forms/${formId}/fill`),
-  submitFormResponse: (classId, formId, answers) =>
-    request(`/classes/${classId}/forms/${formId}/fill`, { method: 'POST', body: { answers } }),
+  submitFormResponse: (classId, formId, answers, { respondentEmail } = {}) =>
+    request(`/classes/${classId}/forms/${formId}/fill`, {
+      method: 'POST',
+      body: { answers, ...(respondentEmail ? { respondentEmail } : {}) },
+    }),
   // Best-effort progress telemetry for the one-at-a-time renderer — callers
   // should swallow failures rather than surface them to the respondent.
   pingFormProgress: (classId, formId, questionIndex) =>
     request(`/classes/${classId}/forms/${formId}/fill/progress`, { method: 'POST', body: { questionIndex } }),
   listFormResponses: (classId, formId) => request(`/classes/${classId}/forms/${formId}/responses`),
   getFormSummary: (classId, formId) => request(`/classes/${classId}/forms/${formId}/responses/summary`),
+  // The respondent's own view of the results — the per-question rollup only,
+  // and refused unless the teacher shared them and this caller has answered.
+  // A different endpoint from the teacher's above, not the same one reshaped.
+  getFormSummaryForRespondent: (classId, formId) => request(`/classes/${classId}/forms/${formId}/summary`),
   formResponsesCsvUrl: (classId, formId) => `${BASE()}/classes/${classId}/forms/${formId}/responses.csv`,
+  // The CSV plus a folder per respondent with their answers and uploaded files.
+  formResponsesZipUrl: (classId, formId) => `${BASE()}/classes/${classId}/forms/${formId}/responses.zip`,
   deleteFormResponse: (classId, formId, responseId) =>
     request(`/classes/${classId}/forms/${formId}/responses/${responseId}`, { method: 'DELETE' }),
 
@@ -1189,16 +1269,29 @@ const lmApi = {
   // routes sit outside the class router). `name` is only read by the server
   // when the form allows guests and nobody is signed in.
   formGuest,
-  joinFormByLink: (shareCode, { name } = {}) =>
+  joinFormByLink: (shareCode, { name, email } = {}) =>
     request(`/forms/link/${encodeURIComponent(shareCode)}/join`, {
       method: 'POST',
-      body: name ? { name } : {},
+      // `email` is asked for only when the form collects one, and only of a
+      // guest — a signed-in respondent is identified by their account. The
+      // server mints it into the guest token, so it is given once per sitting
+      // rather than re-typed at submit time.
+      body: { ...(name ? { name } : {}), ...(email ? { email } : {}) },
     }),
   getFormByLink: (shareCode, formId) => request(`/forms/link/${encodeURIComponent(shareCode)}`, { formId }),
   submitFormResponseByLink: (shareCode, answers, formId) =>
     request(`/forms/link/${encodeURIComponent(shareCode)}/responses`, { method: 'POST', body: { answers }, formId }),
   pingFormProgressByLink: (shareCode, questionIndex, formId) =>
     request(`/forms/link/${encodeURIComponent(shareCode)}/progress`, { method: 'POST', body: { questionIndex }, formId }),
+  getFormSummaryByLink: (shareCode, formId) =>
+    request(`/forms/link/${encodeURIComponent(shareCode)}/summary`, { formId }),
+  // A link respondent's files, filed under the form's class by the server.
+  // `formId` is what picks this form's guest token for the request.
+  uploadFormFilesByLink: (shareCode, files, formId) => {
+    const body = new FormData();
+    Array.from(files).forEach((file) => body.append('files', file));
+    return request(`/forms/link/${encodeURIComponent(shareCode)}/uploads`, { method: 'POST', body, formId });
+  },
   formShareUrl: (shareCode) => `${getEnvironment()}/learning/form/link/${shareCode}`,
 
   /* analytics + uploads */

@@ -29,7 +29,6 @@ import {
   ModalOverlay,
   Progress,
   Select,
-  Spinner,
   Text,
   Textarea,
   useDisclosure,
@@ -37,7 +36,7 @@ import {
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { FiMail } from 'react-icons/fi';
-import { EmptyState, ErrorState, Loading, SectionCard, buttonTextStyles } from '../components/common';
+import { BusyDots, buttonTextStyles, EmptyState, ErrorState, Loading, SectionCard, TableSkeleton } from '../components/common';
 import { LmIcon } from '../components/Icon';
 import useStableNavigate from '../hooks/useStableNavigate';
 import { formatDate, initials, relativeTime } from '../format';
@@ -50,7 +49,7 @@ function InviteStep({ label, state, detail, ...rest }) {
   return (
     <Flex align="center" gap={2} {...rest}>
       {state === 'running' ? (
-        <Spinner size="xs" color="blue.400" speed="0.8s" />
+        <BusyDots size="4px" color="blue.400" label="In progress" />
       ) : (
         <Box
           w="10px"
@@ -428,7 +427,7 @@ function ProgressModal({ isOpen, onClose, classId, membership }) {
         <ModalCloseButton />
         <ModalBody pb={6}>
           {isLoading || !data ? (
-            <Loading minH="160px" />
+            <Loading minH="160px" skeleton={<TableSkeleton rows={3} columns={4} title={false} />} />
           ) : (
             <>
               <HStack spacing={4} mb={4} wrap="wrap">
@@ -592,18 +591,43 @@ function EmailModal({ isOpen, onClose, classId, membership, className }) {
  * A student unenrolling themselves. Leaving is not reversible from this side —
  * getting back in needs the class code or a fresh invite — so it asks first,
  * and says what stays behind: the work already handed in remains with the
- * teacher, only the student's access to the class goes.
+ * teacher, only the student's access to the class goes. Confirming takes a
+ * one-time code mailed to the student.
  */
 function LeaveClassModal({ isOpen, onClose, classId, klass }) {
   const [leaving, setLeaving] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sentTo, setSentTo] = useState('');
+  const [otp, setOtp] = useState('');
   const toast = useToast();
   const navigate = useStableNavigate();
   const queryClient = useQueryClient();
 
+  // A reopened dialog starts again from "send a code".
+  useEffect(() => {
+    if (!isOpen) {
+      setSentTo('');
+      setOtp('');
+    }
+  }, [isOpen]);
+
+  const handleSendCode = async () => {
+    setSending(true);
+    try {
+      const result = await lmApi.requestLeaveCode(classId);
+      setSentTo(result?.email || 'your email');
+      toast({ status: 'success', title: 'Code sent', description: `Check ${result?.email || 'your email'}.` });
+    } catch (error) {
+      toast({ status: 'error', title: 'Could not send the code', description: error.message });
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleLeave = async () => {
     setLeaving(true);
     try {
-      await lmApi.leaveClass(classId);
+      await lmApi.leaveClass(classId, otp.trim());
       // The route the student is standing on stops resolving the moment the
       // membership goes, so drop this class from the cache before the
       // dashboard re-reads the class list.
@@ -632,14 +656,48 @@ function LeaveClassModal({ isOpen, onClose, classId, klass }) {
             Work you have already submitted stays with your teacher. To come back you will need the
             class code or a new invite.
           </Text>
+          {sentTo && (
+            <FormControl mt={4}>
+              <FormLabel fontSize="sm">Code from the email</FormLabel>
+              <Input
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="6-digit code"
+                maxLength={6}
+                isDisabled={leaving}
+                autoFocus
+              />
+              <FormHelperText>
+                Sent to {sentTo}. Valid for 10 minutes.{' '}
+                <Button variant="link" size="xs" onClick={handleSendCode} isLoading={sending} isDisabled={leaving}>
+                  Resend code
+                </Button>
+              </FormHelperText>
+            </FormControl>
+          )}
         </ModalBody>
         <ModalFooter gap={2}>
           <Button variant="ghost" size="sm" onClick={onClose} isDisabled={leaving}>
             Cancel
           </Button>
-          <Button colorScheme="red" size="sm" onClick={handleLeave} isLoading={leaving} loadingText="Leaving…">
-            Leave class
-          </Button>
+          {sentTo ? (
+            <Button
+              colorScheme="red"
+              size="sm"
+              onClick={handleLeave}
+              isLoading={leaving}
+              loadingText="Leaving…"
+              isDisabled={otp.length !== 6}
+            >
+              Leave class
+            </Button>
+          ) : (
+            <Button colorScheme="red" size="sm" onClick={handleSendCode} isLoading={sending} loadingText="Sending…">
+              Send code
+            </Button>
+          )}
         </ModalFooter>
       </ModalContent>
     </Modal>
@@ -816,7 +874,7 @@ export default function People() {
     emailModal.onOpen();
   };
 
-  if (loading) return <Loading label="Loading people…" />;
+  if (loading) return <Loading label="Loading people…" skeleton={<TableSkeleton rows={8} columns={4} />} />;
 
   const pending = members.students.filter((m) => m.status === 'pending');
 

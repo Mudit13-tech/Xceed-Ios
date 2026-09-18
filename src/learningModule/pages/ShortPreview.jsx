@@ -18,7 +18,7 @@ import {
 import { FiChevronLeft, FiChevronRight, FiMaximize, FiMinimize } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
-import { ErrorState, Loading } from '../components/common';
+import { ErrorState, Loading, SectionCardSkeleton } from '../components/common';
 import RichText from '../components/RichText';
 import ShortResults from '../components/ShortResults';
 
@@ -156,7 +156,7 @@ export default function ShortPreview() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slideState, slideIndex]);
 
-  if (loading) return <Loading label="Loading preview…" />;
+  if (loading) return <Loading label="Loading preview…" skeleton={<SectionCardSkeleton lines={4} />} />;
   if (error) return <ErrorState error={error} onRetry={() => navigate(0)} />;
   if (!short) return null;
 

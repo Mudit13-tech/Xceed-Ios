@@ -21,7 +21,7 @@ import { FiChevronLeft, FiChevronRight, FiMaximize, FiMinimize } from 'react-ico
 import QRCode from 'qrcode';
 
 import lmApi from '../api/lmApi';
-import { ErrorState, Loading } from '../components/common';
+import { ErrorState, Loading, SectionCardSkeleton } from '../components/common';
 import RichText from '../components/RichText';
 import ShortResults from '../components/ShortResults';
 import useShortStream from '../hooks/useShortStream';
@@ -179,7 +179,7 @@ export default function ShortPresent() {
   if (connection === 'denied' || (error && !state)) {
     return <ErrorState error={{ message: error || 'Cannot open this session.' }} onRetry={() => navigate(0)} />;
   }
-  if (!state) return <Loading label="Opening the presenter view…" />;
+  if (!state) return <Loading label="Opening the presenter view…" skeleton={<SectionCardSkeleton lines={4} />} />;
 
   const answered = state.results?.totalResponses || 0;
   const joined = state.participantCount || 0;

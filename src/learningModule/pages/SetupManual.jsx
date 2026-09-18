@@ -203,6 +203,7 @@ const SECTIONS = [
     { id: 'invite', icon: 'invite', label: 'Adding students by individual email ID' },
     { id: 'join-settings', icon: 'settings', label: 'Join settings and approving requests' },
     { id: 'student-join', icon: 'exam', label: 'What a student does to join' },
+    { id: 'leaving', icon: 'people', label: 'Students leaving, and deleting a class' },
     { id: 'password', icon: 'locked', label: 'Setting or resetting a password' },
 ];
 
@@ -561,6 +562,48 @@ export default function SetupManual({ standalone = false }) {
                         <strong> &ldquo;Classes can only be joined by student and teaching-staff accounts&rdquo;</strong> means
                         the account is real but holds neither role — that one needs an administrator, not a new code.
                     </Note>
+
+                    <Heading id="leaving">Students leaving, and deleting a class</Heading>
+                    <P>
+                        A student can leave a class on their own, and has to confirm it with a one-time code
+                        emailed to them. That way nobody can remove them using a session left signed in on a
+                        shared computer.
+                    </P>
+                    <SectionTitle>How a student leaves a class</SectionTitle>
+                    <Steps items={[
+                        {
+                            title: 'Open the class and go to the People tab',
+                            body: 'From the Learning dashboard, click the class, then People.',
+                        },
+                        {
+                            title: 'Click “Leave class” under Your enrolment',
+                            body: 'The Your enrolment box is at the bottom of the page. A dialog opens that says what leaving takes away.',
+                        },
+                        {
+                            title: 'Click “Send code”',
+                            body: 'A six-digit code is emailed to the student’s address. It is valid for ten minutes, and “Resend code” sends a new one.',
+                            image: { src: shotOtpMail, alt: 'An XCEED one-time code email', width: 480 },
+                        },
+                        {
+                            title: 'Type the code and click “Leave class”',
+                            body: 'The class disappears from their dashboard, and they lose access to its stream, material, assignments and grades. After five wrong codes the code is cancelled and a new one has to be requested.',
+                        },
+                    ]} />
+                    <P>
+                        Work they have already submitted stays with you. Getting back in takes the class code
+                        or a fresh invitation — and your approval, if the class requires it.
+                    </P>
+                    <P>
+                        Teachers do not get that button. The owner cannot leave their own class, and a co-teacher
+                        is removed by the owner from the People tab.
+                    </P>
+                    <P>
+                        <strong>Deleting a class is a request, not an immediate action.</strong> At the bottom of
+                        Class settings, <strong>Request deletion</strong> asks you to type the class name to
+                        confirm, then hides the class from your view and sends the request to the platform
+                        administrator. Nothing is deleted until the administrator approves — and they can restore
+                        the class instead, so a mistaken request can be undone by asking them.
+                    </P>
 
                     <Heading id="password">Setting or resetting a password</Heading>
                     <P>

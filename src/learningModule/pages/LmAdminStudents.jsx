@@ -40,7 +40,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard, StatTile } from '../components/common';
+import { EmptyState, ErrorState, Loading, SectionCard, StatTile, TableSkeleton } from '../components/common';
 import { LmIcon } from '../components/Icon';
 
 /**
@@ -638,7 +638,7 @@ export default function LmAdminStudents() {
     return () => clearTimeout(timer);
   }, [load, search, selectedDept]);
 
-  if (loading) return <Loading label="Loading student data…" />;
+  if (loading) return <Loading label="Loading student data…" skeleton={<TableSkeleton rows={6} columns={5} />} />;
   if (error) return <ErrorState error={error} onRetry={() => load(search, selectedDept)} />;
 
   const { totals, students, truncated } = data;
@@ -653,7 +653,7 @@ export default function LmAdminStudents() {
         title: result.updated ? 'Department names merged' : 'Nothing to merge',
         description: result.updated
           ? `Corrected ${result.updated} of ${result.checked} student accounts.`
-          : 'Every student account already matches the timetable’s spelling.',
+          : 'Every department is already spelled one way across every account.',
         duration: 6000,
         isClosable: true,
       });

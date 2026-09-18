@@ -166,11 +166,60 @@ npm run deploy:ota
 4. 📤 **Uploads** the zip to the server's OTA endpoint with your secret key
 5. 🎉 **Reports** the live URL of the update on success
 
+### Publishing a full release from your machine (no GitHub Actions)
+
+`npm run deploy:ota` publishes the bundle, but a release is more than that: the
+version bump has to be committed and `main` + `ams-update` pushed together, or
+the next AMS sync merges against a stale base. The
+**`Remote AMS Sync & OTA Update`** workflow used to do all of it on a runner.
+
+It currently cannot run at all. Run `35259040307` (2026-09-17) failed in 4
+seconds with no steps executed:
+
+> The job was not started because recent account payments have failed or your
+> spending limit needs to be increased.
+
+That is GitHub billing on the org account — nothing in this repo fixes it, and
+every dispatch fails the same way until it is sorted. Until then, publish from
+PowerShell in the repo root:
+
+```powershell
+.\manual-ota-update.ps1
+```
+
+or `npm run ota:manual`. It does exactly what the runner's job did:
+
+1. **Preflight** — on `main`, clean tree, `OTA_SECRET_KEY` present, `main` not behind `origin/main`
+2. 📦 **Builds and uploads** via `scripts/deploy-ota.cjs` (same script the workflow called)
+3. 📝 **Commits** `Bump version for OTA update [skip ci]`
+4. 🚀 **Pushes** `main` and `ams-update` atomically, fast-forwarding `ams-update` first
+5. ✅ **Verifies** that `version.json` on the server really serves the new version
+
+Every check that can stop the run happens **before** the upload, because once
+the server accepts a bundle every device pulls it on next launch — there is no
+un-publishing it.
+
+| Flag | Effect |
+|---|---|
+| `-Sync` | Run `safe-pull-from-ams.ps1` first — full parity with the workflow |
+| `-Install` | `npm ci` before building (implied by `-Sync`) |
+| `-Dev` | Publish to `localhost:8010`; commits and pushes nothing |
+| `-NoPush` | Publish and commit, but push by hand |
+| `-Force` | Skip the clean-tree / on-main / up-to-date guards |
+
+> If it stops at the AMS sync with a merge conflict, that is the normal failure
+> mode — resolve it, commit, push both branches, then re-run **without**
+> `-Sync`. See [Section 8](#-8-pulling-updates-from-ams-safe-sync).
+
+When Actions is billed again, nothing needs undoing: the workflow still works,
+and this script stays useful for publishing without one.
+
 ### Testing against a local backend
 ```bash
 npm run deploy:ota -- --dev
 ```
-Targets `http://localhost:8010` instead of production.
+Targets `http://localhost:8010` instead of production. `.\manual-ota-update.ps1 -Dev`
+does the same as a rehearsal of the whole release, without touching git.
 
 ### What users experience
 Next time a user opens the installed Android app:
@@ -316,6 +365,8 @@ On a clone that predates this, run `npm run setup:git`.
 | `npx cap open android` | Opens the Android project in Android Studio |
 | `npm run deploy:ota` | Builds, bumps version, zips, and uploads an OTA update |
 | `npm run deploy:ota -- --dev` | Same but targets `localhost:8010` |
+| `npm run ota:manual` | Full release: `deploy:ota` plus the version-bump commit and push, i.e. what the workflow did |
+| `.\manual-ota-update.ps1 -Sync` | Same, with an AMS sync first — one green workflow run, locally |
 | `npm run test` | Runs the test suite once |
 | `npm run lint` | Checks code for style issues |
 | `npm run drift` | Lists what AMS changed in the files this repo overrides (add `-- -v` for diffs) |
