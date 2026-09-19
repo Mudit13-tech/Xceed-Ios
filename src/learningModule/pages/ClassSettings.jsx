@@ -21,7 +21,14 @@ import {
 } from '@chakra-ui/react';
 import getEnvironment from '../../getenvironment';
 import lmApi from '../api/lmApi';
-import { ClassCardPreview, ColorPicker, SectionCard } from '../components/common';
+import {
+  CardActions,
+  CardBody,
+  CardRow,
+  ClassCardPreview,
+  ColorPicker,
+  SectionCard,
+} from '../components/common';
 import { CLASS_COLORS } from '../format';
 
 export default function ClassSettings() {
@@ -340,17 +347,21 @@ export default function ClassSettings() {
       </SectionCard>
 
       <SectionCard title="Class code" subtitle="Students use this to join." mb={4}>
-        <Flex align="center" gap={4} wrap="wrap">
-          <Text fontSize="2xl" fontWeight="700" fontFamily="mono" letterSpacing="wider">
-            {code}
-          </Text>
-          <Button size="sm" variant="outline" onClick={onCopy}>
-            {hasCopied ? 'Copied!' : 'Copy'}
-          </Button>
-          <Button size="sm" variant="outline" onClick={regenerate}>
-            Generate new code
-          </Button>
-        </Flex>
+        <CardRow>
+          <CardBody minW="auto" flex="0 0 auto">
+            <Text fontSize="2xl" fontWeight="700" fontFamily="mono" letterSpacing="wider">
+              {code}
+            </Text>
+          </CardBody>
+          <CardActions justify={{ base: 'flex-start', md: 'flex-start' }} flex="1">
+            <Button size="sm" variant="outline" onClick={onCopy}>
+              {hasCopied ? 'Copied!' : 'Copy'}
+            </Button>
+            <Button size="sm" variant="outline" onClick={regenerate}>
+              Generate new code
+            </Button>
+          </CardActions>
+        </CardRow>
         <Wrap spacing={6} mt={4}>
           <WrapItem>
             <Checkbox

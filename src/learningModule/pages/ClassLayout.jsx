@@ -21,6 +21,7 @@ import { LmIcon } from '../components/Icon';
 import useStableNavigate from '../hooks/useStableNavigate';
 import NotificationPreferencesModal from '../components/NotificationPreferencesModal';
 import SubjectAttendanceStrip from '../components/SubjectAttendanceStrip';
+import ClassHeaderCard from '../components/ClassHeaderCard';
 import { preloadPath } from '../../routePreload';
 
 // People and Settings are about the class rather than its work, so they sit in
@@ -121,21 +122,38 @@ export default function ClassLayout() {
         color="lmFg.onAccent"
         borderRadius="lg"
         px={{ base: 4, md: 5 }}
-        py={2}
+        /* The phone card is a card — a heading, three tiles and the join code —
+           and 8px around it reads as cramped. The wide row is a row, and is
+           unchanged. */
+        py={{ base: 4, md: 2 }}
         mb={4}
         position="relative"
         overflow="hidden"
       >
+        {/* Two compositions, not one reflowed. Below `md` the row broke into a
+            wrap of unlabelled icon buttons with the class name no larger than
+            anything beside it, so a phone gets its own card — see
+            ClassHeaderCard. */}
+        <ClassHeaderCard
+          klass={klass}
+          classId={classId}
+          isTeacher={isTeacher}
+          onCopyCode={onCopy}
+          hasCopiedCode={hasCopied}
+          onOpenPrefs={() => setPrefsOpen(true)}
+          onPreload={() => preloadPath(`/learning/class/${classId}/people`)}
+        />
+
         {/* One row, fixed height: the class identity scrolls out of the way as
             the window narrows, but the actions on the right stay put. */}
         <Flex
-          direction={{ base: 'column', sm: 'row' }}
-          align={{ base: 'stretch', sm: 'center' }}
+          display={{ base: 'none', md: 'flex' }}
+          align="center"
           justify="space-between"
           wrap="wrap"
           gap={3}
         >
-          <Box flex={{ base: '0 1 auto', sm: '1 1 220px' }} minW={{ base: 0, sm: '180px' }}>
+          <Box flex="1 1 220px" minW="180px">
             <Flex align="center" gap={2} wrap="wrap">
               <Heading size="sm">{klass.name}</Heading>
               {klass.status === 'archived' && <Badge colorScheme="orange">Archived</Badge>}
@@ -156,70 +174,33 @@ export default function ClassLayout() {
           </Box>
 
           <HStack spacing={2} flexShrink={0} flexWrap="wrap" rowGap={2}>
-            <IconButton
-              as={NavLink}
-              to={`/learning/class/${classId}/people`}
-              size="sm"
-              aria-label="People"
-              icon={
-                <Box as="span" display="inline-flex" alignItems="center" gap={1}>
-                  <LmIcon name="people" size={16} />
-                  {klass.counts?.studentCount ?? 0}
-                </Box>
-              }
-              display={{ base: 'flex', md: 'none' }}
-              {...headerLinkStyles}
-            />
             <Button
               as={NavLink}
               to={`/learning/class/${classId}/people`}
               size="sm"
               leftIcon={<LmIcon name="people" size={16} />}
-              display={{ base: 'none', md: 'flex' }}
               {...headerLinkStyles}
             >
               People · {klass.counts?.studentCount ?? 0}
             </Button>
 
             {isTeacher && (
-              <IconButton
-                as={NavLink}
-                to={`/learning/class/${classId}/insights`}
-                size="sm"
-                aria-label="Insights"
-                icon={<LmIcon name="insights" size={16} />}
-                display={{ base: 'flex', md: 'none' }}
-                {...headerLinkStyles}
-              />
-            )}
-            {isTeacher && (
               <Button
                 as={NavLink}
                 to={`/learning/class/${classId}/insights`}
                 size="sm"
                 leftIcon={<LmIcon name="insights" size={16} />}
-                display={{ base: 'none', md: 'flex' }}
                 {...headerLinkStyles}
               >
                 Insights
               </Button>
             )}
 
-            <IconButton
-              as={NavLink}
-              to={`/learning/class/${classId}/leaderboard`}
-              size="sm"
-              aria-label="Leaderboard"
-              icon={<LmIcon name="leaderboard" size={16} />}
-              display={{ base: 'flex', md: 'none' }}
-              {...headerLinkStyles}
-            />
             <Button
               as={NavLink}
               to={`/learning/class/${classId}/leaderboard`}
               size="sm"
               leftIcon={<LmIcon name="leaderboard" size={16} />}
-              display={{ base: 'none', md: 'flex' }}
               {...headerLinkStyles}
             >
               Leaderboard

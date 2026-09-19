@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import getEnvironment from '../getenvironment';
 import { theme, styles, cssReset } from './config';
+import usePolling from './usePolling';
 
 const apiUrl = getEnvironment();
 const CAMERA_API = `${apiUrl}/attendancemodule/cameras`;
@@ -239,30 +240,28 @@ function FeedPanel({ camera, quality, scale, refreshKey, onError }) {
   // Nothing in the browser reports an MJPEG stream that ends after its first
   // frame, so the server is the only place that knows whether these pixels are
   // still arriving. Poll it for as long as a feed is being displayed.
-  useEffect(() => {
-    if (!streamUrl || failed || busy || starting) return undefined;
-    let cancelled = false;
-    const timer = setInterval(async () => {
-      try {
-        const res = await fetch(
-          `${CAMERA_API}/preview/status?jobId=${encodeURIComponent(
-            jobIdRef.current || '',
-          )}`,
-        );
-        const data = await res.json().catch(() => null);
-        if (cancelled || !data || data.alive !== false) return;
-        clearInterval(timer);
-        handleStreamDrop(data.lastError);
-      } catch (_) {
-        // A poll that fails says nothing about the camera — the network hiccup
-        // is here, not there. Leave the feed alone and ask again next tick.
-      }
-    }, STATUS_POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [streamUrl, failed, busy, starting, handleStreamDrop]);
+  const checkStreamAlive = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `${CAMERA_API}/preview/status?jobId=${encodeURIComponent(
+          jobIdRef.current || '',
+        )}`,
+      );
+      const data = await res.json().catch(() => null);
+      if (!data || data.alive !== false) return;
+      // handleStreamDrop sets `failed`, which turns this poll off through the
+      // enabled gate below — no need to tear down the timer by hand.
+      handleStreamDrop(data.lastError);
+    } catch (_) {
+      // A poll that fails says nothing about the camera — the network hiccup
+      // is here, not there. Leave the feed alone and ask again next tick.
+    }
+  }, [handleStreamDrop]);
+
+  usePolling(checkStreamAlive, STATUS_POLL_MS, {
+    enabled: !!streamUrl && !failed && !busy && !starting,
+    immediate: false,
+  });
 
   // Countdown while another holder owns the camera, then reconnect by itself.
   // One timer per tick rather than a single interval, so the unmount cleanup

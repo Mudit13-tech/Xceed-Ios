@@ -33,6 +33,9 @@ const LoginForm = () => {
   const [captchaAnswer, setCaptchaAnswer] = useState('')
   const [emailCode, setEmailCode] = useState(false)
   const [sendingCode, setSendingCode] = useState(false)
+  // Set when the server has locked this account for too many failures. An
+  // emailed code lifts the lock, so the form offers one instead of a wait.
+  const [accountLocked, setAccountLocked] = useState(false)
   const apiUrl = getEnvironment()
   const navigate = useNavigate();
   const location = useLocation();
@@ -131,6 +134,11 @@ const LoginForm = () => {
 
       if (!response.ok) {
         setMessage(`Login failed: ${responseData.message || `${response.status} ${response.statusText}`}`);
+        setAccountLocked(Boolean(responseData.accountLocked))
+        if (responseData.accountLocked) {
+          // The emailed code is the way through; an image cannot lift the lock.
+          return
+        }
         if (responseData.captchaRequired) {
           // A fresh image when the last one expired or was already spent; the
           // same one stays put after a simple typo, so the user is not made to
@@ -212,7 +220,10 @@ const LoginForm = () => {
               type='email'
               placeholder='Enter your email'
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                setAccountLocked(false)
+              }}
             />
           </FormControl>
           <FormControl>
@@ -225,7 +236,19 @@ const LoginForm = () => {
               isRequired
             />
           </FormControl>
-          {captcha && (
+          {accountLocked && !emailCode && (
+            <Button
+              width='100%'
+              variant='outline'
+              colorScheme='blue'
+              bg='transparent'
+              isLoading={sendingCode}
+              onClick={requestEmailCode}
+            >
+              Email me a code to sign in now
+            </Button>
+          )}
+          {captcha && (!accountLocked || emailCode) && (
             <FormControl>
               <FormLabel>
                 {emailCode ? 'Enter the code we emailed you' : 'Type the characters shown'}

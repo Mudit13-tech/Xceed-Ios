@@ -3,9 +3,10 @@
 // polling/auto-scroll/rendering logic can back multiple "view console" pages
 // (ML service, Node.js server, React/Vite dev server) without duplication.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { theme } from './config';
+import usePolling from './usePolling';
 
 const T = theme;
 
@@ -36,42 +37,30 @@ export default function ServiceConsole({
   const logsScrollerRef = useRef(null);
   const previousLogsCountRef = useRef(0);
 
-  useEffect(() => {
-    let cancelled = false;
+  const fetchLogs = useCallback(async () => {
+    try {
+      const response = await axios.get(logsUrl, {
+        timeout: 5000,
+        params: { limit },
+      });
+      const data = response.data;
 
-    async function fetchLogs() {
-      try {
-        const response = await axios.get(logsUrl, {
-          timeout: 5000,
-          params: { limit },
-        });
-        const data = response.data;
-
-        if (!data || !Array.isArray(data.logs)) {
-          throw new Error('Log endpoint did not return logs');
-        }
-        if (cancelled) return;
-
-        setLogsError('');
-        setServiceLogs(data.logs.slice(-limit));
-      } catch (err) {
-        if (!cancelled) {
-          const message = err.response?.data?.error
-            || err.response?.data?.detail
-            || err.message
-            || 'Logs unavailable';
-          setLogsError(message);
-        }
+      if (!data || !Array.isArray(data.logs)) {
+        throw new Error('Log endpoint did not return logs');
       }
-    }
 
-    fetchLogs();
-    const interval = setInterval(fetchLogs, pollMs);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [logsUrl, limit, pollMs]);
+      setLogsError('');
+      setServiceLogs(data.logs.slice(-limit));
+    } catch (err) {
+      const message = err.response?.data?.error
+        || err.response?.data?.detail
+        || err.message
+        || 'Logs unavailable';
+      setLogsError(message);
+    }
+  }, [logsUrl, limit]);
+
+  usePolling(fetchLogs, pollMs);
 
   const visibleServiceLogs = useMemo(
     () => serviceLogs.filter(shouldShowConsoleLog),

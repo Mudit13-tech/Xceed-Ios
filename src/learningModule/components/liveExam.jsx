@@ -1250,11 +1250,15 @@ export function LiveExamModal({ isOpen, onClose, data, classId, onDone, toast })
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      size={{ base: 'full', md: '3xl' }}
+      size={{ base: 'full', md: '4xl', lg: '6xl', xl: '7xl' }}
       scrollBehavior="inside"
     >
       <ModalOverlay />
-      <ModalContent>
+      <ModalContent
+        maxH={{ md: 'calc(100vh - 4rem)' }}
+        minH={{ md: 'min(85vh, calc(100vh - 4rem))' }}
+        my={{ md: 8 }}
+      >
         <ModalHeader>
           Live exam control
           <Text fontSize="xs" fontWeight="400" color="lmFg.muted" mb={2}>

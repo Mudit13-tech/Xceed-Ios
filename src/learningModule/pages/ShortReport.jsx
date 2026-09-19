@@ -24,7 +24,17 @@ import {
 } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
-import { buttonTextStyles, ErrorState, Loading, SectionCard, StatTile, TableSkeleton } from '../components/common';
+import {
+  buttonTextStyles,
+  CardActions,
+  CardBody,
+  CardRow,
+  ErrorState,
+  Loading,
+  SectionCard,
+  StatTile,
+  TableSkeleton,
+} from '../components/common';
 import { formatDateTime } from '../format';
 import { richTextToPlain } from '../richTextUtils';
 import ShortResults from '../components/ShortResults';
@@ -74,24 +84,24 @@ export default function ShortReport() {
 
   return (
     <VStack align="stretch" spacing={5}>
-      <Flex gap={3} wrap="wrap" align="flex-start">
-        <Box flex="1" minW="220px">
+      <CardRow align="flex-start">
+        <CardBody>
           <Heading size="md">{short.title}</Heading>
           <Text fontSize="sm" opacity={0.7}>
             {formatDateTime(session.startedAt)}
             {session.presentedByName ? ` · ${session.presentedByName}` : ''}
             {session.status === 'live' ? ' · still live' : ''}
           </Text>
-        </Box>
-        <HStack spacing={2} wrap="wrap">
+        </CardBody>
+        <CardActions>
           <Button as={RouterLink} to={`/learning/class/${classId}/short/${shortId}/sessions`} size="sm" variant="ghost">
             All sessions
           </Button>
           <Button as="a" href={lmApi.shortSessionCsvUrl(classId, sessionId)} size="sm" variant="outline">
             Download CSV
           </Button>
-        </HStack>
-      </Flex>
+        </CardActions>
+      </CardRow>
 
       <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4}>
         <StatTile label="Joined" value={summary.participants} accent="purple.500" />

@@ -16,13 +16,23 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard, WorkListSkeleton } from '../components/common';
+import {
+  CardActions,
+  CardBody,
+  CardRow,
+  EmptyState,
+  ErrorState,
+  Loading,
+  SectionCard,
+  WorkListSkeleton,
+} from '../components/common';
 import { toDateTimeInput } from '../format';
 import FormCard from '../components/FormCard';
 import FormPreviewModal from '../components/FormPreviewModal';
 import PaperPreviewModal from '../components/PaperPreviewModal';
 import { LmIcon } from '../components/Icon';
 import DeleteButton from '../components/DeleteButton';
+import DownloadPaperButton from '../components/DownloadPaperButton';
 
 /**
  * Lists the class's parameterised assignments — the ones where every student
@@ -37,7 +47,7 @@ const hasDeadline = (assignment, dueDates) =>
   dueDates[assignment._id] !== undefined || Boolean(assignment.settings?.dueDate);
 
 export default function Assignments() {
-  const { classId, isTeacher } = useOutletContext();
+  const { classId, isTeacher, klass } = useOutletContext();
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -219,9 +229,9 @@ export default function Assignments() {
       ) : (
         assignments.map((assignment) => (
           <SectionCard key={assignment._id} mb={3}>
-            <Flex align="center" gap={4} wrap="wrap">
-              <Box flex="1" minW="220px">
-                <HStack>
+            <CardRow>
+              <CardBody>
+                <HStack wrap="wrap">
                   <Heading size="sm">{assignment.title}</Heading>
                   {isTeacher && (
                     <Badge colorScheme={assignment.published ? 'green' : 'gray'}>
@@ -265,9 +275,9 @@ export default function Assignments() {
                     {assignment.bestAttempt.percent}%)
                   </Badge>
                 )}
-              </Box>
+              </CardBody>
 
-              <HStack>
+              <CardActions>
                 {isTeacher ? (
                   <>
                     {/* A deadline is optional, so an empty date box on every draft
@@ -275,10 +285,13 @@ export default function Assignments() {
                         once there is one, or once the teacher asks for one. */}
                     {!assignment.published &&
                       (hasDeadline(assignment, dueDates) ? (
+                        // A date and a time need more than half a phone's
+                        // width, so the field takes a row of its own there.
                         <Input
                           size="sm"
                           type="datetime-local"
-                          maxW="200px"
+                          data-card-action-wide
+                          maxW={{ base: '100%', md: '200px' }}
                           value={
                             dueDates[assignment._id] !== undefined
                               ? dueDates[assignment._id]
@@ -320,6 +333,15 @@ export default function Assignments() {
                     <Button size="sm" variant="outline" onClick={() => setPreviewing(assignment)}>
                       Preview
                     </Button>
+                    {/* The paper and its answer key as a printable file, with
+                        the placeholders left standing — see paperPdf.js for why
+                        it is the authored version rather than one student's. */}
+                    <DownloadPaperButton
+                      classId={classId}
+                      item={assignment}
+                      kind="assignment"
+                      subjectName={klass?.subject || ''}
+                    />
                     <Button
                       size="sm"
                       colorScheme={assignment.published ? 'gray' : 'green'}
@@ -340,8 +362,8 @@ export default function Assignments() {
                     {assignment.attemptsUsed > 0 ? 'Open' : 'Start'}
                   </Button>
                 )}
-              </HStack>
-            </Flex>
+              </CardActions>
+            </CardRow>
           </SectionCard>
         ))
       )}

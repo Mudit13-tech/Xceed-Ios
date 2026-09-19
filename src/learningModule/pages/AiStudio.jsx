@@ -40,7 +40,18 @@ import {
 import lmApi from '../api/lmApi';
 import Markdown from '../components/Markdown';
 import RichTextEditor from '../components/RichTextEditor';
-import { EmptyState, ErrorState, FormSkeleton, Loading, SectionCard, SectionCardSkeleton, WorkListSkeleton } from '../components/common';
+import {
+  CardActions,
+  CardBody,
+  CardRow,
+  EmptyState,
+  ErrorState,
+  FormSkeleton,
+  Loading,
+  SectionCard,
+  SectionCardSkeleton,
+  WorkListSkeleton,
+} from '../components/common';
 import { formatDate, relativeTime } from '../format';
 import { duplicateOptionIndexes } from '../questionRules';
 import { LmIcon } from '../components/Icon';
@@ -1291,7 +1302,7 @@ export default function AiStudio() {
         />
       ) : (
         sessions.map((session) => (
-          <Flex
+          <CardRow
             key={session._id}
             bg="lmBg.surface"
             borderWidth="1px"
@@ -1299,12 +1310,9 @@ export default function AiStudio() {
             borderRadius="lg"
             p={4}
             mb={3}
-            align="center"
-            gap={4}
-            wrap="wrap"
             _hover={{ borderColor: 'purple.300' }}
           >
-            <Box flex="1" minW="220px">
+            <CardBody>
               <Heading size="sm">{session.title}</Heading>
               <HStack fontSize="xs" color="lmFg.muted" spacing={3} mt={1} wrap="wrap">
                 <Text>{formatDate(session.lectureDate)}</Text>
@@ -1333,11 +1341,13 @@ export default function AiStudio() {
                   {session.quizDraftCount ? '✓' : '○'} Quiz ({session.quizDraftCount})
                 </Badge>
               </HStack>
-            </Box>
-            <Button size="sm" colorScheme="purple" variant="outline" onClick={() => setActiveId(session._id)}>
-              Open
-            </Button>
-          </Flex>
+            </CardBody>
+            <CardActions>
+              <Button size="sm" colorScheme="purple" variant="outline" onClick={() => setActiveId(session._id)}>
+                Open
+              </Button>
+            </CardActions>
+          </CardRow>
         ))
       )}
 

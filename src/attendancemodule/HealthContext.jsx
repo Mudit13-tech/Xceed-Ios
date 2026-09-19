@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import getEnvironment from '../getenvironment';
+import usePolling from './usePolling';
 
 const apiUrl = getEnvironment();
 export const HealthContext = createContext(null);
@@ -11,26 +12,20 @@ export function HealthProvider({ children }) {
   const [directMlStatus, setDirectMlStatus] = useState('unknown');
 
   // Fallback direct check for ML service when Node is offline
-  useEffect(() => {
-    let interval;
-    const checkDirectML = async () => {
-      try {
-        const res = await fetch('http://localhost:8500/health');
-        if (res.ok) setDirectMlStatus('online');
-        else setDirectMlStatus('offline');
-      } catch (err) {
-        setDirectMlStatus('offline');
-      }
-    };
-
-    if (clientStatus === 'offline') {
-      checkDirectML();
-      interval = setInterval(checkDirectML, 5000);
-    } else {
-      setDirectMlStatus('unknown');
+  const checkDirectML = useCallback(async () => {
+    try {
+      const res = await fetch('http://localhost:8500/health');
+      setDirectMlStatus(res.ok ? 'online' : 'offline');
+    } catch (err) {
+      setDirectMlStatus('offline');
     }
-    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (clientStatus !== 'offline') setDirectMlStatus('unknown');
   }, [clientStatus]);
+
+  usePolling(checkDirectML, 5000, { enabled: clientStatus === 'offline' });
 
   useEffect(() => {
     const sse = new EventSource(`${apiUrl}/attendancemodule/health/stream`, { withCredentials: true });

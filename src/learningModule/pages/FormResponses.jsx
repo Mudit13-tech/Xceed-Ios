@@ -26,7 +26,17 @@ import {
 
 import lmApi from '../api/lmApi';
 import { AttachmentList } from '../components/Attachments';
-import { EmptyState, ErrorState, Loading, SectionCard, StatTile, TableSkeleton } from '../components/common';
+import {
+  CardActions,
+  CardBody,
+  CardRow,
+  EmptyState,
+  ErrorState,
+  Loading,
+  SectionCard,
+  StatTile,
+  TableSkeleton,
+} from '../components/common';
 import { formatDateTime } from '../format';
 import FormSummary from '../components/FormSummary';
 
@@ -204,14 +214,14 @@ export default function FormResponses() {
 
   return (
     <VStack align="stretch" spacing={5}>
-      <Flex gap={3} wrap="wrap" align="flex-start">
-        <Box flex="1" minW="220px">
+      <CardRow align="flex-start">
+        <CardBody>
           <Heading size="md">{form.title}</Heading>
           <Text fontSize="sm" color="lmFg.muted">
             {responses.length} response(s)
           </Text>
-        </Box>
-        <HStack spacing={2} wrap="wrap">
+        </CardBody>
+        <CardActions>
           <Button as={RouterLink} to={`/learning/class/${classId}/form/${formId}/edit`} size="sm" variant="ghost">
             Edit form
           </Button>
@@ -227,8 +237,8 @@ export default function FormResponses() {
           >
             Download all (ZIP)
           </Button>
-        </HStack>
-      </Flex>
+        </CardActions>
+      </CardRow>
 
       <SimpleGrid columns={{ base: 2, md: 3 }} spacing={4}>
         <StatTile label="Started" value={summary?.totalStarts ?? responses.length} accent="orange.500" />

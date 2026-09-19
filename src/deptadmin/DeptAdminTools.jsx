@@ -68,10 +68,23 @@ export function DeptClassVerification() {
 export function DeptSubjectEmbeddings() {
     const { department, batchDepartment, fullAccess, loading } = useOutletContext();
     if (loading) return null;
+    // An institute admin gets the page whole, ERP tab included.
     if (fullAccess) return <EmbeddingGeneration />;
-    const deptToUse = department || batchDepartment;
-    if (!deptToUse) return null;
-    return <EmbeddingGeneration fixedDepartment={deptToUse} />;
+    // Dept admins can switch department freely on this page (the server still
+    // enforces which departments they may actually touch) — their own
+    // department is just the starting value.
+    //
+    // A department coordinator does not get the ERP tab, though. Pulling a
+    // roster from the ERP is an institute-level action, and the endpoints
+    // behind it already refuse a coordinator by default
+    // (requireDeptMenu('erpSync')) — so the tab was an offer the server would
+    // decline. They keep Manual Generation and View.
+    return (
+        <EmbeddingGeneration
+            defaultDepartment={batchDepartment || department}
+            showErpTab={false}
+        />
+    );
 }
 
 export function DeptConfidenceMonitor() {

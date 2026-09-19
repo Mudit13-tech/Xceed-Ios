@@ -4,7 +4,6 @@ import {
   Badge,
   Box,
   Button,
-  Flex,
   HStack,
   Heading,
   Menu,
@@ -19,7 +18,18 @@ import {
 import { FiChevronDown, FiDownload, FiUpload } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
-import { DeadlineCountdown, EmptyState, ErrorState, Loading, SectionCard, WorkListSkeleton } from '../components/common';
+import {
+  CardActions,
+  CardBody,
+  CardRow,
+  DeadlineCountdown,
+  EmptyState,
+  ErrorState,
+  Loading,
+  PageHeader,
+  SectionCard,
+  WorkListSkeleton,
+} from '../components/common';
 import { formatDate, relativeTime } from '../format';
 import { LmIcon } from '../components/Icon';
 import { SAMPLE_NOTEBOOK_CELLS } from '../sampleNotebook';
@@ -246,78 +256,77 @@ export default function Notebooks() {
 
   return (
     <VStack align="stretch" spacing={5}>
-      <Flex align="center" gap={3} wrap="wrap">
-        <Box>
-          <Heading size="md">Coding notebooks</Heading>
-          <Text fontSize="sm" opacity={0.7}>
+      <PageHeader
+        mb={0}
+        title="Coding notebooks"
+        description={
+          <Text fontSize="sm" opacity={0.7} mt={1}>
             Python and C cells that run in the browser — nothing to install.
           </Text>
-        </Box>
-        <Box flex="1" />
-        {isTeacher && (
-          <Button as="a" href="/learning/codingmanual" target="_blank" rel="noreferrer" variant="ghost" size="sm">
-            <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
-            Manual
-          </Button>
-        )}
-        {isTeacher && (
-          <>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".json,application/json"
-              hidden
-              data-testid="notebook-file-import"
-              onChange={(event) => {
-                importNotebookFile(event.target.files?.[0]);
-                // Cleared so choosing the same file again still fires.
-                event.target.value = '';
-              }}
-            />
-            <Tooltip
-              label="Add a notebook someone downloaded, with its hidden test cases and settings, as a new draft"
-              hasArrow
-            >
-              <Button
-                size="sm"
-                variant="outline"
-                colorScheme="purple"
-                leftIcon={<FiUpload />}
-                isLoading={busy === 'import'}
-                isDisabled={Boolean(busy)}
-                onClick={() => importInputRef.current?.click()}
-              >
-                Import notebook file
+        }
+        actions={
+          isTeacher ? (
+            <>
+              <Button as="a" href="/learning/codingmanual" target="_blank" rel="noreferrer" variant="ghost" size="sm">
+                <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
+                Manual
               </Button>
-            </Tooltip>
-          </>
-        )}
-        {isTeacher && (
-          <Menu>
-            <MenuButton
-              as={Button}
-              colorScheme="purple"
-              size="sm"
-              rightIcon={<FiChevronDown />}
-              isLoading={busy === 'new'}
-            >
-              New notebook
-            </MenuButton>
-            <MenuList>
-              <MenuItem onClick={() => create('python')}>Python notebook</MenuItem>
-              <MenuItem onClick={() => create('c')}>C notebook</MenuItem>
-            </MenuList>
-          </Menu>
-        )}
-      </Flex>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".json,application/json"
+                hidden
+                data-testid="notebook-file-import"
+                onChange={(event) => {
+                  importNotebookFile(event.target.files?.[0]);
+                  // Cleared so choosing the same file again still fires.
+                  event.target.value = '';
+                }}
+              />
+              <Tooltip
+                label="Add a notebook someone downloaded, with its hidden test cases and settings, as a new draft"
+                hasArrow
+              >
+                <Button
+                  size="sm"
+                  variant="outline"
+                  colorScheme="purple"
+                  leftIcon={<FiUpload />}
+                  isLoading={busy === 'import'}
+                  isDisabled={Boolean(busy)}
+                  onClick={() => importInputRef.current?.click()}
+                >
+                  Import notebook file
+                </Button>
+              </Tooltip>
+              <Menu>
+                <MenuButton
+                  as={Button}
+                  colorScheme="purple"
+                  size="sm"
+                  rightIcon={<FiChevronDown />}
+                  isLoading={busy === 'new'}
+                  w={{ base: '100%', md: 'auto' }}
+                >
+                  New notebook
+                </MenuButton>
+                <MenuList>
+                  <MenuItem onClick={() => create('python')}>Python notebook</MenuItem>
+                  <MenuItem onClick={() => create('c')}>C notebook</MenuItem>
+                </MenuList>
+              </Menu>
+            </>
+          ) : null
+        }
+      />
 
       {/* Always on the teacher's Coding tab, so how to set up a tested exercise
           is one click away rather than buried in the manual. */}
       {isTeacher && (
         <SectionCard>
-          <Flex gap={4} wrap="wrap" align="center">
-            <Box flex="1" minW="240px">
-              <HStack spacing={2} mb={1}>
+          <CardRow>
+            <CardBody minW="240px">
+              <HStack spacing={2} mb={1} wrap="wrap">
                 <Text fontWeight="700">📘 Sample notebook: how to set up a coding exercise</Text>
                 <Badge colorScheme="purple">for teachers</Badge>
               </HStack>
@@ -327,8 +336,8 @@ export default function Notebooks() {
                 the output is checked, and how to put helper functions in the same cell. Opens as a draft that
                 students can&apos;t see.
               </Text>
-            </Box>
-            <HStack spacing={2} wrap="wrap">
+            </CardBody>
+            <CardActions>
               <Button
                 size="sm"
                 colorScheme="purple"
@@ -349,8 +358,8 @@ export default function Notebooks() {
               >
                 Open C sample
               </Button>
-            </HStack>
-          </Flex>
+            </CardActions>
+          </CardRow>
         </SectionCard>
       )}
 
@@ -365,7 +374,7 @@ export default function Notebooks() {
           }
           action={
             isTeacher ? (
-              <HStack>
+              <HStack wrap="wrap" justify="center">
                 <Button colorScheme="purple" onClick={() => create('python')}>
                   New Python notebook
                 </Button>
@@ -395,8 +404,8 @@ export default function Notebooks() {
             }
             return (
               <SectionCard key={notebook._id}>
-                <Flex gap={4} wrap="wrap" align="flex-start">
-                  <Box flex="1" minW="220px">
+                <CardRow align="flex-start">
+                  <CardBody>
                     <HStack spacing={2} mb={1} wrap="wrap">
                       <Text fontWeight="700">{notebook.title}</Text>
                       {/* The language decides what a cell even means, so it sits
@@ -434,9 +443,9 @@ export default function Notebooks() {
                         ? ` · ${notebook.submittedCount}/${notebook.startedCount} submitted`
                         : ` · added ${relativeTime(notebook.created_at)}`}
                     </Text>
-                  </Box>
+                  </CardBody>
 
-                  <HStack spacing={2} wrap="wrap">
+                  <CardActions>
                     <Button
                       as={RouterLink}
                       to={`/learning/class/${classId}/notebook/${notebook._id}`}
@@ -474,8 +483,8 @@ export default function Notebooks() {
                         <DeleteButton label="Delete notebook" onClick={() => remove(notebook)} />
                       </>
                     )}
-                  </HStack>
-                </Flex>
+                  </CardActions>
+                </CardRow>
               </SectionCard>
                             );
               })}
@@ -500,8 +509,8 @@ export default function Notebooks() {
                   }
                   return (
                     <SectionCard key={notebook._id}>
-                      <Flex gap={4} wrap="wrap" align="flex-start">
-                        <Box flex="1" minW="220px">
+                      <CardRow align="flex-start">
+                        <CardBody>
                           <HStack spacing={2} mb={1} wrap="wrap">
                             <Text fontWeight="700">{notebook.title}</Text>
                             <Badge colorScheme={(LANGUAGE_META[notebook.language] || LANGUAGE_META.python)[0]}>
@@ -530,9 +539,9 @@ export default function Notebooks() {
                               ? ` · ${notebook.submittedCount}/${notebook.startedCount} submitted`
                               : ` · added ${relativeTime(notebook.created_at)}`}
                           </Text>
-                        </Box>
+                        </CardBody>
 
-                        <HStack spacing={2} wrap="wrap">
+                        <CardActions>
                           <Button
                             as={RouterLink}
                             to={`/learning/class/${classId}/notebook/${notebook._id}`}
@@ -570,8 +579,8 @@ export default function Notebooks() {
                               <DeleteButton label="Delete notebook" onClick={() => remove(notebook)} />
                             </>
                           )}
-                        </HStack>
-                      </Flex>
+                        </CardActions>
+                      </CardRow>
                     </SectionCard>
                   );
                 })}

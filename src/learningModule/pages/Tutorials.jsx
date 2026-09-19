@@ -4,7 +4,6 @@ import {
   Badge,
   Box,
   Button,
-  Flex,
   HStack,
   Heading,
   Input,
@@ -12,11 +11,22 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard, WorkListSkeleton } from '../components/common';
+import {
+  CardActions,
+  CardBody,
+  CardRow,
+  EmptyState,
+  ErrorState,
+  Loading,
+  PageHeader,
+  SectionCard,
+  WorkListSkeleton,
+} from '../components/common';
 import { toDateTimeInput } from '../format';
 import PaperPreviewModal from '../components/PaperPreviewModal';
 import { LmIcon } from '../components/Icon';
 import DeleteButton from '../components/DeleteButton';
+import DownloadPaperButton from '../components/DownloadPaperButton';
 
 /**
  * Whether this row has a deadline to show: one already saved, or one the
@@ -31,7 +41,7 @@ const hasDeadline = (tutorial, dueDates) =>
  * gets their own numbers.
  */
 export default function Tutorials() {
-  const { classId, isTeacher } = useOutletContext();
+  const { classId, isTeacher, klass } = useOutletContext();
   const [tutorials, setTutorials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -119,26 +129,23 @@ export default function Tutorials() {
 
   return (
     <Box>
-      <Flex justify="space-between" align="flex-start" mb={4} gap={3} wrap="wrap">
-        <Box>
-          <Heading size="md">Tutorials</Heading>
-          <Text fontSize="sm" color="lmFg.muted">
-            Numerical practice where every student gets their own values and answers are marked
-            against a formula.
-          </Text>
-        </Box>
-        {isTeacher && (
-          <>
-          <Button as="a" href="/learning/tutorialmanual" target="_blank" rel="noreferrer" variant="ghost">
-            <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
-            Manual
-          </Button>
-          <Button colorScheme="teal" onClick={create}>
-            + New tutorial
-          </Button>
-          </>
-        )}
-      </Flex>
+      <PageHeader
+        title="Tutorials"
+        description="Numerical practice where every student gets their own values and answers are marked against a formula."
+        actions={
+          isTeacher ? (
+            <>
+              <Button as="a" href="/learning/tutorialmanual" target="_blank" rel="noreferrer" variant="ghost">
+                <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
+                Manual
+              </Button>
+              <Button colorScheme="teal" onClick={create}>
+                + New tutorial
+              </Button>
+            </>
+          ) : null
+        }
+      />
 
       <ErrorState error={error} onRetry={load} />
 
@@ -162,9 +169,9 @@ export default function Tutorials() {
       ) : (
         tutorials.map((tutorial) => (
           <SectionCard key={tutorial._id} mb={3}>
-            <Flex align="center" gap={4} wrap="wrap">
-              <Box flex="1" minW="220px">
-                <HStack>
+            <CardRow>
+              <CardBody>
+                <HStack wrap="wrap">
                   <Heading size="sm">{tutorial.title}</Heading>
                   {isTeacher && (
                     <Badge colorScheme={tutorial.published ? 'green' : 'gray'}>
@@ -208,9 +215,9 @@ export default function Tutorials() {
                     {tutorial.bestAttempt.percent}%)
                   </Badge>
                 )}
-              </Box>
+              </CardBody>
 
-              <HStack wrap="wrap" spacing={2} justify="flex-end">
+              <CardActions>
                 {isTeacher ? (
                   <>
                     {/* A deadline is optional, so an empty date box on every
@@ -219,10 +226,13 @@ export default function Tutorials() {
                         asks for one. */}
                     {!tutorial.published &&
                       (hasDeadline(tutorial, dueDates) ? (
+                        // A date and a time need more than half a phone's
+                        // width, so the field takes a row of its own there.
                         <Input
                           size="sm"
                           type="datetime-local"
-                          maxW="200px"
+                          data-card-action-wide
+                          maxW={{ base: '100%', md: '200px' }}
                           value={
                             dueDates[tutorial._id] !== undefined
                               ? dueDates[tutorial._id]
@@ -264,6 +274,15 @@ export default function Tutorials() {
                     <Button size="sm" variant="outline" onClick={() => setPreviewing(tutorial)}>
                       Preview
                     </Button>
+                    {/* The paper and its answer key as a printable file, with
+                        the placeholders left standing — see paperPdf.js for why
+                        it is the authored version rather than one student's. */}
+                    <DownloadPaperButton
+                      classId={classId}
+                      item={tutorial}
+                      kind="tutorial"
+                      subjectName={klass?.subject || ''}
+                    />
                     {tutorial.published && tutorial.settings?.liveMode && (
                       <Button
                         as={RouterLink}
@@ -294,8 +313,8 @@ export default function Tutorials() {
                     {tutorial.attemptsUsed > 0 ? 'Open' : 'Start'}
                   </Button>
                 )}
-              </HStack>
-            </Flex>
+              </CardActions>
+            </CardRow>
           </SectionCard>
         ))
       )}

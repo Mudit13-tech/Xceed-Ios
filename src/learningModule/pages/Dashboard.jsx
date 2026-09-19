@@ -45,6 +45,7 @@ import {
   EmptyState,
   ErrorState,
   Loading,
+  PageHeader,
   StatTile,
   StatTileSkeleton,
 } from '../components/common';
@@ -766,35 +767,40 @@ export default function Dashboard() {
         <OpenExamBanner key={exam._id} exam={exam} muted={secondaryTextColor} />
       ))}
 
-      <Flex justify="space-between" align="center" mb={5} wrap="wrap" gap={3}>
-        <Box>
+      {/* Creating a class lives only in the module header, so it is not
+          offered twice on the same screen. Joining stays here: it is the
+          action a student came for. */}
+      <PageHeader
+        mb={5}
+        title={
           <Heading size="lg" color={headingColor}>
             Your classes
           </Heading>
-          <Text color={secondaryTextColor} fontSize="sm">
+        }
+        description={
+          <Text color={secondaryTextColor} fontSize="sm" mt={1}>
             Everything you teach or are enrolled in.
           </Text>
-        </Box>
-        {/* Creating a class lives only in the module header, so it is not
-            offered twice on the same screen. Joining stays here: it is the
-            action a student came for. */}
-        <HStack wrap="wrap" w={{ base: '100%', md: 'auto' }}>
-          {/* The introduction to the whole module. Public, so a teacher who has
-              not set anything up yet can also forward it to a colleague. */}
-          <Button as="a" href="/learning/manual" target="_blank" rel="noreferrer" variant="ghost">
-            <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
-            Getting started
-          </Button>
-          <Button variant="outline" onClick={() => setSearchParams({ join: '1' })}>
-            Join class
-          </Button>
-          {mayCreateClass && (
-            <Button colorScheme="blue" onClick={() => setSearchParams({ create: '1' })}>
-              Create class
+        }
+        actions={
+          <>
+            {/* The introduction to the whole module. Public, so a teacher who
+                has not set anything up yet can also forward it to a colleague. */}
+            <Button as="a" href="/learning/manual" target="_blank" rel="noreferrer" variant="ghost">
+              <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
+              Getting started
             </Button>
-          )}
-        </HStack>
-      </Flex>
+            <Button variant="outline" onClick={() => setSearchParams({ join: '1' })}>
+              Join class
+            </Button>
+            {mayCreateClass && (
+              <Button colorScheme="blue" onClick={() => setSearchParams({ create: '1' })}>
+                Create class
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {overview ? (
         <Grid templateColumns={{ base: '1fr 1fr', md: 'repeat(4, 1fr)' }} gap={4} mb={6}>

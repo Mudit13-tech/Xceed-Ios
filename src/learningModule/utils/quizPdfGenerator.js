@@ -1,7 +1,11 @@
 import pdfMakeInitializer from '../../filedownload/pdfMakeInitializer';
-import { richTextToPlain } from '../richTextUtils';
+import { richTextBlocks, richTextToPlain } from '../richTextUtils';
+import { resolveImages } from './pdfImages';
 
 pdfMakeInitializer();
+
+/** A4 minus pdfmake's 40pt page margins — the width an image has to fit. */
+const CONTENT_WIDTH = 515;
 
 /**
  * Formats correct answers for display in the PDF document.
@@ -46,11 +50,50 @@ function formatCorrectAnswers(q) {
  * @param {Object} quizData Quiz payload returned by exportQuestions endpoint.
  * @param {boolean} withAnswers Whether to include answer keys and explanations.
  */
-export function generateQuizPdf(quizData, withAnswers = false) {
+export async function generateQuizPdf(quizData, withAnswers = false) {
   const pdfMake = globalThis.pdfMake;
   if (!pdfMake) {
     throw new Error('PDF generator library is not initialized.');
   }
+
+  /* Every picture in the paper, fetched once, before anything is laid out.
+     pdfmake cannot take a URL in the browser, so an image has to be bytes by
+     the time the document definition mentions it — see pdfImages.js. */
+  const questions = quizData.questions || [];
+  const imageBlocks = [];
+  questions.forEach((q) => {
+    imageBlocks.push(richTextBlocks(q.question));
+    (q.options || []).forEach((option) => imageBlocks.push(richTextBlocks(option)));
+    if (q.explanation) imageBlocks.push(richTextBlocks(q.explanation));
+  });
+  const images = await resolveImages(imageBlocks);
+
+  /* The pictures in a piece of rich text, as pdfmake nodes.
+     Only the pictures: the words are already laid out by the callers below,
+     inside a columns row that carries the question number and the marks, and
+     rebuilding that to interleave images would cost more than it buys. An
+     image follows the text it was written into, indented to line up under it.
+     `fit` keeps the aspect ratio and never upscales past the column. */
+  const imageNodes = (html, indent = 18) =>
+    richTextBlocks(html)
+      .filter((block) => block.type === 'image')
+      .map((block) => {
+        const dataUri = images.get(block.src);
+        if (!dataUri) {
+          return {
+            text: block.alt ? `[image: ${block.alt} — could not be loaded]` : '[image could not be loaded]',
+            fontSize: 8.5,
+            italics: true,
+            color: '#b45309',
+            margin: [indent, 2, 0, 4],
+          };
+        }
+        return {
+          image: dataUri,
+          fit: [CONTENT_WIDTH - indent, 320],
+          margin: [indent, 4, 0, 6],
+        };
+      });
 
   const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
   const nowStr = new Date().toLocaleDateString(undefined, {
@@ -186,6 +229,10 @@ export function generateQuizPdf(quizData, withAnswers = false) {
       margin: [0, 0, 0, 4],
     });
 
+    // Any diagram the prompt carried. Stock Quill embeds these as data URIs,
+    // and richTextToPlain above drops them, which is the bug this restores.
+    qBlock.push(...imageNodes(q.question));
+
     // Sub-info badge (Type)
     qBlock.push({
       text: `Type: ${typeLabel}${q.topic ? ` | Topic: ${q.topic}` : ''}`,
@@ -196,14 +243,19 @@ export function generateQuizPdf(quizData, withAnswers = false) {
 
     // Options for MCQ / MSQ / TrueFalse
     if ((q.type === 'mcq' || q.type === 'msq') && Array.isArray(q.options) && q.options.length > 0) {
-      const optionRows = q.options.map((optText, optIdx) => {
+      const optionRows = q.options.flatMap((optText, optIdx) => {
         const letter = optionLetters[optIdx] || `${optIdx + 1}`;
-        return {
-          text: `(${letter})  ${richTextToPlain(optText)}`,
-          fontSize: 9.5,
-          color: '#334155',
-          margin: [24, 1, 0, 1],
-        };
+        return [
+          {
+            text: `(${letter})  ${richTextToPlain(optText)}`,
+            fontSize: 9.5,
+            color: '#334155',
+            margin: [24, 1, 0, 1],
+          },
+          // An option is often a picture on its own — a waveform, a circuit —
+          // in which case the text above it is empty and this is the answer.
+          ...imageNodes(optText, 30),
+        ];
       });
       qBlock.push({ stack: optionRows, margin: [0, 0, 0, 6] });
     } else if (q.type === 'truefalse') {
@@ -242,6 +294,9 @@ export function generateQuizPdf(quizData, withAnswers = false) {
           margin: [0, 3, 0, 0],
         });
       }
+      // A worked explanation is where a diagram most often lives, so it is
+      // added whether or not the explanation carries any words with it.
+      if (q.explanation) answerStack.push(...imageNodes(q.explanation, 0));
 
       qBlock.push({
         table: {
