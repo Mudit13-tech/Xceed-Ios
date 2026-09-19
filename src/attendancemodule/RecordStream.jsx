@@ -6,6 +6,8 @@ import { useDepartments } from './useDepartments';
 import { useBatchYears } from './useBatchYears';
 import SubtabNewTabButton from './SubtabNewTabButton';
 import { readSubtabFromSearch } from './subtabNavigation';
+import usePolling from './usePolling';
+import SlotRecordingGrid from './SlotRecordingGrid';
 
 const _apiUrl    = getEnvironment();
 const CAM_API    = `${_apiUrl}/attendancemodule/cameras`;
@@ -107,7 +109,7 @@ useEffect(() => {
     'recordTab',
   ));
   const [mainTab, setMainTab] = useState(() => readSubtabFromSearch(
-    ['Recording', 'Scheduler'],
+    ['Recording', 'Scheduler', 'Weekly slots'],
     'Recording',
   ));
   const [scheduleDate,      setScheduleDate]      = useState('');
@@ -135,8 +137,6 @@ function showToast(msg, type = 'success') {
 }
     
 
-    const pollRef  = useRef(null);
-const tickRef  = useRef(null);
 const [now, setNow] = useState(Date.now());
 
     // ── Load rooms from timetable (same logic as groundtruthgen_rtsp) ──────
@@ -196,22 +196,24 @@ const [now, setNow] = useState(Date.now());
     }, [selectedRoom]);
 
     // ── Poll recording list every 4s ───────────────────────────────────────
+    // Returns the list as well as storing it, so a caller waiting on a specific
+    // recording to finish finalising can read the result instead of guessing at
+    // a delay. usePolling ignores the return value.
     const refreshList = useCallback(() => {
-        apiFetch(`${REC_API}/list`)
+        return apiFetch(`${REC_API}/list`)
             .then(r => r.ok ? r.json() : [])
-            .then(data => setRecordings(Array.isArray(data) ? data : []))
-            .catch(() => {});
+            .then(data => {
+                const list = Array.isArray(data) ? data : [];
+                setRecordings(list);
+                return list;
+            })
+            .catch(() => []);
     }, []);
 
-    useEffect(() => {
-    refreshList();
-    pollRef.current = setInterval(refreshList, 4000);
-    tickRef.current = setInterval(() => setNow(Date.now()), 1000);
-    return () => {
-        clearInterval(pollRef.current);
-        clearInterval(tickRef.current);
-    };
-}, [refreshList]);
+    usePolling(refreshList, 4000);
+    // The 1s clock only drives elapsed-time labels, so it has nothing to say
+    // while the tab is hidden; it re-reads the real clock the moment it is back.
+    usePolling(useCallback(() => setNow(Date.now()), []), 1000);
 
     
 
@@ -268,11 +270,7 @@ const refreshSchedules = useCallback(() => {
         .catch(() => {});
 }, [department, year, selectedRoom, recordings]);
 
-useEffect(() => {
-    refreshSchedules();
-    const t = setInterval(refreshSchedules, 8000);
-    return () => clearInterval(t);
-}, [refreshSchedules]);
+usePolling(refreshSchedules, 8000);
 
 const loadAllCameras = useCallback(async () => {
     setSchedCamsLoading(true);
@@ -328,11 +326,23 @@ useEffect(() => {
         const idToStop = typeof recIdFromClick === 'string' ? recIdFromClick : activeRecId;
         if (!idToStop) return;
         const stoppedRec = recordings.find(r => r.recordingId === idToStop);
-        await apiFetch(`${REC_API}/stop`, {
+        const res = await apiFetch(`${REC_API}/stop`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ recordingId: idToStop }),
         });
+        // The server answers as soon as it can, which for a large video is
+        // before ffmpeg has finished writing the file: an mp4 has to be rewritten
+        // end to end to move its index to the front. Saying "stopped" then would
+        // send somebody off to play a file that is still growing.
+        let finalising = false;
+        try {
+            finalising = !!(await res.clone().json()).finalising;
+        } catch (_) {
+            // Older server, or a body we cannot read. Fall back to the previous
+            // behaviour rather than failing the stop.
+        }
+
         if (stoppedRec) {
             const stoppedAt = new Date().toLocaleString();
             const duration = stoppedRec.started ? elapsed(stoppedRec.started) : '—';
@@ -341,8 +351,28 @@ useEffect(() => {
         if (idToStop === activeRecId) {
             setActiveRecId(null);
         }
-        showToast('Recording stopped', 'info');
-        setTimeout(refreshList, 1500);
+
+        if (finalising) {
+            showToast('Recording stopping — finalising the file…', 'info');
+            // The list reports a recording as in progress until ffmpeg exits, so
+            // poll it rather than guessing at a delay. Bounded: if it is still
+            // going after two minutes something is wrong with that process, and
+            // the sweep's own escalation will deal with it.
+            let tries = 0;
+            const poll = setInterval(async () => {
+                tries += 1;
+                const live = await refreshList().catch(() => null);
+                const done = Array.isArray(live)
+                    && !live.some(r => r.recordingId === idToStop && r.status === 'recording');
+                if (done || tries >= 40) {
+                    clearInterval(poll);
+                    if (done) showToast('Recording saved', 'success');
+                }
+            }, 3000);
+        } else {
+            showToast('Recording stopped', 'info');
+            setTimeout(refreshList, 1500);
+        }
     }
 
     // ADD after handleStop():
@@ -579,7 +609,13 @@ async function handleSchedulerSubmit() {
 
             {/* ── Top-level tabs ── */}
             <div style={{ display: 'flex', borderBottom: `2px solid ${T.border}`, marginBottom: 24 }}>
-                {[{ id: 'Recording', icon: '⏺' }, { id: 'Scheduler', icon: '🗓' }].map(({ id, icon }) => (
+                {[
+                    { id: 'Recording', icon: '⏺' },
+                    { id: 'Scheduler', icon: '🗓' },
+                    // The standing order, as against the Scheduler's single
+                    // named date: which slots record every week.
+                    { id: 'Weekly slots', icon: '🔁' },
+                ].map(({ id, icon }) => (
                     <span key={id} style={{ display: 'inline-flex', alignItems: 'stretch', flexShrink: 0 }}>
                         <button
                             type="button"
@@ -1156,6 +1192,10 @@ if (recDate !== today) return false;
                     </div>
                 )}
             </div>
+        )}
+
+        {mainTab === 'Weekly slots' && (
+            <SlotRecordingGrid theme={T} showToast={showToast} />
         )}
         </div>
 

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { theme, styles, cssReset } from './config';
 import EnrollmentWarning from './EnrollmentWarning';
 import getEnvironment from '../getenvironment';
+import usePolling from './usePolling';
 
 const apiUrl = getEnvironment();
 const LIVE_API = `${apiUrl}/attendancemodule/scheduler/live-status`;
@@ -435,12 +436,14 @@ export default function LiveReportPage() {
     setFetching(false);
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
-    fetchStatus(selSlot, selDate);
-    const id = setInterval(() => fetchStatus(selSlot, selDate), 15000);
-    return () => clearInterval(id);
-  }, [selSlot, selDate, fetchStatus]);
+  // setLoading stays tied to the slot/date change specifically: the spinner
+  // belongs to "you asked for a different period", not to every background
+  // refresh of the one already on screen.
+  useEffect(() => { setLoading(true); }, [selSlot, selDate]);
+  usePolling(
+    useCallback(() => fetchStatus(selSlot, selDate), [fetchStatus, selSlot, selDate]),
+    15000,
+  );
 
   const periods    = (data?.periods || []).filter(p => p.enabled !== false);
   const rooms      = data?.rooms || [];

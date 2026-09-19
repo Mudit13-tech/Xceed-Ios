@@ -97,6 +97,7 @@ const XceedLearningIntro = lazyWithPreload(() => import('./pages/XceedLearningIn
 const ILeedIntro = lazyWithPreload(() => import('./pages/ILeedIntro'));
 const GuidePage = lazyWithPreload(() => import('./pages/GuidePage'));
 const HelpdeskPage = lazyWithPreload(() => import('./pages/HelpdeskPage'));
+const ExplainersPage = lazyWithPreload(() => import('./pages/ExplainersPage'));
 const PrivacyPolicy = lazyWithPreload(() => import('./pages/PrivacyPolicy'));
 const ErrorPage = lazyWithPreload(() => import('./pages/ErrorPage.jsx'));
 const NotFound = lazyWithPreload(() => import('./pages/NotFound.jsx'));
@@ -341,6 +342,13 @@ const APP_ROUTES = (
               the address being asked about — and every answer is scoped to that
               address. See modules/helpdeskModule on the server. */}
           <Route path="/help" element={<HelpdeskPage />} />
+          {/* Every explainer recording in one place, grouped by feature. Public
+              for the same reason /help is: someone who cannot sign in is
+              exactly who needs to see how joining a class works. The MP4s
+              themselves are static files under /explainer-videos — note the
+              different path, so the directory does not sit in front of this
+              route on whichever host resolves the two first. */}
+          <Route path="/explainers" element={<ExplainersPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/nirf" element={<NirfRanking />} />
 

@@ -164,6 +164,25 @@ const CSS = `
 .hd-link-label::after{content:' →';}
 .hd-link-desc{display:block;font-size:.8rem;color:var(--secondary);line-height:1.55;margin-top:3px;}
 
+/* Explainer recordings attached to an answer. One column: these are screen
+   captures of a full-width UI, and side by side on a laptop each would be too
+   small to read the thing it is demonstrating. The accent is inherited from the
+   module wrapper, like everything else here, so a quiz video reads as belonging
+   to the quiz answer it sits under. */
+.hd-videos{display:flex;flex-direction:column;gap:14px;margin:4px 0 12px;}
+.hd-video{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;
+  background:var(--surface-alt);}
+.hd-video-player{display:block;width:100%;aspect-ratio:16/9;background:#000;}
+.hd-video-cap{display:block;padding:9px 12px 11px;border-top:1px solid var(--line);
+  background:var(--surface);}
+.hd-video-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  font-weight:700;font-size:.86rem;color:var(--accent-dark);}
+.hd-video-for{display:inline-block;font-weight:600;font-size:.68rem;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--accent-dark);background:var(--accent-bg);
+  border:1px solid var(--accent);border-radius:999px;padding:1px 7px;}
+.hd-video-sum{display:block;font-size:.8rem;color:var(--secondary);line-height:1.55;
+  margin-top:4px;}
+
 .hd-tablewrap{overflow-x:auto;margin:0 0 12px;border:1px solid var(--line);border-radius:10px;
   -webkit-overflow-scrolling:touch;}
 .hd-table{border-collapse:collapse;width:100%;font-size:.83rem;min-width:340px;}
@@ -464,6 +483,44 @@ function Block({ block }) {
             <span className="hd-link-label">{item.label}</span>
             {item.description ? <span className="hd-link-desc">{item.description}</span> : null}
           </a>
+        ))}
+      </div>
+    );
+  }
+
+  if (block.type === 'videos') {
+    /* preload="none" on every one of these, deliberately.
+    
+       An answer can carry two recordings and they are 8-17 MB apiece. Letting
+       the browser fetch even metadata for each on render would put tens of
+       megabytes on the wire for a reader who came for the checks above and
+       will never press play — on a phone, on a corridor connection, which is
+       where this page gets read. The poster frame costs a click; the bandwidth
+       does not.
+    
+       `src` is site-relative and the server enforces it (see blocks.js), so
+       these load from the same origin as the page. */
+    return (
+      <div className="hd-videos">
+        {block.items.map((item) => (
+          <figure className="hd-video" key={item.src}>
+            <video className="hd-video-player" controls preload="none" playsInline>
+              <source src={item.src} type="video/mp4" />
+              Your browser cannot play this video.{' '}
+              <a href={item.src}>Download it instead.</a>
+            </video>
+            <figcaption className="hd-video-cap">
+              <span className="hd-video-title">
+                {item.title}
+                {item.audience ? (
+                  <span className="hd-video-for">{item.audience}</span>
+                ) : null}
+              </span>
+              {item.summary ? (
+                <span className="hd-video-sum">{item.summary}</span>
+              ) : null}
+            </figcaption>
+          </figure>
         ))}
       </div>
     );
@@ -1173,6 +1230,16 @@ export default function HelpdeskPage() {
               <button type="button" onClick={startOver}>
                 {fromLogin ? 'Ask about a different address' : 'Start again with a different address'}
               </button>
+            </div>
+
+            {/* The recordings appear inline on the answers that have one, but
+                somebody who would rather watch than read should not have to
+                guess which question hides the video they want. */}
+            <div className="hd-foot">
+              <span>
+                Would rather watch than read? <a href="/explainers">All the explainer videos</a>{' '}
+                are in one place, grouped by what they show.
+              </span>
             </div>
 
             {/* No support address anywhere on this page — not even down here.

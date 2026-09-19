@@ -41,6 +41,9 @@ vi.mock('../api/lmApi', () => ({
     submitAssignmentAttempt: vi.fn(),
     getTutorial: (...a) => getTutorial(...a),
     myTutorialAttempt: (...a) => myTutorialAttempt(...a),
+    // No stream in these tests: the player subscribes only when given a URL.
+    tutorialLiveStreamUrl: () => null,
+    tutorialLiveState: vi.fn(),
     saveTutorialAttempt: vi.fn(),
     checkTutorialAnswer: vi.fn(),
     submitTutorialAttempt: vi.fn(),

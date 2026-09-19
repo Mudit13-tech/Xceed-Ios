@@ -3,7 +3,9 @@
 // so their ground truth can be improved.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import getEnvironment from '../getenvironment';
+import StudentGroundTruthModal from './StudentGroundTruthModal';
 import { theme, styles, cssReset, DEGREES } from './config';
 import { usePeriods } from './usePeriods';
 import SubtabNewTabButton from './SubtabNewTabButton';
@@ -13,6 +15,20 @@ const apiUrl = getEnvironment();
 const REPORTS_API = `${apiUrl}/attendancemodule/reports`;
 const GT_API = `${apiUrl}/attendancemodule/ground-truth`;
 const BATCHES_API = `${apiUrl}/attendancemodule/settings/batches`;
+// Where a report opens from here.
+//
+// The reports page is mounted twice — /attendance/reports for an institute
+// admin, /dept-admin/reports for a coordinator — and it opens a specific
+// report from ?tab=detail&reportId=… (see its location.search effect). Picking
+// the base from the path the user is already on keeps a coordinator inside
+// their own layout instead of bouncing them off the /attendance gate.
+function reportDetailPath(reportId, pathname) {
+  const base = String(pathname || '').startsWith('/dept-admin')
+    ? '/dept-admin/reports'
+    : '/attendance/reports';
+  return `${base}?tab=detail&reportId=${encodeURIComponent(reportId)}`;
+}
+
 const LOW_CONF_THRESHOLD = 0.6;
 const HIGH_CONF_THRESHOLD = 0.8;
 
@@ -89,6 +105,12 @@ function ReviewAuditPanel({ fixedDepartment = '', showToast }) {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState(() => new Set());
+  // Ground truth for one student, opened from their roll number. Holds the
+  // batch too — StudentGroundTruthModal needs both, and the audit rows are the
+  // only place that pairing is to hand.
+  const [gtTarget, setGtTarget] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Department picker is for full-access admins only; a dept admin is locked
   // to their own department (and the server enforces that regardless).
@@ -160,6 +182,7 @@ function ReviewAuditPanel({ fixedDepartment = '', showToast }) {
           <th>Faculty</th>
           <th>Conf</th>
           <th>ERP</th>
+          <th>Report</th>
         </tr>
       </thead>
       <tbody>
@@ -183,6 +206,21 @@ function ReviewAuditPanel({ fixedDepartment = '', showToast }) {
                 </span>
               ) : (
                 <span style={{ color: theme.textMuted }}>—</span>
+              )}
+            </td>
+            <td>
+              {s.reportId ? (
+                <button
+                  type="button"
+                  className="cm-link"
+                  title="Open this attendance report"
+                  onClick={() => navigate(reportDetailPath(s.reportId, location.pathname))}
+                >
+                  Open
+                </button>
+              ) : (
+                // Reviews recorded before reportId was carried on a session.
+                <span style={{ color: theme.border }}>·</span>
               )}
             </td>
             <td>
@@ -320,6 +358,20 @@ function ReviewAuditPanel({ fixedDepartment = '', showToast }) {
         </section>
       )}
 
+      {gtTarget && (
+        <StudentGroundTruthModal
+          batch={gtTarget.batch}
+          rollNo={gtTarget.rollNo}
+          onClose={() => setGtTarget(null)}
+          onSaved={() => {
+            // Re-run the audit: fixing the enrolled faces is the point of
+            // opening it, and the counts here are what said it was needed.
+            setGtTarget(null);
+            fetchAudit();
+          }}
+        />
+      )}
+
       {deptBlocks.map((d) => (
         <section
           key={d.department}
@@ -333,6 +385,141 @@ function ReviewAuditPanel({ fixedDepartment = '', showToast }) {
             <span style={{ fontSize: 11, color: theme.warning, fontWeight: 700 }}>
               Repeat ({data.minReviews}+): {d.repeatReview.length}
             </span>
+          </div>
+
+          {/* 0. Who is yellow in each class, most-flagged first.
+                 This is the view a coordinator holding one subject wants: the
+                 two cuts below diagnose students, this one diagnoses a class.
+                 No threshold — the ranking is the triage, so the student
+                 flagged twice in an otherwise clean class still shows up. */}
+          <div style={{ marginBottom: 24 }}>
+            <div className="cm-subhead">
+              Flagged for review, by class — most-flagged student first
+            </div>
+            {(d.classes || []).length === 0 ? (
+              <div className="cm-empty">Nobody was marked for review in this window.</div>
+            ) : (
+              (d.classes || []).map((cls) => {
+                const visible = cls.students.filter((st) => matchesSearch(st.rollNo));
+                if (!visible.length) return null;
+                return (
+                  <div key={`${d.department}-${cls.subject}`} style={{ marginBottom: 14 }}>
+                    <div
+                      style={{
+                        display: 'flex', alignItems: 'baseline', gap: 10,
+                        flexWrap: 'wrap', marginBottom: 6,
+                      }}
+                    >
+                      <span style={{ fontWeight: 700, fontSize: 13, color: theme.text }}>
+                        {cls.subjectName || cls.subject}
+                      </span>
+                      {cls.subjectCode && (
+                        <span style={{ fontSize: 11, color: theme.textMuted, fontFamily: theme.fontMono }}>
+                          {cls.subjectCode}
+                        </span>
+                      )}
+                      <span style={{ fontSize: 11, color: theme.warning, fontWeight: 700 }}>
+                        {cls.reviewTotal} review{cls.reviewTotal === 1 ? '' : 's'}
+                        {' '}across {visible.length} student{visible.length === 1 ? '' : 's'}
+                      </span>
+                    </div>
+
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="cm-table">
+                        <thead>
+                          <tr>
+                            <th />
+                            <th>Roll No</th>
+                            <th>Sem</th>
+                            <th>Runs</th>
+                            <th>Yellow</th>
+                            <th>Present</th>
+                            <th>Absent</th>
+                            <th>Latest review</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visible.map((st) => {
+                            const key = `c-${d.department}-${cls.subject}-${st.rollNo}`;
+                            const open = expanded.has(key);
+                            // Sessions arrive newest-first from the server.
+                            const latest = st.sessions && st.sessions[0];
+                            return [
+                              <tr key={key}>
+                                <td>
+                                  <button
+                                    className="cm-expand-btn"
+                                    onClick={() => toggle(key)}
+                                    aria-label={open ? 'Collapse' : 'Expand'}
+                                  >
+                                    {open ? '▾' : '▸'}
+                                  </button>
+                                </td>
+                                <td style={{ fontWeight: 700, fontFamily: theme.fontMono }}>
+                                  {/* The roll number IS the link to their
+                                      enrolled faces — bad ground truth is the
+                                      usual reason a student keeps going
+                                      yellow, so it is one click from the
+                                      count that says so. */}
+                                  {st.batch ? (
+                                    <button
+                                      type="button"
+                                      className="cm-link"
+                                      title={`Open ground truth photos for ${st.rollNo}`}
+                                      onClick={() => setGtTarget({ batch: st.batch, rollNo: st.rollNo })}
+                                    >
+                                      {st.rollNo}
+                                    </button>
+                                  ) : (
+                                    // No batch recorded — the modal loads by
+                                    // (batch, rollNo) and would open empty.
+                                    <span title="No batch recorded for this student">{st.rollNo}</span>
+                                  )}
+                                </td>
+                                <td>{st.semester || '—'}</td>
+                                <td style={{ textAlign: 'center' }}>{st.runs}</td>
+                                <td style={{ textAlign: 'center' }}>
+                                  <span className="low-badge">{st.review}</span>
+                                </td>
+                                <td style={{ textAlign: 'center' }}>{st.present}</td>
+                                <td style={{ textAlign: 'center' }}>{st.absent}</td>
+                                <td style={{ fontSize: 11 }}>
+                                  {latest ? (
+                                    latest.reportId ? (
+                                      <button
+                                        type="button"
+                                        className="cm-link"
+                                        title="Open the most recent report where this student was marked for review"
+                                        onClick={() => navigate(reportDetailPath(latest.reportId, location.pathname))}
+                                      >
+                                        {latest.date} · {slotLabel(latest.timeSlot) || latest.timeSlot}
+                                      </button>
+                                    ) : (
+                                      <span style={{ color: theme.textMuted }}>
+                                        {latest.date} · {slotLabel(latest.timeSlot) || latest.timeSlot}
+                                      </span>
+                                    )
+                                  ) : (
+                                    <span style={{ color: theme.textMuted }}>—</span>
+                                  )}
+                                </td>
+                              </tr>,
+                              open && (
+                                <tr key={`${key}-d`}>
+                                  <td colSpan={8} style={{ background: theme.surfaceAlt }}>
+                                    {sessionRows(st.sessions)}
+                                  </td>
+                                </tr>
+                              ),
+                            ];
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
 
           {/* 1. Never present in any completed run */}
@@ -816,6 +1003,18 @@ export default function ConfidenceMonitor({ fixedDepartment = '' }) {
                     font-size: 12px;
                     color: ${theme.textMuted};
                 }
+                .cm-link {
+                    background: none;
+                    border: none;
+                    padding: 0;
+                    font: inherit;
+                    color: ${theme.accent};
+                    font-weight: 700;
+                    cursor: pointer;
+                    text-decoration: underline;
+                    text-underline-offset: 2px;
+                }
+                .cm-link:hover { color: ${theme.text}; }
                 .cm-expand-btn {
                     border: none;
                     background: transparent;

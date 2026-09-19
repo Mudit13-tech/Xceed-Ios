@@ -16,9 +16,43 @@ import StudentGroundTruthModal from './StudentGroundTruthModal';
 import EnrollmentWarning from './EnrollmentWarning';
 import { AmsSubtab } from './SubtabNewTabButton';
 import { readSubtabFromSearch } from './subtabNavigation';
+import usePolling from './usePolling';
 
 const apiUrl = getEnvironment();
 const REPORT_API = `${apiUrl}/attendancemodule/reports`;
+
+// Where "Frames" goes for a given report.
+//
+// Class Verification is mounted twice — /attendance/frame-verification for an
+// institute admin and /dept-admin/class-verification for a department
+// coordinator — and this page is the same component under both. Picking the
+// route from the path the user is already on keeps a coordinator inside their
+// own layout instead of bouncing them to an /attendance URL their gate turns
+// away.
+//
+// FrameVerification reads room/date/period straight out of the query string
+// (see its useState initialisers), so a link is all this needs to be: the page
+// opens already pointed at the class, with no extra API and nothing to keep in
+// sync here.
+function classVerificationPath(report, pathname) {
+  const base = String(pathname || '').startsWith('/dept-admin')
+    ? '/dept-admin/class-verification'
+    : '/attendance/frame-verification';
+  const params = new URLSearchParams();
+  // Only what identifies the class. An empty value would select a blank option
+  // in the dropdown rather than leaving it on its own default.
+  if (report?.room) params.set('room', report.room);
+  if (report?.date) params.set('date', report.date);
+  // Lower-cased to match what the availability endpoint emits: it parses the
+  // period out of the frame folder name and lower-cases it
+  // (frameVerificationController), while a report's timeSlot is only whatever
+  // was written. FrameVerification clears any `period` not in that list, so a
+  // case mismatch here would not error — it would silently land the user on an
+  // unselected page, which is worse than no link at all.
+  if (report?.timeSlot) params.set('period', String(report.timeSlot).toLowerCase());
+  const query = params.toString();
+  return query ? `${base}?${query}` : base;
+}
 const REPORT_DELETE_SETTINGS_API = `${apiUrl}/attendancemodule/settings/report-deletion`;
 const USER_API = `${apiUrl}/user/getuser`;
 const ML_API = `${apiUrl}/ml`;
@@ -196,9 +230,11 @@ export default function AttendanceReport() {
         });
       })
       .catch(() => { });
-    const id = setInterval(() => setNowMin(nowMinIST()), 30000);
-    return () => clearInterval(id);
   }, []);
+
+  // Clock label only — nothing to recompute while the tab is hidden, and it
+  // re-reads the real clock as soon as it is back.
+  usePolling(useCallback(() => setNowMin(nowMinIST()), []), 30000);
 
   // ── Camera-switch dwell time (for the countdown banner) ───────────────────
   useEffect(() => {
@@ -459,20 +495,23 @@ export default function AttendanceReport() {
   }, []);
 
   // ── Auto-poll detail report when session is live ──────────────
-  useEffect(() => {
-    if (detailReport?.status !== 'live') return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`${REPORT_API}/${detailReport._id}`);
-        const updated = await res.json();
-        setDetailReport(updated);
-        setSessionChecks(updated.slotResults?.length || 0);
-      } catch {
-        /* ignore */
-      }
-    }, 10000); // poll every 10 seconds
-    return () => clearInterval(interval);
-  }, [detailReport?._id, detailReport?.status]);
+  const reportId = detailReport?._id;
+  const refreshDetail = useCallback(async () => {
+    if (!reportId) return;
+    try {
+      const res = await fetch(`${REPORT_API}/${reportId}`);
+      const updated = await res.json();
+      setDetailReport(updated);
+      setSessionChecks(updated.slotResults?.length || 0);
+    } catch {
+      /* ignore */
+    }
+  }, [reportId]);
+
+  usePolling(refreshDetail, 10000, {
+    enabled: detailReport?.status === 'live' && !!reportId,
+    immediate: false,
+  });
 
   // ── Camera-switch countdown ticker ────────────────────────────────────────
   // Python switches cameras every camSwitchSec, not every `duration`. We count
@@ -2158,6 +2197,27 @@ export default function AttendanceReport() {
                               >
                                 View
                               </button>
+                              {/* Frames for THIS class. Disabled rather than
+                                  hidden when the report has no room — the
+                                  column stays aligned, and the title says why
+                                  instead of the button silently missing. */}
+                              <button
+                                type="button"
+                                disabled={!r.room}
+                                title={r.room
+                                  ? `Open frame verification for ${r.room}`
+                                  : 'This report has no room recorded'}
+                                onClick={() => navigate(classVerificationPath(r, location.pathname))}
+                                style={{
+                                  ...styles.btnGhost,
+                                  padding: '6px 10px',
+                                  fontSize: 11,
+                                  opacity: r.room ? 1 : 0.45,
+                                  cursor: r.room ? 'pointer' : 'not-allowed',
+                                }}
+                              >
+                                Frames
+                              </button>
                               {canDeleteReports && (
                                 <button
                                   type="button"
@@ -2345,6 +2405,21 @@ export default function AttendanceReport() {
                           ? 'Live'
                           : 'Completed'}
                     </span>
+                    {/* Same destination as the row's Frames button, offered
+                        again here because this is where somebody reading a
+                        result decides they want to see the evidence. */}
+                    {detailReport.room && (
+                      <button
+                        onClick={() => navigate(classVerificationPath(detailReport, location.pathname))}
+                        style={{
+                          ...styles.btnGhost,
+                          padding: '8px 18px',
+                          fontSize: '13px',
+                        }}
+                      >
+                        Class Verification
+                      </button>
+                    )}
                     <button
                       onClick={() => setTab('unknown')}
                       style={{

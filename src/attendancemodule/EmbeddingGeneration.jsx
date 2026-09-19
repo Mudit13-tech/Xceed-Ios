@@ -89,7 +89,7 @@ function FilterBlock({
     dept, setDept, sem, setSem, subject, setSubject,
     subjectCode, setSubjectCode, setSubjectId,
     departments, deptLoading, deptError,
-    prefillSem, prefillSubject,fixedDepartment
+    prefillSem, prefillSubject,
 }) {
     const [sems,            setSems]            = useState([]);
     const [subjects,        setSubjects]        = useState([]);
@@ -201,16 +201,10 @@ function FilterBlock({
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 16, alignItems: 'end' }} className="r-grid-3">
                 <div>
                     <label style={styles.label}>Department</label>
-                    {fixedDepartment ? (
-                        <div style={{ ...styles.select, display: 'flex', alignItems: 'center', background: theme.surfaceAlt, color: theme.textMuted, cursor: 'not-allowed' }}>
-                            {fixedDepartment.replace(/_/g, ' ')}
-                        </div>
-                    ) : (
-                        <select value={dept} onChange={e => setDept(e.target.value)} style={styles.select} disabled={deptLoading}>
-                            <option value="">{deptLoading ? 'Loading...' : deptError ? 'Error' : 'Select department...'}</option>
-                            {departments.map(d => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
-                        </select>
-                    )}
+                    <select value={dept} onChange={e => setDept(e.target.value)} style={styles.select} disabled={deptLoading}>
+                        <option value="">{deptLoading ? 'Loading...' : deptError ? 'Error' : 'Select department...'}</option>
+                        {departments.map(d => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
+                    </select>
                 </div>
                 <div>
                     <label style={styles.label}>Semester</label>
@@ -247,8 +241,8 @@ function FilterBlock({
 // ===============================================================================
 // TAB 1 - Generate Subject Embeddings
 // ===============================================================================
-function GenerateTab({ departments, deptLoading, deptError, prefill, onPrefillConsumed, fixedDepartment = '' }) {
-    const [dept,        setDept]        = useState(fixedDepartment);
+function GenerateTab({ departments, deptLoading, deptError, prefill, onPrefillConsumed, defaultDepartment = '' }) {
+    const [dept,        setDept]        = useState(defaultDepartment);
     const [sem,         setSem]         = useState('');
     const [subject,     setSubject]     = useState('');
     const [subjectCode, setSubjectCode] = useState('');
@@ -304,10 +298,7 @@ function GenerateTab({ departments, deptLoading, deptError, prefill, onPrefillCo
     // Apply prefill when it arrives from ViewTab
     useEffect(() => {
         if (!prefill) return;
-        // For dept-locked admins, ignore any prefill dept that doesn't match —
-        // they should never be able to jump into another department's batch.
-        if (fixedDepartment && prefill.dept && prefill.dept !== fixedDepartment) return;
-        setDept(fixedDepartment || prefill.dept || '');
+        setDept(prefill.dept || defaultDepartment || '');
         setRollInput((prefill.rollNos || []).join('\n'));
         setSummary(null);
         setRows([]);
@@ -545,7 +536,6 @@ function GenerateTab({ departments, deptLoading, deptError, prefill, onPrefillCo
 
             <FilterBlock
                 dept={dept} setDept={handleSetDept}
-                fixedDepartment = {fixedDepartment}
                 sem={sem} setSem={setSem}
                 subject={subject} setSubject={setSubject}
                 subjectCode={subjectCode} setSubjectCode={setSubjectCode}
@@ -836,8 +826,8 @@ function GenerateTab({ departments, deptLoading, deptError, prefill, onPrefillCo
 // ===============================================================================
 // TAB 2 - View Generated Embeddings
 // ===============================================================================
-function ViewTab({ departments, deptLoading, deptError, onUpdate, fixedDepartment = '' }) {
-    const [dept,         setDept]         = useState(fixedDepartment);
+function ViewTab({ departments, deptLoading, deptError, onUpdate, defaultDepartment = '' }) {
+    const [dept,         setDept]         = useState(defaultDepartment);
     const [pklFiles,     setPklFiles]     = useState([]);
     const [history,      setHistory]      = useState([]);
     const [pklLoading,   setPklLoading]   = useState(false);
@@ -1043,16 +1033,10 @@ function ViewTab({ departments, deptLoading, deptError, onUpdate, fixedDepartmen
                 <div style={{ fontSize: '11px', fontWeight: 700, color: theme.accent, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Filter</div>
                 <div style={{ maxWidth: 320 }}>
                     <label style={styles.label}>Department</label>
-                    {fixedDepartment ? (
-                        <div style={{ ...styles.select, display: 'flex', alignItems: 'center', background: theme.surfaceAlt, color: theme.textMuted, cursor: 'not-allowed' }}>
-                            {fixedDepartment.replace(/_/g, ' ')}
-                        </div>
-                    ) : (
-                        <select value={dept} onChange={e => setDept(e.target.value)} style={styles.select} disabled={deptLoading}>
-                            <option value="">{deptLoading ? 'Loading...' : deptError ? 'Error' : 'Select department...'}</option>
-                            {departments.map(d => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
-                        </select>
-                    )}
+                    <select value={dept} onChange={e => setDept(e.target.value)} style={styles.select} disabled={deptLoading}>
+                        <option value="">{deptLoading ? 'Loading...' : deptError ? 'Error' : 'Select department...'}</option>
+                        {departments.map(d => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
+                    </select>
                 </div>
             </div>
 
@@ -1457,11 +1441,32 @@ function ViewTab({ departments, deptLoading, deptError, onUpdate, fixedDepartmen
 
 // Main export
 // ===============================================================================
-export default function EmbeddingGeneration({ fixedDepartment = '' }) {
+/**
+ * @param {boolean} showErpTab
+ *   Whether ERP Embedding Generation is offered. Institute admins pull a whole
+ *   department's roster straight from the ERP; a department coordinator works
+ *   from the roll numbers they were given, so the tab is theirs to see only if
+ *   an admin says so.
+ *
+ *   Hiding it is presentation, not access control. The ERP sync endpoints sit
+ *   behind requireDeptMenu('erpSync') — which defaults to false — so a
+ *   coordinator is already refused server-side whether or not this tab renders.
+ */
+export default function EmbeddingGeneration({ defaultDepartment = '', showErpTab = true }) {
     const { departments, deptLoading, deptError } = useDepartments();
-    // Tab 3 = ERP Embedding Generation — the default entry point; manual
-    // paste/xlsx generation (tab 1) is the fallback path.
-    const [activeTab, setActiveTab] = useState(() => readSubtabFromSearch([3, 1, 2], 3));
+    // Tab 3 = ERP Embedding Generation — the default entry point where it is
+    // offered; manual paste/xlsx generation (tab 1) is the fallback path, and
+    // the only entry point when ERP is not on offer.
+    //
+    // The allowed list is narrowed too, not just the default: otherwise a
+    // ?tab=3 link — bookmarked, or shared by an admin who can see that tab —
+    // would select a tab this render has no panel for, leaving a page with its
+    // tab bar and nothing under it.
+    const [activeTab, setActiveTab] = useState(() => (
+        showErpTab
+            ? readSubtabFromSearch([3, 1, 2], 3)
+            : readSubtabFromSearch([1, 2], 1)
+    ));
     const [prefill,   setPrefill]   = useState(null);
 
     const handleUpdate = useCallback((data) => {
@@ -1486,7 +1491,9 @@ export default function EmbeddingGeneration({ fixedDepartment = '' }) {
             </div>
 
             <div className="ams-tabs">
-                <AmsSubtab value={3} label="ERP Embedding Generation" active={activeTab === 3} onSelect={setActiveTab} />
+                {showErpTab && (
+                    <AmsSubtab value={3} label="ERP Embedding Generation" active={activeTab === 3} onSelect={setActiveTab} />
+                )}
                 <AmsSubtab value={1} label="Manual Generation" active={activeTab === 1} onSelect={setActiveTab} />
                 <AmsSubtab value={2} label="View Embeddings" active={activeTab === 2} onSelect={setActiveTab} />
             </div>
@@ -1496,17 +1503,17 @@ export default function EmbeddingGeneration({ fixedDepartment = '' }) {
                     departments={departments} deptLoading={deptLoading} deptError={deptError}
                     prefill={prefill}
                     onPrefillConsumed={() => setPrefill(null)}
-                    fixedDepartment={fixedDepartment}
+                    defaultDepartment={defaultDepartment}
                 />
             )}
-            {activeTab === 3 && (
-                <ERPSync embedded fixedDepartment={fixedDepartment} />
+            {showErpTab && activeTab === 3 && (
+                <ERPSync embedded defaultDepartment={defaultDepartment} />
             )}
             {activeTab === 2 && (
                 <ViewTab
                     departments={departments} deptLoading={deptLoading} deptError={deptError}
                     onUpdate={handleUpdate}
-                    fixedDepartment={fixedDepartment}
+                    defaultDepartment={defaultDepartment}
                 />
             )}
         </div>

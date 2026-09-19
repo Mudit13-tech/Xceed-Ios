@@ -49,7 +49,18 @@ import AttendanceControl from '../components/attendanceControl';
 import AccessCodeButton from '../components/AccessCodeButton';
 import RoomCodeButton from '../components/RoomCodeButton';
 import ExamCodes from '../components/ExamCodes';
-import { CopyLinkButton, EmptyState, ErrorState, Loading, SectionCard, WorkListSkeleton } from '../components/common';
+import {
+  CardActions,
+  CardBody,
+  CardRow,
+  CopyLinkButton,
+  EmptyState,
+  ErrorState,
+  Loading,
+  PageHeader,
+  SectionCard,
+  WorkListSkeleton,
+} from '../components/common';
 import PublishQuizModal from '../components/PublishQuizModal';
 import QuizPreviewModal from '../components/QuizPreviewModal';
 import { formatDateTime, relativeTime } from '../format';
@@ -675,7 +686,10 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
     setDownloadingPdf(withAnswers ? 'answers' : 'questions');
     try {
       const pdfData = await lmApi.exportQuizQuestions(classId, quiz._id, withAnswers);
-      generateQuizPdf(pdfData, withAnswers);
+      // Awaited: the generator fetches any picture whose src is a URL before it
+      // lays the document out, so the toast below is not shown before the file
+      // exists — and a failure in it is caught here rather than going unhandled.
+      await generateQuizPdf(pdfData, withAnswers);
       toast({
         status: 'success',
         title: withAnswers ? 'Questions & Answers PDF downloaded' : 'Questions PDF downloaded',
@@ -846,9 +860,10 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
       borderColor={isLive ? 'green.400' : 'lmBorder.base'}
       boxShadow={isLive ? '0 2px 12px -2px rgba(34, 197, 94, 0.25)' : 'none'}
       borderRadius="lg"
-      p={4}
+      p={{ base: 3, sm: 4 }}
       mb={3}
       direction="column"
+      minW={0}
       align="stretch"
       gap={2}
       transition="all 0.2s ease"
@@ -937,12 +952,12 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
         )}
       </Flex>
 
-      <Flex align="center" gap={4} wrap="wrap">
+      <CardRow>
         {/* While it is running, the card is the way in: the whole body is the
             link to the live page (teachers to the monitor, students to the
             paper), not just the pill in its corner. Only the body — the action
-            buttons to the right keep their own destinations. */}
-        <Box flex="1" minW="220px" {...bodyLink}>
+            buttons beside it keep their own destinations. */}
+        <CardBody {...bodyLink}>
           {isTeacher && (scheduled || opensAt || entryCloses) && (
             <Text fontSize="xs" color="lmFg.subtle" mt={1}>
               {[
@@ -1021,9 +1036,9 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
               only staff ever receive the codes: the student copy of the settings
               carries neither. */}
           {isTeacher && quiz.published && <ExamCodes settings={quiz.settings} mt={2} />}
-        </Box>
+        </CardBody>
 
-        <Flex gap={2} wrap="wrap" align="center" maxW="100%">
+        <CardActions>
           {isTeacher ? (
             <>
               {/* First while the exam is on, because mid-exam it is the only
@@ -1172,8 +1187,8 @@ function QuizRow({ quiz, classId, isTeacher, onPublish, onUnpublish, onDelete, o
             )}
             </>
           )}
-        </Flex>
-      </Flex>
+        </CardActions>
+      </CardRow>
     </Flex>
   );
 }
@@ -1261,48 +1276,51 @@ export default function Quizzes() {
 
   return (
     <Box>
-      <Flex justify="space-between" align="center" mb={4} gap={3} wrap="wrap">
-        <Box>
+      {/* Students get the action row too, for the SEB installer alone: they
+          have no other route to it that does not start with a test about to
+          begin. */}
+      <PageHeader
+        title={
           <Heading size="md" color="lmFg.heading">
             Quizzes & exams
           </Heading>
-          <Text fontSize="sm" color="lmFg.muted">
-            {isTeacher
-              ? 'Build a paper here, then publish it to the class.'
-              : 'Everything your teacher has published.'}
-          </Text>
-        </Box>
-        {/* Students get this row too, for the SEB installer alone: they have no
-            other route to it that does not start with a test about to begin. */}
-        <Flex gap={2} wrap="wrap" align="center" maxW="100%">
-          <SebInstallerDownload />
-          {isTeacher && (
-            <>
-              <Button as={RouterLink} to={`/learning/class/${classId}/studio`} size="sm" variant="outline">
-                <LmIcon name="ai" size={14} style={{ marginRight: 6 }} />
-                Generate from a recording
-              </Button>
-              <Button
-                as="a"
-                href="/learning/quizmanual"
-                target="_blank"
-                rel="noreferrer"
-                size="sm"
-                variant="outline"
-                colorScheme="teal"
-                borderWidth="2px"
-                fontWeight="semibold"
-              >
-                <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
-                Manual
-              </Button>
-              <Button colorScheme="blue" size="sm" onClick={onOpen}>
-                + Create quiz
-              </Button>
-            </>
-          )}
-        </Flex>
-      </Flex>
+        }
+        description={
+          isTeacher
+            ? 'Build a paper here, then publish it to the class.'
+            : 'Everything your teacher has published.'
+        }
+        actions={
+          <>
+            <SebInstallerDownload />
+            {isTeacher && (
+              <>
+                <Button as={RouterLink} to={`/learning/class/${classId}/studio`} size="sm" variant="outline">
+                  <LmIcon name="ai" size={14} style={{ marginRight: 6 }} />
+                  Generate from a recording
+                </Button>
+                <Button
+                  as="a"
+                  href="/learning/quizmanual"
+                  target="_blank"
+                  rel="noreferrer"
+                  size="sm"
+                  variant="outline"
+                  colorScheme="teal"
+                  borderWidth="2px"
+                  fontWeight="semibold"
+                >
+                  <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
+                  Manual
+                </Button>
+                <Button colorScheme="blue" size="sm" onClick={onOpen}>
+                  + Create quiz
+                </Button>
+              </>
+            )}
+          </>
+        }
+      />
 
       <ErrorState error={error} onRetry={load} />
 

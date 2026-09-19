@@ -150,8 +150,32 @@ export default function PublishQuizModal({ isOpen, onClose, quiz, classId, onPub
     const currentRoomCode = quiz.settings?.roomCode || '';
     const roomCodeSet = Boolean(currentRoomCode || quiz.settings?.roomCodeRequired);
     setRoomCodeMode(roomCodeSet ? 'required' : quiz.published ? 'none' : '');
-    setPublishAt(toDateTimeInput(quiz.publishAt) || nowForInput());
-    setAvailableFrom(toDateTimeInput(quiz.settings?.availableFrom) || nowPlus5ForInput());
+    /* Empty, not `now`, for a paper that carries no publish time of its own.
+       Empty is what this field means by "publish the moment you press the
+       button" — the badge, the helper text and the footer's `Publish now & get
+       link` all key off it, and all three read the scheduled way round when the
+       box is seeded full. Seeding it with `now` also did not schedule anything:
+       the server drops a publish time that is not in the future (see
+       publishQuiz), and by the time the request lands that `now` is seconds
+       past, so a footer reading `Schedule & get link` published to the class
+       there and then. */
+    setPublishAt(toDateTimeInput(quiz.publishAt) || '');
+    /* A start time that has already gone by is not a schedule, it is "straight
+       away" — which is exactly what an empty box here means. Carrying one over
+       from an earlier run is what left re-publishing stuck: `availableFrom` sat
+       before the new publish moment, `startsBeforePublished` fired, and the
+       footer was disabled on a dialog where the teacher had done nothing but
+       unpublish to fix a typo and come back. Their only way out was noticing a
+       stale date in a field they never touched.
+
+       Only for a paper that is not currently live. A live one is ordered
+       against its own publish moment rather than against now — see
+       `effectivePublishTime` — so its stored start time is still meaningful and
+       is left alone. */
+    const storedFrom = quiz.settings?.availableFrom;
+    const startAlreadyPassed =
+      !quiz.published && storedFrom && new Date(storedFrom).getTime() <= Date.now();
+    setAvailableFrom(startAlreadyPassed ? '' : toDateTimeInput(storedFrom) || nowPlus5ForInput());
     setAvailableTo(toDateTimeInput(quiz.settings?.availableTo));
     // `window.startDeadline` rather than the setting, so a quiz still carrying
     // the older "minutes after opening" margin opens the toggle already on,

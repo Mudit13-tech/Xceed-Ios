@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import {
   CartesianGrid,
@@ -10,6 +10,7 @@ import {
   YAxis,
 } from 'recharts';
 import { theme } from './config';
+import usePolling from './usePolling';
 import ServiceConsole from './ServiceConsole';
 import GpuInventory from './GpuInventory';
 import getEnvironment from '../getenvironment';
@@ -142,24 +143,26 @@ export default function GpuMetrics() {
   const [customEnd, setCustomEnd] = useState('');
   const chartScrollerRef = useRef(null);
   const previousChartCountRef = useRef(0);
+  // Gates the live poll until the history call has established the baseline it
+  // extends — see startReadingBackendHistory below.
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  const appendSample = useCallback((sample) => {
+    setSamples((previous) => {
+      const existingIndex = previous.findIndex((item) => item.timestamp === sample.timestamp);
+      if (existingIndex >= 0) {
+        const next = [...previous];
+        next[existingIndex] = sample;
+        return next;
+      }
+      return [...previous, sample]
+        .sort((left, right) => left.timestamp - right.timestamp)
+        .slice(-HISTORY_LIMIT);
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    let interval = null;
-
-    function appendSample(sample) {
-      setSamples((previous) => {
-        const existingIndex = previous.findIndex((item) => item.timestamp === sample.timestamp);
-        if (existingIndex >= 0) {
-          const next = [...previous];
-          next[existingIndex] = sample;
-          return next;
-        }
-        return [...previous, sample]
-          .sort((left, right) => left.timestamp - right.timestamp)
-          .slice(-HISTORY_LIMIT);
-      });
-    }
 
     async function loadHistory() {
       const response = await axios.get(METRICS_HISTORY_URL, {
@@ -186,28 +189,6 @@ export default function GpuMetrics() {
       }
     }
 
-    async function fetchLatestMetric() {
-      try {
-        const response = await axios.get(METRICS_URL, { timeout: 5000 });
-        const sample = normalizeSample(response.data);
-        if (!sample) {
-          throw new Error('GPU metrics endpoint did not return JSON metrics');
-        }
-        if (cancelled) return;
-
-        appendSample(sample);
-        setError(sample.available ? '' : (sample.error || 'GPU metrics unavailable'));
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err.response?.data?.error
-            || err.message
-            || 'GPU metrics unavailable'
-          );
-        }
-      }
-    }
-
     async function startReadingBackendHistory() {
       try {
         await loadHistory();
@@ -220,19 +201,39 @@ export default function GpuMetrics() {
           );
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          // Only now start the live poll — the history call establishes the
+          // baseline the appended samples extend, and a live sample landing
+          // first would be overwritten by it.
+          setHistoryLoaded(true);
+        }
       }
-
-      await fetchLatestMetric();
-      if (!cancelled) interval = setInterval(fetchLatestMetric, POLL_MS);
     }
 
     void startReadingBackendHistory();
-    return () => {
-      cancelled = true;
-      if (interval) clearInterval(interval);
-    };
+    return () => { cancelled = true; };
   }, []);
+
+  const fetchLatestMetric = useCallback(async () => {
+    try {
+      const response = await axios.get(METRICS_URL, { timeout: 5000 });
+      const sample = normalizeSample(response.data);
+      if (!sample) {
+        throw new Error('GPU metrics endpoint did not return JSON metrics');
+      }
+      appendSample(sample);
+      setError(sample.available ? '' : (sample.error || 'GPU metrics unavailable'));
+    } catch (err) {
+      setError(
+        err.response?.data?.error
+        || err.message
+        || 'GPU metrics unavailable'
+      );
+    }
+  }, [appendSample]);
+
+  usePolling(fetchLatestMetric, POLL_MS, { enabled: historyLoaded });
 
   const latest = samples[samples.length - 1];
   const gpuLabel = useMemo(() => describeGpu(latest), [latest]);

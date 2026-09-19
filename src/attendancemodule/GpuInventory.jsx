@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { theme } from './config';
+import usePolling from './usePolling';
 import getEnvironment from '../getenvironment';
 
 // Every card on the ML host, not just the one this service holds.
@@ -111,13 +112,13 @@ export default function GpuInventory() {
 
   useEffect(() => { void load(); }, [load]);
 
-  useEffect(() => {
-    // Paused while a switch is in flight: the service is mid-re-exec and every
-    // poll would just be a connection error scrolling over the real status.
-    if (!autoRefresh || switching) return undefined;
-    const timer = setInterval(() => { void load(); }, AUTO_REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [autoRefresh, load, switching]);
+  // Paused while a switch is in flight: the service is mid-re-exec and every
+  // poll would just be a connection error scrolling over the real status. The
+  // leading call belongs to the effect above, so this one does not repeat it.
+  usePolling(load, AUTO_REFRESH_MS, {
+    enabled: autoRefresh && !switching,
+    immediate: false,
+  });
 
   const gpus = useMemo(() => inventory?.gpus || [], [inventory]);
   const recommended = inventory?.recommended || null;

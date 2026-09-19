@@ -194,6 +194,32 @@ describe('LoginForm captcha', () => {
     expect(JSON.parse(fetchMock.mock.calls[4][1].body).captchaToken).toBe('tok-2');
   });
 
+  it('offers an emailed code when the account is locked, and sends it', async () => {
+    const fetchMock = queueFetch(
+      {
+        ok: false,
+        body: { message: 'Too many failed sign-in attempts for this account.', accountLocked: true },
+      },
+      { ok: true, body: { token: 'email-tok', message: 'A code is on its way.' } },
+      { ok: false, body: { message: 'Invalid email or password.' } },
+    );
+    const user = userEvent.setup();
+    renderForm();
+
+    await signIn(user);
+    // No image fetched: an image cannot lift the lock.
+    await user.click(await screen.findByRole('button', { name: 'Email me a code to sign in now' }));
+    expect(fetchMock.mock.calls[1][0]).toBe('http://api.test/auth/captcha/email');
+
+    await user.type(await screen.findByPlaceholderText('Six-digit code from your email'), '123456');
+    await user.click(screen.getByRole('button', { name: 'Login' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    const sent = JSON.parse(fetchMock.mock.calls[2][1].body);
+    expect(sent.captchaToken).toBe('email-tok');
+    expect(sent.captchaAnswer).toBe('123456');
+  });
+
   it('can be refreshed by hand', async () => {
     const fetchMock = queueFetch(
       { ok: false, body: { message: 'Invalid email or password.', captchaRequired: true } },

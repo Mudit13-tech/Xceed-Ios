@@ -16,6 +16,7 @@ import DeptRollAssignmentChart from './DeptRollAssignmentChart';
 import { MLDataFolder } from './MLDataFolder';
 import { createPortal } from "react-dom";
 import { useRef } from "react";
+import usePolling from './usePolling';
 
 const apiUrl          = getEnvironment();
 const CAM_API         = `${apiUrl}/attendancemodule/cameras`;
@@ -444,15 +445,11 @@ export default function AMSDashboard() {
   // One tick drives both. The camera list and the live rooms are two views of
   // the same moment, and separate timers would let the panels drift apart on
   // screen — a room shown as running next to a camera still badged offline.
-  useEffect(() => {
-    const poll = () => {
-      fetchLiveStatus();
-      fetchCameras();
-    };
-    poll();
-    const id = setInterval(poll, 15000);
-    return () => clearInterval(id);
-  }, [fetchLiveStatus, fetchCameras]);
+  const poll = useCallback(
+    () => Promise.all([fetchLiveStatus(), fetchCameras()]),
+    [fetchLiveStatus, fetchCameras],
+  );
+  usePolling(poll, 15000);
 
   useEffect(() => {
     fetch(NOTIF_API, { credentials: 'include' })

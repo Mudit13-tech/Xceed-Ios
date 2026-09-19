@@ -63,12 +63,12 @@ function LiveVerdict({ verdict, busy }) {
     <Tooltip
       label={
         remaining
-          ? `Not right yet. ${remaining} check${remaining === 1 ? '' : 's'} left on this answer.`
-          : 'Not right yet, and that was your last check. You can still submit.'
+          ? `Incorrect. ${remaining} check${remaining === 1 ? '' : 's'} left on this answer.`
+          : 'Incorrect, and that was your last check. You can still submit.'
       }
     >
       <Badge colorScheme="orange" fontSize="0.65rem">
-        not yet{remaining ? ` · ${remaining} left` : ''}
+        Incorrect{remaining ? ` · ${remaining} left` : ''}
       </Badge>
     </Tooltip>
   );
