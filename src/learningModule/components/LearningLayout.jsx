@@ -31,7 +31,6 @@ import {
   ModalOverlay,
   Skeleton,
   SkeletonCircle,
-  Spinner,
   Text,
   Tooltip,
   useColorMode,
@@ -45,7 +44,7 @@ import useStableNavigate from '../hooks/useStableNavigate';
 import { canCreateClass, isStudentOnly } from '../roles';
 import NotificationBell from './NotificationBell';
 import { LmIcon } from './Icon';
-import { buttonTextStyles } from './common';
+import { buttonTextStyles, BusyDots } from './common';
 import { clearNativeSession } from '../../mobile/session';
 
 // Split out of the shell: every student sees it exactly once, and nobody else
@@ -730,7 +729,10 @@ export default function LearningLayout() {
           </Box>
 
           <Box flex="1" minW={0} w="100%">
-            <React.Suspense fallback={<Flex p={8} justify="center"><Spinner color="blue.500" /></Flex>}>
+            {/* A route chunk on its way, whose page shape the shell cannot know — so
+                BusyDots rather than a skeleton that would promise the wrong one.
+                See the sweep in __tests__/NoSpinners.test.jsx. */}
+            <React.Suspense fallback={<Flex p={8} justify="center"><BusyDots label="Loading…" /></Flex>}>
               <Outlet context={{ me, overview, reloadOverview: load }} />
             </React.Suspense>
           </Box>
