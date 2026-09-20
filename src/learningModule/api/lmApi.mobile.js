@@ -75,6 +75,18 @@
  * catch. Worth revisiting only if safeStorage ever grows a fallback that
  * returns a token where a bare read would not, since these two would then be
  * comparing against a different value than `request` is sending.
+ *
+ * Reviewed again 2026-09-20 against the +24/-1 of the AMS sync merged that day,
+ * and again nothing needed porting. Five methods arrived: the co-teacher gate
+ * (checkCoTeacherEmail, requestCoTeacherCode), the `otp` argument threaded
+ * through inviteMembers, and the two role-revocations (adminRevokeFaculty,
+ * adminRevokeStudent). The loop classifies all five as writes, which is right
+ * for four of them. `checkCoTeacherEmail` is the exception and is deliberately
+ * left alone: it POSTs but changes nothing, so it clears the shell cache it
+ * need not have. That is the direction WRITES is documented to err in, and the
+ * cost is one refetch of me/overview/classes while a teacher types an address
+ * into the invite box — cheaper than a hand-kept exception list that goes stale
+ * the first time upstream turns one of these into a real write.
  */
 import { Preferences } from '@capacitor/preferences';
 
