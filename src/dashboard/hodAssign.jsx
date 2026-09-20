@@ -29,6 +29,7 @@ import { useNavigate } from 'react-router-dom';
 import getEnvironment from '../getenvironment';
 import DeanAssignPanel from './deanAssign';
 import DashboardSectionsPanel from './dashboardSections';
+import AttendanceMenusPanel from './attendanceMenus';
 import EditableName from './editableName';
 
 const apiUrl = getEnvironment();
@@ -36,16 +37,18 @@ const apiUrl = getEnvironment();
 /**
  * Academic leadership: who reads which department, and what they are shown.
  *
- * Three panels, in the order the decisions are made — heads of department, the
- * Dean (Academic), and then what each of their dashboards carries. They sit on
- * one screen because they are one subject: the dean's appointment is the HOD's
- * at a wider scope, and the panel settings are meaningless without knowing who
- * is reading them. Kept apart, the second and third were things an
- * administrator had to remember existed.
+ * Four panels, in the order the decisions are made — heads of department, the
+ * Dean (Academic), what each of their learning-module dashboards carries, and
+ * what each of their iLEED views carries. They sit on one screen because they
+ * are one subject: the dean's appointment is the HOD's at a wider scope, and
+ * the panel settings are meaningless without knowing who is reading them. Kept
+ * apart, the others were things an administrator had to remember existed — the
+ * iLEED toggles most of all, which lived inside the attendance module's own
+ * settings and still do, as the same document seen from two screens.
  *
- * The first panel is below; the other two are `deanAssign` and
- * `dashboardSections`, each owning its own reads and writes so a failure in one
- * cannot take the screen down with it.
+ * The first panel is below; the others are `deanAssign`, `dashboardSections`
+ * and `attendanceMenus`, each owning its own reads and writes so a failure in
+ * one cannot take the screen down with it.
  *
  * ── Heads of department — the platform's department → person mapping.
  *
@@ -59,9 +62,13 @@ const apiUrl = getEnvironment();
  * so it is made by removing the current head and then assigning, never as a
  * side effect of typing an address into a form.
  *
- * Assigning also puts the HOD role on the account and sets its department, and
- * removing takes the role away again — unless the same person still heads
- * another department, in which case the role stays and this screen says so.
+ * Assigning also puts three roles on the account and sets its department: the
+ * `HOD` appointment, and one role per dashboard a head can open —
+ * `hod-learning` for Xceed Learning and `hod-ileed` for iLEED. Removing takes
+ * all three away again — unless the same person still heads another
+ * department, in which case they stay and this screen says so. Either
+ * dashboard can be withdrawn on its own from user management without ending
+ * the appointment; see services/departmentHeads.js on the server.
  *
  * No name is asked for. The person being appointed is not the person filling in
  * this form, so any name typed here is a guess at somebody else's spelling, and
@@ -241,8 +248,8 @@ const HodAssignPage = () => {
       toast({
         title: `${head.dept} has no head assigned`,
         description: data.roleRemoved
-          ? 'The HOD role has been removed from the account.'
-          : 'The account keeps the HOD role — it still heads another department.',
+          ? 'The HOD roles have been removed from the account.'
+          : 'The account keeps its HOD roles — it still heads another department.',
         status: 'success',
         duration: 6000,
         isClosable: true,
@@ -274,7 +281,7 @@ const HodAssignPage = () => {
             </Heading>
             <Text color={subColor}>
               Who heads each department, who is Dean (Academic), and what each of their
-              dashboards shows.
+              dashboards and iLEED views shows.
             </Text>
           </Box>
           <Button leftIcon={<FiArrowLeft />} variant="outline" size="sm" ml="auto" onClick={goBack}>
@@ -414,6 +421,12 @@ const HodAssignPage = () => {
 
         {/* And what the two dashboards those appointments open actually carry. */}
         <DashboardSectionsPanel />
+
+        {/* The same decision for the attendance module's two read-only views.
+            Its own panel with its own reads and writes, against the attendance
+            module's endpoints rather than this one's — a module being down
+            must cost this screen that panel and nothing else. */}
+        <AttendanceMenusPanel />
       </Container>
     </Box>
   );

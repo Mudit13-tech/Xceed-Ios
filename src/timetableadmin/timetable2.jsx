@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ViewTimetable from './viewtt';
 import getEnvironment from '../getenvironment';
 import MailProgressModal from './mailProgressModal';
+import { notifyGate } from './notifyGate';
 import './Timetable.css';
 import TimetableSummary from './ttsummary';
 import ReactToPrint from 'react-to-print';
@@ -523,10 +524,19 @@ const Timetable = () => {
     const pdfUrl = `${currentPathname}/generatepdf`;
     window.location.href = pdfUrl;
   };
+  // Which availability check the banner is currently showing; see saveSlotData.
+  const slotCheckSeq = useRef(0);
+
   const saveSlotData = async (day, slot, slotData) => {
     const Url = `${apiUrl}/timetablemodule/tt/saveslot/${day}/${slot}`;
     const code = currentCode;
     const sem = selectedSemester;
+
+    // Replies are not guaranteed to arrive in the order the selections were
+    // made, so an older check landing last would leave the banner describing a
+    // cell that has since changed.
+    const check = ++slotCheckSeq.current;
+    setMessage('Checking slot availability...');
 
     try {
       const response = await fetch(Url, {
@@ -538,11 +548,13 @@ const Timetable = () => {
 
       if (response) {
         const data = await response.json();
+        if (check !== slotCheckSeq.current) return;
         setMessage(data.message);
          setTimeout(() => setMessage(''), 2000); 
       }
     } catch (error) {
-      // handle error silently
+      // Leaving "Checking..." on screen forever would read as a hung check.
+      if (check === slotCheckSeq.current) setMessage('');
     }
   };
 
@@ -582,15 +594,31 @@ const Timetable = () => {
     const isConfirmed = window.confirm(
       'Are you sure you want to lock the timetable?'
     );
-    var toInform = false;
-    if (currentSessionCodes.includes(currentCode))
-      toInform = window.confirm(
-        'Do you want to inform the teachers about the timetable changes?'
-      );
-    if (isConfirmed) {
+    if (!isConfirmed) {
+      // Answering "cancel" is not a failure, and the notification question used
+      // to be put even after it had been declined.
+      return;
+    }
+
+    // Whether the teachers are told, asked about, or cannot be told and why.
+    // One rule across the three pages that lock a timetable — see notifyGate.
+    // `TTData` is this page's `alldetails` response, so `publish` is on it
+    // whether it arrived as the document or as a one-element array.
+    const table = Array.isArray(TTData) ? TTData[0] : TTData;
+    const gate = notifyGate({
+      code: currentCode,
+      currentSessionCodes,
+      // The raw flag: "not loaded" and "explicitly a draft" differ.
+      published: table?.publish,
+    });
+    const toInform =
+      gate.mode === 'auto' ||
+      (gate.mode === 'ask' &&
+        window.confirm(
+          'Do you want to inform the teachers about the timetable changes?'
+        ));
+    {
       setIsLocking(true);
-      setMessage('Data is being saved....');
-      setMessage('Data saved. Commencing lock');
       setMessage('Data is being locked');
       // The server mails every affected teacher before it answers, so the
       // progress state goes up before the request rather than after it —
@@ -628,28 +656,50 @@ const Timetable = () => {
           setMessage('');
           toast({
             title: 'Timetable Locked',
+            // A lock that told nobody says so here, rather than reading the
+            // same as one that mailed the whole department.
+            description: gate.canNotify
+              ? undefined
+              : `No one was emailed: ${gate.reason}.`,
             status: 'success',
-            duration: 6000,
+            duration: gate.canNotify ? 6000 : 8000,
             isClosable: true,
             position: 'top',
           });
         } else {
-          console.error(
-            'Failed to send data to the backend. HTTP status:',
-            response.status
-          );
+          // The guards in this module explain themselves in `error`; show that
+          // rather than a status code nobody can act on.
+          const data = await response.json().catch(() => ({}));
+          const reason =
+            data?.error ||
+            `The server refused the lock (HTTP ${response.status}).`;
+          toast({
+            title: 'Timetable Lock Failed',
+            description: reason,
+            status: 'error',
+            duration: 8000,
+            isClosable: true,
+            position: 'top',
+          });
           // Never leave the modal spinning on a request that came back bad.
           if (toInform) {
             setMailReport({
               phase: 'done',
               results: [],
               heading: 'Lock failed — no notifications sent',
-              note: `The server refused the lock (HTTP ${response.status}), so nothing was emailed.`,
+              note: `${reason} Nothing was emailed.`,
             });
           }
         }
       } catch (error) {
-        console.error('Error sending data to the backend:', error);
+        toast({
+          title: 'Timetable Lock Failed',
+          description: 'The server could not be reached. Please try again.',
+          status: 'error',
+          duration: 8000,
+          isClosable: true,
+          position: 'top',
+        });
         // Same reason as the bad-status branch: the modal must not spin on.
         if (toInform) {
           setMailReport({
@@ -662,18 +712,9 @@ const Timetable = () => {
           });
         }
       } finally {
+        setMessage('');
         setIsLocking(false);
       }
-    } else {
-      toast({
-        title: 'Timetable Lock Failed',
-        description:
-          'An error occurred while attempting to lock the timetable.',
-        status: 'error',
-        duration: 6000,
-        isClosable: true,
-        position: 'top',
-      });
     }
   };
 

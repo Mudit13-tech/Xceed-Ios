@@ -114,6 +114,9 @@ describe('inviting students', () => {
         'c1',
         ['asha.rao@nitj.ac.in', 'vikram@nitj.ac.in'],
         'student',
+        // No approval code rides along on a student invite: the co-teacher
+        // gate is the only thing that mints one, and it is not in this path.
+        undefined,
       ),
     );
   });

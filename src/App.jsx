@@ -228,6 +228,9 @@ const DeptAdminLayout = lazyWithPreload(() => import('./deptadmin/DeptAdminLayou
 const DeptDashboard = lazyWithPreload(() => import('./deptadmin/DeptDashboard'));
 const HodLayout = lazyWithPreload(() => import('./hodadmin/HodLayout'));
 const HodDashboard = lazyWithPreload(() => import('./hodadmin/HodDashboard'));
+const HodNotificationSettings = lazyWithPreload(() => import('./hodadmin/HodNotificationSettings'));
+const DeanLayout = lazyWithPreload(() => import('./deanadmin/DeanLayout'));
+const DeanDashboard = lazyWithPreload(() => import('./deanadmin/DeanDashboard'));
 const DeptReports = lazyWithPreload(() => import('./deptadmin/DeptReports'));
 const DeptBugReports = lazyWithPreload(() => import('./deptadmin/DeptBugReports'));
 const DeptDisputes = lazyWithPreload(() => import('./deptadmin/DeptDisputes'));
@@ -235,6 +238,9 @@ const DeptAssignRolls = lazyWithPreload(() => import('./deptadmin/DeptAdminTools
 const DeptLiveRTSP = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptLiveRTSP })));
 const DeptGroundTruthUpload = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptGroundTruthUpload })));
 const DeptAttendanceReport = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptAttendanceReport })));
+// The same screen with the room list drawn from the saved reports rather than
+// the institute-wide camera registry — see LeadershipAttendanceReport.
+const LeadershipAttendanceReport = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.LeadershipAttendanceReport })));
 const DeptClassVerification = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptClassVerification })));
 const DeptSubjectEmbeddings = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptSubjectEmbeddings })));
 const DeptConfidenceMonitor = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptConfidenceMonitor })));
@@ -690,7 +696,33 @@ const APP_ROUTES = (
           <Route path="/ileed-hod" element={<HodLayout />}>
             <Route index element={<HodDashboard />} />
             <Route path="dashboard" element={<HodDashboard />} />
-            <Route path="reports" element={<DeptAttendanceReport />} />
+            <Route path="reports" element={<LeadershipAttendanceReport />} />
+            {/* No confidence or verification route here, unlike the Dean's
+                block below: both judge the recognition system rather than
+                report a department's attendance, and a head can act on
+                nothing either shows — see NOT_FOR_HEADS in menuCatalogue.js. Left
+                out rather than merely unlinked, so the pages are not reachable
+                by typing the path either. */}
+            <Route path="notifications" element={<HodNotificationSettings />} />
+          </Route>
+
+          {/* ─── iLEED Dean (Academic) (read-only, every department) ── */}
+          {/* The same four screens as the head of department's above, drawn at
+              institute scope. The components are shared deliberately — the
+              server decides the scope from the role, so a second set would be
+              two ways of answering the same question. What is NOT shared is
+              which of them a viewer gets: `deanMenus` and `hodMenus` are
+              separate documents, so an institute can show the dean a screen it
+              does not show every head, and the other way round. */}
+          <Route path="/ileed-dean" element={<DeanLayout />}>
+            <Route index element={<DeanDashboard />} />
+            <Route path="dashboard" element={<DeanDashboard />} />
+            {/* The leadership variant, same as the head's: a dean runs no
+                session either, so the camera registry is the wrong room list
+                for them too. Their confidence and verification screens stay —
+                unlike a head, judging the recognition system across every
+                department is squarely the dean's. */}
+            <Route path="reports" element={<LeadershipAttendanceReport />} />
             <Route path="confidence" element={<DeptConfidenceMonitor />} />
             <Route path="verification" element={<DeptClassVerification />} />
           </Route>

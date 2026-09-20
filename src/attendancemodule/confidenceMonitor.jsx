@@ -95,7 +95,12 @@ function Toast({ toast }) {
 // Every listed review carries the subject and the period it happened in, so a
 // coordinator can go straight to that frame and fix the ground truth.
 
-function ReviewAuditPanel({ fixedDepartment = '', showToast }) {
+// How many weakly-recognised students each semester shows before asking. Ten
+// is about what a coordinator will act on in one sitting, and the ranking puts
+// the worst first — the rest are there to page into, not to scroll past.
+const WEAK_STUDENT_PAGE = 10;
+
+export function ReviewAuditPanel({ fixedDepartment = '', showToast }) {
   const { slotLabel } = usePeriods();
   const [days, setDays] = useState('60');
   const [minReviews, setMinReviews] = useState('3');
@@ -109,6 +114,10 @@ function ReviewAuditPanel({ fixedDepartment = '', showToast }) {
   // batch too — StudentGroundTruthModal needs both, and the audit rows are the
   // only place that pairing is to hand.
   const [gtTarget, setGtTarget] = useState(null);
+  // How many weakly-recognised students each semester group is showing. Absent
+  // means the default page. Kept per (department, semester) rather than as one
+  // number, so opening up one semester does not expand every other one.
+  const [shownBySem, setShownBySem] = useState({});
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -128,6 +137,19 @@ function ReviewAuditPanel({ fixedDepartment = '', showToast }) {
       .catch(() => {});
   }, [fixedDepartment]);
 
+  // Keyed on department AND semester: two departments can both have a
+  // "Semester 5", and paging one must not page the other.
+  const semKey = (department, semester) => `${department}||${semester}`;
+
+  const shownFor = (department, group) =>
+    shownBySem[semKey(department, group.semester)] ?? WEAK_STUDENT_PAGE;
+
+  const showMore = (department, semester) =>
+    setShownBySem((prev) => {
+      const key = semKey(department, semester);
+      return { ...prev, [key]: (prev[key] ?? WEAK_STUDENT_PAGE) + WEAK_STUDENT_PAGE };
+    });
+
   const fetchAudit = useCallback(async () => {
     setLoading(true);
     try {
@@ -140,6 +162,10 @@ function ReviewAuditPanel({ fixedDepartment = '', showToast }) {
       if (!res.ok) throw new Error(json.error || json.message || 'Failed to fetch');
       setData(json);
       setExpanded(new Set());
+      // A new window or department is a different list; carrying the old
+      // expansion over would show ten rows of one semester and forty of
+      // another for no reason the reader can see.
+      setShownBySem({});
     } catch (err) {
       showToast(err.message);
     } finally {
@@ -162,13 +188,41 @@ function ReviewAuditPanel({ fixedDepartment = '', showToast }) {
   const matchesSearch = (rollNo) =>
     !search || rollNo.toLowerCase().includes(search.toLowerCase());
 
+  // Every cut that carries roll numbers gets the search applied, and a
+  // department survives if ANY cut still has something in it.
+  //
+  // This used to filter and test only alwaysReview and repeatReview. Those two
+  // are the strictest cuts on the page — never present in any run; flagged
+  // three times inside one subject — so a department whose only signal was a
+  // flagged class, a weak period or a weakly recognised student was dropped
+  // here and every section below rendered its empty state. That is the same
+  // shape of bug as the server-side one in getReviewAudit, in the layer after
+  // it, and fixing only the server left the page just as blank.
   const deptBlocks = (data?.departments || [])
     .map((d) => ({
       ...d,
-      alwaysReview: d.alwaysReview.filter((s) => matchesSearch(s.rollNo)),
-      repeatReview: d.repeatReview.filter((s) => matchesSearch(s.rollNo)),
+      alwaysReview: (d.alwaysReview || []).filter((s) => matchesSearch(s.rollNo)),
+      repeatReview: (d.repeatReview || []).filter((s) => matchesSearch(s.rollNo)),
+      classes: (d.classes || [])
+        .map((cls) => ({
+          ...cls,
+          students: (cls.students || []).filter((s) => matchesSearch(s.rollNo)),
+        }))
+        .filter((cls) => cls.students.length),
+      weakStudents: (d.weakStudents || [])
+        .map((group) => ({
+          ...group,
+          students: (group.students || []).filter((s) => matchesSearch(s.rollNo)),
+        }))
+        .filter((group) => group.students.length),
+      // Periods hold no roll numbers, so a roll-number search cannot say
+      // anything about them; showing every period while the student tables are
+      // filtered down to one row reads as a bug. Unfiltered, they stay.
+      periods: search ? [] : (d.periods || []),
     }))
-    .filter((d) => d.alwaysReview.length || d.repeatReview.length);
+    .filter((d) =>
+      d.alwaysReview.length || d.repeatReview.length
+      || d.classes.length || d.weakStudents.length || d.periods.length);
 
   // "12-05 · Period 3 — 10:20–11:10 · DSP · LT103"
   const sessionRows = (sessions) => (
@@ -338,7 +392,15 @@ function ReviewAuditPanel({ fixedDepartment = '', showToast }) {
             <strong style={{ color: theme.warning }}>
               {data.stats.repeatReviewRows}
             </strong>{' '}
-            repeat-review student/subject pairs
+            repeat-review student/subject pairs ·{' '}
+            <strong style={{ color: theme.warning }}>
+              {data.stats.weakPeriods ?? 0}
+            </strong>{' '}
+            of {data.stats.periodsScanned ?? 0} periods more yellow than green ·{' '}
+            <strong style={{ color: theme.warning }}>
+              {data.stats.weakStudents ?? 0}
+            </strong>{' '}
+            students mostly yellow in the last {data.stats.zoneDays ?? 7} days
           </div>
         )}
       </section>
@@ -385,6 +447,209 @@ function ReviewAuditPanel({ fixedDepartment = '', showToast }) {
             <span style={{ fontSize: 11, color: theme.warning, fontWeight: 700 }}>
               Repeat ({data.minReviews}+): {d.repeatReview.length}
             </span>
+          </div>
+
+          {/* 0aa. Which STUDENT is weak, folded across every period.
+                 One row per roll number — the same student showing up under
+                 six period headings is six chances to miss that it is one
+                 person. Ranked by how many DIFFERENT periods they come out
+                 yellow in, because that is what separates the two causes: a
+                 student yellow repeatedly in one slot is probably sitting at
+                 the back of that room, while the same student yellow across
+                 unrelated hours is an enrolment photo problem, and only the
+                 second is worth re-enrolling over. */}
+          <div style={{ marginBottom: 24 }}>
+            <div className="cm-subhead">
+              Students recognised weakly — more yellow than green over the last{' '}
+              {data.zoneDays ?? 7} days, most affected periods first
+            </div>
+            {(d.weakStudents || []).length === 0 ? (
+              <div className="cm-empty">
+                Every recognised student came out green more often than yellow.
+              </div>
+            ) : (
+              (d.weakStudents || []).map((group) => (
+                <div key={group.semester} style={{ marginBottom: 14 }}>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: theme.text,
+                      margin: '10px 0 6px',
+                    }}
+                  >
+                    Semester {group.semester}
+                    <span style={{ fontWeight: 400, color: theme.textMuted, marginLeft: 8 }}>
+                      {group.students.length > WEAK_STUDENT_PAGE
+                        ? `showing ${Math.min(shownFor(d.department, group), group.weakStudents)} of ${group.weakStudents} students`
+                        : `${group.weakStudents} student${group.weakStudents === 1 ? '' : 's'}`}
+                      {' · '}
+                      <span style={{ color: theme.warning }}>{group.yellow} yellow</span>
+                      {' / '}
+                      <span style={{ color: theme.success }}>{group.green} green</span>
+                    </span>
+                  </div>
+                  <table className="cm-table">
+                    <thead>
+                      <tr>
+                        <th>Roll no</th>
+                        <th>Periods affected</th>
+                        <th>Runs seen</th>
+                        <th>Green</th>
+                        <th>Yellow</th>
+                        <th>Where</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.students.slice(0, shownFor(d.department, group)).map((st) => (
+                        <tr key={st.rollNo}>
+                          <td style={{ fontFamily: theme.fontMono, fontWeight: 600 }}>
+                            {/* Straight to the enrolled faces. A student yellow
+                                across unrelated periods is almost always bad
+                                ground truth, so the fix is one click from the
+                                number that says so — same link as the cuts
+                                below. */}
+                            {st.batch ? (
+                              <button
+                                type="button"
+                                className="cm-link"
+                                title={`Open ground truth photos for ${st.rollNo}`}
+                                onClick={() => setGtTarget({ batch: st.batch, rollNo: st.rollNo })}
+                              >
+                                {st.rollNo}
+                              </button>
+                            ) : (
+                              // No batch recorded — the modal loads by
+                              // (batch, rollNo) and would open empty.
+                              <span title="No batch recorded for this student">{st.rollNo}</span>
+                            )}
+                          </td>
+                          <td>
+                            <span className="low-badge">
+                              {st.weakPeriods} of {st.periodsSeen}
+                            </span>
+                          </td>
+                          <td>{st.seen}</td>
+                          <td style={{ color: theme.success, fontWeight: 600 }}>
+                            {st.greenPct}% <span style={{ color: theme.textMuted, fontWeight: 400 }}>({st.green})</span>
+                          </td>
+                          <td style={{ color: theme.warning, fontWeight: 600 }}>
+                            {st.yellowPct}% <span style={{ color: theme.textMuted, fontWeight: 400 }}>({st.yellow})</span>
+                          </td>
+                          <td style={{ fontSize: 11, color: theme.textMuted }}>
+                            {/* The periods themselves, worst first — the detail
+                                that says whether this is one room or all of
+                                them, without giving the student a row per
+                                period. */}
+                            {st.periods.map((prd) => (
+                              <div key={prd.timeSlot}>
+                                <span style={{
+                                  fontFamily: theme.fontMono,
+                                  color: prd.weak ? theme.warning : theme.textMuted,
+                                }}>
+                                  {prd.timeSlot}
+                                </span>
+                                {' '}
+                                {prd.yellow}Y/{prd.green}G
+                                {prd.rooms.length ? ` · ${prd.rooms.join(', ')}` : ''}
+                              </div>
+                            ))}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {group.students.length > shownFor(d.department, group) && (
+                    <button
+                      type="button"
+                      className="cm-link"
+                      style={{ marginTop: 6, fontSize: 12 }}
+                      onClick={() => showMore(d.department, group.semester)}
+                    >
+                      Show{' '}
+                      {Math.min(
+                        WEAK_STUDENT_PAGE,
+                        group.students.length - shownFor(d.department, group),
+                      )}{' '}
+                      more — {group.students.length - shownFor(d.department, group)} still
+                      hidden in semester {group.semester}
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* 0a. Which HOUR is weak, by confidence zone rather than by the
+                 merge's verdict.
+                 Everything below reads finalStatus, and the merge promotes a
+                 medium-confidence sighting to Present — so a room full of
+                 yellow zone chips produces zero on every other number here.
+                 This reads the zones directly and asks a different question:
+                 in this period, is the model more often unsure than sure?
+                 Per period, not per subject, because a weak hour is usually
+                 physical — where the camera points, sun through a west window
+                 at 3pm, lights off for a projector — and that belongs to a
+                 time and a room rather than to a syllabus. */}
+          <div style={{ marginBottom: 24 }}>
+            <div className="cm-subhead">
+              Recognition confidence by period — weakest hour first
+            </div>
+            {(d.periods || []).length === 0 ? (
+              <div className="cm-empty">
+                No recognised students in this window, so there is no confidence
+                split to report.
+              </div>
+            ) : (
+              <table className="cm-table">
+                <thead>
+                  <tr>
+                    <th>Period</th>
+                    <th>Rooms</th>
+                    <th>Recognised</th>
+                    <th>Green (high)</th>
+                    <th>Yellow (medium)</th>
+                    <th>Low</th>
+                    <th>Verdict</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(d.periods || []).map((p) => (
+                    <tr
+                      key={p.timeSlot}
+                      style={p.weak ? { background: 'rgba(245,158,11,0.07)' } : undefined}
+                    >
+                      <td style={{ fontFamily: theme.fontMono }}>{p.timeSlot}</td>
+                      <td style={{ fontSize: 11, color: theme.textMuted }}>
+                        {/* Named rather than counted: a period that is weak in
+                            one room only is a camera, not an hour. */}
+                        {p.rooms.map((r) => r.room).join(', ')}
+                      </td>
+                      <td>{p.seen}</td>
+                      <td style={{ color: theme.success, fontWeight: 600 }}>
+                        {p.highPct}% <span style={{ color: theme.textMuted, fontWeight: 400 }}>({p.high})</span>
+                      </td>
+                      <td style={{ color: theme.warning, fontWeight: 600 }}>
+                        {p.mediumPct}% <span style={{ color: theme.textMuted, fontWeight: 400 }}>({p.medium})</span>
+                      </td>
+                      <td style={{ color: theme.textMuted }}>
+                        {p.lowPct}% ({p.low})
+                      </td>
+                      <td>
+                        {p.weak ? (
+                          <span className="low-badge">
+                            yellow leads by {p.margin} pts
+                          </span>
+                        ) : (
+                          <span style={{ color: theme.textMuted, fontSize: 11 }}>ok</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
 
           {/* 0. Who is yellow in each class, most-flagged first.
