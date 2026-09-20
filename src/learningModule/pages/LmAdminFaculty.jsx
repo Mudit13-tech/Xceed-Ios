@@ -10,6 +10,7 @@ import {
   FormControl,
   FormLabel,
   HStack,
+  IconButton,
   Input,
   Link as RouterLinkStyle,
   Select,
@@ -24,12 +25,15 @@ import {
   VStack,
   Wrap,
   WrapItem,
+  useDisclosure,
   useToast,
 } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile, TableSkeleton } from '../components/common';
+import { LmIcon } from '../components/Icon';
+import RevokeRoleDialog from '../components/RevokeRoleDialog';
 
 /**
  * Faculty accounts, for an lm-admin.
@@ -398,6 +402,12 @@ export default function LmAdminFaculty() {
   const [selectedDept, setSelectedDept] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  /* The row whose FACULTY role is being taken off, if any. Held here rather
+     than inside the dialog so the table stays the thing that knows which row
+     the pointer was on. */
+  const [revoking, setRevoking] = useState(null);
+  const revokeModal = useDisclosure();
+  const toast = useToast();
 
   const load = useCallback(async (q, dept) => {
     setError(null);
@@ -557,6 +567,7 @@ export default function LmAdminFaculty() {
                   <Th>Added</Th>
                   <Th isNumeric>Classes</Th>
                   <Th>Status</Th>
+                  <Th></Th>
                 </Tr>
               </Thead>
               {/* One tbody per department rather than a Department column: the
@@ -566,7 +577,7 @@ export default function LmAdminFaculty() {
               {groups.map((group) => (
                 <Tbody key={group.dept}>
                   <Tr>
-                    <Td colSpan={5} bg="blackAlpha.50" py={2}>
+                    <Td colSpan={6} bg="blackAlpha.50" py={2}>
                       <HStack spacing={2}>
                         <Text fontWeight="700" fontSize="sm" color="lmFg.heading">
                           {group.dept}
@@ -596,6 +607,25 @@ export default function LmAdminFaculty() {
                       <Td>
                         <ClaimBadge claimed={person.claimed} />
                       </Td>
+                      <Td>
+                        {/* Icon-only and last, like the student directory's
+                            edit: the column exists for the rare account that
+                            has stopped teaching here, and a red word repeated
+                            down two hundred rows would read as the page's
+                            purpose. */}
+                        <IconButton
+                          aria-label={`Remove the faculty role from ${person.name || person.email}`}
+                          title="Remove the FACULTY role"
+                          icon={<LmIcon name="delete" size={15} />}
+                          size="xs"
+                          variant="ghost"
+                          colorScheme="red"
+                          onClick={() => {
+                            setRevoking(person);
+                            revokeModal.onOpen();
+                          }}
+                        />
+                      </Td>
                     </Tr>
                   ))}
                 </Tbody>
@@ -610,6 +640,32 @@ export default function LmAdminFaculty() {
           </Box>
         )}
       </SectionCard>
+
+      <RevokeRoleDialog
+        role="FACULTY"
+        person={revoking}
+        isOpen={revokeModal.isOpen}
+        onClose={revokeModal.onClose}
+        onDone={(result) => {
+          toast({
+            status: 'success',
+            title: `FACULTY removed from ${result.name || result.email}`,
+            // Both halves of the truth, because the second is the one an
+            // administrator is about to be surprised by.
+            description: [
+              result.hasNoRolesLeft
+                ? 'That account now holds no roles and will see no module until one is granted.'
+                : `Still holds: ${result.rolesLeft.join(', ')}.`,
+              result.ownedClasses
+                ? `They still own ${result.ownedClasses} class${result.ownedClasses === 1 ? '' : 'es'} and can still teach ${result.ownedClasses === 1 ? 'it' : 'them'}.`
+                : '',
+            ].filter(Boolean).join(' '),
+            duration: 10000,
+            isClosable: true,
+          });
+          load(search, selectedDept);
+        }}
+      />
     </VStack>
   );
 }

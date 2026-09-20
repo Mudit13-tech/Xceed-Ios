@@ -98,6 +98,36 @@ function EmptyState({ title, subtitle }) {
     );
 }
 
+// The date strings the API returns are DD-MM-YYYY, for display. Grouping the
+// dropdown by month makes a long list navigable — a room with a term of saved
+// frames otherwise shows a flat run of a hundred dates — and it makes the
+// ordering visible, which is what hid the bug where the list was sorted on the
+// display string and so came back grouped by day of the month.
+//
+// Order is preserved exactly as the server sent it (newest first, sorted on
+// YYYYMMDD). This only inserts the headings.
+const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+export function groupDatesByMonth(dates) {
+    const groups = [];
+    for (const value of Array.isArray(dates) ? dates : []) {
+        const parts = /^(\d{2})-(\d{2})-(\d{4})$/.exec(String(value || ''));
+        // Anything that is not DD-MM-YYYY keeps its place under its own heading
+        // rather than being dropped — a date we cannot parse is still a date
+        // somebody needs to open.
+        const label = parts
+            ? `${MONTH_NAMES[Number(parts[2]) - 1] || parts[2]} ${parts[3]}`
+            : 'Other';
+        const last = groups[groups.length - 1];
+        if (last && last.label === label) last.dates.push(value);
+        else groups.push({ label, dates: [value] });
+    }
+    return groups;
+}
+
 export default function FrameVerification({ fixedDepartment = '' }) {
     const { slotLabel } = usePeriods();
     // Deep-link support (e.g. from the ERP Overrides page): ?room=&date=&period=
@@ -557,8 +587,12 @@ export default function FrameVerification({ fixedDepartment = '' }) {
                                     <option value="">
                                         {!room ? 'Select room first' : availabilityLoading ? 'Loading dates...' : 'Select date'}
                                     </option>
-                                    {availableDates.map((item) => (
-                                        <option key={item} value={item}>{item}</option>
+                                    {groupDatesByMonth(availableDates).map((group) => (
+                                        <optgroup key={group.label} label={group.label}>
+                                            {group.dates.map((item) => (
+                                                <option key={item} value={item}>{item}</option>
+                                            ))}
+                                        </optgroup>
                                     ))}
                                 </select>
                             </div>

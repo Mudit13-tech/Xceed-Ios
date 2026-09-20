@@ -57,6 +57,27 @@ export function DeptAttendanceReport() {
     return <AttendanceReport fixedDepartment={deptToUse} />;
 }
 
+/**
+ * The same report screen, for a head of department and the Dean.
+ *
+ * Only the room selector differs: they read what their classes produced rather
+ * than run a session in a room, so the list is drawn from the reports on screen
+ * instead of the institute-wide camera registry. Everything that decides what
+ * may be READ is the server's — see getReports and getReportById, which scope
+ * both the listing and the detail to the reader's own departments.
+ *
+ * A separate export rather than a flag on the one above, so the department
+ * admin's screen cannot change by accident when this one does.
+ */
+export function LeadershipAttendanceReport() {
+    const { department, batchDepartment, fullAccess, loading } = useOutletContext();
+    if (loading) return null;
+    if (fullAccess) return <AttendanceReport roomsFromSavedReports />;
+    const deptToUse = batchDepartment || department;
+    if (!deptToUse) return null;
+    return <AttendanceReport fixedDepartment={deptToUse} roomsFromSavedReports />;
+}
+
 // Unscoped for every role, same as the iams-admin view: the page lists the
 // rooms that have a camera registered, with no department filter applied.
 export function DeptClassVerification() {

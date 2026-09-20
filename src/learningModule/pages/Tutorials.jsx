@@ -194,7 +194,7 @@ export default function Tutorials() {
                 </Text>
                 {isTeacher && tutorial.stats && (
                   <Text fontSize="xs" color="lmFg.muted">
-                    {tutorial.stats.attempts} submission(s)
+                    {tutorial.stats.submitted} submission(s)
                     {tutorial.stats.avg !== null && tutorial.stats.avg !== undefined
                       ? ` · avg ${Math.round(tutorial.stats.avg * 10) / 10}%`
                       : ''}

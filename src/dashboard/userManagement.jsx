@@ -61,16 +61,32 @@ const ROLE_OPTIONS = [
   { value: 'iams-admin', label: 'iLEED Admin' },
   { value: 'iams-dept-admin', label: 'iLEED Department Admin' },
   { value: 'lm-admin', label: 'LM Admin' },
-  /* Department-scoped: the server refuses HOD to an account with no primary
-     department, because every module that reads the role answers "which
-     department?" from that field. Set the department in the same row first. */
+  /* Department-scoped: the server refuses any of the three to an account with
+     no primary department, because every module that reads them answers "which
+     department?" from that field. Set the department in the same row first.
+
+     `HOD` is the appointment and says nothing about what a head may open; the
+     two below are the dashboards, one each, so a department can be given the
+     Learning view without the attendance one or the other way round. Assigning
+     a head from /superadmin/hods grants all three — these rows are for adding
+     a dashboard back, or taking one away, without ending the appointment. */
   { value: 'HOD', label: 'Head of Department' },
+  { value: 'hod-learning', label: 'HOD — Xceed Learning Dashboard' },
+  { value: 'hod-ileed', label: 'HOD — iLEED Dashboard' },
   /* Institute-wide, so unlike HOD above it needs no department — there is
      nothing to scope it to. /superadmin/deans is the usual way to grant it and
      shows who holds it; this row is so the role can be seen and taken away from
      the screen that manages every other one. */
   { value: 'DEAN', label: 'Dean (Academic)' },
 ];
+
+/* Roles are typed by hand, so the same role is stored `HOD`, `hod` and `Hod`.
+   Compared on the key, or the dropdown offers a role the account already holds
+   in another spelling — and adding it writes a duplicate. */
+const roleHeld = (roles, role) =>
+  (Array.isArray(roles) ? roles : [roles])
+    .filter(Boolean)
+    .some((held) => String(held).trim().toLowerCase() === String(role).trim().toLowerCase());
 
 const userEmails = (user) =>
   (Array.isArray(user.email) ? user.email : [user.email]).filter(Boolean).map(String);
@@ -557,7 +573,7 @@ const UserManagementPage = () => {
                               setSelectedRoles((s) => ({ ...s, [user._id]: e.target.value }))
                             }
                           >
-                            {ROLE_OPTIONS.filter((r) => !user.role?.includes(r.value)).map((r) => (
+                            {ROLE_OPTIONS.filter((r) => !roleHeld(user.role, r.value)).map((r) => (
                               <option key={r.value} value={r.value}>
                                 {r.label}
                               </option>
