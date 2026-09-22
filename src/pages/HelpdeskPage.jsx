@@ -223,6 +223,63 @@ const CSS = `
 .hd-chip:hover:not(:disabled){border-color:var(--accent);color:var(--accent-dark);
   background:var(--accent-bg);}
 .hd-chip:disabled{opacity:.5;cursor:not-allowed;}
+/* The "n more…" chip is the same shape as a question but is not one, so it
+   reads as an action rather than as the last item in the list. */
+.hd-chip-more{font-style:italic;color:var(--muted);border-style:dashed;}
+
+.hd-search{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 14px;}
+.hd-search-label{font-size:.78rem;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.04em;}
+.hd-search-input{flex:1 1 220px;min-width:0;font:inherit;font-size:.9rem;
+  padding:8px 12px;border-radius:999px;border:1px solid var(--control-line);
+  background:var(--surface);color:var(--ink);}
+.hd-search-input:focus{outline:none;border-color:var(--accent);
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);}
+.hd-empty{font-size:.88rem;color:var(--secondary);line-height:1.6;margin:0;}
+
+/* Quiet by design: a question people are reading past, not a demand. */
+.hd-rate{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 0 0;
+  padding:8px 12px;border-radius:10px;background:var(--surface-alt);}
+.hd-rate-q{font-size:.82rem;color:var(--secondary);}
+.hd-rate-btn{font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;
+  padding:3px 14px;border-radius:999px;border:1px solid var(--control-line);
+  background:var(--surface);color:var(--secondary);transition:all .12s;}
+.hd-rate-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent-dark);}
+.hd-rate-btn:disabled{opacity:.5;cursor:not-allowed;}
+
+/* The administrator's report. Plain and dense on purpose: it is read once a
+   week by somebody deciding what to rewrite, not browsed. */
+.hd-insights{border:1px solid var(--line);border-radius:12px;background:var(--surface);
+  padding:16px;margin:0 0 16px;}
+.hd-insights-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin:0 0 12px;}
+.hd-insights-head h3{margin:0;font-size:1rem;}
+.hd-insights-tiles{display:grid;gap:10px;margin:0 0 14px;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));}
+.hd-tile{background:var(--surface-alt);border-radius:10px;padding:10px 12px;}
+.hd-tile-n{display:block;font-size:1.4rem;font-weight:800;font-variant-numeric:tabular-nums;}
+.hd-tile-l{display:block;font-size:.74rem;color:var(--muted);line-height:1.4;margin-top:2px;}
+.hd-insights-scroll{overflow-x:auto;}
+.hd-insights-table{width:100%;border-collapse:collapse;font-size:.8rem;min-width:520px;}
+.hd-insights-table th{text-align:left;padding:6px 8px;color:var(--muted);font-size:.72rem;
+  text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--line);}
+.hd-insights-table td{padding:6px 8px;border-bottom:1px solid var(--line);
+  font-variant-numeric:tabular-nums;vertical-align:top;}
+.hd-insights-table td:first-child{font-variant-numeric:normal;}
+/* An answer people read and then abandoned. The queue, marked. */
+.hd-insights-table tr.is-flagged td{background:color-mix(in srgb, #ef4444 8%, transparent);}
+.hd-insights-q{display:block;color:var(--ink);}
+.hd-insights-m{display:block;font-size:.7rem;color:var(--muted);margin-top:1px;}
+.hd-insights-notice{display:inline-block;margin-top:3px;padding:0 6px;border-radius:999px;
+  background:var(--brand-bg,var(--surface-alt));color:var(--accent-dark);font-size:.65rem;
+  font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+.hd-insights-foot{margin:12px 0 0;font-size:.74rem;color:var(--muted);line-height:1.5;}
+/* The ask count, for administrators. Deliberately quiet: it is a note on the
+   chip for somebody reading the page as a report, not a figure competing with
+   the question itself. */
+.hd-chip-count{display:inline-block;margin-left:7px;padding:1px 7px;border-radius:999px;
+  background:var(--surface-alt);color:var(--muted);font-size:.72em;font-weight:700;
+  font-variant-numeric:tabular-nums;}
 
 /* ── action cards ── */
 .hd-action{border:1px solid var(--line);border-radius:12px;background:var(--surface);
@@ -255,6 +312,13 @@ textarea.hd-input{min-height:120px;resize:vertical;line-height:1.6;}
 
 .hd-error{background:var(--bad-bg);border:1px solid var(--bad-line);color:var(--bad-text);
   border-radius:8px;padding:9px 12px;font-size:.83rem;margin:0 0 10px;line-height:1.55;}
+
+/* A question, so it is amber rather than the red of .hd-error — nothing has
+   gone wrong and the address may well be the one they meant. Both colours come
+   from the tokens above, so this reads correctly in dark mode too. */
+.hd-confirm{background:var(--warn-bg);border:1px solid var(--warn);color:var(--warn-text);
+  border-radius:8px;padding:11px 13px;margin:0 0 10px;}
+.hd-confirm p{margin:0 0 11px;color:inherit;font-size:.84rem;line-height:1.55;}
 
 /* ── gate ── */
 .hd-gate{background:var(--surface);border:1px solid var(--line);border-radius:16px;
@@ -392,10 +456,43 @@ const accentVars = (category) => {
  * the second question is nearly always next door to the first, and forty
  * questions under an answer buries it. One button widens it back out again.
  */
-function QuestionMenu({ menu, open, onOpen, onAsk, busy, asked }) {
+/* How many questions a module shows before it offers the rest.
+   The Learning module carries fifteen and Conferences carries one; a wall of
+   chips is the cost of that imbalance, paid by every module. The menu is
+   already ordered most-asked-first, so the cut is not arbitrary — what is
+   hidden is what nobody asks. */
+const CHIPS_BEFORE_MORE = 8;
+
+/** Matches a question the way somebody skimming would: all the words, any order. */
+const matches = (question, query) => {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const haystack = question.toLowerCase();
+  return words.every((word) => haystack.includes(word));
+};
+
+function QuestionMenu({ menu, open, onOpen, onAsk, busy, asked, counts, query }) {
   const chip = (topic) => (
-    <button className="hd-chip" key={topic.id} type="button" disabled={busy} onClick={() => onAsk(topic)}>
+    <button
+      className="hd-chip"
+      key={topic.id}
+      type="button"
+      disabled={busy}
+      onClick={() => onAsk(topic)}
+      /* The count as a description rather than part of the name: the button is
+         still "Am I registered?", and the number is what it is worth knowing
+         about it. */
+      title={counts ? `Asked ${counts[topic.id] || 0} time(s)` : undefined}
+    >
       {topic.question}
+      {/* Administrators only — `counts` is null for everybody else. The number
+          is what the menu is already ordered by, so the chips read in the order
+          the numbers explain. */}
+      {counts ? (
+        <span className="hd-chip-count" aria-hidden="true">
+          {counts[topic.id] || 0}
+        </span>
+      ) : null}
     </button>
   );
 
@@ -404,16 +501,51 @@ function QuestionMenu({ menu, open, onOpen, onAsk, busy, asked }) {
      above, and a chip that re-asks it reads as a broken one. */
   const rest = group ? group.topics.filter((topic) => topic.id !== asked) : [];
 
+  /* ── searching ────────────────────────────────────────────────────────────
+     A search crosses the modules. Somebody typing "roll number" does not know
+     whether that lives under Attendance or the Learning module — that is the
+     whole reason they are typing rather than browsing — so the module cards
+     are set aside while a query is live and the matches are listed flat. */
+  if (query) {
+    const hits = menu
+      .flatMap((entry) => entry.topics.map((topic) => ({ ...topic, category: entry.category })))
+      .filter((topic) => matches(topic.question, query));
+
+    if (!hits.length) {
+      return (
+        <div className="hd-group">
+          <p className="hd-group-title">Nothing matches “{query}”</p>
+          <p className="hd-empty">
+            Try a word from the problem rather than the page — “code”, “roll number”, “timetable”.
+            Or clear the box and pick a module; if none of them fit, the last card on the page
+            sends your question to a person.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="hd-group">
+        <p className="hd-group-title">
+          {hits.length} question{hits.length === 1 ? '' : 's'} matching “{query}”
+        </p>
+        <div className="hd-chips">{hits.map(chip)}</div>
+      </div>
+    );
+  }
+
   /* A module with nothing left in it — Conferences has one question — falls
      back to everything rather than to an empty heading. */
   if (!group || !rest.length) {
     return (
       <div>
         {menu.map((entry) => (
-          <div className="hd-group hd-module" key={entry.category} style={accentVars(entry.category)}>
-            <p className="hd-group-title">{entry.category}</p>
-            <div className="hd-chips">{entry.topics.map(chip)}</div>
-          </div>
+          <QuestionGroup
+            key={entry.category}
+            entry={entry}
+            chip={chip}
+            onOpen={onOpen}
+          />
         ))}
       </div>
     );
@@ -427,6 +559,35 @@ function QuestionMenu({ menu, open, onOpen, onAsk, busy, asked }) {
         <button className="hd-btn ghost" type="button" onClick={() => onOpen('')}>
           Show every question
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One module's questions, capped.
+ *
+ * Every question of every module at once is forty-one chips, and the modules
+ * are lopsided — fifteen under the Learning module, one under Conferences — so
+ * the wall is really one module's doing and all of them pay for it. The menu
+ * arrives ordered most-asked-first, so showing the first few and offering the
+ * rest hides what nobody asks rather than an arbitrary tail.
+ */
+function QuestionGroup({ entry, chip, onOpen }) {
+  const [all, setAll] = useState(false);
+  const hidden = entry.topics.length - CHIPS_BEFORE_MORE;
+  const shown = all ? entry.topics : entry.topics.slice(0, CHIPS_BEFORE_MORE);
+
+  return (
+    <div className="hd-group hd-module" style={accentVars(entry.category)}>
+      <p className="hd-group-title">{entry.category}</p>
+      <div className="hd-chips">
+        {shown.map(chip)}
+        {hidden > 0 && !all ? (
+          <button className="hd-chip hd-chip-more" type="button" onClick={() => setAll(true)}>
+            {hidden} more…
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -656,10 +817,145 @@ const askedSoFar = (thread) =>
     .join(' · ')
     .slice(0, 600);
 
+/**
+ * What the help desk knows about itself, for an administrator.
+ *
+ * The counts on the chips answer "which questions does this page carry". They
+ * do not answer the question worth asking, which is whether it is carrying
+ * them well — and by count alone a popular answer and a useless one look
+ * identical. Three things separate them, and they are put side by side here
+ * because each is misleading on its own:
+ *
+ *  - **Asked** in total, and in the last N days. Forty over two years and
+ *    forty since Tuesday are the same total and different facts.
+ *  - **Gave up** — read this answer, then wrote to a human anyway. An answer
+ *    that fails does it here, and nowhere else the page can see.
+ *  - **Rated** — what the readers said when asked outright.
+ *
+ * Sorted by gave-up first, because that is the queue: the answer most often
+ * read and then abandoned is the one to rewrite next, whatever its total.
+ */
+function Insights({ data, menu, onClose }) {
+  const titles = Object.fromEntries(
+    menu.flatMap((group) => group.topics.map((topic) => [topic.id, topic.question])),
+  );
+  const moduleOf = Object.fromEntries(
+    menu.flatMap((group) => group.topics.map((topic) => [topic.id, group.category])),
+  );
+
+  const rows = Object.keys(titles)
+    .map((id) => ({
+      id,
+      question: titles[id],
+      module: moduleOf[id],
+      asked: data.counts?.[id] || 0,
+      recent: data.recent?.[id] || 0,
+      missed: data.misses?.[id] || 0,
+      helpful: data.feedback?.[id]?.helpful || 0,
+      notHelpful: data.feedback?.[id]?.notHelpful || 0,
+      notice: data.notices?.[id] || null,
+    }))
+    /* Everything, not just what has been asked: a question nobody has ever
+       asked is itself a finding — either nobody has that problem, or nobody
+       can find the question. */
+    .sort((a, b) => b.missed - a.missed || b.notHelpful - a.notHelpful || b.asked - a.asked);
+
+  const funnel = data.funnel || {};
+
+  return (
+    <div className="hd-insights">
+      <div className="hd-insights-head">
+        <h3>How this page is doing</h3>
+        <button className="hd-btn ghost" type="button" onClick={onClose}>
+          Hide
+        </button>
+      </div>
+
+      <div className="hd-insights-tiles">
+        <div className="hd-tile">
+          <span className="hd-tile-n">{data.total ?? 0}</span>
+          <span className="hd-tile-l">answers served, all time</span>
+        </div>
+        <div className="hd-tile">
+          <span className="hd-tile-n">{funnel.requested ?? 0}</span>
+          <span className="hd-tile-l">codes asked for, last {data.windowDays} days</span>
+        </div>
+        <div className="hd-tile">
+          <span className="hd-tile-n">
+            {/* Null, not nought, when nobody reached the gate — "nobody
+                finished" and "nobody arrived" are different facts and a bare
+                0% says the first while meaning the second. */}
+            {funnel.completion === null || funnel.completion === undefined
+              ? '—'
+              : `${funnel.completion}%`}
+          </span>
+          <span className="hd-tile-l">
+            got through the code step ({funnel.verified ?? 0} of {funnel.requested ?? 0})
+          </span>
+        </div>
+      </div>
+
+      <div className="hd-insights-scroll">
+        <table className="hd-insights-table">
+          <thead>
+            <tr>
+              <th>Question</th>
+              <th>Asked</th>
+              <th>Last {data.windowDays}d</th>
+              <th>Gave up</th>
+              <th>Helped</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className={row.missed ? 'is-flagged' : undefined}>
+                <td>
+                  <span className="hd-insights-q">{row.question}</span>
+                  <span className="hd-insights-m">{row.module}</span>
+                  {row.notice ? <span className="hd-insights-notice">notice</span> : null}
+                </td>
+                <td>{row.asked}</td>
+                <td>{row.recent}</td>
+                {/* The number that orders this table: read, then wrote to a
+                    person anyway. */}
+                <td>{row.missed || ''}</td>
+                <td>
+                  {row.helpful || row.notHelpful ? (
+                    <span title={`${row.helpful} yes, ${row.notHelpful} no`}>
+                      {row.helpful}/{row.helpful + row.notHelpful}
+                    </span>
+                  ) : (
+                    ''
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="hd-insights-foot">
+        None of these numbers record who asked — one row per question for the whole
+        installation. “Gave up” counts the answers somebody read immediately before writing
+        to the XCEED team.
+      </p>
+    </div>
+  );
+}
+
 /* ── the page ───────────────────────────────────────────────────────────── */
 
 export default function HelpdeskPage() {
   const [menu, setMenu] = useState([]);
+  /* null until the counts endpoint answers, and null for ever for everybody it
+     refuses — which is how the page knows not to draw them. */
+  const [askCounts, setAskCounts] = useState(null);
+  /* The whole insights payload behind those counts: the recent window, the
+     answers people gave up on, the ratings, and the front-door funnel. Held
+     separately from `askCounts` because the chips want one number and the
+     report wants all of them. */
+  const [insights, setInsights] = useState(null);
+  const [insightsOpen, setInsightsOpen] = useState(false);
   /* `checking` is the very first stage: a visitor who is already signed in gets
      a pass without an email round trip (see the probe below), and rendering the
      address form for the moment that takes would ask a signed-in user for the
@@ -670,6 +966,11 @@ export default function HelpdeskPage() {
   const [pass, setPass] = useState('');
   const [otp, setOtp] = useState('');
   const [gateNote, setGateNote] = useState('');
+  /* The "are you sure?" the server sends back the first time a personal address
+     is entered, and null the rest of the time. Held as the question itself
+     rather than as a boolean so the address it names is the one the server
+     normalised, not the one still sitting in the input. */
+  const [nonInstituteAsk, setNonInstituteAsk] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [thread, setThread] = useState([]);
@@ -685,6 +986,24 @@ export default function HelpdeskPage() {
   /* The question just answered, so the list of what to ask next does not offer
      it back. */
   const [lastAsked, setLastAsked] = useState('');
+  /* A question named in the URL — /help?topic=no-account.
+     Read once, at mount, and held until the gate opens: a link in a support
+     reply or a manual arrives before anybody has verified an address, and
+     the point of the link is that it survives that. Cleared as it is asked,
+     so a back-navigation does not ask it again. */
+  const [pendingTopic, setPendingTopic] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('topic') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  /* What is typed into the search box above the questions. Held here rather
+     than in QuestionMenu so that asking a question can clear it — the answer
+     is the thing being looked for, and leaving the query live would bury it
+     under its own search results. */
+  const [query, setQuery] = useState('');
   /* Whether this account is a member of staff, which decides one thing: whether
      the manuals are offered at the top. Answered by the server on the way in,
      so the page never guesses from an address. */
@@ -731,6 +1050,31 @@ export default function HelpdeskPage() {
       .then((response) => response.json())
       .then((data) => setMenu(data.menu || []))
       .catch(() => setMenu([]));
+  }, []);
+
+  /* How often each question has been asked, for administrators.
+     The request itself is the check: the route is behind checkRole(['admin']),
+     so a refusal means "not an administrator" and there is nothing to ask
+     anybody. A visitor with no session gets a 401 here and a page identical to
+     the one they have always had. */
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API}/topic-counts`, { credentials: 'include' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        /* The shape, not just the status. A 200 carrying something else — a
+           proxy's error page, a stub — is not an administrator's counts, and
+           treating it as one would draw a nought beside every question for a
+           visitor who is not one. */
+        if (!cancelled && data && data.counts && typeof data.counts === 'object') {
+          setAskCounts(data.counts);
+          setInsights(data);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /**
@@ -812,6 +1156,9 @@ export default function HelpdeskPage() {
       if (!response.ok) {
         const failure = new Error(data.message || 'Something went wrong. Please try again.');
         failure.status = response.status;
+        /* Carried onto the error because it is the one non-2xx reply that is a
+           question rather than a fault — see `requestCode`. */
+        failure.confirmNonInstitute = Boolean(data.confirmNonInstitute);
         throw failure;
       }
       return data;
@@ -819,19 +1166,37 @@ export default function HelpdeskPage() {
     [pass],
   );
 
-  const requestCode = async (event) => {
-    event.preventDefault();
+  /**
+   * Asks for the code.
+   *
+   * `confirmed` is the second pass at a personal address: the server answers
+   * the first one with a question instead of a code (see `requestCode` in
+   * helpdeskController.js), and this sends it back with the answer. Asked once
+   * per address — `nonInstituteAsk` is cleared on the way through, so somebody
+   * who has said yes is not asked again when the code needs resending.
+   */
+  const requestCode = async (event, confirmed = false) => {
+    event?.preventDefault?.();
     setError('');
     setBusy(true);
     try {
       const data = await call(`${API}/code`, {
         method: 'POST',
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({
+          email: email.trim(),
+          ...(confirmed ? { confirmNonInstitute: true } : {}),
+        }),
       });
+      setNonInstituteAsk(null);
       setGateNote(data.message);
       setStage('code');
     } catch (failure) {
-      setError(failure.message);
+      /* Not an error — a question. `call` throws on any non-2xx, so the 409
+         that carries the confirmation arrives here; showing it in the red box
+         under the button would read as a refusal, which is the one thing it is
+         not. */
+      if (failure.confirmNonInstitute) setNonInstituteAsk(failure.message);
+      else setError(failure.message);
     } finally {
       setBusy(false);
     }
@@ -876,6 +1241,21 @@ export default function HelpdeskPage() {
     }
   };
 
+  /* Ask the question the URL named, once the gate is open and the menu has
+     arrived — the menu is what turns an id into a question with a module, and
+     asking before it lands would file the answer under no module at all.
+
+     An id nobody recognises is dropped in silence rather than answered with an
+     error: a stale link in an old mail should land somebody on the help desk,
+     which is useful, not on a complaint about a link they did not write. */
+  useEffect(() => {
+    if (!pendingTopic || stage !== 'chat' || !menu.length) return;
+    const topic = menuTopic(pendingTopic);
+    setPendingTopic('');
+    if (topic) askTopic(topic);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingTopic, stage, menu]);
+
   /* The pass has run out. Say so where the answer would have been and put the
      visitor back at the door, rather than showing a bare 401. */
   const handleExpiry = () => {
@@ -887,7 +1267,32 @@ export default function HelpdeskPage() {
     setLastAsked('');
     setStage('email');
     setGateNote('');
+    setNonInstituteAsk(null);
     setError('Your help-desk session has expired. Verify your address again to carry on.');
+  };
+
+  /**
+   * Records whether the answer helped.
+   *
+   * Marked rated on the message itself rather than in a set of ids, because
+   * the same question asked twice in one session is two messages and the
+   * second one deserves its own ask. Nothing is undone if the request fails:
+   * the visitor did their part, and a rating that did not record is the
+   * page's problem, not something to report back as a failure.
+   */
+  const rateAnswer = async (message, helpful) => {
+    setThread((previous) =>
+      previous.map((entry) => (entry === message ? { ...entry, rated: true } : entry)),
+    );
+    try {
+      await call(`${API}/action/rate-answer`, {
+        method: 'POST',
+        body: JSON.stringify({ topicId: message.id, helpful }),
+      });
+    } catch {
+      /* Deliberately silent. The thanks is already on screen and the number is
+         not worth an error message to somebody who was trying to be helpful. */
+    }
   };
 
   const askTopic = async (topic) => {
@@ -902,6 +1307,7 @@ export default function HelpdeskPage() {
        under an answer buries the answer. */
     setOpenModule(asked);
     setLastAsked(topic.id);
+    setQuery('');
     setThread((previous) => [...previous, { side: 'me', text: topic.question, category: asked }]);
     try {
       const data = await call(`${API}/topic/${topic.id}`);
@@ -935,7 +1341,17 @@ export default function HelpdeskPage() {
            four answers is describing the fifth thing, and without the four the
            reply is a request for them. */
         body: JSON.stringify(
-          action.id === 'ask-question' ? { ...values, context: askedSoFar(thread) } : values,
+          action.id === 'ask-question'
+            ? {
+                ...values,
+                context: askedSoFar(thread),
+                /* The answer on screen when they gave up. Counted server-side
+                   against that question — an answer read and then followed by
+                   "my question is not answered here" failed at the one job it
+                   had, and that pair is the only place the page can see it. */
+                lastTopic: lastAsked,
+              }
+            : values,
         ),
       });
       setThread((previous) => [...previous, { side: 'bot', category, ...data.answer }]);
@@ -968,9 +1384,14 @@ export default function HelpdeskPage() {
     setCategory('');
     setThread([]);
     setGateNote('');
+    setNonInstituteAsk(null);
     setError('');
     setStage('email');
   };
+
+  /* How many questions the page is offering, which is what decides whether a
+     search box earns its place — not how many modules they are filed under. */
+  const questionCount = menu.reduce((total, group) => total + group.topics.length, 0);
 
   /** One topic from the menu by id, for a link that asks it directly. */
   const menuTopic = (topicId) =>
@@ -1059,14 +1480,50 @@ export default function HelpdeskPage() {
                     autoComplete="email"
                     placeholder="you@nitj.ac.in"
                     value={email}
-                    onChange={(event) => setEmail(event.target.value)}
+                    onChange={(event) => {
+                      setEmail(event.target.value);
+                      /* The question was about the address as it was. Changing
+                         a character makes it a different address, and a "yes"
+                         standing over from the old one would let a typo the
+                         person is in the middle of fixing through unasked. */
+                      setNonInstituteAsk(null);
+                    }}
                     required
                   />
                 </div>
                 {error ? <div className="hd-error">{error}</div> : null}
-                <button className="hd-btn" type="submit" disabled={busy || !email.trim()}>
-                  {busy ? 'Sending…' : 'Send me a code'}
-                </button>
+                {/* The confirmation, in place of the button rather than beside
+                    it: leaving "Send me a code" live next to a question asking
+                    whether they meant this address makes the question skippable
+                    by the reflex of pressing the same button again, which is
+                    exactly the reflex that got the wrong address typed. */}
+                {nonInstituteAsk ? (
+                  <div className="hd-confirm" role="alert">
+                    <p>{nonInstituteAsk}</p>
+                    <div className="hd-row">
+                      <button
+                        className="hd-btn"
+                        type="button"
+                        disabled={busy}
+                        onClick={(event) => requestCode(event, true)}
+                      >
+                        {busy ? 'Sending…' : 'Yes, send the code anyway'}
+                      </button>
+                      <button
+                        className="hd-btn ghost"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setNonInstituteAsk(null)}
+                      >
+                        Let me change it
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button className="hd-btn" type="submit" disabled={busy || !email.trim()}>
+                    {busy ? 'Sending…' : 'Send me a code'}
+                  </button>
+                )}
 
                 {/* What is behind the gate, as the modules themselves rather
                     than as forty question titles. Enough to recognise your own
@@ -1164,6 +1621,38 @@ export default function HelpdeskPage() {
                     </div>
                   </div>
 
+                  {/* Was it any use? Asked of the newest answer only, and only
+                      of a real one — an error bubble has no topic id, and
+                      "was this helpful" under "that did not work" is a poor
+                      joke. Once answered it says thank you rather than
+                      disappearing, so the press is visibly received. */}
+                  {message === last && message.id && !message.rated ? (
+                    <div className="hd-rate">
+                      <span className="hd-rate-q">Did this answer help?</span>
+                      <button
+                        className="hd-rate-btn"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => rateAnswer(message, true)}
+                      >
+                        Yes
+                      </button>
+                      <button
+                        className="hd-rate-btn"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => rateAnswer(message, false)}
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : null}
+                  {message === last && message.rated ? (
+                    <div className="hd-rate">
+                      <span className="hd-rate-q">Thank you — noted.</span>
+                    </div>
+                  ) : null}
+
                   {/* Follow-ups belong to the newest reply only. Leaving them
                       live on older messages invites a click that answers a
                       question two screens back. */}
@@ -1204,8 +1693,58 @@ export default function HelpdeskPage() {
               </div>
             ) : null}
 
+            {/* Administrators only — `insights` is null for everybody the
+                counts route refuses. Folded away by default: this is a report
+                about the page, and an administrator who opened /help to answer
+                somebody's question came for the answers. */}
+            {insights ? (
+              insightsOpen ? (
+                <Insights data={insights} menu={menu} onClose={() => setInsightsOpen(false)} />
+              ) : (
+                <div className="hd-row" style={{ marginBottom: 14 }}>
+                  <button
+                    className="hd-btn ghost"
+                    type="button"
+                    onClick={() => setInsightsOpen(true)}
+                  >
+                    How this page is doing
+                  </button>
+                </div>
+              )
+            ) : null}
+
+            {/* A search over the question titles, not a box that takes a
+                question. The distinction is the page's whole design — every
+                answer here is written and checked, and a free-text box invites
+                the ones it cannot answer — so this filters the menu and
+                nothing else. At forty-one questions across six modules it is
+                the difference between finding yours and reading all of them. */}
+            {questionCount > CHIPS_BEFORE_MORE ? (
+              <div className="hd-search">
+                <label className="hd-search-label" htmlFor="hd-search">
+                  Search the questions
+                </label>
+                <input
+                  id="hd-search"
+                  type="search"
+                  className="hd-search-input"
+                  placeholder="roll number, timetable, code…"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  autoComplete="off"
+                />
+                {query ? (
+                  <button className="hd-btn ghost" type="button" onClick={() => setQuery('')}>
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
             <QuestionMenu
               menu={menu}
+              query={query.trim()}
+              counts={askCounts}
               open={openModule}
               onOpen={setOpenModule}
               onAsk={askTopic}

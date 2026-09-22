@@ -26,6 +26,28 @@ import getEnvironment from '../getenvironment';
 
 const apiUrl = getEnvironment();
 
+/**
+ * XCEED accounts only ever exist on an institute address, so a personal one on
+ * this form is a mistyped or misremembered address rather than a lost account.
+ *
+ * The server refuses it too, and its answer is the one that counts — this copy
+ * exists so the person is told before a round trip, in the same breath as the
+ * "enter a valid email address" check next to it. Subdomains count
+ * (`cse.nitj.ac.in`); the server's rule is `modules/instituteEmail.js` and the
+ * two are meant to agree.
+ */
+const INSTITUTE_DOMAINS = ['nitj.ac.in'];
+
+const isInstituteAddress = (value) => {
+  const email = String(value || '').trim().toLowerCase();
+  const domain = email.slice(email.lastIndexOf('@') + 1);
+  return INSTITUTE_DOMAINS.some(
+    (allowed) => domain === allowed || domain.endsWith(`.${allowed}`),
+  );
+};
+
+const INSTITUTE_DOMAIN_LIST = INSTITUTE_DOMAINS.map((domain) => `@${domain}`).join(', ');
+
 const ForgotPassword = () => {
   const [step, setStep] = useState('email'); // 'email' | 'reset' | 'done'
   const [email, setEmail] = useState('');
@@ -113,6 +135,14 @@ const ForgotPassword = () => {
     setInfo('');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setError('Enter a valid email address.');
+      return;
+    }
+    if (!isInstituteAddress(email)) {
+      setError(
+        `${email.trim()} is not an institute address. XCEED accounts are only created on ` +
+        `institute addresses (${INSTITUTE_DOMAIN_LIST}), so please check the address and ` +
+        'try again with your institute email.',
+      );
       return;
     }
     setIsLoading(true);
@@ -389,10 +419,11 @@ const ForgotPassword = () => {
                 <Text as="span" fontWeight="600">
                   Not receiving an OTP?
                 </Text>{' '}
-                Your account is created only once a faculty member invites you to a
-                classroom — until then there is nothing to reset. Ask your faculty to
-                create the classroom and invite you; you will then receive the link to
-                set your password.
+                Use your institute address ({INSTITUTE_DOMAIN_LIST}) — XCEED has no
+                accounts on personal addresses such as Gmail. Your account is created
+                only once a faculty member invites you to a classroom, so until then
+                there is nothing to reset. Ask your faculty to create the classroom and
+                invite you; you will then receive the link to set your password.
               </Text>
               {/* The help desk rather than the support address. It answers this
                   exact question against the real account — whether an account

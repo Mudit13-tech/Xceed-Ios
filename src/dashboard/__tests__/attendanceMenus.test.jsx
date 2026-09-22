@@ -236,4 +236,34 @@ describe('which menus the views actually draw', () => {
       expect(within(deanRow).getByText('has a screen')).toBeInTheDocument();
     }
   });
+
+  /* An administrator configuring which panels a view carries had no way to go
+     and look at the result. These go to the real screens rather than an
+     admin-only twin, which works because checkRole lets `admin` past every
+     gate and resolveAttendanceAccess has an explicit admin branch that grants
+     institute scope with no department — so a platform admin is not refused
+     for heading no department. */
+  it('offers a View link into each iLEED view', async () => {
+    renderPanel();
+    await screen.findByRole('heading', { name: HOD });
+
+    const hodView = within(column(HOD)).getByRole('link', { name: /view/i });
+    expect(hodView).toHaveAttribute('href', '/ileed-hod/dashboard');
+
+    const deanView = within(column(DEAN)).getByRole('link', { name: /view/i });
+    expect(deanView).toHaveAttribute('href', '/ileed-dean/dashboard');
+  });
+
+  /* A navigation would discard unsaved toggles, and comparing the switches
+     against the screen they produce is the entire reason to click it. */
+  it('opens each view in a new tab', async () => {
+    renderPanel();
+    await screen.findByRole('heading', { name: HOD });
+
+    for (const title of [HOD, DEAN]) {
+      const link = within(column(title)).getByRole('link', { name: /view/i });
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', expect.stringContaining('noreferrer'));
+    }
+  });
 });

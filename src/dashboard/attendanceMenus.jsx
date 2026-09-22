@@ -14,7 +14,7 @@ import {
   useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
-import { FiSave } from 'react-icons/fi';
+import { FiExternalLink, FiSave } from 'react-icons/fi';
 import getEnvironment from '../getenvironment';
 import { ALL_MENUS, leadershipMenuKeysFor } from '../attendancemodule/menuCatalogue';
 
@@ -58,6 +58,17 @@ const apiUrl = getEnvironment();
  * request that is not a GET by `refuseAttendanceWrites`, and re-checked per
  * menu on the server by `requireHodMenu` / `requireDeanMenu`. A toggle here
  * grants visibility, never the ability to change anything.
+ *
+ * ── View opens the real screen, not a copy of it.
+ *
+ * Unlike the learning module's panel, which links to `lm-admin` twins of its
+ * dashboards, these go straight to `/ileed-hod` and `/ileed-dean`. No twin is
+ * needed: `checkRole` lets the `admin` role past every gate, and
+ * `resolveAttendanceAccess` has an explicit admin branch that sets
+ * `attendanceFullAccess` with no department — so an administrator opening a
+ * head's dashboard sees it at institute scope rather than being refused for
+ * heading no department. What they are checking is which panels the toggles
+ * above put on the screen, and that is the same answer at either scope.
  */
 
 const AUDIENCES = [
@@ -65,6 +76,7 @@ const AUDIENCES = [
     key: 'hod',
     field: 'hodMenus',
     endpoint: '/attendancemodule/settings/batches/hod-menus',
+    view: '/ileed-hod/dashboard',
     title: 'HOD — iLEED menus',
     blurb:
       "What a head of department may look at, scoped to the department they head. The same setting as the Head of Department section in the attendance module's Dept Menu Config.",
@@ -74,6 +86,7 @@ const AUDIENCES = [
     key: 'dean',
     field: 'deanMenus',
     endpoint: '/attendancemodule/settings/batches/dean-menus',
+    view: '/ileed-dean/dashboard',
     title: 'Dean (Academic) — iLEED menus',
     blurb:
       'What the Dean (Academic) may look at, across every department at once. Its own document, so it need not match the heads.',
@@ -232,7 +245,8 @@ const AttendanceMenusPanel = () => {
           already restricted to the role they are named after, and refuse anything that is
           not a read. The HOD column is the same setting as the Head of Department section
           in the attendance module&apos;s Dept Menu Config; editing it in either place edits
-          the same document.
+          the same document. <strong>View</strong> opens that view in a new tab, at
+          institute scope, so you can see what these switches put on the screen.
         </Box>
       </Alert>
 
@@ -265,16 +279,33 @@ const AttendanceMenusPanel = () => {
                       {audience.blurb}
                     </Text>
                   </Box>
-                  <Button
-                    size="sm"
-                    colorScheme={audience.accent}
-                    leftIcon={<FiSave />}
-                    onClick={() => save(audience)}
-                    isLoading={saving === audience.key}
-                    isDisabled={!dirty[audience.key] || !stored}
-                  >
-                    Save
-                  </Button>
+                  <Flex gap={2} flexShrink={0}>
+                    {/* A new tab rather than a navigation: leaving this screen
+                        to look at the view would throw away unsaved toggles,
+                        and comparing the two is the whole point. */}
+                    <Button
+                      as="a"
+                      href={audience.view}
+                      target="_blank"
+                      rel="noreferrer"
+                      size="sm"
+                      variant="outline"
+                      colorScheme={audience.accent}
+                      leftIcon={<FiExternalLink />}
+                    >
+                      View
+                    </Button>
+                    <Button
+                      size="sm"
+                      colorScheme={audience.accent}
+                      leftIcon={<FiSave />}
+                      onClick={() => save(audience)}
+                      isLoading={saving === audience.key}
+                      isDisabled={!dirty[audience.key] || !stored}
+                    >
+                      Save
+                    </Button>
+                  </Flex>
                 </Flex>
 
                 {!stored ? (

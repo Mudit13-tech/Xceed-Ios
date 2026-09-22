@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
-  AlertIcon,
   Badge,
   Box,
   Button,
@@ -22,6 +20,7 @@ import {
 } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
+import { noteThread, noteThreadLabel, noteByline } from '../bugNotes';
 import { EmptyState, ErrorState, Loading, SectionCard, TableSkeleton } from '../components/common';
 import { formatDateTime, relativeTime } from '../format';
 import { githubIssueUrl } from '../githubIssue';
@@ -63,6 +62,21 @@ const KIND_COPY = {
   },
 };
 
+/* "Not about a class" as a value the dropdown can hold.
+
+   A bug had to name a class, and plenty of them are not about one — the sign-in
+   page, a mail that did not arrive, the whole module being down. With no way to
+   say so, the reporter picked a class at random and the queue learned something
+   false about where the trouble was. The queue has always been able to show
+   this (`report.className ? ` · in ${x}` : ' · platform-wide'`) and the server
+   has always accepted it; only the form refused to offer it.
+
+   A sentinel rather than the empty string, because the empty string is the
+   dropdown's own "nothing chosen yet" and the two mean different things: one is
+   an answer, the other is the absence of one. Sent as null, which is what
+   platform-wide already is on the wire. */
+const GENERAL = '__general__';
+
 function ReportForm({ classes, pointsPerReport, onSent }) {
   const [kind, setKind] = useState('bug');
   const [title, setTitle] = useState('');
@@ -97,7 +111,7 @@ function ReportForm({ classes, pointsPerReport, onSent }) {
         kind,
         title: title.trim(),
         description: description.trim(),
-        classId: classId || null,
+        classId: classId && classId !== GENERAL ? classId : null,
         pageUrl: pageUrl.trim(),
         screenshotUrl: screenshot || '',
       });
@@ -141,12 +155,16 @@ function ReportForm({ classes, pointsPerReport, onSent }) {
         onChange={(event) => setPageUrl(event.target.value)}
       />
       <Select
-        placeholder={kind === 'bug' ? "Which class is this for? (required)" : "Was it in a particular class? (optional)"}
+        placeholder={kind === 'bug' ? 'Where is this? (required)' : 'Where was it? (optional)'}
         value={classId}
         onChange={(event) => setClassId(event.target.value)}
         maxW="420px"
         isRequired={kind === 'bug'}
       >
+        {/* First, because it is the right answer for anything outside a class
+            — and because a reporter who has to scroll past twelve classes to
+            find it will pick one of the twelve instead. */}
+        <option value={GENERAL}>General — not about a particular class</option>
         {classes.map((klass) => (
           <option key={klass._id} value={klass._id}>
             {klass.name}
@@ -199,6 +217,44 @@ function ReportForm({ classes, pointsPerReport, onSent }) {
   );
 }
 
+/**
+ * Every reply on a report, oldest first, with who wrote it and when.
+ *
+ * The same component on both sides of the conversation: the admin needs it to
+ * see whether they have already asked this, and the reporter needs it because
+ * showing only the newest note made a question, its answer and the follow-up
+ * look like one remark.
+ */
+function NoteThread({ report, ...boxProps }) {
+  const thread = noteThread(report);
+  if (!thread.length) return null;
+
+  return (
+    <Box {...boxProps}>
+      <Text fontSize="xs" fontWeight="600" color="lmFg.muted" mb={1}>
+        {noteThreadLabel(thread)}
+      </Text>
+      <VStack align="stretch" spacing={2}>
+        {thread.map((entry, index) => (
+          <Box
+            key={entry._id || `${entry.at || ''}-${index}`}
+            borderWidth="1px"
+            borderRadius="md"
+            p={2}
+          >
+            <Text fontSize="sm" whiteSpace="pre-wrap">
+              {entry.body}
+            </Text>
+            <Text fontSize="xs" color="lmFg.muted" mt={1}>
+              {noteByline(entry, formatDateTime, (value) => STATUS_STYLE[value]?.label || value)}
+            </Text>
+          </Box>
+        ))}
+      </VStack>
+    </Box>
+  );
+}
+
 /** The admin queue. Only rendered when the API let this account read it. */
 function AdminQueue({ reports, counts, onReviewed }) {
   const [note, setNote] = useState({});
@@ -225,7 +281,10 @@ function AdminQueue({ reports, counts, onReviewed }) {
   // A reply without a verdict — "what were you doing when it happened?" on a
   // ticket that has to stay open until they answer.
   const sendNote = async (report) => {
-    const text = (note[report._id] ?? report.adminNote ?? '').trim();
+    // The box starts empty and is emptied again after a send: it is where the
+    // next reply is written, not a copy of the last one that has to be cleared
+    // before anything else can be said.
+    const text = (note[report._id] ?? '').trim();
     if (!text) return;
     setSendingNote(report._id);
     try {
@@ -302,30 +361,42 @@ function AdminQueue({ reports, counts, onReviewed }) {
               </Badge>
             )}
 
-            <HStack spacing={2} mb={2} align="center">
-              <Input
+            <VStack align="stretch" spacing={1} mb={2}>
+              <Textarea
                 size="sm"
-                placeholder="Note back to the reporter (optional)"
-                value={note[report._id] ?? report.adminNote ?? ''}
+                rows={2}
+                resize="vertical"
+                maxLength={2000}
+                placeholder="Reply to the reporter — this is emailed to them"
+                value={note[report._id] ?? ''}
                 onChange={(event) =>
                   setNote((current) => ({ ...current, [report._id]: event.target.value }))
                 }
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') sendNote(report);
+                  // Enter starts a line now that this is a paragraph box.
+                  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                    event.preventDefault();
+                    sendNote(report);
+                  }
                 }}
               />
-              <Button
-                size="sm"
-                colorScheme="purple"
-                variant="outline"
-                flexShrink={0}
-                isLoading={sendingNote === report._id}
-                isDisabled={!(note[report._id] ?? report.adminNote ?? '').trim()}
-                onClick={() => sendNote(report)}
-              >
-                Send note
-              </Button>
-            </HStack>
+              <Flex justify="space-between" align="center" gap={2} wrap="wrap">
+                <Text fontSize="xs" color="lmFg.muted">
+                  Emailed to the reporter. Ctrl+Enter to send.
+                </Text>
+                <Button
+                  size="sm"
+                  colorScheme="purple"
+                  variant="outline"
+                  flexShrink={0}
+                  isLoading={sendingNote === report._id}
+                  isDisabled={!(note[report._id] ?? '').trim()}
+                  onClick={() => sendNote(report)}
+                >
+                  Send note
+                </Button>
+              </Flex>
+            </VStack>
             <HStack spacing={2} wrap="wrap">
               {/* Only "approve" pays, and only the first time — the server will
                   not pay twice however often this is pressed. */}
@@ -362,6 +433,8 @@ function AdminQueue({ reports, counts, onReviewed }) {
                 Raise on GitHub ↗
               </Button>
             </HStack>
+
+            <NoteThread report={report} mt={3} />
           </Box>
         ))
       )}
@@ -440,12 +513,10 @@ export default function BugReports() {
                 {formatDateTime(report.created_at)}
                 {report.className ? ` · ${report.className}` : ''}
               </Text>
-              {report.adminNote && (
-                <Alert status="info" borderRadius="md" fontSize="xs" mt={2}>
-                  <AlertIcon />
-                  {report.adminNote}
-                </Alert>
-              )}
+              {/* The whole exchange, not just the last line of it — see
+                  NoteThread. It used to be one Alert holding the newest note,
+                  which meant an answer to a question replaced the question. */}
+              <NoteThread report={report} mt={2} />
             </Box>
           ))}
         </VStack>

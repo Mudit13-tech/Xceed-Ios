@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import lmApi from '../learningModule/api/lmApi';
+import { noteThread, noteThreadLabel, noteByline } from '../learningModule/bugNotes';
 import { theme } from '../attendancemodule/config';
 
 /**
@@ -195,34 +196,77 @@ function ReportForm({ classes, pointsPerReport, onSent, notify }) {
     );
 }
 
+/**
+ * Every reply on a report, oldest first, with who wrote it and when.
+ *
+ * Both sides need it: the admin, to see whether they have already asked this,
+ * and the reporter, because showing only the newest note made a question, its
+ * answer and the follow-up look like one remark.
+ */
+function NoteThread({ report, style }) {
+    const thread = noteThread(report);
+    if (!thread.length) return null;
+
+    return (
+        <div style={style}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, marginBottom: 6 }}>
+                {noteThreadLabel(thread)}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {thread.map((entry, index) => (
+                    <div
+                        key={entry._id || `${entry.at || ''}-${index}`}
+                        style={{
+                            background: theme.surfaceAlt, border: `1px solid ${theme.border}`,
+                            borderRadius: 7, padding: '8px 11px',
+                        }}
+                    >
+                        <div style={{ fontSize: 12, color: theme.text, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                            {entry.body}
+                        </div>
+                        <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 5 }}>
+                            {noteByline(entry, formatWhen, (value) => STATUS_STYLE[value]?.label || value)}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 /** One report in the admin queue. Only rendered when the API let us read it. */
 function QueueCard({ report, onDecide, onSendNote }) {
-    const [note, setNote] = useState(report.adminNote || '');
+    // Empty, not the note already sent: the box is where the *next* reply is
+    // written, and what has been said is in the thread below the buttons.
+    const [note, setNote] = useState('');
     const [busy, setBusy] = useState(false);
     const [sending, setSending] = useState(false);
 
     const decide = async (status) => {
         setBusy(true);
         try {
-            await onDecide(report, status, note);
+            await onDecide(report, status, note.trim());
+            setNote('');
         } finally {
             setBusy(false);
         }
     };
 
-    // Re-sending text the reporter has already been shown notifies nobody: the
-    // server only raises a notification when the stored note actually changes.
-    const noteIsNew = note.trim() !== '' && note.trim() !== (report.adminNote || '').trim();
+    // Anything typed can be sent, including the same thing twice — chasing an
+    // unanswered question means saying it again, and a button that goes dead
+    // after one reply is why there was no way to write a second.
+    const canSend = note.trim() !== '';
 
     // A reply with no verdict attached — "what were you doing when it happened?"
     // on a ticket that has to stay open until they answer. The four buttons below
     // all decide the report, so without this there is no way to ask a question
     // without also closing or approving it.
     const sendNote = async () => {
-        if (!noteIsNew) return;
+        if (!canSend) return;
         setSending(true);
         try {
             await onSendNote(report, note.trim());
+            setNote('');
         } finally {
             setSending(false);
         }
@@ -278,22 +322,39 @@ function QueueCard({ report, onDecide, onSendNote }) {
                 </div>
             )}
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                <input
+            <div style={{ marginBottom: 10 }}>
+                <textarea
                     className="dbr-input"
-                    placeholder="Note back to the reporter (optional)"
+                    rows={2}
+                    maxLength={2000}
+                    style={{ resize: 'vertical', fontFamily: 'inherit' }}
+                    placeholder="Reply to the reporter — this is emailed to them"
                     value={note}
                     onChange={(event) => setNote(event.target.value)}
-                    onKeyDown={(event) => { if (event.key === 'Enter') sendNote(); }}
+                    onKeyDown={(event) => {
+                        // Enter starts a line now that this is a paragraph box.
+                        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                            event.preventDefault();
+                            sendNote();
+                        }
+                    }}
                 />
-                <button
-                    className="dbr-btn dbr-btn--ghost dbr-btn--sm"
-                    style={{ flexShrink: 0 }}
-                    disabled={!noteIsNew || sending}
-                    onClick={sendNote}
-                >
-                    {sending ? 'Sending…' : 'Send note'}
-                </button>
+                <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    gap: 8, flexWrap: 'wrap', marginTop: 6,
+                }}>
+                    <span style={{ fontSize: 11, color: theme.textMuted }}>
+                        Emailed to {report.reporterEmail || 'the reporter'}. Ctrl+Enter to send.
+                    </span>
+                    <button
+                        className="dbr-btn dbr-btn--ghost dbr-btn--sm"
+                        style={{ flexShrink: 0 }}
+                        disabled={!canSend || sending}
+                        onClick={sendNote}
+                    >
+                        {sending ? 'Sending…' : 'Send note'}
+                    </button>
+                </div>
             </div>
 
             {/* Only "Approve" pays, and only the first time: the server records the
@@ -323,6 +384,11 @@ function QueueCard({ report, onDecide, onSendNote }) {
                     Reject
                 </button>
             </div>
+
+            {/* Under the decision rather than over it: the queue is read
+                verdict-first, and the history is what you go to when the
+                verdict is not obvious. */}
+            <NoteThread report={report} style={{ marginTop: 14, borderTop: `1px solid ${theme.border}`, paddingTop: 12 }} />
         </div>
     );
 }
@@ -365,7 +431,13 @@ export default function DeptBugReports() {
 
     const decide = async (report, nextStatus, adminNote) => {
         try {
-            await lmApi.reviewBug(report._id, { status: nextStatus, adminNote });
+            // Only when something was actually typed: the box now starts empty,
+            // so sending it regardless would post "" and wipe the last reply off
+            // the report on every verdict.
+            await lmApi.reviewBug(report._id, {
+                status: nextStatus,
+                ...(adminNote ? { adminNote } : {}),
+            });
             notify(nextStatus === 'acknowledged' ? 'Approved' : `Marked ${nextStatus}`, true);
             await load();
         } catch (err) {
@@ -519,14 +591,10 @@ export default function DeptBugReports() {
                                                     {formatWhen(report.created_at)}
                                                     {report.className ? ` · ${report.className}` : ''}
                                                 </div>
-                                                {report.adminNote && (
-                                                    <div style={{
-                                                        marginTop: 8, padding: '7px 11px', borderRadius: 7,
-                                                        background: theme.accentDim, color: theme.text, fontSize: 11.5,
-                                                    }}>
-                                                        {report.adminNote}
-                                                    </div>
-                                                )}
+                                                {/* The whole exchange, not just the last line of
+                                                    it: an answer to a question used to replace
+                                                    the question. */}
+                                                <NoteThread report={report} style={{ marginTop: 8 }} />
                                             </div>
                                         );
                                     })}

@@ -86,10 +86,16 @@ const EventRegistration = () => {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${apiUrl}/user/getuser/all`, { credentials: 'include' });
+      /* Asked of the server rather than fetched whole and filtered here. The
+         screen wants certificate managers, of whom there are a handful; the
+         un-filtered response is every account on the platform, nearly all of
+         them students it then throws away. */
+      const response = await fetch(
+        `${apiUrl}/user/getuser/all?role=CM&limit=200`,
+        { credentials: 'include' },
+      );
       const data = await response.json();
-      const allUsers = data.user || [];
-      const cm = allUsers.filter((user) => user.role.includes('CM'));
+      const cm = data.user || [];
       setCmUsers(cm);
 
       const results = await Promise.all(
