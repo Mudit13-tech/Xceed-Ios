@@ -18,17 +18,12 @@ import {
   Heading,
   HStack,
   IconButton,
+  Image,
   Menu,
   MenuButton,
   MenuDivider,
   MenuItem,
   MenuList,
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
   Skeleton,
   SkeletonCircle,
   Text,
@@ -43,6 +38,9 @@ import lmApi from '../api/lmApi';
 import useStableNavigate from '../hooks/useStableNavigate';
 import { canCreateClass, isStudentOnly } from '../roles';
 import NotificationBell from './NotificationBell';
+import TimetableChangeModal from './TimetableChangeModal';
+import LogoutConfirmModal from '../../components/LogoutConfirmModal';
+import useTimetableChanges from '../hooks/useTimetableChanges';
 import { LmIcon } from './Icon';
 import { buttonTextStyles, BusyDots } from './common';
 import { clearNativeSession } from '../../mobile/session';
@@ -464,6 +462,9 @@ export default function LearningLayout() {
   const [dashSections, setDashSections] = useState(null);
   const [overview, setOverview] = useState(null);
   const [classes, setClasses] = useState(null);
+  // Timetable changes the student has not dealt with: the modal below shows
+  // them once, and the class cards carry the mark until each class is opened.
+  const timetableChanges = useTimetableChanges();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const navigate = useStableNavigate();
 
@@ -535,7 +536,6 @@ export default function LearningLayout() {
   const logoutModal = useDisclosure();
 
   const confirmLogout = useCallback(async () => {
-    logoutModal.onClose();
     try {
       await fetch(`${getEnvironment()}/user/getuser/logout`, {
         method: 'POST',
@@ -546,6 +546,10 @@ export default function LearningLayout() {
     }
     localStorage.removeItem('token');
     await clearNativeSession();
+    /* Closed after the request rather than before it: the dialog shows the
+       logout running, and closing it first would hide that behind a page the
+       user is about to leave anyway. */
+    logoutModal.onClose();
     navigate('/login', { replace: true });
   }, [navigate, logoutModal]);
   const mayCreateClass = canCreateClass(me?.roles);
@@ -622,10 +626,41 @@ export default function LearningLayout() {
 
             <NotificationBell />
 
-            {/* Theme and sign-out sit together in the bar as one pair of square
-                buttons — the same 32px bordered treatment the attendance shell
-                uses — rather than being buried in the avatar menu. */}
+            {/* Home, theme and sign-out sit together in the bar as one set of
+                square buttons — the same 32px bordered treatment the attendance
+                shell uses — rather than being buried in the avatar menu. */}
             <HStack spacing={2}>
+              {/* The way back to the rest of XCEED, behind the X the platform
+                  uses for itself everywhere else.
+
+                  Students see no platform navbar above this header (`studentOnly`
+                  hides it), and a teacher on a phone sees none either, so for
+                  most of the people in here the learning module had no exit
+                  except the browser's back button — which, after a few screens
+                  of classes, is a long way from the front page.
+
+                  A real anchor rather than a router link: it leaves the module
+                  for the platform shell, and being able to open the rest of
+                  XCEED in a second tab while a class stays open in this one is
+                  the point of the button, not an accident of it. */}
+              <IconButton
+                as="a"
+                href="/"
+                aria-label="XCEED home"
+                title="XCEED home"
+                variant="ghost"
+                icon={
+                  <Image
+                    src="/clublogo.png"
+                    alt=""
+                    boxSize="20px"
+                    objectFit="contain"
+                  />
+                }
+                {...SQUARE_BTN}
+                borderColor={headerBorderColor}
+                color={headerTitleColor}
+              />
               <IconButton
                 onClick={toggleColorMode}
                 variant="ghost"
@@ -733,11 +768,23 @@ export default function LearningLayout() {
                 BusyDots rather than a skeleton that would promise the wrong one.
                 See the sweep in __tests__/NoSpinners.test.jsx. */}
             <React.Suspense fallback={<Flex p={8} justify="center"><BusyDots label="Loading…" /></Flex>}>
-              <Outlet context={{ me, overview, reloadOverview: load }} />
+              <Outlet
+                context={{
+                  me,
+                  overview,
+                  reloadOverview: load,
+                  timetableChanges,
+                }}
+              />
             </React.Suspense>
           </Box>
         </Flex>
       </Container>
+
+      <TimetableChangeModal
+        changes={timetableChanges.unseen}
+        onClose={timetableChanges.dismiss}
+      />
 
       <Drawer isOpen={isOpen} placement="left" onClose={onClose}>
         <DrawerOverlay />
@@ -767,7 +814,22 @@ export default function LearningLayout() {
             <DevTeamCta onNavigate={onClose} />
             
         </DrawerBody>
-          <DrawerFooter borderTopWidth="1px">
+          <DrawerFooter borderTopWidth="1px" flexDirection="column" gap={2} alignItems="stretch">
+            {/* The same exit as the header's X, repeated where navigation
+                actually happens on a phone: the drawer is open precisely when
+                somebody is deciding where to go next, and "out of this module"
+                is one of the answers. */}
+            <Button
+              as="a"
+              href="/"
+              w="full"
+              variant="outline"
+              leftIcon={<Image src="/clublogo.png" alt="" boxSize="16px" objectFit="contain" />}
+              justifyContent="flex-start"
+              onClick={onClose}
+            >
+              XCEED home
+            </Button>
             <Button
               w="full"
               colorScheme="red"
@@ -796,23 +858,12 @@ export default function LearningLayout() {
         </Suspense>
       )}
 
-      <Modal isOpen={logoutModal.isOpen} onClose={logoutModal.onClose} isCentered size="sm" closeOnOverlayClick={false}>
-        <ModalOverlay />
-        <ModalContent >
-          <ModalHeader fontSize="lg">Log out</ModalHeader>
-          <ModalBody>
-            <Text>Are you sure you want to log out?</Text>
-          </ModalBody>
-          <ModalFooter gap={3}>
-            <Button variant="ghost" onClick={logoutModal.onClose}>
-              Cancel
-            </Button>
-            <Button colorScheme="red" onClick={confirmLogout}>
-              Log out
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+      <LogoutConfirmModal
+        isOpen={logoutModal.isOpen}
+        onClose={logoutModal.onClose}
+        onConfirm={confirmLogout}
+        accountLabel={me?.email || me?.name || ''}
+      />
     </Box>
   );
 }

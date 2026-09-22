@@ -49,6 +49,38 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('ForgotPassword institute addresses', () => {
+  // Every XCEED account is provisioned against an institute mailbox, so a
+  // personal address here is a mistyped one. The server refuses it too; this
+  // says so before the round trip, and — more to the point — before the person
+  // is told an OTP may be coming and goes off to wait for it.
+  it('refuses a personal address without asking the server', async () => {
+    const fetchMock = queueFetch({ ok: true, body: { success: true } });
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.type(screen.getByPlaceholderText('you@nitj.ac.in'), 'asha@gmail.com');
+    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+
+    expect(await screen.findByText(/not an institute address/i)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+    // Still on the address step: nothing to verify, so no OTP boxes.
+    expect(screen.queryByText(/If an account with this email exists/)).not.toBeInTheDocument();
+  });
+
+  it('lets a department subdomain through', async () => {
+    const fetchMock = queueFetch({ ok: true, body: { success: true } });
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.type(screen.getByPlaceholderText('you@nitj.ac.in'), 'asha@cse.nitj.ac.in');
+    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+
+    await screen.findByText(/If an account with this email exists/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('ForgotPassword captcha', () => {
   it('shows no captcha on an ordinary request', async () => {
     queueFetch({ ok: true, body: { success: true, message: 'OTP sent successfully' } });

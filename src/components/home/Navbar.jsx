@@ -9,15 +9,10 @@ import {
   Button,
   Flex,
   IconButton,
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
   useColorMode,
   useDisclosure,
 } from '@chakra-ui/react';
+import LogoutConfirmModal from '../LogoutConfirmModal';
 import { loginPathFor } from '../../authRedirect';
 import { clearNativeSession } from '../../mobile/session';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -183,7 +178,6 @@ export default function Navbar() {
   const logoutModal = useDisclosure();
 
   const handleLogout = async () => {
-    logoutModal.onClose();
     try {
       const response = await fetch(`${apiUrl}/user/getuser/logout`, {
         method: 'POST',
@@ -202,8 +196,24 @@ export default function Navbar() {
       navigate('/login');
     } catch (error) {
       console.error('Error during logout:', error.message);
+    } finally {
+      /* Closed here rather than on the button press: the dialog now shows the
+         request running, and closing it first would put that progress on a
+         screen the user has already been sent away from. The local session is
+         cleared above either way, so a failed request still ends signed out. */
+      logoutModal.onClose();
     }
   };
+
+  /* Who is being logged out, for the dialog to name. Address before display
+     name — on a shared machine the address is what distinguishes two people,
+     and a name is what they have in common with the last person to sit down. */
+  const accountLabel =
+    (Array.isArray(userDetails?.user?.email)
+      ? userDetails.user.email[0]
+      : userDetails?.user?.email) ||
+    userDetails?.user?.name ||
+    '';
 
   useEffect(() => {
     const isPublicPath =
@@ -436,23 +446,12 @@ export default function Navbar() {
           </ul>
         </div>
       </div>
-      <Modal isOpen={logoutModal.isOpen} onClose={logoutModal.onClose} isCentered size="sm">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader fontSize="lg">Log out</ModalHeader>
-          <ModalBody>
-            <Text>Are you sure you want to log out?</Text>
-          </ModalBody>
-          <ModalFooter gap={3}>
-            <Button variant="ghost" onClick={logoutModal.onClose}>
-              Cancel
-            </Button>
-            <Button colorScheme="red" onClick={handleLogout}>
-              Log out
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+      <LogoutConfirmModal
+        isOpen={logoutModal.isOpen}
+        onClose={logoutModal.onClose}
+        onConfirm={handleLogout}
+        accountLabel={accountLabel}
+      />
     </nav>
   );
 }

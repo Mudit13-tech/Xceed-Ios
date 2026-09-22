@@ -39,7 +39,7 @@ vi.mock('../api/lmApi', () => ({
 const open = async () => {
   const { default: Assignments } = await import('../pages/Assignments');
   renderWithProviders(<Assignments />);
-  return screen.findByRole('heading', { name: /numerical assignments/i });
+  return screen.findByRole('heading', { name: /^assignments$/i });
 };
 
 beforeEach(() => {

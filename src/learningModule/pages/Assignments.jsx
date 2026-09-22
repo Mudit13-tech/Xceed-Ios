@@ -186,7 +186,7 @@ export default function Assignments() {
 
       <Flex direction="column" align="flex-start" mb={4} gap={3}>
         <Box>
-          <Heading size="md">Numerical Assignments</Heading>
+          <Heading size="md">Assignments</Heading>
           <Text fontSize="sm" color="lmFg.muted">
             Assessed numerical work. Every student gets their own values, and answers are marked
             against a formula rather than a fixed key.

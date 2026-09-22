@@ -57,7 +57,7 @@ import { canCreateClass } from '../roles';
 // Sunday (see server's ttInternals.DAYS), so that index is left unmapped.
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-function ClassCard({ klass, onOpen }) {
+function ClassCard({ klass, onOpen, timetableChanged = false }) {
   const cardBg = useColorModeValue('white', 'gray.800');
   const cardBorder = useColorModeValue('gray.200', 'gray.700');
   const ownerColor = useColorModeValue('gray.600', 'gray.300');
@@ -102,6 +102,28 @@ function ClassCard({ klass, onOpen }) {
         >
           {isTeacher ? 'Teaching' : 'Student'}
         </Badge>
+        {/* A published timetable for this class's semester moved and the
+            student has not opened the class since. Opening it is what clears
+            the mark — see useTimetableChanges. */}
+        {timetableChanged && (
+          <Badge
+            position="absolute"
+            bottom={-2}
+            left={5}
+            colorScheme="orange"
+            borderRadius="full"
+            fontSize="0.65rem"
+            px={2}
+            py={0.5}
+            boxShadow="sm"
+            display="flex"
+            alignItems="center"
+            gap={1}
+          >
+            <LmIcon name="timetable" size={11} />
+            Timetable updated
+          </Badge>
+        )}
       </Box>
       <Box px={5} py={4}>
         <Text fontSize="sm" color={ownerColor} noOfLines={1}>
@@ -682,7 +704,7 @@ function OpenExamBanner({ exam, muted }) {
 
 
 export default function Dashboard() {
-  const { me, overview, reloadOverview } = useOutletContext() || {};
+  const { me, overview, reloadOverview, timetableChanges } = useOutletContext() || {};
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -740,7 +762,12 @@ export default function Dashboard() {
     reloadOverview?.();
   }, [reloadOverview]);
 
-  const openClass = (klass) => navigate(`/learning/class/${klass._id}`);
+  const openClass = (klass) => {
+    // Opening the class is the acknowledgement the mark was waiting for: it
+    // is the one gesture that proves the student saw it.
+    timetableChanges?.acknowledgeClass?.(klass._id);
+    navigate(`/learning/class/${klass._id}`);
+  };
 
   const afterChange = async () => {
     closeModals();
@@ -872,7 +899,14 @@ export default function Dashboard() {
               ) : (
                 <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5}>
                   {classes.map((klass) => (
-                    <ClassCard key={klass._id} klass={klass} onOpen={openClass} />
+                    <ClassCard
+                      key={klass._id}
+                      klass={klass}
+                      onOpen={openClass}
+                      timetableChanged={timetableChanges?.changedClassIds?.has(
+                        String(klass._id),
+                      )}
+                    />
                   ))}
                 </SimpleGrid>
               )}
@@ -883,7 +917,14 @@ export default function Dashboard() {
               ) : (
                 <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5}>
                   {completed.map((klass) => (
-                    <ClassCard key={klass._id} klass={klass} onOpen={openClass} />
+                    <ClassCard
+                      key={klass._id}
+                      klass={klass}
+                      onOpen={openClass}
+                      timetableChanged={timetableChanges?.changedClassIds?.has(
+                        String(klass._id),
+                      )}
+                    />
                   ))}
                 </SimpleGrid>
               )}
@@ -894,7 +935,14 @@ export default function Dashboard() {
               ) : (
                 <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5}>
                   {archived.map((klass) => (
-                    <ClassCard key={klass._id} klass={klass} onOpen={openClass} />
+                    <ClassCard
+                      key={klass._id}
+                      klass={klass}
+                      onOpen={openClass}
+                      timetableChanged={timetableChanges?.changedClassIds?.has(
+                        String(klass._id),
+                      )}
+                    />
                   ))}
                 </SimpleGrid>
               )}

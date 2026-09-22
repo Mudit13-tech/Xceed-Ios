@@ -5,7 +5,12 @@
  * other buttons decide the report, so without a note-only path there is no way
  * to ask "what were you doing when it happened?" without also approving or
  * closing the ticket. The server reads an absent status as "leave it as it is",
- * so the assertion that `status` is not sent is the whole behaviour.
+ * so the assertion that `status` is not sent is the whole behaviour — and now
+ * also what tells the server to email the reply rather than only post it in the
+ * app, which makes it load-bearing twice over.
+ *
+ * Since the reply is now an email, the box is a paragraph box: Enter starts a
+ * line and Ctrl/Cmd+Enter sends.
  */
 
 import React from 'react';
@@ -29,6 +34,7 @@ const REPORT = {
   description: 'Front page says 1, the class says 3.',
   status: 'open',
   reporterName: 'Asha Rao',
+  reporterEmail: 'asha@nitj.ac.in',
   adminNote: '',
   created_at: new Date().toISOString(),
 };
@@ -48,7 +54,8 @@ const renderPage = (report = REPORT) => {
   );
 };
 
-const noteBox = () => screen.getByPlaceholderText('Note back to the reporter (optional)');
+const noteBox = () =>
+  screen.getByPlaceholderText('Reply to the reporter — this is emailed to them');
 const sendButton = () => screen.getByRole('button', { name: 'Send note' });
 
 beforeEach(() => {
@@ -100,33 +107,125 @@ describe('superadmin bug queue — Send note', () => {
     expect(sendButton()).toBeDisabled();
   });
 
-  it('is disabled when the note has not changed', async () => {
-    // Re-sending text the reporter has already seen notifies nobody, because the
-    // server only raises a notification when the stored note actually changes.
-    // A button that appears to work but does nothing is worse than a dim one.
+  it('starts empty on a report that has already been replied to', async () => {
+    // It used to open holding the last note sent, which had to be selected and
+    // deleted before a second reply could be written — and left the button dim,
+    // reading as though replying again were not allowed.
     renderPage({ ...REPORT, adminNote: 'Already told them this.' });
     await screen.findByText('Document count is wrong');
+
+    expect(noteBox().value).toBe('');
     expect(sendButton()).toBeDisabled();
   });
 
-  it('becomes available once the existing note is edited', async () => {
+  it('will send the same thing twice', async () => {
+    // Chasing an unanswered question means saying it again. The button used to
+    // refuse text matching the stored note, so the second ask was impossible.
     const user = userEvent.setup();
-    renderPage({ ...REPORT, adminNote: 'Already told them this.' });
+    renderPage({ ...REPORT, adminNote: 'Which browser were you using?' });
     await screen.findByText('Document count is wrong');
 
-    await user.type(noteBox(), ' And one more thing.');
+    await user.type(noteBox(), 'Which browser were you using?');
     expect(sendButton()).toBeEnabled();
+
+    await user.click(sendButton());
+    await waitFor(() => expect(lmApi.reviewBug).toHaveBeenCalledTimes(1));
+    expect(lmApi.reviewBug.mock.calls[0][1]).toEqual({
+      adminNote: 'Which browser were you using?',
+    });
   });
 
-  it('sends on Enter', async () => {
+  it('empties the box after sending, ready for the next reply', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText('Document count is wrong');
 
-    await user.type(noteBox(), 'Any console errors?{Enter}');
+    await user.type(noteBox(), 'First question.');
+    await user.click(sendButton());
+
+    await waitFor(() => expect(noteBox().value).toBe(''));
+    expect(sendButton()).toBeDisabled();
+  });
+
+  it('does not wipe the stored note when a verdict is pressed with an empty box', async () => {
+    // The box starts empty now, so passing it through on every verdict would
+    // post "" and erase the last reply from the report.
+    const user = userEvent.setup();
+    renderPage({ ...REPORT, adminNote: 'Already told them this.' });
+    await screen.findByText('Document count is wrong');
+
+    await user.click(screen.getByRole('button', { name: 'Reject' }));
+
+    await waitFor(() => expect(lmApi.reviewBug).toHaveBeenCalled());
+    expect(lmApi.reviewBug.mock.calls[0][1]).toEqual({ status: 'rejected' });
+  });
+
+  it('sends on Ctrl+Enter', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Document count is wrong');
+
+    await user.type(noteBox(), 'Any console errors?');
+    await user.keyboard('{Control>}{Enter}{/Control}');
 
     await waitFor(() => expect(lmApi.reviewBug).toHaveBeenCalledTimes(1));
     expect(lmApi.reviewBug.mock.calls[0][1]).toEqual({ adminNote: 'Any console errors?' });
+  });
+
+  it('starts a new line on plain Enter instead of sending', async () => {
+    // It used to send on Enter, which was right for a one-line box. A reply
+    // that is going out as an email needs paragraphs more than it needs a
+    // keyboard shortcut one key shorter.
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Document count is wrong');
+
+    await user.type(noteBox(), 'line one{Enter}line two');
+
+    expect(lmApi.reviewBug).not.toHaveBeenCalled();
+    expect(noteBox().value).toBe('line one\nline two');
+  });
+
+  it('is a box a real reply fits in', async () => {
+    // A 2000-character email body cannot be written into a one-line input.
+    renderPage();
+    await screen.findByText('Document count is wrong');
+    expect(noteBox().tagName).toBe('TEXTAREA');
+    expect(noteBox()).toHaveAttribute('maxLength', '2000');
+  });
+
+  it('tells the admin where the reply is going before they type it', async () => {
+    renderPage();
+    await screen.findByText('Document count is wrong');
+    expect(screen.getByText(/emailed to asha@nitj\.ac\.in/i)).toBeInTheDocument();
+  });
+
+  it('says the note was emailed once it has been', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Document count is wrong');
+
+    await user.type(noteBox(), 'Which browser?');
+    await user.click(sendButton());
+
+    expect(await screen.findByText('Note emailed to the reporter')).toBeInTheDocument();
+  });
+
+  it('does not claim delivery the server did not report', async () => {
+    // The note is stored either way — the reporter can read it on their own
+    // page — but a toast that says "emailed" when the mail never left is how an
+    // admin comes to believe somebody was answered.
+    lmApi.reviewBug.mockResolvedValue({ emailed: false });
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Document count is wrong');
+
+    await user.type(noteBox(), 'Which browser?');
+    await user.click(sendButton());
+
+    expect(
+      await screen.findByText('Note saved, but it could not be emailed to the reporter'),
+    ).toBeInTheDocument();
   });
 
   it('does not decide the report when the verdict buttons are left alone', async () => {

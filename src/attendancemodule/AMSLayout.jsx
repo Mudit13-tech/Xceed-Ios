@@ -8,6 +8,7 @@ import getEnvironment from '../getenvironment';
 import { HealthProvider } from './HealthContext';
 import ILeed from './BrandName';
 import useShellOffset from './useShellOffset';
+import LogoutConfirmModal from '../components/LogoutConfirmModal';
 
 const T = theme;
 const apiUrl = getEnvironment();
@@ -168,6 +169,12 @@ export default function AMSLayout() {
   const [accessChecked, setAccessChecked] = useState(false);
   const [shellRef, shellTop] = useShellOffset();
   const queryClient = useQueryClient();
+
+  // Whether the confirmation is up. The header's power button used to sign the
+  // user straight out on a single press — a 32px target next to the home button,
+  // on the mobile header, where a mis-tap costs a login. It now asks first, with
+  // the same dialog the platform navbar and the learning module use.
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   // The platform navbar (and its Logout link) is hidden on mobile here, so this
   // header has to carry the action itself. Same call and same cache teardown as
@@ -543,7 +550,7 @@ export default function AMSLayout() {
                   />
                 </a>
                 <button
-                  onClick={handleLogout}
+                  onClick={() => setLogoutOpen(true)}
                   title="Logout"
                   aria-label="Logout"
                   style={{ ...SQUARE_BTN, color: '#ef4444' }}
@@ -563,6 +570,11 @@ export default function AMSLayout() {
           </main>
         </div>
       </div>
+      <LogoutConfirmModal
+        isOpen={logoutOpen}
+        onClose={() => setLogoutOpen(false)}
+        onConfirm={handleLogout}
+      />
     </HealthProvider>
   );
 }

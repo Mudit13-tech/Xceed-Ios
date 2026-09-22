@@ -13,7 +13,7 @@ import {
   useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
-import { FiSave } from 'react-icons/fi';
+import { FiExternalLink, FiSave } from 'react-icons/fi';
 import getEnvironment from '../getenvironment';
 
 const apiUrl = getEnvironment();
@@ -43,16 +43,25 @@ const apiUrl = getEnvironment();
  * turning a panel off tidies a screen and protects nothing.
  */
 
+/* `view` is the administrator's own way into each dashboard. Not the route the
+   post-holder uses — /learning/hod-dashboard is behind RequireHod and
+   /learning/dean-dashboard behind the dean's gate, and an administrator holds
+   neither role. These are the lm-admin twins of the same screen, which exist
+   precisely so an admin can see what they are configuring: same component,
+   same endpoint, a gate that admits them. Toggling a panel off above and not
+   being able to look at the result was the gap. */
 const AUDIENCES = [
   {
     key: 'hod',
     title: 'HOD Dashboard',
     blurb: 'What a head of department sees, scoped to the department they head.',
+    view: '/learning/lm-admin/hod-dashboard',
   },
   {
     key: 'dean',
     title: 'Dean Dashboard',
     blurb: 'What the Dean (Academic) sees, across every department.',
+    view: '/learning/lm-admin/dean-dashboard',
   },
 ];
 
@@ -162,6 +171,8 @@ const DashboardSectionsPanel = () => {
         <AlertIcon />
         These control what appears on a screen, not who may open it — both dashboards are
         already restricted to the role they are named after, and to its departments.
+        <strong> View</strong> opens the administrator's copy of a dashboard in a new tab,
+        so you can see what a head or the dean is being shown.
       </Alert>
 
       {loading ? (
@@ -188,16 +199,33 @@ const DashboardSectionsPanel = () => {
                       {audience.blurb}
                     </Text>
                   </Box>
-                  <Button
-                    size="sm"
-                    colorScheme="purple"
-                    leftIcon={<FiSave />}
-                    onClick={() => save(audience.key)}
-                    isLoading={saving === audience.key}
-                    isDisabled={!dirty[audience.key]}
-                  >
-                    Save
-                  </Button>
+                  <Flex gap={2} flexShrink={0}>
+                    {/* A new tab rather than a navigation: leaving the screen
+                        to look at the dashboard would throw away unsaved
+                        toggles, and comparing the two is the whole point. */}
+                    <Button
+                      as="a"
+                      href={audience.view}
+                      target="_blank"
+                      rel="noreferrer"
+                      size="sm"
+                      variant="outline"
+                      colorScheme="purple"
+                      leftIcon={<FiExternalLink />}
+                    >
+                      View
+                    </Button>
+                    <Button
+                      size="sm"
+                      colorScheme="purple"
+                      leftIcon={<FiSave />}
+                      onClick={() => save(audience.key)}
+                      isLoading={saving === audience.key}
+                      isDisabled={!dirty[audience.key]}
+                    >
+                      Save
+                    </Button>
+                  </Flex>
                 </Flex>
 
                 {catalogue.map((section) => {
