@@ -4,6 +4,7 @@ import Header from '../components/header';
 import {
   Box,
   Container,
+  SimpleGrid,
   Text,
   Table,
   Thead,
@@ -35,6 +36,166 @@ import {
 import { ExternalLinkIcon, DownloadIcon, CheckIcon } from '@chakra-ui/icons';
 import { FaChalkboardTeacher, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
 import { Helmet } from 'react-helmet-async';
+
+/* The three links every department row carries.
+   Stated once because the table and the phone layout both draw them, and a URL
+   that drifts between the two is a link that works on a desktop and 404s on a
+   phone. */
+const ttHref = (code) => `${window.location.origin}/tt/${code}`;
+const loadHref = (code) => `${ttHref(code)}/generatepdf/loadallocation`;
+const pdfHref = (code) => `${ttHref(code)}/generatepdf`;
+
+/* A saved/locked timestamp, or the reason there is not one. */
+function TimeText({ value, color, empty }) {
+  if (value === null || value === undefined) {
+    return <Text color="gray.500" fontSize="xs">{empty}</Text>;
+  }
+  return (
+    <Text color={color} fontWeight="medium" fontSize="2xs">
+      {value}
+    </Text>
+  );
+}
+
+/* Published, with when — or the button that publishes it.
+
+   One component rather than one per layout: this is the only control on the
+   screen that changes anything, and the guard against double-publishing (which
+   re-mails every faculty member) has to be the same in both. */
+function PublishState({ item, publishingCode, onPublish }) {
+  if (item.publish) {
+    return (
+      <VStack spacing={0} align="start">
+        <HStack spacing={1}>
+          <FaCheckCircle color="green" size={12} />
+          <Text color="green.600" fontWeight="semibold" fontSize="xs">
+            Published
+          </Text>
+        </HStack>
+        <Text color="gray.600" fontSize="2xs">
+          {new Date(item.datePublished).toLocaleString()}
+        </Text>
+      </VStack>
+    );
+  }
+  return (
+    <Button
+      size="xs"
+      colorScheme="green"
+      leftIcon={<CheckIcon />}
+      onClick={() => onPublish(item._id)}
+      // Must compare against what handlePublish stores (_id). Comparing to
+      // item.code left the button live during the request, so extra clicks
+      // re-mailed every faculty.
+      isLoading={publishingCode === item._id}
+      isDisabled={publishingCode !== null}
+      loadingText="Publishing..."
+      fontSize="xs"
+      px={3}
+      py={1}
+    >
+      Publish
+    </Button>
+  );
+}
+
+/* One department, on a phone.
+
+   The table this replaces below `md` was eight columns held to percentage
+   widths by `tableLayout: fixed`, which on a 375px screen is about forty
+   pixels each — and because a fixed-layout table at width 100% can never
+   outgrow its container, the `overflowX` around it had nothing to scroll. So
+   the columns did not overflow, they crushed: timestamps broke into one word
+   per line and the three actions became unlabelled icons a thumb could not
+   separate.
+
+   A card gives each field a label beside its value and the actions their
+   names, which is what there is room for when the width is spent vertically
+   instead. */
+function DepartmentCard({ item, savedTime, lockedTime, publishingCode, onPublish }) {
+  const field = (label, node) => (
+    <Flex justify="space-between" align="baseline" gap={3} w="100%">
+      <Text fontSize="xs" color="gray.500" fontWeight="semibold" flexShrink={0}>
+        {label}
+      </Text>
+      <Box textAlign="right" minW={0}>{node}</Box>
+    </Flex>
+  );
+
+  return (
+    <Box
+      borderWidth="1px"
+      borderColor="gray.200"
+      borderRadius="xl"
+      p={4}
+      bg="white"
+      shadow="sm"
+    >
+      <Flex justify="space-between" align="center" gap={2} mb={3}>
+        <Badge colorScheme="purple" fontSize="sm" px={2} py={1} borderRadius="md">
+          {item.dept}
+        </Badge>
+        <Text fontSize="sm" fontWeight="semibold" color="gray.600">
+          {item.code}
+        </Text>
+      </Flex>
+
+      <VStack spacing={2} align="stretch" mb={3}>
+        {field('Last Saved', (
+          <TimeText value={savedTime} color="green.600" empty="Not saved yet" />
+        ))}
+        {field('Last Locked', (
+          <TimeText value={lockedTime} color="orange.600" empty="Not locked yet" />
+        ))}
+        {field('Publish', (
+          <PublishState item={item} publishingCode={publishingCode} onPublish={onPublish} />
+        ))}
+      </VStack>
+
+      {/* Named, not iconned. The icons are fine in a table row where the column
+          heading says what they are; on a card there is no heading, and three
+          unlabelled squares in a row is a guess. */}
+      <SimpleGrid columns={{ base: 1, sm: 3 }} spacing={2}>
+        <Button
+          as="a"
+          href={ttHref(item.code)}
+          target="_blank"
+          rel="noopener noreferrer"
+          size="sm"
+          colorScheme="teal"
+          variant="outline"
+          leftIcon={<ExternalLinkIcon />}
+        >
+          View TT
+        </Button>
+        <Button
+          as="a"
+          href={loadHref(item.code)}
+          target="_blank"
+          rel="noopener noreferrer"
+          size="sm"
+          colorScheme="purple"
+          variant="outline"
+          leftIcon={<FaChalkboardTeacher />}
+        >
+          Load
+        </Button>
+        <Button
+          as="a"
+          href={pdfHref(item.code)}
+          target="_blank"
+          rel="noopener noreferrer"
+          size="sm"
+          colorScheme="blue"
+          variant="outline"
+          leftIcon={<DownloadIcon />}
+        >
+          PDF
+        </Button>
+      </SimpleGrid>
+    </Box>
+  );
+}
 
 function TimetableMasterView() {
   const [sessions, setSessions] = useState([]);
@@ -255,7 +416,7 @@ function TimetableMasterView() {
             >
               <Badge
                 colorScheme="whiteAlpha"
-                fontSize={{ base: "xs", md: "sm" }}
+                fontSize="sm"
                 px={{ base: 2, md: 3 }}
                 py={1}
                 borderRadius="full"
@@ -366,7 +527,29 @@ function TimetableMasterView() {
                       </Alert>
                     </Box>
                   ) : (
+                    <>
+                    {/* ── phones: one card per department ───────────────── */}
+                    <VStack
+                      display={{ base: 'flex', md: 'none' }}
+                      spacing={3}
+                      align="stretch"
+                      p={4}
+                    >
+                      {data.map((item) => (
+                        <DepartmentCard
+                          key={item._id}
+                          item={item}
+                          savedTime={savedTimes[item.code]}
+                          lockedTime={lockedTimes[item.code]}
+                          publishingCode={publishingCode}
+                          onPublish={handlePublish}
+                        />
+                      ))}
+                    </VStack>
+
+                    {/* ── the table, from a tablet up ───────────────────── */}
                     <Box
+                      display={{ base: 'none', md: 'block' }}
                       overflowX="auto"
                       w="100%"
                       sx={{
@@ -386,106 +569,97 @@ function TimetableMasterView() {
                         },
                       }}
                     >
-                      <Table 
-                        variant="simple" 
-                        size={{ base: "sm", md: "md" }}
-                        sx={{
-                          tableLayout: "fixed",
-                          width: "100%",
-                        }}
-                      >
+                      {/* `tableLayout: fixed` at width 100% was the bug: a
+                          fixed-layout table cannot outgrow its container, so
+                          the overflowX above it never had anything to scroll
+                          and eight columns compressed instead. A minimum width
+                          lets it overflow and the wrapper scroll, which is what
+                          a table of this shape needs on a tablet. */}
+                      <Table variant="simple" size="md" minW="900px">
                         <Thead bg="teal.50">
                           <Tr>
                             <Th
                               color="teal.700"
-                              fontSize={{ base: "xs", md: "sm" }}
+                              fontSize="sm"
                               fontWeight="bold"
                               borderBottom="2px"
                               borderColor="teal.200"
                               whiteSpace="normal"
                               wordBreak="break-word"
-                              width="12%"
                             >
                               Department
                             </Th>
                             <Th
                               color="teal.700"
-                              fontSize={{ base: "xs", md: "sm" }}
+                              fontSize="sm"
                               fontWeight="bold"
                               borderBottom="2px"
                               borderColor="teal.200"
                               whiteSpace="normal"
                               wordBreak="break-word"
-                              width="8%"
                             >
                               Code
                             </Th>
                             <Th
                               color="teal.700"
-                              fontSize={{ base: "xs", md: "sm" }}
+                              fontSize="sm"
                               fontWeight="bold"
                               borderBottom="2px"
                               borderColor="teal.200"
                               whiteSpace="normal"
                               wordBreak="break-word"
-                              width="15%"
                             >
                               Last Saved
                             </Th>
                             <Th
                               color="teal.700"
-                              fontSize={{ base: "xs", md: "sm" }}
+                              fontSize="sm"
                               fontWeight="bold"
                               borderBottom="2px"
                               borderColor="teal.200"
                               whiteSpace="normal"
                               wordBreak="break-word"
-                              width="15%"
                             >
                               Last Locked
                             </Th>
                             <Th
                               color="teal.700"
-                              fontSize={{ base: "xs", md: "sm" }}
+                              fontSize="sm"
                               fontWeight="bold"
                               borderBottom="2px"
                               borderColor="teal.200"
                               whiteSpace="normal"
                               wordBreak="break-word"
-                              width="10%"
                             >
                               Publish Status
                             </Th>
                             <Th
                               color="teal.700"
-                              fontSize={{ base: "xs", md: "sm" }}
+                              fontSize="sm"
                               fontWeight="bold"
                               borderBottom="2px"
                               borderColor="teal.200"
                               textAlign="center"
-                              width="10%"
                             >
                               View TT
                             </Th>
                             <Th
                               color="teal.700"
-                              fontSize={{ base: "xs", md: "sm" }}
+                              fontSize="sm"
                               fontWeight="bold"
                               borderBottom="2px"
                               borderColor="teal.200"
                               textAlign="center"
-                              width="10%"
                             >
                               Faculty Load
                             </Th>
                             <Th
                               color="teal.700"
-                              fontSize={{ base: "xs", md: "sm" }}
+                              fontSize="sm"
                               fontWeight="bold"
                               borderBottom="2px"
                               borderColor="teal.200"
                               textAlign="center"
-                              width="11%"
                             >
                               Download
                             </Th>
@@ -501,10 +675,10 @@ function TimetableMasterView() {
                             >
                               <Td 
                                 fontWeight="semibold" 
-                                fontSize={{ base: "xs", md: "sm" }}
+                                fontSize="sm"
                                 whiteSpace="normal"
                                 wordBreak="break-word"
-                                p={{ base: 2, md: 3 }}
+                                p={3}
                               >
                                 <Badge 
                                   colorScheme="purple" 
@@ -520,82 +694,47 @@ function TimetableMasterView() {
                                 </Badge>
                               </Td>
                               <Td 
-                                fontSize={{ base: "xs", md: "sm" }}
+                                fontSize="sm"
                                 fontWeight="medium"
-                                p={{ base: 2, md: 3 }}
+                                p={3}
                               >
                                 {item.code}
                               </Td>
                               <Td 
-                                fontSize={{ base: "xs", md: "sm" }}
+                                fontSize="sm"
                                 whiteSpace="normal"
                                 wordBreak="break-word"
-                                p={{ base: 2, md: 3 }}
+                                p={3}
                               >
-                                {savedTimes[item.code] !== null && savedTimes[item.code] !== undefined ? (
-                                  <Text color="green.600" fontWeight="medium" fontSize="2xs">
-                                    {savedTimes[item.code]}
-                                  </Text>
-                                ) : (
-                                  <Text color="gray.500" fontSize="xs">
-                                    Not saved yet
-                                  </Text>
-                                )}
+                                <TimeText
+                                  value={savedTimes[item.code]}
+                                  color="green.600"
+                                  empty="Not saved yet"
+                                />
                               </Td>
                               <Td 
-                                fontSize={{ base: "xs", md: "sm" }}
+                                fontSize="sm"
                                 whiteSpace="normal"
                                 wordBreak="break-word"
-                                p={{ base: 2, md: 3 }}
+                                p={3}
                               >
-                                {lockedTimes[item.code] !== null && lockedTimes[item.code] !== undefined ? (
-                                  <Text color="orange.600" fontWeight="medium" fontSize="2xs">
-                                    {lockedTimes[item.code]}
-                                  </Text>
-                                ) : (
-                                  <Text color="gray.500" fontSize="xs">
-                                    Not locked yet
-                                  </Text>
-                                )}
+                                <TimeText
+                                  value={lockedTimes[item.code]}
+                                  color="orange.600"
+                                  empty="Not locked yet"
+                                />
                               </Td>
                               <Td 
-                                fontSize={{ base: "xs", md: "sm" }}
-                                p={{ base: 2, md: 3 }}
+                                fontSize="sm"
+                                p={3}
                               >
-                                {item.publish ? (
-                                  <VStack spacing={0} align="start">
-                                    <HStack spacing={1}>
-                                      <FaCheckCircle color="green" size={12} />
-                                      <Text color="green.600" fontWeight="semibold" fontSize="xs">
-                                        Published
-                                      </Text>
-                                    </HStack>
-                                    <Text color="gray.600" fontSize="2xs">
-                                      {new Date(item.datePublished).toLocaleString()}
-                                    </Text>
-                                  </VStack>
-                                ) : (
-                                  <Button
-                                    size="xs"
-                                    colorScheme="green"
-                                    leftIcon={<CheckIcon />}
-                                    onClick={() => handlePublish(item._id)}
-                                    // Must compare against what handlePublish
-                                    // stores (_id). Comparing to item.code left
-                                    // the button live during the request, so
-                                    // extra clicks re-mailed every faculty.
-                                    isLoading={publishingCode === item._id}
-                                    isDisabled={publishingCode !== null}
-                                    loadingText="Publishing..."
-                                    fontSize="xs"
-                                    px={3}
-                                    py={1}
-                                  >
-                                    Publish
-                                  </Button>
-                                )}
+                                <PublishState
+                                  item={item}
+                                  publishingCode={publishingCode}
+                                  onPublish={handlePublish}
+                                />
                               </Td>
-                              <Td textAlign="center" p={{ base: 2, md: 3 }}>
+                              <Td textAlign="center" p={3}>
                                 <Tooltip label="View Timetable" placement="top" hasArrow bg="teal.600" fontSize="sm">
                                   <IconButton
                                     as="a"
@@ -613,7 +752,7 @@ function TimetableMasterView() {
                                   />
                                 </Tooltip>
                               </Td>
-                              <Td textAlign="center" p={{ base: 2, md: 3 }}>
+                              <Td textAlign="center" p={3}>
                                 <Tooltip label="View Faculty Load Allocation" placement="top" hasArrow bg="purple.600" fontSize="sm">
                                   <IconButton
                                     as="a"
@@ -636,7 +775,7 @@ function TimetableMasterView() {
                                   />
                                 </Tooltip>
                               </Td>
-                              <Td textAlign="center" p={{ base: 2, md: 3 }}>
+                              <Td textAlign="center" p={3}>
                                 <Tooltip label="Download PDF" placement="top" hasArrow bg="blue.600" fontSize="sm">
                                   <IconButton
                                     as="a"
@@ -659,6 +798,7 @@ function TimetableMasterView() {
                         </Tbody>
                       </Table>
                     </Box>
+                    </>
                   )}
                 </CardBody>
               </Card>

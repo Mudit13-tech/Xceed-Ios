@@ -13,6 +13,7 @@ import {
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import { LmIcon } from './Icon';
+import DeleteButton from './DeleteButton';
 import getEnvironment from '../../getenvironment';
 import { serverFileLinkProps, downloadFileNative, isNativeApp } from '../../utils/nativeCapabilities';
 
@@ -323,11 +324,9 @@ export function AttachmentPicker({ attachments = [], onChange, disabled, classId
               <Text fontSize="sm" noOfLines={1} maxW="200px">
                 {attachment.name}
               </Text>
-              <IconButton
+              <DeleteButton
                 size="xs"
-                variant="ghost"
-                aria-label="Remove attachment"
-                icon={<LmIcon name="close" size={13} />}
+                label="Remove attachment"
                 onClick={() => remove(index)}
                 isDisabled={disabled}
               />

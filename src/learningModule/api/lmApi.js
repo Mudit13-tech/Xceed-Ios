@@ -371,7 +371,10 @@ const lmApi = {
   // Accounts are always provisioned for addresses without one, and the platform
   // role is always granted to people who already have an account without it —
   // both were once modal checkboxes and are now the only supported behaviour.
-  inviteMembers: (classId, emails, role) =>
+  // `otp` is only ever sent for a co-teacher the timetable does not list — the
+  // code the inviting teacher was mailed to vouch for them. Left undefined
+  // everywhere else, which is every student invite.
+  inviteMembers: (classId, emails, role, otp) =>
     request(`/classes/${classId}/members/invite`, {
       method: 'POST',
       body: {
@@ -379,9 +382,18 @@ const lmApi = {
         role,
         createAccounts: true,
         grantRoleToExisting: true,
+        ...(otp ? { otp } : {}),
       },
     }),
   inviteStatus: (classId, batchId) => request(`/classes/${classId}/members/invite-status/${batchId}`),
+  /* The co-teacher gate. `checkCoTeacherEmail` reads the timetable's faculty
+     master and changes nothing — the server runs the same check again on the
+     invite itself — and `requestCoTeacherCode` mails the caller the approval
+     code for one unlisted address. See server services/coTeacherGate. */
+  checkCoTeacherEmail: (classId, email) =>
+    request(`/classes/${classId}/members/co-teacher/check`, { method: 'POST', body: { email } }),
+  requestCoTeacherCode: (classId, email) =>
+    request(`/classes/${classId}/members/co-teacher/code`, { method: 'POST', body: { email } }),
   decideJoinRequest: (classId, membershipId, approve) =>
     request(`/classes/${classId}/members/${membershipId}/decide`, { method: 'POST', body: { approve } }),
   updateMember: (classId, membershipId, body) =>
@@ -1077,6 +1089,10 @@ const lmApi = {
   /* lm-admin — faculty accounts. Same 403 for anyone who is not a platform admin. */
   adminListFaculty: ({ q, dept } = {}) => request(`/admin/faculty${qs({ q, dept })}`),
   adminCreateFaculty: (body) => request('/admin/faculty', { method: 'POST', body }),
+  /* Taking the FACULTY role back off an account — a role change, not a delete.
+     The account, the classes it owns and everything handed in to them stay; the
+     response says what is left holding and what is still attached. */
+  adminRevokeFaculty: (facultyId) => request(`/admin/faculty/${facultyId}`, { method: 'DELETE' }),
   /* Bulk import from the timetable module's master faculty table. The preview
      is a read — what the button would do, department by department — and the
      import is the button. `dept` omitted imports every department. */
@@ -1089,6 +1105,13 @@ const lmApi = {
   /* lm-admin — student accounts. Same 403 for anyone who is not a platform admin. */
   adminListStudents: (params = {}) => request(`/admin/students${qs(params)}`),
   adminCreateStudent: (body) => request('/admin/students', { method: 'POST', body }),
+  /* The same for STUDENT. `endEnrolments` also ends their class memberships:
+     the role alone is not what holds an already-enrolled student in a class,
+     so without it the account keeps reaching the classes it has joined. */
+  adminRevokeStudent: (studentId, { endEnrolments = false } = {}) =>
+    request(`/admin/students/${studentId}${qs({ endEnrolments: endEnrolments || undefined })}`, {
+      method: 'DELETE',
+    }),
   /* lm-admin — all classes owned by a specific faculty member.
      Powers the class-count click-through on the faculty directory page. */
   adminGetFacultyClasses: (facultyId) => request(`/admin/faculty/${facultyId}/classes`),

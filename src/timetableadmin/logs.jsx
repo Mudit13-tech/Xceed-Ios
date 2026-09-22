@@ -28,11 +28,13 @@ import {
   Divider,
   List,
   ListItem,
-  ListIcon,
   Tag,
   TagLabel,
+  TagLeftIcon,
   Tooltip,
   Spinner,
+  Skeleton,
+  SkeletonText,
   Wrap,
   Alert,
   AlertIcon,
@@ -72,22 +74,60 @@ const SLOT_TIME_MAP = {
   period8: '04:30 PM',
 };
 
-const TimetableLockLog = ({ facultyChanges }) => {
+/**
+ * One stored change-set, in the shape this component renders.
+ *
+ * `changes` on a log is free-form JSON written by whichever version of the
+ * lock controller was running that day, and the page now shows rows going back
+ * years — including ones written before the department and session fields
+ * existed. An entry without a `changes` object, or a change-set that is an
+ * object rather than the array this expects, used to reach
+ * `f.changes.addedSubjects` and throw, and a render error in one table cell
+ * takes the whole page with it: the coordinator saw "Something went wrong"
+ * instead of their logs, and nothing said which row was at fault.
+ *
+ * So the shape is coerced here, once, and anything unreadable is shown as
+ * exactly that.
+ */
+const readChangeSet = (raw) => {
+  const entries = Array.isArray(raw) ? raw : [];
+  return entries.filter(Boolean).map((entry) => ({
+    faculty: entry.faculty || entry.facultyName || 'Unknown faculty',
+    changes: {
+      addedSubjects: entry.changes?.addedSubjects || [],
+      removedSubjects: entry.changes?.removedSubjects || [],
+      updatedSubjects: entry.changes?.updatedSubjects || [],
+    },
+  }));
+};
+
+const TimetableLockLog = ({ facultyChanges, unreadable }) => {
   const { isOpen, onToggle } = useDisclosure();
+  const entries = readChangeSet(facultyChanges);
 
   // Summary counts for the "Short Form"
-  const totalAdded = facultyChanges.reduce(
-    (acc, f) => acc + (f.changes.addedSubjects?.length || 0),
+  const totalAdded = entries.reduce(
+    (acc, f) => acc + (f.changes.addedSubjects.length || 0),
     0
   );
-  const totalRemoved = facultyChanges.reduce(
-    (acc, f) => acc + (f.changes.removedSubjects?.length || 0),
+  const totalRemoved = entries.reduce(
+    (acc, f) => acc + (f.changes.removedSubjects.length || 0),
     0
   );
-  const totalUpdated = facultyChanges.reduce(
-    (acc, f) => acc + (f.changes.updatedSubjects?.length || 0),
+  const totalUpdated = entries.reduce(
+    (acc, f) => acc + (f.changes.updatedSubjects.length || 0),
     0
   );
+
+  if (unreadable || (!entries.length && !totalAdded && !totalRemoved && !totalUpdated)) {
+    return (
+      <Text fontSize="xs" color="gray.500" fontStyle="italic">
+        {unreadable
+          ? 'Change details could not be read for this entry.'
+          : 'No change details recorded.'}
+      </Text>
+    );
+  }
 
   return (
     <Box>
@@ -132,7 +172,7 @@ const TimetableLockLog = ({ facultyChanges }) => {
           border="1px"
           borderColor="gray.100"
         >
-          {facultyChanges.map(({ faculty, changes }, idx) => (
+          {entries.map(({ faculty, changes }, idx) => (
             <Box key={idx} pb={idx !== facultyChanges.length - 1 ? 3 : 0}>
               <Text
                 fontWeight="bold"
@@ -168,7 +208,7 @@ const TimetableLockLog = ({ facultyChanges }) => {
                 ))}
 
                 {/* UPDATED SECTION */}
-                {changes.updatedSubjects?.map((u, i) => (
+                {changes.updatedSubjects?.filter(Boolean).map((u, i) => (
                   <Box key={`upd-${i}`}>
                     <HStack fontSize="xs" fontWeight="bold" color="blue.600">
                       <Icon as={FiEdit} />
@@ -177,13 +217,14 @@ const TimetableLockLog = ({ facultyChanges }) => {
                       </Text>
                     </HStack>
                     <VStack align="stretch" ml={5} mt={1} spacing={1}>
-                      {u.changes.room && (
+                      {u.changes?.room && (
                         <Text fontSize="xs" color="gray.600">
-                          <b>Room:</b> {u.changes.room.from.join(', ')} →{' '}
-                          <b>{u.changes.room.to.join(', ')}</b>
+                          <b>Room:</b>{' '}
+                          {(u.changes.room.from || []).join(', ') || '—'} →{' '}
+                          <b>{(u.changes.room.to || []).join(', ') || '—'}</b>
                         </Text>
                       )}
-                      {u.changes.slots?.added?.length > 0 && (
+                      {u.changes?.slots?.added?.length > 0 && (
                         <Text fontSize="xs" color="gray.600">
                           <Text as="span" color="green.600" fontWeight="bold">
                             Added:
@@ -191,7 +232,7 @@ const TimetableLockLog = ({ facultyChanges }) => {
                           {u.changes.slots.added.join(', ')}
                         </Text>
                       )}
-                      {u.changes.slots?.removed?.length > 0 && (
+                      {u.changes?.slots?.removed?.length > 0 && (
                         <Text fontSize="xs" color="gray.600">
                           <Text as="span" color="red.600" fontWeight="bold">
                             Removed:
@@ -364,13 +405,13 @@ const MailDelivery = ({ log, apiUrl, onNotificationsUpdated, defaultOpen }) => {
       <Wrap spacing={2} shouldWrapChildren>
         {summary.sent > 0 && (
           <Tag size="sm" colorScheme="green" variant="subtle">
-            <ListIcon as={FiCheckCircle} mr={1} mb={0} />
+            <TagLeftIcon as={FiCheckCircle} mr={1} mb={0} />
             <TagLabel>{summary.sent} delivered</TagLabel>
           </Tag>
         )}
         {summary.failed > 0 && (
           <Tag size="sm" colorScheme="red" variant="subtle">
-            <ListIcon as={FiAlertCircle} mr={1} mb={0} />
+            <TagLeftIcon as={FiAlertCircle} mr={1} mb={0} />
             <TagLabel>{summary.failed} failed</TagLabel>
           </Tag>
         )}
@@ -385,7 +426,7 @@ const MailDelivery = ({ log, apiUrl, onNotificationsUpdated, defaultOpen }) => {
             hasArrow
           >
             <Tag size="sm" colorScheme="gray" variant="subtle">
-              <ListIcon as={FiSlash} mr={1} mb={0} />
+              <TagLeftIcon as={FiSlash} mr={1} mb={0} />
               <TagLabel>{summary.skipped} mail off</TagLabel>
             </Tag>
           </Tooltip>
@@ -462,7 +503,7 @@ const MailDelivery = ({ log, apiUrl, onNotificationsUpdated, defaultOpen }) => {
 
                     <HStack spacing={2} mt={1} wrap="wrap">
                       <Tag size="sm" colorScheme={style.colorScheme} variant="subtle">
-                        <ListIcon as={style.icon} mr={1} mb={0} />
+                        <TagLeftIcon as={style.icon} mr={1} mb={0} />
                         <TagLabel>{style.label}</TagLabel>
                       </Tag>
                       {n.status === 'sent' ? (
@@ -560,6 +601,10 @@ const Logs = () => {
   const [scope, setScope] = useState({ allDepts: true, depts: [] });
 
   const [logs, setLogs] = useState([]);
+  // The table used to render "No logs found." while the first request was
+  // still in flight, which reads as an answer rather than as a wait — and the
+  // answer it gives is the wrong one. `null` is "not asked yet".
+  const [isLoading, setIsLoading] = useState(true);
   const [sessions, setSessions] = useState([]);
   const [allDepts, setAllDepts] = useState([]);
   const [deptFilter, setDeptFilter] = useState(deptParam);
@@ -608,6 +653,7 @@ const Logs = () => {
   }, [apiUrl, deptFilter]);
 
   const fetchLogs = useCallback(async () => {
+    setIsLoading(true);
     try {
       // One endpoint for every combination now: `/logs/get` takes both filters
       // as query parameters, so the three near-identical URLs this used to
@@ -644,6 +690,7 @@ const Logs = () => {
         });
         setLogs([]);
         setTotalLogs(0);
+        setIsLoading(false);
         return;
       }
       const data = await res.json();
@@ -668,6 +715,8 @@ const Logs = () => {
         duration: 4000,
         isClosable: true,
       });
+    } finally {
+      setIsLoading(false);
     }
   }, [apiUrl, currentPage, limit, deptFilter, sessionFilter, toast]);
 
@@ -988,7 +1037,33 @@ const Logs = () => {
                 </Tr>
               </Thead>
               <Tbody>
-                {logs.length === 0 ? (
+                {isLoading ? (
+                  // A skeleton of the table it is about to become, rather than
+                  // an empty page or a spinner over nothing: the columns hold
+                  // their width, so nothing jumps when the rows arrive.
+                  Array.from({ length: Math.min(limit, 5) }).map((_, i) => (
+                    <Tr key={`skeleton-${i}`}>
+                      <Td py={{ base: 3, md: 5 }}>
+                        <Skeleton height="14px" width="110px" />
+                      </Td>
+                      <Td py={{ base: 3, md: 5 }}>
+                        <Skeleton height="14px" width="160px" />
+                      </Td>
+                      <Td py={{ base: 3, md: 5 }}>
+                        <Skeleton height="20px" width="140px" borderRadius="md" />
+                      </Td>
+                      <Td py={{ base: 3, md: 5 }}>
+                        <HStack spacing={2}>
+                          <Skeleton height="20px" width="70px" borderRadius="md" />
+                          <Skeleton height="20px" width="70px" borderRadius="md" />
+                        </HStack>
+                      </Td>
+                      <Td py={{ base: 3, md: 5 }}>
+                        <SkeletonText noOfLines={2} spacing={2} skeletonHeight="10px" width="180px" />
+                      </Td>
+                    </Tr>
+                  ))
+                ) : logs.length === 0 ? (
                   <Tr>
                     <Td colSpan={5} textAlign="center" py={8}>
                       <Text color="gray.500">No logs found.</Text>
@@ -1018,19 +1093,34 @@ const Logs = () => {
                       </Td>
                       <Td py={{ base: 3, md: 5 }}>
                         <Badge colorScheme="blue" variant="subtle" whiteSpace="normal">
-                          {log.dept} - {log.session}
+                          {log.dept || 'Department not recorded'}
+                          {log.session ? ` - ${log.session}` : ''}
                         </Badge>
+                        {!log.dept && log.code && (
+                          <Text fontSize="2xs" color="gray.500" mt={1}>
+                            Timetable {log.code}
+                          </Text>
+                        )}
                       </Td>
                       <Td py={{ base: 3, md: 5 }} minW={{ base: "240px", md: "auto" }}>
-                        <TimetableLockLog
-                          facultyChanges={(() => {
-                            try {
-                              return JSON.parse(log.changes);
-                            } catch {
-                              return [];
-                            }
-                          })()}
-                        />
+                        {(() => {
+                          let parsed = null;
+                          try {
+                            parsed = JSON.parse(log.changes);
+                          } catch {
+                            parsed = null;
+                          }
+                          return (
+                            <TimetableLockLog
+                              facultyChanges={parsed}
+                              unreadable={
+                                log.changes !== undefined &&
+                                log.changes !== null &&
+                                !Array.isArray(parsed)
+                              }
+                            />
+                          );
+                        })()}
                       </Td>
                       <Td py={{ base: 3, md: 5 }} minW={{ base: "220px", md: "260px" }}>
                         <MailDelivery

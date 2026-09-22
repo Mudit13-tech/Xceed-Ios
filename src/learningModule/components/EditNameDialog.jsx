@@ -14,12 +14,12 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
-  Spinner,
   Flex,
   VStack,
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
+import { BusyDots } from './common';
 import { looksLikeEmail, EMAIL_AS_NAME_MESSAGE } from '../displayName';
 
 /**
@@ -124,7 +124,7 @@ export default function EditNameDialog({ isOpen, onClose, onSaved }) {
         <ModalBody>
           {loading ? (
             <Flex justify="center" py={6}>
-              <Spinner />
+              <BusyDots label="Loading your name…" />
             </Flex>
           ) : (
             <VStack spacing={4} align="stretch">

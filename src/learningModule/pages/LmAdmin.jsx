@@ -641,7 +641,8 @@ export default function LmAdmin() {
       >
         <Text fontSize="sm" color="lmFg.muted">
           FACULTY is the only role that can open a class, set a paper or read an answer key, so
-          handing it out lives on its own page rather than in this summary.
+          handing it out — and taking it back off somebody who no longer teaches here — lives on
+          its own page rather than in this summary.
         </Text>
       </SectionCard>
 
@@ -655,7 +656,9 @@ export default function LmAdmin() {
         }
       >
         <Text fontSize="sm" color="lmFg.muted">
-          Invite new students by email, provision accounts, track department-wise enrollment numbers, and view which classes students have joined.
+          Invite new students by email, provision accounts, track department-wise enrollment numbers,
+          view which classes students have joined, and remove the student role from an account that
+          should no longer have it.
         </Text>
       </SectionCard>
 

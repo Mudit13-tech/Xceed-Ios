@@ -411,7 +411,7 @@ export default function GettingStartedManual({ standalone = false }) {
                         <Shot src={shotTutorials} alt="The Tutorials tab for a class" />
                     </Part>
 
-                    <Part number={5} icon="assignment" title="Numerical Assignments" href="/learning/assignmentmanual" where="Numerical Assignments">
+                    <Part number={5} icon="assignment" title="Assignments" href="/learning/assignmentmanual" where="Assignments">
                         <P>
                             Assessed work with a due date, marked automatically the moment it is submitted:
                             numerical questions, multiple-choice and multiple-answer questions, and plain
@@ -431,7 +431,7 @@ export default function GettingStartedManual({ standalone = false }) {
                             deterministic, so a student who reloads or comes back tomorrow sees the same numbers,
                             and a question can carry a constraint so nobody is handed a division by zero.
                         </P>
-                        <Shot src={shotAssignments} alt="The Numerical Assignments tab for a class" />
+                        <Shot src={shotAssignments} alt="The Assignments tab for a class" />
                     </Part>
 
                     <Part number={6} icon="form" title="Forms" href="/learning/formsmanual" where="Forms">
@@ -439,7 +439,7 @@ export default function GettingStartedManual({ standalone = false }) {
                             Everything that is not an automatically marked assessment: feedback, sign-up sheets,
                             project-group declarations, consent, a quick survey — and document hand-ins, by setting
                             a form&apos;s category to Assignment, which makes a deadline compulsory and lists it on
-                            the Numerical Assignments tab as well. Eight question types, sections to break up a
+                            the Assignments tab as well. Eight question types, sections to break up a
                             long form, the option to show one question at a time (which also shows you where
                             respondents give up), an optional closing time, and a choice between keeping it inside
                             the class or sharing a link anyone can open, signed in or not. Responses come back as a

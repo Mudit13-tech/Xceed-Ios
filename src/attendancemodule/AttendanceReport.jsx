@@ -1,7 +1,7 @@
 // client/src/attendancemodule/AttendanceReport.jsx
 // Input: room + slot + RTSP URL → auto-lookup from LockSem → attendance report
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { DEGREES, YEARS, theme, styles, cssReset } from './config';
 import { useDepartments } from './useDepartments';
@@ -16,9 +16,43 @@ import StudentGroundTruthModal from './StudentGroundTruthModal';
 import EnrollmentWarning from './EnrollmentWarning';
 import { AmsSubtab } from './SubtabNewTabButton';
 import { readSubtabFromSearch } from './subtabNavigation';
+import usePolling from './usePolling';
 
 const apiUrl = getEnvironment();
 const REPORT_API = `${apiUrl}/attendancemodule/reports`;
+
+// Where "Frames" goes for a given report.
+//
+// Class Verification is mounted twice — /attendance/frame-verification for an
+// institute admin and /dept-admin/class-verification for a department
+// coordinator — and this page is the same component under both. Picking the
+// route from the path the user is already on keeps a coordinator inside their
+// own layout instead of bouncing them to an /attendance URL their gate turns
+// away.
+//
+// FrameVerification reads room/date/period straight out of the query string
+// (see its useState initialisers), so a link is all this needs to be: the page
+// opens already pointed at the class, with no extra API and nothing to keep in
+// sync here.
+function classVerificationPath(report, pathname) {
+  const base = String(pathname || '').startsWith('/dept-admin')
+    ? '/dept-admin/class-verification'
+    : '/attendance/frame-verification';
+  const params = new URLSearchParams();
+  // Only what identifies the class. An empty value would select a blank option
+  // in the dropdown rather than leaving it on its own default.
+  if (report?.room) params.set('room', report.room);
+  if (report?.date) params.set('date', report.date);
+  // Lower-cased to match what the availability endpoint emits: it parses the
+  // period out of the frame folder name and lower-cases it
+  // (frameVerificationController), while a report's timeSlot is only whatever
+  // was written. FrameVerification clears any `period` not in that list, so a
+  // case mismatch here would not error — it would silently land the user on an
+  // unselected page, which is worse than no link at all.
+  if (report?.timeSlot) params.set('period', String(report.timeSlot).toLowerCase());
+  const query = params.toString();
+  return query ? `${base}?${query}` : base;
+}
 const REPORT_DELETE_SETTINGS_API = `${apiUrl}/attendancemodule/settings/report-deletion`;
 const USER_API = `${apiUrl}/user/getuser`;
 const ML_API = `${apiUrl}/ml`;
@@ -100,7 +134,23 @@ const REPORT_TAB_OPTIONS = [
 // ── LT103 dual-camera preset (same as groundtruthgen_rtsp) ───────────────────
 //const LT103L_URL = 'rtsp://admin:Admin%401234%23@10.10.177.249:554/video/live?channel=1&subtype=0&rtsp_transport=tcp';
 //const LT103R_URL = 'rtsp://admin:Admin%401234%23@10.10.177.250:554/video/live?channel=1&subtype=0&rtsp_transport=tcp';
-export default function AttendanceReport() {
+/**
+ * @param {object} props
+ * @param {boolean} [props.roomsFromSavedReports] Draw the room list from the
+ *   saved reports on screen rather than from the camera registry.
+ *
+ *   The registry is every room in the institute that has a camera, which is
+ *   the right list for somebody about to run a session in one of them. A head
+ *   of department runs none: they read what their department's classes already
+ *   produced, and the rooms worth naming are the rooms those reports are in.
+ *   The registry also reaches well beyond their department, so it offered a
+ *   head a list mostly of rooms they have no business in.
+ *
+ *   The reports this derives from are already scoped to the reader by the
+ *   server — see getReports — so this narrows what is shown without becoming
+ *   the thing that decides what may be seen.
+ */
+export default function AttendanceReport({ roomsFromSavedReports = false } = {}) {
   const { slotLabel, slotKeys } = usePeriods();
   const navigate = useNavigate();
   const location = useLocation();
@@ -196,9 +246,11 @@ export default function AttendanceReport() {
         });
       })
       .catch(() => { });
-    const id = setInterval(() => setNowMin(nowMinIST()), 30000);
-    return () => clearInterval(id);
   }, []);
+
+  // Clock label only — nothing to recompute while the tab is hidden, and it
+  // re-reads the real clock as soon as it is back.
+  usePolling(useCallback(() => setNowMin(nowMinIST()), []), 30000);
 
   // ── Camera-switch dwell time (for the countdown banner) ───────────────────
   useEffect(() => {
@@ -267,6 +319,12 @@ export default function AttendanceReport() {
   // Only rooms that already have a camera registered are shown
   // (Camera registry → distinct roomId).
   useEffect(() => {
+    // Derived from the reports instead, so the institute-wide registry is not
+    // fetched at all for a reader who will not be offered it.
+    if (roomsFromSavedReports) {
+      setRoomsLoading(false);
+      return;
+    }
     (async () => {
       setRoomsLoading(true);
       try {
@@ -279,7 +337,13 @@ export default function AttendanceReport() {
         setRoomsLoading(false);
       }
     })();
-  }, []);
+  }, [roomsFromSavedReports]);
+
+  /** The rooms the selector offers: the registry, or the ones on screen. */
+  const roomOptions = useMemo(() => {
+    if (!roomsFromSavedReports) return rooms;
+    return [...new Set(reports.map((r) => r.room).filter(Boolean))].sort();
+  }, [roomsFromSavedReports, rooms, reports]);
 
   // ── Timetable auto-lookup when room + slot change ─────────────
   useEffect(() => {
@@ -459,20 +523,23 @@ export default function AttendanceReport() {
   }, []);
 
   // ── Auto-poll detail report when session is live ──────────────
-  useEffect(() => {
-    if (detailReport?.status !== 'live') return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`${REPORT_API}/${detailReport._id}`);
-        const updated = await res.json();
-        setDetailReport(updated);
-        setSessionChecks(updated.slotResults?.length || 0);
-      } catch {
-        /* ignore */
-      }
-    }, 10000); // poll every 10 seconds
-    return () => clearInterval(interval);
-  }, [detailReport?._id, detailReport?.status]);
+  const reportId = detailReport?._id;
+  const refreshDetail = useCallback(async () => {
+    if (!reportId) return;
+    try {
+      const res = await fetch(`${REPORT_API}/${reportId}`);
+      const updated = await res.json();
+      setDetailReport(updated);
+      setSessionChecks(updated.slotResults?.length || 0);
+    } catch {
+      /* ignore */
+    }
+  }, [reportId]);
+
+  usePolling(refreshDetail, 10000, {
+    enabled: detailReport?.status === 'live' && !!reportId,
+    immediate: false,
+  });
 
   // ── Camera-switch countdown ticker ────────────────────────────────────────
   // Python switches cameras every camSwitchSec, not every `duration`. We count
@@ -1019,15 +1086,19 @@ export default function AttendanceReport() {
                   disabled={roomsLoading}
                 >
                   <option value="">
-                    {roomsLoading ? 'Loading rooms with cameras...' : 'Select room with camera...'}
+                    {roomsLoading
+                      ? 'Loading rooms with cameras...'
+                      : roomsFromSavedReports
+                        ? 'Select a room from the saved reports...'
+                        : 'Select room with camera...'}
                   </option>
-                  {rooms.map((r) => (
+                  {roomOptions.map((r) => (
                     <option key={r} value={r}>
                       {r}
                     </option>
                   ))}
                 </select>
-                {!roomsLoading && rooms.length === 0 && (
+                {!roomsLoading && roomOptions.length === 0 && (
                   <div
                     style={{
                       marginTop: 6,
@@ -2158,6 +2229,27 @@ export default function AttendanceReport() {
                               >
                                 View
                               </button>
+                              {/* Frames for THIS class. Disabled rather than
+                                  hidden when the report has no room — the
+                                  column stays aligned, and the title says why
+                                  instead of the button silently missing. */}
+                              <button
+                                type="button"
+                                disabled={!r.room}
+                                title={r.room
+                                  ? `Open frame verification for ${r.room}`
+                                  : 'This report has no room recorded'}
+                                onClick={() => navigate(classVerificationPath(r, location.pathname))}
+                                style={{
+                                  ...styles.btnGhost,
+                                  padding: '6px 10px',
+                                  fontSize: 11,
+                                  opacity: r.room ? 1 : 0.45,
+                                  cursor: r.room ? 'pointer' : 'not-allowed',
+                                }}
+                              >
+                                Frames
+                              </button>
                               {canDeleteReports && (
                                 <button
                                   type="button"
@@ -2345,6 +2437,21 @@ export default function AttendanceReport() {
                           ? 'Live'
                           : 'Completed'}
                     </span>
+                    {/* Same destination as the row's Frames button, offered
+                        again here because this is where somebody reading a
+                        result decides they want to see the evidence. */}
+                    {detailReport.room && (
+                      <button
+                        onClick={() => navigate(classVerificationPath(detailReport, location.pathname))}
+                        style={{
+                          ...styles.btnGhost,
+                          padding: '8px 18px',
+                          fontSize: '13px',
+                        }}
+                      >
+                        Class Verification
+                      </button>
+                    )}
                     <button
                       onClick={() => setTab('unknown')}
                       style={{

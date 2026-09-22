@@ -56,8 +56,15 @@ function walkFiles(dir, prefix = '') {
  * would simply be 25x its usual size and the manifest would list 100,000 files.
  * A silent 535 MB is not a failure mode worth leaving open for the sake of a
  * list of two.
+ *
+ * `explainer-videos` is the case that proved the list needs revisiting whenever
+ * AMS adds to `public/`: 22 recordings, 222 MB, mirrored in by the 2026-09-19
+ * sync and shipped whole in 2.1.46 before anybody looked at the deploy's own
+ * "231.84 MB changed" line. They are excluded here *and* addressed absolutely in
+ * src/pages/ExplainersPage.jsx - excluding them while the page still asks for a
+ * site-relative url just swaps half a gigabyte for a grid of dead players.
  */
-const BUNDLE_EXCLUDES = ['pyodide', 'clang'];
+const BUNDLE_EXCLUDES = ['pyodide', 'clang', 'explainer-videos'];
 
 /** True for a `dist`-relative path that must not be published. */
 function isExcludedFromBundle(fileName) {

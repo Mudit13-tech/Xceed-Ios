@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import ViewTimetable from './viewtt';
 import getEnvironment from '../getenvironment';
 import MailProgressModal from './mailProgressModal';
+import { notifyGate } from './notifyGate';
 import TimetableSummary from './ttsummary';
 import ReactToPrint from 'react-to-print';
 import { Container } from '@chakra-ui/react';
@@ -149,6 +150,9 @@ const Timetable = () => {
       return () => clearTimeout(timer);
     }
   }, [message]);
+
+  // Which availability check the banner is currently showing; see saveSlotData.
+  const slotCheckSeq = useRef(0);
 
  
 
@@ -604,6 +608,13 @@ const Timetable = () => {
     const code = currentCode;
     const sem = selectedSemester;
 
+    // Every dropdown selection asks this question again, and the answers are
+    // not guaranteed to come back in the order they were asked. Without a
+    // sequence guard a slower reply about an earlier selection lands last and
+    // leaves the banner describing a cell the incharge has already changed.
+    const check = ++slotCheckSeq.current;
+    setMessage('Checking slot availability...');
+
     try {
       const response = await fetch(Url, {
         method: 'POST',
@@ -613,10 +624,12 @@ const Timetable = () => {
       });
       if (response) {
         const data = await response.json();
+        if (check !== slotCheckSeq.current) return;
         setMessage(data.message);
       }
     } catch (error) {
-      // handle error silently
+      // Leaving "Checking..." on screen forever would read as a hung check.
+      if (check === slotCheckSeq.current) setMessage('');
     }
   };
 
@@ -683,98 +696,125 @@ const handleLockTT = async () => {
     const isConfirmed = window.confirm(
       'Are you sure you want to lock the timetable?'
     );
-    var toInform = false;
-    if (currentSessionCodes.includes(currentCode) && TTData?.publish === true)
-      toInform = window.confirm(
-        'Do you want to inform the teachers about the timetable changes?'
-      );
-    if (isConfirmed) {
-      setIsLocking(true);
-      setMessage('Data is being saved....');
-      setMessage('Data saved. Commencing lock');
-      setMessage('Data is being locked');
-      // The server mails every affected teacher before it answers, so the
-      // progress state goes up before the request rather than after it —
-      // otherwise the slowest part of the lock happens with nothing on screen.
-      if (toInform) setMailReport({ phase: 'sending' });
-      const Url = `${apiUrl}/timetablemodule/lock/locktt`;
-      const code = currentCode;
-      try {
-        const response = await fetch(Url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, toInform }),
-          credentials: 'include',
-        });
+    if (!isConfirmed) {
+      // Answering "cancel" is not a failure, and the notification question used
+      // to be put even after it had been declined.
+      return;
+    }
 
-        if (response.ok) {
-          const data = await response.json();
-          const { results } = data;
-          if (toInform) {
-            // Reported in the modal rather than a toast. A toast names a
-            // count and then vanishes; what a coordinator needs is which
-            // teacher does not know their timetable moved, and the link that
-            // can send it again. `logId` is what makes that resend possible.
-            setMailReport({
-              phase: 'done',
-              results: results || [],
-              logId: data.logId,
-              note:
-                'Delivery times are recorded against this change on the ' +
-                'Change Logs page.',
-            });
-          } else {
-            setMailReport(null);
-          }
-          setMessage('');
-          toast({
-            title: 'Timetable Locked',
-            status: 'success',
-            duration: 3000,
-            isClosable: true,
-            position: 'bottom',
+    // Whether the teachers are told, asked about, or cannot be told and why.
+    // One rule across the three pages that lock a timetable — see notifyGate.
+    const gate = notifyGate({
+      code: currentCode,
+      currentSessionCodes,
+      // The raw flag, not a coerced boolean: "not loaded" and "explicitly a
+      // draft" are different answers and the gate treats them differently.
+      published: TTData?.publish,
+    });
+    // A published timetable mails its changes without asking: the teachers
+    // already have this table, so a change to it is news they must have.
+    const toInform =
+      gate.mode === 'auto' ||
+      (gate.mode === 'ask' &&
+        window.confirm(
+          'Do you want to inform the teachers about the timetable changes?'
+        ));
+    setIsLocking(true);
+    setMessage('Data is being locked');
+    // The server mails every affected teacher before it answers, so the
+    // progress state goes up before the request rather than after it —
+    // otherwise the slowest part of the lock happens with nothing on screen.
+    if (toInform) setMailReport({ phase: 'sending' });
+    const Url = `${apiUrl}/timetablemodule/lock/locktt`;
+    const code = currentCode;
+    try {
+      const response = await fetch(Url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, toInform }),
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const { results } = data;
+        if (toInform) {
+          // Reported in the modal rather than a toast. A toast names a
+          // count and then vanishes; what a coordinator needs is which
+          // teacher does not know their timetable moved, and the link that
+          // can send it again. `logId` is what makes that resend possible.
+          setMailReport({
+            phase: 'done',
+            results: results || [],
+            logId: data.logId,
+            note:
+              'Delivery times are recorded against this change on the ' +
+              'Change Logs page.',
           });
         } else {
-          console.error(
-            'Failed to send data to the backend. HTTP status:',
-            response.status
-          );
-          // Never leave the modal spinning on a request that came back bad.
-          if (toInform) {
-            setMailReport({
-              phase: 'done',
-              results: [],
-              heading: 'Lock failed — no notifications sent',
-              note: `The server refused the lock (HTTP ${response.status}), so nothing was emailed.`,
-            });
-          }
+          setMailReport(null);
         }
-      } catch (error) {
-        console.error('Error sending data to the backend:', error);
-        // Same reason as the bad-status branch: the modal must not spin on.
+        setMessage('');
+        toast({
+          title: 'Timetable Locked',
+          // A lock that told nobody says so here. It is otherwise
+          // indistinguishable from one that mailed the whole department, and
+          // the coordinator finds out weeks later, from a teacher.
+          description: gate.canNotify
+            ? undefined
+            : `No one was emailed: ${gate.reason}.`,
+          status: 'success',
+          duration: gate.canNotify ? 3000 : 8000,
+          isClosable: true,
+          position: 'bottom',
+        });
+      } else {
+        // The guards in this module explain themselves in `error`; show that
+        // rather than a status code nobody can act on.
+        const data = await response.json().catch(() => ({}));
+        const reason =
+          data?.error || `The server refused the lock (HTTP ${response.status}).`;
+        toast({
+          title: 'Timetable Lock Failed',
+          description: reason,
+          status: 'error',
+          duration: 8000,
+          isClosable: true,
+          position: 'bottom',
+        });
+        // Never leave the modal spinning on a request that came back bad.
         if (toInform) {
           setMailReport({
             phase: 'done',
             results: [],
-            heading: 'Lock request failed',
-            note:
-              'The request did not reach the server, so it is not known ' +
-              'whether any notifications were sent. Check the Change Logs page.',
+            heading: 'Lock failed — no notifications sent',
+            note: `${reason} Nothing was emailed.`,
           });
         }
-      } finally {
-        setIsLocking(false);
       }
-    } else {
+    } catch (error) {
       toast({
         title: 'Timetable Lock Failed',
-        description:
-          'An error occurred while attempting to lock the timetable.',
+        description: 'The server could not be reached. Please try again.',
         status: 'error',
-        duration: 3000,
+        duration: 8000,
         isClosable: true,
         position: 'bottom',
       });
+      // Same reason as the bad-status branch: the modal must not spin on.
+      if (toInform) {
+        setMailReport({
+          phase: 'done',
+          results: [],
+          heading: 'Lock request failed',
+          note:
+            'The request did not reach the server, so it is not known ' +
+            'whether any notifications were sent. Check the Change Logs page.',
+        });
+      }
+    } finally {
+      setMessage('');
+      setIsLocking(false);
     }
   };
 
@@ -871,28 +911,26 @@ const handleLockTT = async () => {
   // RENDER
   return (
     <Container maxW="full" p={0} bg="gray.50" overflowX="hidden">
-      {/* Enhanced Hero Section with Gradient */}
+      {/* Page header, and the only change to this page: the dark green panel
+          and its decorative circles are gone, and the band is violet —
+          purple.500, the shade Chakra fills a `colorScheme="purple"` button
+          with, so the top matches the controls on the page rather than sitting
+          a step darker than them. Everything below is as it was. */}
       <Box 
-        bgGradient="linear(135deg, #1a413f 0%, #375b59 50%, #1e566a 100%)"
+        bg="purple.500"
         py={{ base: 7, md: 10 }}
         position="relative"
-        overflow="hidden"
       >
-        <Box position="absolute" top="0" left="0" right="0" bottom="0" opacity="0.1">
-          <Box position="absolute" top="15%" left="8%" w={{ base: "60px", md: "120px" }} h={{ base: "60px", md: "120px" }} borderRadius="full" bg="white" />
-          <Box position="absolute" top="50%" right="12%" w={{ base: "90px", md: "180px" }} h={{ base: "90px", md: "180px" }} borderRadius="full" bg="white" />
-          <Box position="absolute" bottom="10%" left="40%" w={{ base: "50px", md: "100px" }} h={{ base: "50px", md: "100px" }} borderRadius="full" bg="white" />
-        </Box>
         <Container maxW="8xl" position="relative" zIndex="1" px={{ base: 4, md: 6 }}>
           <VStack spacing={2} align="center" justify="center" minH={{ base: "90px", md: "110px" }}>
-            <Badge fontSize={{ base: "sm", md: "xl" }} px={{ base: 2, md: 3 }} py={{ base: 1, md: 2 }} borderRadius="full" bg="whiteAlpha.400" color="white" fontWeight="bold" textTransform="uppercase">
+            <Heading size={{ base: "md", md: "lg" }} color="white" textAlign="center">
               Dashboard - Timetable Management System
-            </Badge>
+            </Heading>
             {TTData?.dept && (
               <Text color="whiteAlpha.900" fontSize={{ base: "sm", md: "lg" }} fontWeight="semibold">
                 {TTData.dept}
                 {TTData?.name && (
-                  <Text as="span" color="whiteAlpha.700" fontWeight="normal" fontSize={{ base: "xs", md: "md" }}>
+                  <Text as="span" color="whiteAlpha.800" fontWeight="normal" fontSize={{ base: "xs", md: "md" }}>
                     {' '}· Coordinator: {TTData.name}
                   </Text>
                 )}
@@ -922,41 +960,9 @@ const handleLockTT = async () => {
                 { icon: ViewIcon,    label: 'View Rooms',   c: 'pink',   fn: handleViewRoom },
                 { icon: EditIcon,    label: 'Edit Faculty', c: 'cyan',   fn: handleEditFaculty },
                 { icon: DownloadIcon,label: 'Import Data',  c: 'yellow', fn: handleImportData },
-                { icon: FaBook,      label: 'Help & Manual',c: 'green',  darkGreen: true, fn: () => window.open('/tt-manual', '_blank', 'noopener,noreferrer'), isNew: true },
+                { icon: FaBook,      label: 'Help & Manual',c: 'green',  darkGreen: true, fn: () => window.open('/tt-manual', '_blank', 'noopener,noreferrer') },
               ].map((a, i) => (
                 <Box key={i} position="relative" display="inline-block">
-                  {a.isNew && (
-                    <Box
-                      position="absolute"
-                      top="-9px"
-                      right="-9px"
-                      zIndex={2}
-                      sx={{
-                        animation: 'ttNewPulse 2s ease-in-out infinite',
-                        '@keyframes ttNewPulse': {
-                          '0%, 100%': { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(234,179,8,0.7)' },
-                          '50%': { transform: 'scale(1.12)', boxShadow: '0 0 0 6px rgba(234,179,8,0)' },
-                        },
-                      }}
-                    >
-                      <Box
-                        bg="linear-gradient(135deg, #facc15 0%, #f97316 100%)"
-                        color="white"
-                        fontSize="10px"
-                        fontWeight="900"
-                        letterSpacing="0.08em"
-                        px="7px"
-                        py="2px"
-                        borderRadius="full"
-                        border="2px solid white"
-                        boxShadow="0 2px 8px rgba(249,115,22,0.6)"
-                        lineHeight="1.4"
-                        userSelect="none"
-                      >
-                        ✦ NEW
-                      </Box>
-                    </Box>
-                  )}
                   <Button
                     onClick={a.fn}
                     colorScheme={a.c}

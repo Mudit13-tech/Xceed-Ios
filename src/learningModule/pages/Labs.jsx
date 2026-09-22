@@ -4,7 +4,6 @@ import {
   Badge,
   Box,
   Button,
-  Flex,
   HStack,
   Heading,
   Menu,
@@ -15,7 +14,17 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { EmptyState, ErrorState, Loading, SectionCard, WorkListSkeleton } from '../components/common';
+import {
+  CardActions,
+  CardBody,
+  CardRow,
+  EmptyState,
+  ErrorState,
+  Loading,
+  PageHeader,
+  SectionCard,
+  WorkListSkeleton,
+} from '../components/common';
 import DeleteButton from '../components/DeleteButton';
 
 /**
@@ -97,35 +106,31 @@ export default function Labs() {
 
   return (
     <Box>
-      <Flex justify="space-between" align="flex-start" mb={4} gap={3} wrap="wrap">
-        <Box>
-          <Heading size="md">Virtual lab</Heading>
-          <Text fontSize="sm" color="lmFg.muted">
-            Wire up a circuit, put meters on it and run it. Voltage, current and power in AC and DC,
-            with a scope for waveforms — solved properly, so the numbers are the ones the bench would
-            give.
-          </Text>
-        </Box>
-        {isTeacher && (
-          <Menu>
-            <MenuButton as={Button} colorScheme="teal">
-              + New experiment
-            </MenuButton>
-            <MenuList>
-              {catalogue.map((domain) => (
-                <MenuItem key={domain.key} onClick={() => create(domain)}>
-                  <Box>
-                    <Text fontWeight="600">{domain.label}</Text>
-                    <Text fontSize="xs" color="lmFg.muted" maxW="320px" whiteSpace="normal">
-                      {domain.blurb}
-                    </Text>
-                  </Box>
-                </MenuItem>
-              ))}
-            </MenuList>
-          </Menu>
-        )}
-      </Flex>
+      <PageHeader
+        title="Virtual lab"
+        description="Wire up a circuit, put meters on it and run it. Voltage, current and power in AC and DC, with a scope for waveforms — solved properly, so the numbers are the ones the bench would give."
+        actions={
+          isTeacher ? (
+            <Menu>
+              <MenuButton as={Button} colorScheme="teal" w={{ base: '100%', md: 'auto' }}>
+                + New experiment
+              </MenuButton>
+              <MenuList>
+                {catalogue.map((domain) => (
+                  <MenuItem key={domain.key} onClick={() => create(domain)}>
+                    <Box>
+                      <Text fontWeight="600">{domain.label}</Text>
+                      <Text fontSize="xs" color="lmFg.muted" maxW="320px" whiteSpace="normal">
+                        {domain.blurb}
+                      </Text>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </MenuList>
+            </Menu>
+          ) : null
+        }
+      />
 
       <ErrorState error={error} onRetry={load} />
 
@@ -142,9 +147,9 @@ export default function Labs() {
       ) : (
         labs.map((lab) => (
           <SectionCard key={lab._id} mb={3}>
-            <Flex align="center" gap={4} wrap="wrap">
-              <Box flex="1" minW="240px">
-                <HStack>
+            <CardRow>
+              <CardBody minW="240px">
+                <HStack wrap="wrap">
                   <Heading size="sm">{lab.title}</Heading>
                   <Badge colorScheme="teal">{lab.domainLabel}</Badge>
                   {isTeacher && (
@@ -180,9 +185,9 @@ export default function Labs() {
                       : 'In progress'}
                   </Badge>
                 )}
-              </Box>
+              </CardBody>
 
-              <HStack>
+              <CardActions>
                 {isTeacher ? (
                   <>
                     <Button
@@ -229,8 +234,8 @@ export default function Labs() {
                     {lab.myAttempt ? 'Open' : 'Start'}
                   </Button>
                 )}
-              </HStack>
-            </Flex>
+              </CardActions>
+            </CardRow>
           </SectionCard>
         ))
       )}

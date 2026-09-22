@@ -9,7 +9,6 @@ import {
   Flex,
   HStack,
   Heading,
-  Input,
   Link,
   Select,
   Spinner,
@@ -17,6 +16,7 @@ import {
   StatLabel,
   StatNumber,
   Text,
+  Textarea,
   VStack,
   useColorModeValue,
   useToast,
@@ -25,6 +25,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import lmApi from '../learningModule/api/lmApi';
 import { githubIssueUrl } from '../learningModule/githubIssue';
+import { noteThread, noteThreadLabel, noteByline } from '../learningModule/bugNotes';
 
 /**
  * Bugs and suggestions, for the people who can act on them.
@@ -55,7 +56,10 @@ const KIND_STYLE = {
 const formatWhen = (value) => (value ? new Date(value).toLocaleString() : '');
 
 function ReportCard({ report, onDecide, onSendNote }) {
-  const [note, setNote] = useState(report.adminNote || '');
+  // Empty, not the note already sent. The box is where the *next* message is
+  // written; what has already been said is in the thread below the buttons,
+  // where it does not have to be deleted before anything else can be typed.
+  const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
   const cardBg = useColorModeValue('white', 'gray.800');
@@ -66,7 +70,8 @@ function ReportCard({ report, onDecide, onSendNote }) {
   const decide = async (status) => {
     setBusy(true);
     try {
-      await onDecide(report, status, note);
+      await onDecide(report, status, note.trim());
+      setNote('');
     } finally {
       setBusy(false);
     }
@@ -81,14 +86,18 @@ function ReportCard({ report, onDecide, onSendNote }) {
     setSending(true);
     try {
       await onSendNote(report, note.trim());
+      // Cleared so the next reply starts from nothing. It also has to be
+      // cleared for the button to go quiet again, since anything typed can be
+      // sent — including the same thing twice, which is what chasing an
+      // unanswered question looks like.
+      setNote('');
     } finally {
       setSending(false);
     }
   };
 
-  // Re-sending text the reporter has already been shown notifies nobody: the
-  // server only raises a notification when the stored note actually changes.
-  const noteIsNew = note.trim() !== '' && note.trim() !== (report.adminNote || '').trim();
+  const canSend = note.trim() !== '';
+  const thread = noteThread(report);
 
   const kind = KIND_STYLE[report.kind] || KIND_STYLE.bug;
   const status = STATUS_STYLE[report.status] || { colorScheme: 'gray', label: report.status };
@@ -145,28 +154,45 @@ function ReportCard({ report, onDecide, onSendNote }) {
         </Text>
       )}
 
-      <HStack spacing={2} mb={3} align="center">
-        <Input
+      <VStack align="stretch" spacing={2} mb={3}>
+        <Textarea
           size="sm"
-          placeholder="Note back to the reporter (optional)"
+          rows={3}
+          resize="vertical"
+          // The server slices the note at 2000 characters. On a box this size
+          // that is reachable, and silently dropping the end of something that
+          // is now an email body is the worst version of this.
+          maxLength={2000}
+          placeholder="Reply to the reporter — this is emailed to them"
           value={note}
           onChange={(event) => setNote(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && noteIsNew) sendNote();
+            // Plain Enter has to fall through and start a new line now that this
+            // is a paragraph box, so sending moves to the usual modifier.
+            if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+              event.preventDefault();
+              sendNote();
+            }
           }}
         />
-        <Button
-          size="sm"
-          colorScheme="purple"
-          variant="outline"
-          flexShrink={0}
-          isLoading={sending}
-          isDisabled={!noteIsNew}
-          onClick={sendNote}
-        >
-          Send note
-        </Button>
-      </HStack>
+        <Flex justify="space-between" align="center" gap={3} wrap="wrap">
+          <Text fontSize="xs" color={subColor}>
+            Emailed to {report.reporterEmail || 'the reporter'} and shown in the app.
+            Ctrl+Enter to send. The verdict buttons below notify in the app only.
+          </Text>
+          <Button
+            size="sm"
+            colorScheme="purple"
+            variant="outline"
+            flexShrink={0}
+            isLoading={sending}
+            isDisabled={!canSend}
+            onClick={sendNote}
+          >
+            Send note
+          </Button>
+        </Flex>
+      </VStack>
 
       <HStack spacing={2} wrap="wrap">
         {/* Only "Approve" pays, and only the first time: the server records the
@@ -211,6 +237,36 @@ function ReportCard({ report, onDecide, onSendNote }) {
           Raise on GitHub ↗
         </Button>
       </HStack>
+
+      {/* What has already been said, under the decision rather than over it:
+          the queue is read verdict-first, and the history is what you go to
+          when the verdict is not obvious. */}
+      {thread.length > 0 && (
+        <Box mt={4} pt={3} borderTopWidth="1px" borderColor={border}>
+          <Text fontSize="xs" fontWeight="600" color={subColor} mb={2}>
+            {noteThreadLabel(thread)}
+          </Text>
+          <VStack align="stretch" spacing={2}>
+            {thread.map((entry, index) => (
+              <Box
+                key={entry._id || `${entry.at || ''}-${index}`}
+                bg={quoteBg}
+                borderWidth="1px"
+                borderColor={border}
+                borderRadius="md"
+                p={3}
+              >
+                <Text fontSize="sm" whiteSpace="pre-wrap">
+                  {entry.body}
+                </Text>
+                <Text fontSize="xs" color={subColor} mt={2}>
+                  {noteByline(entry, formatWhen, (value) => STATUS_STYLE[value]?.label || value)}
+                </Text>
+              </Box>
+            ))}
+          </VStack>
+        </Box>
+      )}
     </Box>
   );
 }
@@ -246,7 +302,13 @@ const BugReportsAdmin = () => {
 
   const decide = async (report, nextStatus, adminNote) => {
     try {
-      await lmApi.reviewBug(report._id, { status: nextStatus, adminNote });
+      // Only when something was actually typed. The box now starts empty, so
+      // sending it regardless would post "" and wipe the last reply off the
+      // report on every verdict.
+      await lmApi.reviewBug(report._id, {
+        status: nextStatus,
+        ...(adminNote ? { adminNote } : {}),
+      });
       toast({
         status: 'success',
         title: nextStatus === 'acknowledged' ? 'Approved' : `Marked ${nextStatus}`,
@@ -267,8 +329,19 @@ const BugReportsAdmin = () => {
    */
   const sendNote = async (report, adminNote) => {
     try {
-      await lmApi.reviewBug(report._id, { adminNote });
-      toast({ status: 'success', title: 'Note sent to the reporter', duration: 3000 });
+      // The server says whether the mail actually went. A note on a report
+      // filed by an account with no address — or one the mailbox refused — is
+      // still worth storing, since the reporter sees it on their own page, but
+      // the toast must not claim it was delivered when it was not.
+      const saved = await lmApi.reviewBug(report._id, { adminNote });
+      const failed = saved?.emailed === false;
+      toast({
+        status: failed ? 'warning' : 'success',
+        title: failed
+          ? 'Note saved, but it could not be emailed to the reporter'
+          : 'Note emailed to the reporter',
+        duration: failed ? 6000 : 3000,
+      });
       await load();
     } catch (err) {
       toast({ status: 'error', title: err.message, duration: 6000 });

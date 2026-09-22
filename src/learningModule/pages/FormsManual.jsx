@@ -164,7 +164,7 @@ function TabOverview() {
                 declarations, consent — and, with the <strong>Assignment</strong> category, document hand-ins
                 where students upload a PDF or other file before a deadline. Nothing here is marked, no response
                 is ever scored, and no gradebook row is created. If you want a mark, you want a Quiz or a
-                Numerical Assignment instead.
+                numerical assignment on the Assignments tab instead.
             </Note>
 
             <ShotSlot
@@ -176,7 +176,7 @@ function TabOverview() {
             <SectionTitle>Two Categories</SectionTitle>
             <Rows items={[
                 { label: 'Normal form', desc: 'The default. A survey, feedback form, sign-up sheet or anything else that is not a hand-in. Listed on the Forms tab only.' },
-                { label: 'Assignment', desc: 'A document hand-in — usually a single File upload question. It must have a submission deadline before it can be published, it is announced to students as a new assignment, and it is listed on the Numerical Assignments tab under Document Submissions as well as on the Forms tab. See the Assignment Forms tab of this manual.' },
+                { label: 'Assignment', desc: 'A document hand-in — usually a single File upload question. It must have a submission deadline before it can be published, it is announced to students as a new assignment, and it is listed on the Assignments tab under Document Submissions as well as on the Forms tab. See the Assignment Forms tab of this manual.' },
             ]} />
             <P>
                 The Forms tab groups its list under those two headings, Assignment first. Forms used to be
@@ -237,7 +237,7 @@ function TabBuild() {
             <Steps items={[
                 {
                     title: 'Open the class → Forms → New form',
-                    body: 'A blank draft is created and you land straight in the editor. A draft is invisible to students until you publish it. (For a document hand-in there is a shortcut on the Numerical Assignments tab — see Assignment Forms.)',
+                    body: 'A blank draft is created and you land straight in the editor. A draft is invisible to students until you publish it. (For a document hand-in there is a shortcut on the Assignments tab — see Assignment Forms.)',
                     shot: { screen: 'Forms tab with the New-form button', path: 'manualAssets/forms/new-form.png' },
                 },
                 {
@@ -247,7 +247,7 @@ function TabBuild() {
                 },
                 {
                     title: 'Choose the category',
-                    body: 'Normal form for everything except hand-ins. Choose Assignment when students are uploading their work: the form then needs a submission deadline, shows on the Numerical Assignments tab too, and students are mailed about it as a new assignment.',
+                    body: 'Normal form for everything except hand-ins. Choose Assignment when students are uploading their work: the form then needs a submission deadline, shows on the Assignments tab too, and students are mailed about it as a new assignment.',
                     shot: { screen: 'Form editor, the Category dropdown and the note beneath it', path: 'manualAssets/forms/editor-category.png' },
                 },
                 {
@@ -354,9 +354,9 @@ function TabAssignment() {
             <SectionTitle>Two Ways to Create One</SectionTitle>
             <Steps items={[
                 {
-                    title: 'From the Numerical Assignments tab: + New document assignment',
+                    title: 'From the Assignments tab: + New document assignment',
                     body: 'Under the Document Submissions heading. This creates a draft called “Untitled assignment”, already in the Assignment category, with one required File upload question (“Upload your submission”), and opens it in the form editor.',
-                    shot: { screen: 'Numerical Assignments tab, the Document Submissions section and its button', path: 'manualAssets/forms/assignment-new.png' },
+                    shot: { screen: 'Assignments tab, the Document Submissions section and its button', path: 'manualAssets/forms/assignment-new.png' },
                 },
                 {
                     title: 'Or from the Forms tab: + New form, then set Category to Assignment',
@@ -372,7 +372,7 @@ function TabAssignment() {
 
             <SectionTitle>What the Category Changes</SectionTitle>
             <Rows items={[
-                { label: 'Where it is listed', desc: 'Under the Assignment heading on the Forms tab, and under Document Submissions on the Numerical Assignments tab — for you and for students. Both lists carry the same buttons.' },
+                { label: 'Where it is listed', desc: 'Under the Assignment heading on the Forms tab, and under Document Submissions on the Assignments tab — for you and for students. Both lists carry the same buttons.' },
                 { label: 'Deadline', desc: 'Required before publishing, and it cannot be cleared from a published assignment form — unpublish first if you really mean to remove it.' },
                 { label: 'Announcement', desc: 'On first publish, students are notified and emailed “New assignment in <class>: <title>”, with the question count and due date. It follows their assignment notification preference rather than the general one.' },
                 { label: 'What it does not change', desc: 'No marks, no gradebook row, no late penalty. Access mode, one-response-per-person, sections and the rest behave exactly as on a normal form.' },
@@ -406,7 +406,7 @@ function TabStudent() {
             <SectionTitle>A class member, from the class</SectionTitle>
             <Steps items={[
                 {
-                    title: 'Open the class → Forms (or, for an assignment form, Numerical Assignments)',
+                    title: 'Open the class → Forms (or, for an assignment form, Assignments)',
                     body: 'Published forms are listed with their deadline countdown. A form they have already answered is badged Responded, and its button reads View / edit response. After the deadline, a form that does not allow late responses shows Closed.',
                     shot: { screen: 'Student view of the Forms tab', path: 'manualAssets/forms/student-list.png' },
                 },
@@ -507,7 +507,7 @@ function TabGotchas() {
             <Note type="danger">
                 <strong>A form is not an exam.</strong> No proctoring, no timer, no marking — not even on an
                 assignment form. If the answers decide a grade automatically, build it as a Quiz or a
-                Numerical Assignment.
+                numerical assignment on the Assignments tab.
             </Note>
 
             <ul style={{ fontSize: 13, color: T.text, lineHeight: 1.9, paddingLeft: 20, marginBottom: 16 }}>
@@ -519,7 +519,7 @@ function TabGotchas() {
                 <li><strong>An assignment form cannot be published without a deadline</strong>, and a
                     published one cannot have its deadline cleared.</li>
                 <li><strong>Switching a form from Assignment back to Normal</strong> takes it off the
-                    Numerical Assignments tab, but students who were already mailed about &ldquo;a new
+                    Assignments tab, but students who were already mailed about &ldquo;a new
                     assignment&rdquo; are not told.</li>
                 <li><strong>Delete is permanent.</strong> It removes the form and every response to it. To stop collecting but keep the answers, unpublish instead.</li>
                 <li><strong>The share link is minted on first publish and never changes.</strong> That is

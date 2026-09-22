@@ -20,6 +20,7 @@ import { theme, styles, cssReset, formatSlotLabel } from './config';
 import BackButton from './BackButton';
 import { usePeriods } from './usePeriods';
 import getEnvironment from '../getenvironment';
+import usePolling from './usePolling';
 
 const apiUrl = getEnvironment();
 const SCHEDULER_API = `${apiUrl}/attendancemodule/scheduler`;
@@ -367,12 +368,12 @@ export default function SchedulerLedgerPage() {
     useEffect(() => { load(); }, [load]);
 
     // Only while looking at today: a past day cannot change, and polling it
-    // would be a request a minute for a fixed answer.
-    useEffect(() => {
-        if (!autoRefresh || date !== todayStr()) return undefined;
-        const id = setInterval(load, 30000);
-        return () => clearInterval(id);
-    }, [autoRefresh, date, load]);
+    // would be a request a minute for a fixed answer. The leading call is left
+    // to the effect above so switching date does not fire two at once.
+    usePolling(load, 30000, {
+        enabled: autoRefresh && date === todayStr(),
+        immediate: false,
+    });
 
     const rows = useMemo(() => {
         const all = data?.rows || [];

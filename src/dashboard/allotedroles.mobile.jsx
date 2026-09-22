@@ -17,12 +17,11 @@
  * untouched and merges cleanly; run npm run drift to see what has changed in
  * it. See build/mobileOverrides.js.
  */
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Box,
-  Button,
   Container,
   Flex,
   Heading,
@@ -46,6 +45,8 @@ import {
 import getEnvironment from '../getenvironment';
 import {
   EXCLUDED_ROLES,
+  hasUnnamedHodDashboards,
+  hasDeanDashboards,
   singleRoleTarget,
 } from '../authRedirect';
 
@@ -100,13 +101,35 @@ const ROLE_META = {
     icon: FiUserCheck,
     accent: 'cyan',
   },
-  // Synthetic, like the two learning-* entries below: an HOD holds one platform
-  // role but has two dashboards, and the HOD card already points at the
-  // Learning module's. Appended for anyone with the HOD role so the attendance
-  // view is reachable without a second stored role.
+  // A head's two dashboards, one stored role each.
+  //
+  // Named for the module AND the post. The module because that is where the
+  // card goes and a head holds one per module they can reach; the post because
+  // these two are the head-of-department views specifically — the same modules
+  // have other cards above, and without saying so a head cannot tell which of
+  // them is theirs, nor an administrator tell what they have granted.
+  'hod-learning': {
+    name: 'Xceed Learning — HOD',
+    description:
+      "Head of Department view — your department's classrooms, faculty and student counts",
+    icon: FiUsers,
+    accent: 'blue',
+  },
+  'hod-ileed': {
+    name: 'iLEED — HOD',
+    description:
+      "Head of Department view — your department's attendance, live classrooms and reports",
+    icon: FiUserCheck,
+    accent: 'cyan',
+  },
+  // Synthetic, like the two learning-* entries below: the iLEED card for a head
+  // who holds the bare `HOD` appointment and neither of the two roles above —
+  // one appointed before they existed. Appended only in that case, so nobody is
+  // offered the same dashboard twice.
   'ileed-hod': {
-    name: 'iLEED Dashboard',
-    description: "Your department's attendance, live classrooms and reports",
+    name: 'iLEED — HOD',
+    description:
+      "Head of Department view — your department's attendance, live classrooms and reports",
     icon: FiUserCheck,
     accent: 'cyan',
   },
@@ -116,15 +139,14 @@ const ROLE_META = {
     icon: FiBookOpen,
     accent: 'teal',
   },
-  // Named for the module, not the post. Every other card here names a role
-  // because the role is what distinguishes it, but a head holds exactly one
-  // card per module they can reach — so "Head of Department" told them their
-  // own job title and not where the card goes. The Dean card below is left
-  // naming the post: the dean's card is institute-wide and has no module of
-  // its own to name.
+  // The bare appointment, for a head who predates the two named roles above.
+  // Reads the same as `hod-learning`, because that is the card it opens. The
+  // Dean card below names only the post: the dean's card is institute-wide and
+  // has no single module of its own to name.
   HOD: {
-    name: 'Xceed Learning',
-    description: "Your department's classrooms, faculty and student counts",
+    name: 'Xceed Learning — HOD',
+    description:
+      "Head of Department view — your department's classrooms, faculty and student counts",
     icon: FiUsers,
     accent: 'blue',
   },
@@ -133,6 +155,17 @@ const ROLE_META = {
     description: 'Every department: classrooms, faculty, coursework and student activity',
     icon: FiUsers,
     accent: 'purple',
+  },
+  // Synthetic, like `ileed-hod` above: the dean's iLEED card. `DEAN` is one
+  // stored role opening two dashboards — the Learning one the entry above
+  // names, and this — so the second is appended rather than stored, and both
+  // are named for their module so a dean can tell which is which.
+  'ileed-dean': {
+    name: 'iLEED — Dean (Academic)',
+    description:
+      "Institute-wide view — every department's attendance, live classrooms and reports",
+    icon: FiUserCheck,
+    accent: 'cyan',
   },
   'lm-admin': {
     name: 'Learning Module Admin',
@@ -157,8 +190,22 @@ const ROLE_META = {
   },
 };
 
+/** Roles are typed by hand in user management, so `HOD` and `hod` are one role. */
+const hasRole = (roles, role) =>
+  (Array.isArray(roles) ? roles : [roles])
+    .filter(Boolean)
+    .some((held) => String(held).trim().toLowerCase() === String(role).trim().toLowerCase());
+
+// Matched on the key, not the spelling: an account storing `hod` rather than
+// `HOD` was given a card titled "hod" — the raw role key, as the fallback
+// below is meant for a role invented tomorrow, not for a known one typed in
+// another case.
+const ROLE_META_BY_KEY = new Map(
+  Object.entries(ROLE_META).map(([role, meta]) => [role.toLowerCase(), meta]),
+);
+
 const roleMeta = (role) =>
-  ROLE_META[role] || {
+  ROLE_META_BY_KEY.get(String(role).trim().toLowerCase()) || {
     name: role,
     description: 'Access your dashboard',
     icon: FiUser,
@@ -243,34 +290,6 @@ const AllocatedRolesPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
-  const [isPublishing, setIsPublishing] = useState(false);
-
-  const handlePublishOTA = async () => {
-    setIsPublishing(true);
-
-    try {
-      const response = await fetch(`${apiUrl}/api/v1/ota/trigger-update`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        alert("Sync & OTA Update Triggered Successfully! The process is running on GitHub.");
-      } else {
-        const data = await response.json().catch(() => ({}));
-        alert(`Failed to trigger update: ${data.error || 'Please check console for errors.'}`);
-      }
-    } catch (err) {
-      console.error(err);
-      alert("An error occurred.");
-    } finally {
-      setIsPublishing(false);
-    }
-  };
-
   const pageBg = useColorModeValue('gray.50', 'gray.900');
   const subColor = useColorModeValue('gray.500', 'gray.400');
   const emptyCardBg = useColorModeValue('white', 'gray.800');
@@ -310,9 +329,26 @@ const AllocatedRolesPage = () => {
   const isLoading = isUserLoading || isLmLoading;
   const user = userDetails?.user;
 
-  const allocatedRoles = useMemo(() => (user?.role || []).filter(
+  const platformRoles = useMemo(() => (user?.role || []).filter(
     (role) => !EXCLUDED_ROLES.includes(String(role).toLowerCase())
   ), [user?.role]);
+
+  // `HOD` is the appointment, not a dashboard: an account that holds either of
+  // the named module roles reaches both screens through those, so a third card
+  // saying only "Head of Department" would open one of them a second time.
+  // Heads who hold nothing but `HOD` keep it — it is the only card they have —
+  // and the synthetic iLEED card below joins it.
+  const hasNamedHodRole = useMemo(
+    () => ['hod-learning', 'hod-ileed'].some((role) => hasRole(platformRoles, role)),
+    [platformRoles],
+  );
+
+  const allocatedRoles = useMemo(
+    () => (hasNamedHodRole
+      ? platformRoles.filter((role) => !hasRole([role], 'HOD'))
+      : platformRoles),
+    [platformRoles, hasNamedHodRole],
+  );
 
   const learningCards = [];
   if (lmOverview) {
@@ -334,19 +370,30 @@ const AllocatedRolesPage = () => {
     }
   }
 
-  // The iLEED dashboard card for heads of department. Derived from the platform
-  // role rather than fetched, so it does not depend on the attendance module
-  // being reachable — and kept out of `allocatedRoles` for the same reason the
-  // learning cards are: it must not turn a single-role account into a two-role
-  // one and suppress the redirect.
+  // The iLEED dashboard card for a head who holds the bare `HOD` appointment
+  // and NEITHER named role — one appointed before the two existed, or restored
+  // from a backup taken before them. Derived from the platform role rather than
+  // fetched, so it does not depend on the attendance module being reachable,
+  // and kept out of `allocatedRoles` for the same reason the learning cards
+  // are: it must not turn a single-role account into a two-role one and
+  // suppress the redirect.
+  //
+  // Neither, not "no hod-ileed": a head left holding `hod-learning` alone has
+  // had this dashboard taken away, and appending it back here would undo the
+  // one thing splitting the role in two is for.
+  //
+  // The dean's iLEED card is appended unconditionally on the `DEAN` role, with
+  // no equivalent of the `hasNamedHodRole` test: there are no named dean roles,
+  // so there is nothing that could have taken this dashboard away and no way to
+  // offer it twice.
   //
   // Upstream wraps this in a try/catch because there it runs inside the fetch
   // effect, where a throw would cost the user the cards already set. Here it is
-  // derived from `allocatedRoles`, which has already put every entry through
+  // derived from `platformRoles`, which has already put every entry through
   // String() to filter it, so there is no shape left for this to throw on.
-  const extraCards = allocatedRoles.some((r) => String(r).toUpperCase() === 'HOD')
-    ? [{ role: 'ileed-hod' }]
-    : [];
+  const extraCards = [];
+  if (hasRole(platformRoles, 'HOD') && !hasNamedHodRole) extraCards.push({ role: 'ileed-hod' });
+  if (hasRole(platformRoles, 'DEAN')) extraCards.push({ role: 'ileed-dean' });
 
   // A module that turned the user away sent them back here. Without this the
   // return trip is silent and indistinguishable from the card doing nothing —
@@ -376,6 +423,15 @@ const AllocatedRolesPage = () => {
   // on any failure here keeps that a recoverable dead end instead of a wall.
   useEffect(() => {
     if (!isLoading && allocatedRoles.length === 1 && user) {
+      // A head holding only the bare `HOD` appointment is NOT a single
+      // destination account: that one role opens both the Learning and the
+      // iLEED dashboard, and the second is offered as the synthetic card above.
+      // Redirecting here would land them on one and hide the other — the head
+      // would never see a card at all.
+      if (hasUnnamedHodDashboards(user.role)) return;
+      // And a dean is not one either: `DEAN` opens the Learning dean dashboard
+      // and the iLEED one, and the second is the synthetic card above.
+      if (hasDeanDashboards(user.role)) return;
       try {
         const target = singleRoleTarget(allocatedRoles[0], user);
         if (target !== '#') navigate(target);
@@ -400,8 +456,9 @@ const AllocatedRolesPage = () => {
   return (
     <Box bg={pageBg} minH="100vh" py={{ base: 8, md: 16 }}>
       <Container maxW="5xl">
-        {/* Header */}
-        <Flex justify="space-between" align={{ base: "flex-start", sm: "center" }} direction={{ base: "column", sm: "row" }} mb={{ base: 8, md: 12 }} gap={4}>
+        {/* Header. A single column since the release controls moved to the
+            Super Admin page — the row it used to share with them is gone. */}
+        <Box mb={{ base: 8, md: 12 }}>
           <Box>
             <Text
               fontSize={{ base: 'xs', md: 'sm' }}
@@ -428,17 +485,7 @@ const AllocatedRolesPage = () => {
                 : 'No roles have been assigned to your account yet.'}
             </Text>
           </Box>
-          
-          {allocatedRoles.includes('admin') && (
-            <Button 
-              colorScheme="blue" 
-              onClick={handlePublishOTA}
-              isLoading={isPublishing}
-            >
-              Publish OTA Update
-            </Button>
-          )}
-        </Flex>
+        </Box>
 
         {roleCount ? (
           <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={{ base: 4, md: 6 }}>

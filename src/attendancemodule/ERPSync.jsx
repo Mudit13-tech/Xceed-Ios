@@ -161,9 +161,9 @@ function StatusBadge({ status }) {
 // `embedded` — rendered inside another page (the Subject Embeddings page's
 // "ERP Embedding Generation" tab): skips the page wrapper, css reset and the
 // big heading, which the host page already provides.
-export default function ERPSync({ fixedDepartment, embedded = false }) {
+export default function ERPSync({ defaultDepartment, embedded = false }) {
   const { departments, deptLoading, deptError } = useDepartments();
-  const [dept, setDept] = useState(fixedDepartment || '');
+  const [dept, setDept] = useState(defaultDepartment || '');
   const [semester, setSemester] = useState('');
   const [availableSems, setAvailableSems] = useState([]);
   const [semsLoading, setSemsLoading] = useState(false);
@@ -209,11 +209,13 @@ export default function ERPSync({ fixedDepartment, embedded = false }) {
   }, []);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
-  // fixedDepartment can arrive after mount (the dept-admin outlet context
-  // resolves asynchronously), so the initial state alone is not enough.
+  // defaultDepartment can arrive after mount (the dept-admin outlet context
+  // resolves asynchronously). Only seed it in — never stomp a department the
+  // admin has already picked themselves.
   useEffect(() => {
-    if (fixedDepartment) setDept(fixedDepartment);
-  }, [fixedDepartment]);
+    if (defaultDepartment && !dept) setDept(defaultDepartment);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultDepartment]);
 
   // Dept → semester cascade (same endpoint the other pages use)
   useEffect(() => {
@@ -686,25 +688,15 @@ export default function ERPSync({ fixedDepartment, embedded = false }) {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'flex-end' }}>
           <div style={{ minWidth: 220, flex: '2 1 220px' }}>
             <label style={styles.label}>Department</label>
-            {/* Dept admins get a static box, not a disabled <select>: their dept
-                string comes from the user record and need not appear verbatim
-                in the department list (spacing/underscore variants), in which
-                case a select would render blank. */}
-            {fixedDepartment ? (
-              <div style={{ ...styles.select, display: 'flex', alignItems: 'center', background: theme.surfaceAlt, color: theme.textMuted, cursor: 'not-allowed' }}>
-                {fixedDepartment.replace(/_/g, ' ')}
-              </div>
-            ) : (
-              <select
-                value={dept}
-                onChange={(e) => { setDept(e.target.value); setSubjects([]); setRosters({}); }}
-                style={styles.select}
-                disabled={deptLoading || busy}
-              >
-                <option value="">{deptLoading ? 'Loading...' : deptError ? 'Error' : 'Select...'}</option>
-                {departments.map((d) => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
-              </select>
-            )}
+            <select
+              value={dept}
+              onChange={(e) => { setDept(e.target.value); setSubjects([]); setRosters({}); }}
+              style={styles.select}
+              disabled={deptLoading || busy}
+            >
+              <option value="">{deptLoading ? 'Loading...' : deptError ? 'Error' : 'Select...'}</option>
+              {departments.map((d) => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
+            </select>
           </div>
           <div style={{ minWidth: 130, flex: '1 1 130px' }}>
             <label style={styles.label}>Semester</label>

@@ -1,9 +1,10 @@
 // client/src/attendancemodule/ServerMetricsPanel.jsx
 // Rendered above the log stream on the Node server console.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import getEnvironment from '../getenvironment';
 import { theme } from './config';
+import usePolling from './usePolling';
 
 const apiUrl = getEnvironment();
 const METRICS_URL = `${apiUrl}/api/v1/attendancemodule/health/metrics`;
@@ -157,7 +158,6 @@ export default function ServerMetricsPanel() {
   const [metrics, setMetrics] = useState(null);
   const [error, setError] = useState(null);
   const [paused, setPaused] = useState(false);
-  const timer = useRef(null);
 
   const load = useCallback(async () => {
     try {
@@ -173,12 +173,10 @@ export default function ServerMetricsPanel() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-    if (paused) return undefined;
-    timer.current = setInterval(load, 2000);
-    return () => clearInterval(timer.current);
-  }, [load, paused]);
+  // Pausing still loads once, so the panel shows a reading rather than an
+  // empty chart while paused.
+  useEffect(() => { if (paused) void load(); }, [paused, load]);
+  usePolling(load, 2000, { enabled: !paused });
 
   if (error && !metrics) {
     return (

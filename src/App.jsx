@@ -15,6 +15,7 @@
 // flash of missing chrome for no saving.
 
 import React, { Suspense } from 'react';
+import RouteFallback from './components/RouteFallback';
 import MobileShell from './mobile/MobileShell';
 import {
   BrowserRouter as Router,
@@ -97,6 +98,7 @@ const XceedLearningIntro = lazyWithPreload(() => import('./pages/XceedLearningIn
 const ILeedIntro = lazyWithPreload(() => import('./pages/ILeedIntro'));
 const GuidePage = lazyWithPreload(() => import('./pages/GuidePage'));
 const HelpdeskPage = lazyWithPreload(() => import('./pages/HelpdeskPage'));
+const ExplainersPage = lazyWithPreload(() => import('./pages/ExplainersPage'));
 const PrivacyPolicy = lazyWithPreload(() => import('./pages/PrivacyPolicy'));
 const ErrorPage = lazyWithPreload(() => import('./pages/ErrorPage.jsx'));
 const NotFound = lazyWithPreload(() => import('./pages/NotFound.jsx'));
@@ -228,6 +230,9 @@ const DeptAdminLayout = lazyWithPreload(() => import('./deptadmin/DeptAdminLayou
 const DeptDashboard = lazyWithPreload(() => import('./deptadmin/DeptDashboard'));
 const HodLayout = lazyWithPreload(() => import('./hodadmin/HodLayout'));
 const HodDashboard = lazyWithPreload(() => import('./hodadmin/HodDashboard'));
+const HodNotificationSettings = lazyWithPreload(() => import('./hodadmin/HodNotificationSettings'));
+const DeanLayout = lazyWithPreload(() => import('./deanadmin/DeanLayout'));
+const DeanDashboard = lazyWithPreload(() => import('./deanadmin/DeanDashboard'));
 const DeptReports = lazyWithPreload(() => import('./deptadmin/DeptReports'));
 const DeptBugReports = lazyWithPreload(() => import('./deptadmin/DeptBugReports'));
 const DeptDisputes = lazyWithPreload(() => import('./deptadmin/DeptDisputes'));
@@ -235,6 +240,9 @@ const DeptAssignRolls = lazyWithPreload(() => import('./deptadmin/DeptAdminTools
 const DeptLiveRTSP = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptLiveRTSP })));
 const DeptGroundTruthUpload = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptGroundTruthUpload })));
 const DeptAttendanceReport = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptAttendanceReport })));
+// The same screen with the room list drawn from the saved reports rather than
+// the institute-wide camera registry — see LeadershipAttendanceReport.
+const LeadershipAttendanceReport = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.LeadershipAttendanceReport })));
 const DeptClassVerification = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptClassVerification })));
 const DeptSubjectEmbeddings = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptSubjectEmbeddings })));
 const DeptConfidenceMonitor = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptConfidenceMonitor })));
@@ -248,69 +256,6 @@ const LearningRoutes = lazyWithPreload(() => import('./learningModule/LearningRo
 const ConfidenceMonitor = lazyWithPreload(() => import('./attendancemodule/confidenceMonitor'));
 const MLDataFolder = lazyWithPreload(() => import('./attendancemodule/MLDataFolder.jsx').then((m) => ({ default: m.MLDataFolder })));
 const MLFineTuning = lazyWithPreload(() => import('./attendancemodule/MLFineTuning'));
-
-/**
- * What fills the page while a route's chunk is in flight.
- *
- * Inline styles and no component library on purpose: this is the one thing that
- * has to render before anything else has loaded, on the slow connection that
- * made splitting worth doing in the first place.
- *
- * The shimmer uses a CSS animation injected once via a <style> tag — no deps,
- * no import, and it survives rendering before Chakra or anything else is ready.
- * The bar mirrors the skeleton shimmer already used inside the learning module,
- * giving a consistent "loading" signal across the whole app.
- */
-const _routeFallbackStyle = `
-@keyframes _rfShimmer {
-  0%   { background-position: -600px 0; }
-  100% { background-position:  600px 0; }
-}
-._rfBar {
-  height: 4px;
-  border-radius: 2px;
-  background: linear-gradient(
-    90deg,
-    #e8e8e8 25%,
-    #f5f5f5 50%,
-    #e8e8e8 75%
-  );
-  background-size: 1200px 100%;
-  animation: _rfShimmer 1.4s ease-in-out infinite;
-}
-`;
-
-// Most chunk fetches finish well inside this, and a bar that appears for a few
-// frames and vanishes reads as a glitch line above the page rather than as
-// progress. Only a fetch that is actually slow gets to show it.
-const ROUTE_FALLBACK_DELAY_MS = 400;
-
-let _rfStyleInjected = false;
-function RouteFallback() {
-  const [visible, setVisible] = React.useState(false);
-  React.useEffect(() => {
-    const timer = setTimeout(() => setVisible(true), ROUTE_FALLBACK_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (!_rfStyleInjected && typeof document !== 'undefined') {
-    const tag = document.createElement('style');
-    tag.textContent = _routeFallbackStyle;
-    document.head.appendChild(tag);
-    _rfStyleInjected = true;
-  }
-  if (!visible) return null;
-  return (
-    <div
-      style={{ padding: '48px 24px' }}
-      role="status"
-      aria-live="polite"
-      aria-label="Loading page"
-    >
-      <div className="_rfBar" style={{ maxWidth: 480, margin: '0 auto' }} />
-    </div>
-  );
-}
 
 /**
  * The route table, built once at module load rather than per render, so that
@@ -341,6 +286,13 @@ const APP_ROUTES = (
               the address being asked about — and every answer is scoped to that
               address. See modules/helpdeskModule on the server. */}
           <Route path="/help" element={<HelpdeskPage />} />
+          {/* Every explainer recording in one place, grouped by feature. Public
+              for the same reason /help is: someone who cannot sign in is
+              exactly who needs to see how joining a class works. The MP4s
+              themselves are static files under /explainer-videos — note the
+              different path, so the directory does not sit in front of this
+              route on whichever host resolves the two first. */}
+          <Route path="/explainers" element={<ExplainersPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/nirf" element={<NirfRanking />} />
 
@@ -689,7 +641,33 @@ const APP_ROUTES = (
           <Route path="/ileed-hod" element={<HodLayout />}>
             <Route index element={<HodDashboard />} />
             <Route path="dashboard" element={<HodDashboard />} />
-            <Route path="reports" element={<DeptAttendanceReport />} />
+            <Route path="reports" element={<LeadershipAttendanceReport />} />
+            {/* No confidence or verification route here, unlike the Dean's
+                block below: both judge the recognition system rather than
+                report a department's attendance, and a head can act on
+                nothing either shows — see NOT_FOR_HEADS in menuCatalogue.js. Left
+                out rather than merely unlinked, so the pages are not reachable
+                by typing the path either. */}
+            <Route path="notifications" element={<HodNotificationSettings />} />
+          </Route>
+
+          {/* ─── iLEED Dean (Academic) (read-only, every department) ── */}
+          {/* The same four screens as the head of department's above, drawn at
+              institute scope. The components are shared deliberately — the
+              server decides the scope from the role, so a second set would be
+              two ways of answering the same question. What is NOT shared is
+              which of them a viewer gets: `deanMenus` and `hodMenus` are
+              separate documents, so an institute can show the dean a screen it
+              does not show every head, and the other way round. */}
+          <Route path="/ileed-dean" element={<DeanLayout />}>
+            <Route index element={<DeanDashboard />} />
+            <Route path="dashboard" element={<DeanDashboard />} />
+            {/* The leadership variant, same as the head's: a dean runs no
+                session either, so the camera registry is the wrong room list
+                for them too. Their confidence and verification screens stay —
+                unlike a head, judging the recognition system across every
+                department is squarely the dean's. */}
+            <Route path="reports" element={<LeadershipAttendanceReport />} />
             <Route path="confidence" element={<DeptConfidenceMonitor />} />
             <Route path="verification" element={<DeptClassVerification />} />
           </Route>
@@ -753,7 +731,7 @@ function App() {
        page already on screen up while the next one's chunk is still coming
        down. Without it a click on a link whose chunk had not been fetched
        suspended the boundary below and replaced the entire app — header, rail
-       and class switcher included — with the 4px loading bar, for as long as
+       and class switcher included — with the loading skeleton, for as long as
        the download took (#2413). React Router has done this under the flag
        since 6.13; it is the default in v7. */
     <Router future={{ v7_startTransition: true }}>
@@ -765,9 +743,10 @@ function App() {
 
       {/* One boundary around the whole table rather than per route: a lazy
           element with no Suspense above it throws, and a single boundary here
-          cannot be forgotten when a route is added. The fallback is deliberately
-          plain — it shows for the length of one chunk fetch, and anything
-          heavier would need its own bytes to render. */}
+          cannot be forgotten when a route is added. The fallback is a skeleton
+          drawn from injected CSS rather than components — it shows for the
+          length of one chunk fetch, and anything heavier would need its own
+          bytes to render before those bytes had arrived. */}
       {/* ErrorBoundary sits outside Suspense (Suspense only catches a pending
           lazy import, not a render crash) and outside the routes but inside
           Navbar, so a page that crashes still leaves the navbar clickable —
