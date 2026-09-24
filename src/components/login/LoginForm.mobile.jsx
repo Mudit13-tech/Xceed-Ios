@@ -54,6 +54,35 @@ import {
   FormLabel,
 } from '@chakra-ui/react'
 
+/**
+ * What the browser can add to its user agent for the login history: a laptop
+ * on battery (the only signal that tells a laptop from a desktop), and an iPad,
+ * which reports itself as a Mac. Best effort and never slower than a blink —
+ * the sign-in does not wait on it.
+ *
+ * Ported from AMS's LoginForm.jsx as-is. In the app the WebView's user agent
+ * already says "Android ... Mobile", and the server only consults the hint for
+ * a device it would otherwise call a computer, so a phone stays a phone.
+ */
+async function deviceHint() {
+  try {
+    if (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1) return 'tablet'
+    if (typeof navigator.getBattery !== 'function') return ''
+    const battery = await Promise.race([
+      navigator.getBattery(),
+      new Promise((resolve) => setTimeout(() => resolve(null), 150)),
+    ])
+    if (!battery) return ''
+    // A desktop reports a full battery on permanent charge; anything else is a
+    // real battery, so a laptop.
+    const hasRealBattery =
+      battery.charging === false || battery.level < 1 || Number.isFinite(battery.dischargingTime)
+    return hasRealBattery ? 'laptop' : ''
+  } catch {
+    return ''
+  }
+}
+
 const LoginForm = () => {
   const queryClient = useQueryClient();
   const [email, setEmail] = useState('')
@@ -226,7 +255,7 @@ const LoginForm = () => {
   const handleSubmit = async (e) => {
     setIsLoading(true)
     e.preventDefault()
-    const userData = { email, password }
+    const userData = { email, password, deviceHint: await deviceHint() }
     if (captcha) {
       userData.captchaToken = captcha.token
       userData.captchaAnswer = captchaAnswer
