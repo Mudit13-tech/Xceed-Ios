@@ -10,24 +10,36 @@
 // the two toggle sets exist precisely so that cannot happen.
 //
 // The server is the boundary, not this file: `attendanceLeadershipReadAccess`
-// admits the role, `refuseAttendanceWrites` rejects anything that is not a GET,
-// and `requireDeanMenu` re-checks each toggle. Hiding a link here only spares
-// somebody a screen full of 403s.
+// admits the role and `refuseAttendanceWrites` rejects anything that is not a
+// GET. A toggle is the control rather than a hint: switching a menu off takes
+// the link out of this sidebar, refuses the screen below (see disabledMenu),
+// and closes the endpoints it reads — `requireLeadershipMenu` is mounted on
+// every iLEED data mount a leadership viewer can reach, and reads the DEAN's
+// toggles for a dean.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import getEnvironment from '../getenvironment';
 import { theme } from '../attendancemodule/config';
 import LeadershipSidebar from '../attendancemodule/LeadershipSidebar';
-import { leadershipMenusFor } from '../attendancemodule/menuCatalogue';
+import { leadershipMenusFor, menuForPath } from '../attendancemodule/menuCatalogue';
+import MenuDisabledNotice from '../attendancemodule/MenuDisabledNotice';
 
 const apiUrl = getEnvironment();
 
 // Built from the shared leadership list, exactly as HodLayout builds its own
 // — see attendancemodule/menuCatalogue.js. The same `menuKey` values as
 // DeptAdminLayout's ALL_MENUS, so one entry in the config screen drives every
-// set. Routes point at the read-only destinations a dean can actually open.
-export const DEAN_MENUS = leadershipMenusFor('/ileed-dean', 'dean');
+// set. Routes point at the destinations a dean can actually open.
+//
+// The whole catalogue, the same as the head of department's shell. A dean
+// reads every department where a head reads the one they head, so the screens
+// are the same screens at a wider scope — and the scope is the server's to
+// decide, not this file's: `resolveAttendanceAccess` answers a dean with
+// institute access and no department, which is what these pages already
+// understand. Which of the eighteen this particular institute's dean sees is
+// `deanMenus`, its own document, separate from the heads'.
+export const DEAN_MENUS = leadershipMenusFor('/ileed-dean');
 
 // No "Email Notifications" entry, unlike the HOD's menu. Those preferences are
 // a head's alerts for the department they head, and a dean heads none — so the
@@ -47,6 +59,7 @@ const EMPTY_CONTEXT = {
 
 export default function DeanLayout() {
     const navigate = useNavigate();
+    const location = useLocation();
     // null = still loading. Rendering the menu from `{}` would flash an empty
     // sidebar and then fill it, which reads as a broken page.
     const [deanMenus, setDeanMenus] = useState(null);
@@ -124,6 +137,28 @@ export default function DeanLayout() {
         );
     }, [deanMenus]);
 
+    /**
+     * The screen being asked for, when an administrator has switched it off.
+     *
+     * Hiding the link was never enough: an old bookmark, a link somebody was
+     * sent, or a typed path all reached the screen anyway, and it rendered as
+     * though it had been enabled. The server refuses its data now — see
+     * requireLeadershipMenu — so without this the reader gets a page of failed
+     * fetches, which looks like a broken screen rather than a closed one.
+     *
+     * Null while the toggles are still loading, so nothing is refused on the
+     * strength of an answer that has not arrived. The dashboard is never
+     * refused: it is where the role card lands. A path with no catalogue menu
+     * behind it — the head's own mailbox, or a typo — is not a toggle's to
+     * withhold and goes to the router as before.
+     */
+    const disabledMenu = useMemo(() => {
+        if (!deanMenus) return null;
+        const menu = menuForPath('/ileed-dean', location.pathname);
+        if (!menu || !menu.menuKey || menu.id === 'dashboard') return null;
+        return deanMenus[menu.menuKey] === true ? null : menu;
+    }, [deanMenus, location.pathname]);
+
     if (error) return null;
 
     return (
@@ -138,6 +173,8 @@ export default function DeanLayout() {
             <main style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
                 {context.error ? (
                     <div style={{ padding: 32, color: theme.danger }}>{context.error}</div>
+                ) : disabledMenu ? (
+                    <MenuDisabledNotice label={disabledMenu.label} audience="the Dean (Academic)" />
                 ) : (
                     <Outlet context={context} />
                 )}

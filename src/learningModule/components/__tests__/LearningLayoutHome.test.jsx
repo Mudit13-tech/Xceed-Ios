@@ -114,6 +114,38 @@ describe('XCEED home from the learning module', () => {
     expect(logo.getAttribute('alt')).toBe('');
   });
 
+  /**
+   * clublogo.png is a near-white wordmark on transparency — its opaque pixels
+   * average rgb(242,242,242). It was drawn for the platform's dark hero, and
+   * this header is white in light mode, so the button was a white X on white:
+   * in daylight there was nothing there to press.
+   *
+   * Asserted as "not transparent" rather than against one exact colour: the
+   * point is that the mark never borrows the header's background, whatever
+   * shade of dark is chosen for it later.
+   */
+  it('does not leave the white wordmark on a white header', async () => {
+    await renderLayout();
+    const home = await screen.findByRole('link', { name: 'XCEED home' });
+
+    const { backgroundColor } = window.getComputedStyle(home);
+    expect(backgroundColor).not.toBe('transparent');
+    expect(backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+  });
+
+  it('gives the mark a dark ground in the drawer too, where a phone sees it', async () => {
+    const user = userEvent.setup();
+    await renderLayout();
+
+    await user.click(await screen.findByRole('button', { name: 'Open menu' }));
+    const drawer = await screen.findByRole('dialog');
+    const logo = within(drawer).getByRole('link', { name: /XCEED home/i }).querySelector('img');
+
+    const { backgroundColor } = window.getComputedStyle(logo.parentElement);
+    expect(backgroundColor).not.toBe('transparent');
+    expect(backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+  });
+
   it('repeats the exit in the mobile drawer', async () => {
     const user = userEvent.setup();
     await renderLayout();

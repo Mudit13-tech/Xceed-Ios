@@ -50,6 +50,7 @@ import {
   StatTileSkeleton,
 } from '../components/common';
 import { LmIcon } from '../components/Icon';
+import RoomWithMap from '../components/RoomWithMap';
 import { CLASS_COLORS } from '../format';
 import { canCreateClass } from '../roles';
 
@@ -70,13 +71,25 @@ function ClassCard({ klass, onOpen, timetableChanged = false }) {
   const todayName = WEEKDAY_NAMES[new Date().getDay()];
   return (
         <Box
-      as="button"
+      /* A div that behaves as a button rather than a real one, because the
+         card now contains a link — the room's map pin — and an anchor inside a
+         button is invalid markup that browsers resolve however they like.
+         Keyboard operation is kept by hand below so nothing is lost by it. */
+      role="button"
+      tabIndex={0}
       textAlign="left"
       display="flex"
       flexDirection="column"
       alignItems="stretch"
       width="100%"
+      cursor="pointer"
       onClick={() => onOpen(klass)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpen(klass);
+        }
+      }}
       bg={cardBg}
       borderWidth="1px"
       borderColor={cardBorder}
@@ -216,6 +229,16 @@ function ClassCard({ klass, onOpen, timetableChanged = false }) {
               );
             })}
           </Wrap>
+        )}
+
+        {/* Under the schedule, because it answers the question the schedule
+            raises: the slots say when, this says where. One room when every
+            slot is in the same one, one per room when they are not —
+            RoomWithMap collapses the repeats. */}
+        {klass.room && (
+          <Flex mt={2} align="center" gap={1} fontSize="xs" color={metaColor}>
+            <RoomWithMap room={klass.room} fontSize="xs" iconSize={12} />
+          </Flex>
         )}
 
         {/* Quiz marks released and not yet read. Deliberately on the subject

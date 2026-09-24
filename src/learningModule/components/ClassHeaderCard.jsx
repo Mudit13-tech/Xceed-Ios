@@ -17,6 +17,7 @@ import {
 import { FiCheck, FiCopy, FiMoreVertical } from 'react-icons/fi';
 
 import { LmIcon } from './Icon';
+import RoomWithMap from './RoomWithMap';
 
 /**
  * The class header, as it reads on a phone.
@@ -77,7 +78,8 @@ export default function ClassHeaderCard({
   onOpenPrefs,
   onPreload,
 }) {
-  const meta = [klass.section, klass.subject, klass.room].filter(Boolean).join(' · ');
+  // The room is held out of the join so it can carry its pin — see RoomWithMap.
+  const meta = [klass.section, klass.subject].filter(Boolean).join(' · ');
   // Insights is a teacher's read on the class, so the row is two tiles wide for
   // a student and three for staff rather than leaving a gap where it would be.
   const tiles = [
@@ -103,9 +105,11 @@ export default function ClassHeaderCard({
             </Heading>
             {klass.status === 'archived' && <Badge colorScheme="orange">Archived</Badge>}
           </Flex>
-          {meta && (
+          {(meta || klass.room) && (
             <Text fontSize="sm" opacity={0.92} mt={1}>
               {meta}
+              {meta && klass.room ? ' · ' : ''}
+              <RoomWithMap room={klass.room} />
             </Text>
           )}
           <Flex fontSize="sm" opacity={0.85} mt={2} gap={4} wrap="wrap">

@@ -4,6 +4,7 @@ import ViewTimetable from './viewtt';
 import getEnvironment from '../getenvironment';
 import MailProgressModal from './mailProgressModal';
 import { notifyGate } from './notifyGate';
+import { bannerColor, bannerHolds, bannerTone } from './slotBanner';
 import TimetableSummary from './ttsummary';
 import ReactToPrint from 'react-to-print';
 import { Container } from '@chakra-ui/react';
@@ -143,12 +144,15 @@ const Timetable = () => {
   // Auto-hide notification
  
 
-  // Auto-clear message
+  // Auto-clear message — except while a slot check is still in flight.
+  // "Checking slot availability…" used to be swept away after three seconds
+  // like any other message, so a check slower than that left the banner empty
+  // and then answered out of nowhere. A question stays up until it is
+  // answered; answers still clear themselves.
   useEffect(() => {
-    if (message) {
-      const timer = setTimeout(() => setMessage(''), 3000);
-      return () => clearTimeout(timer);
-    }
+    if (!message || bannerHolds(message)) return undefined;
+    const timer = setTimeout(() => setMessage(''), 3000);
+    return () => clearTimeout(timer);
   }, [message]);
 
   // Which availability check the banner is currently showing; see saveSlotData.
@@ -1575,7 +1579,8 @@ const handleLockTT = async () => {
 
       <Portal>
         <Box
-          bg={showMessage && message ? 'orange.500' : 'transparent'}
+          // Violet while it asks, green or red once it knows — see slotBanner.
+          bg={showMessage && message ? bannerColor(bannerTone(message)) : 'transparent'}
           color="white"
           textAlign="center"
           fontWeight="bold"

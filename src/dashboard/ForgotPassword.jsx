@@ -6,6 +6,7 @@ import {
   Button,
   Flex,
   FormControl,
+  FormHelperText,
   FormLabel,
   Heading,
   HStack,
@@ -51,6 +52,9 @@ const INSTITUTE_DOMAIN_LIST = INSTITUTE_DOMAINS.map((domain) => `@${domain}`).jo
 const ForgotPassword = () => {
   const [step, setStep] = useState('email'); // 'email' | 'reset' | 'done'
   const [email, setEmail] = useState('');
+  // Checked by the server against the date of birth on the account (asked for
+  // after sign-in). An account that has not given one yet is not held to it.
+  const [dob, setDob] = useState('');
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -145,9 +149,13 @@ const ForgotPassword = () => {
       );
       return;
     }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+      setError('Enter your date of birth.');
+      return;
+    }
     setIsLoading(true);
     try {
-      const body = { email: email.trim() };
+      const body = { email: email.trim(), dob };
       if (captcha) {
         body.captchaToken = captcha.token;
         body.captchaAnswer = captchaAnswer;
@@ -175,7 +183,7 @@ const ForgotPassword = () => {
       // address has an account (see forgotpasswordroute.js), so this can't
       // either — showing a per-address message here would just move the
       // enumeration oracle from the API response into the UI.
-      setInfo('If an account with this email exists, an OTP has been sent to it. It is valid for 10 minutes.');
+      setInfo('If this email and date of birth match an account, an OTP has been sent to it. It is valid for 10 minutes.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -249,7 +257,7 @@ const ForgotPassword = () => {
             </Heading>
             <Text color={subColor} fontSize="sm" textAlign="center">
               {step === 'email' &&
-                "Enter your registered email and we'll send you a one-time password (OTP)."}
+                "Enter your registered email and date of birth and we'll send you a one-time password (OTP)."}
               {step === 'reset' &&
                 'Enter the OTP you received and choose a new password.'}
               {step === 'done' &&
@@ -286,6 +294,20 @@ const ForgotPassword = () => {
                     onKeyDown={(e) => e.key === 'Enter' && sendOtp()}
                   />
                 </InputGroup>
+              </FormControl>
+              <FormControl isRequired>
+                <FormLabel htmlFor="forgot-dob">Date of birth</FormLabel>
+                <Input
+                  id="forgot-dob"
+                  type="date"
+                  value={dob}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setDob(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && sendOtp()}
+                />
+                <FormHelperText fontSize="xs">
+                  The date of birth saved on your XCEED account.
+                </FormHelperText>
               </FormControl>
               {captcha && (
                 <FormControl isRequired>
@@ -420,7 +442,8 @@ const ForgotPassword = () => {
                   Not receiving an OTP?
                 </Text>{' '}
                 Use your institute address ({INSTITUTE_DOMAIN_LIST}) — XCEED has no
-                accounts on personal addresses such as Gmail. Your account is created
+                accounts on personal addresses such as Gmail — and check the date of
+                birth: no code is sent if it does not match the one on your account. Your account is created
                 only once a faculty member invites you to a classroom, so until then
                 there is nothing to reset. Ask your faculty to create the classroom and
                 invite you; you will then receive the link to set your password.

@@ -13,6 +13,7 @@ import {
   useDisclosure,
 } from '@chakra-ui/react';
 import LogoutConfirmModal from '../LogoutConfirmModal';
+import { openDobEditor } from '../DobGate';
 import { loginPathFor } from '../../authRedirect';
 import { clearNativeSession } from '../../mobile/session';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -414,6 +415,19 @@ export default function Navbar() {
                           boxShadow: '0 0 0 3px rgba(34, 211, 238, 0.45)',
                         }}
                       />
+
+                      {/* The one-time date-of-birth edit; the dialog says
+                          whether it is still available. */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        color="white"
+                        fontWeight="normal"
+                        _hover={{ color: 'cyan.300' }}
+                        onClick={openDobEditor}
+                      >
+                        Date of birth
+                      </Button>
 
                       <Button
                         variant="outline"

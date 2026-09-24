@@ -59,6 +59,8 @@ const MessagesPage = lazyWithPreload(() => import('./timetableadmin/viewMessages
 // import LockedView from './timetableviewer/viewer';
 const Note = lazyWithPreload(() => import('./timetableadmin/addnote'));
 import Navbar from './components/home/Navbar';
+// Eager for the same reason as Navbar: it guards every signed-in page.
+import DobGate from './components/DobGate';
 import ErrorBoundary from './components/ErrorBoundary';
 const PrintSummary = lazyWithPreload(() => import('./timetableadmin/printSummary'));
 const LoadDistribution = lazyWithPreload(() => import('./timetableadmin/loaddistribution'));
@@ -233,6 +235,8 @@ const HodDashboard = lazyWithPreload(() => import('./hodadmin/HodDashboard'));
 const HodNotificationSettings = lazyWithPreload(() => import('./hodadmin/HodNotificationSettings'));
 const DeanLayout = lazyWithPreload(() => import('./deanadmin/DeanLayout'));
 const DeanDashboard = lazyWithPreload(() => import('./deanadmin/DeanDashboard'));
+const TimetableHodLayout = lazyWithPreload(() => import('./timetablehod/TimetableHodLayout'));
+const TimetableHodDashboard = lazyWithPreload(() => import('./timetablehod/TimetableHodDashboard'));
 const DeptReports = lazyWithPreload(() => import('./deptadmin/DeptReports'));
 const DeptBugReports = lazyWithPreload(() => import('./deptadmin/DeptBugReports'));
 const DeptDisputes = lazyWithPreload(() => import('./deptadmin/DeptDisputes'));
@@ -638,38 +642,102 @@ const APP_ROUTES = (
 
           {/* ─── Department Admin Routes ────────────────────────────── */}
           {/* ─── iLEED Head of Department (read-only) ───────────────── */}
+          {/* Every screen in the iLEED menu catalogue, drawn at the head's own
+              department. The head used to get four of them; an institute asked
+              for the lot, and what makes that safe is not a short list but the
+              server's read-only rule — `attendanceLeadershipReadAccess` admits
+              the role and `refuseAttendanceWrites` refuses every method but a
+              read, so the operational screens (capture, roll assignment, ERP
+              upload, embeddings, extra and altering classes) show their data
+              and change nothing.
+
+              Deliberately the SAME components as /dept-admin, not copies. They
+              read their scope from the shell's outlet context, which HodLayout
+              fills from the server's own answer, so a head gets their
+              department without any of these pages knowing a head exists.
+
+              Which of them a head actually sees is an administrator's
+              decision, one toggle at a time, on the Academic Administration
+              screen — see HodLayout, which draws only the ones switched on.
+              These routes stay mounted either way, so a link somebody was sent
+              opens the screen rather than a blank shell. */}
           <Route path="/ileed-hod" element={<HodLayout />}>
             <Route index element={<HodDashboard />} />
             <Route path="dashboard" element={<HodDashboard />} />
             <Route path="reports" element={<LeadershipAttendanceReport />} />
-            {/* No confidence or verification route here, unlike the Dean's
-                block below: both judge the recognition system rather than
-                report a department's attendance, and a head can act on
-                nothing either shows — see NOT_FOR_HEADS in menuCatalogue.js. Left
-                out rather than merely unlinked, so the pages are not reachable
-                by typing the path either. */}
+            <Route path="live-rtsp" element={<DeptLiveRTSP />} />
+            <Route path="assign-rolls" element={<DeptAssignRolls />} />
+            <Route path="erp-upload" element={<DeptGroundTruthUpload />} />
+            <Route path="verification" element={<DeptClassVerification />} />
+            <Route path="cameras" element={<CameraRegistry />} />
+            <Route path="embeddings" element={<DeptSubjectEmbeddings />} />
+            <Route path="preview" element={<CameraPreview />} />
+            <Route path="confidence" element={<DeptConfidenceMonitor />} />
+            <Route path="record-stream" element={<RecordStream />} />
+            <Route path="extra-class" element={<ExtraClassPage />} />
+            <Route path="altering-class" element={<AlterClassPage />} />
+            <Route path="institute-identification" element={<InstituteIdentification />} />
+            <Route path="erp-overrides" element={<ErpOverrides />} />
+            {/* The drill-down the list links to. Without it a head clicking a
+                row lands on the shell's catch-all instead of the analysis. */}
+            <Route path="erp-overrides/:reportId" element={<ErpOverrideAnalysis />} />
+            <Route path="disputes" element={<DeptDisputes />} />
+            <Route path="bug-report" element={<DeptBugReports />} />
             <Route path="notifications" element={<HodNotificationSettings />} />
           </Route>
 
           {/* ─── iLEED Dean (Academic) (read-only, every department) ── */}
-          {/* The same four screens as the head of department's above, drawn at
-              institute scope. The components are shared deliberately — the
-              server decides the scope from the role, so a second set would be
-              two ways of answering the same question. What is NOT shared is
-              which of them a viewer gets: `deanMenus` and `hodMenus` are
-              separate documents, so an institute can show the dean a screen it
-              does not show every head, and the other way round. */}
+          {/* The head of department's block above, at institute scope — the
+              same screens, the same components, one shell up.
+
+              The components are shared deliberately: the server decides the
+              scope from the role, answering a dean with institute access and
+              no department, so a second set of pages would be two ways of
+              answering one question. Read-only is the same rule too —
+              `refuseAttendanceWrites` refuses a dean every method but a read,
+              which is what makes it safe to hand an institute-wide viewer the
+              operational screens.
+
+              What is NOT shared is which of them a dean gets: `deanMenus` is
+              its own document, so an institute can show the dean a screen it
+              does not show every head, and the other way round.
+
+              No `notifications` route, unlike the head's block. Those
+              preferences are a head's alerts for the department they head, and
+              a dean heads none — it is also the one thing in either view that
+              a viewer may WRITE, so leaving it out keeps the dean's view
+              read-only with no exception to explain. */}
           <Route path="/ileed-dean" element={<DeanLayout />}>
             <Route index element={<DeanDashboard />} />
             <Route path="dashboard" element={<DeanDashboard />} />
-            {/* The leadership variant, same as the head's: a dean runs no
-                session either, so the camera registry is the wrong room list
-                for them too. Their confidence and verification screens stay —
-                unlike a head, judging the recognition system across every
-                department is squarely the dean's. */}
             <Route path="reports" element={<LeadershipAttendanceReport />} />
-            <Route path="confidence" element={<DeptConfidenceMonitor />} />
+            <Route path="live-rtsp" element={<DeptLiveRTSP />} />
+            <Route path="assign-rolls" element={<DeptAssignRolls />} />
+            <Route path="erp-upload" element={<DeptGroundTruthUpload />} />
             <Route path="verification" element={<DeptClassVerification />} />
+            <Route path="cameras" element={<CameraRegistry />} />
+            <Route path="embeddings" element={<DeptSubjectEmbeddings />} />
+            <Route path="preview" element={<CameraPreview />} />
+            <Route path="confidence" element={<DeptConfidenceMonitor />} />
+            <Route path="record-stream" element={<RecordStream />} />
+            <Route path="extra-class" element={<ExtraClassPage />} />
+            <Route path="altering-class" element={<AlterClassPage />} />
+            <Route path="institute-identification" element={<InstituteIdentification />} />
+            <Route path="erp-overrides" element={<ErpOverrides />} />
+            {/* The drill-down the list links to, same as the head's block. */}
+            <Route path="erp-overrides/:reportId" element={<ErpOverrideAnalysis />} />
+            <Route path="disputes" element={<DeptDisputes />} />
+            <Route path="bug-report" element={<DeptBugReports />} />
+          </Route>
+
+          {/* ─── Timetable Head of Department (read-only) ───────────── */}
+          {/* A head used to be given DTTI — the department coordinator's
+              editing role — just to see their department's load. These pages
+              read it instead; the API behind them admits the HOD role and
+              refuses anything that is not a GET. */}
+          <Route path="/timetable-hod" element={<TimetableHodLayout />}>
+            <Route index element={<TimetableHodDashboard />} />
+            <Route path="dashboard" element={<TimetableHodDashboard />} />
           </Route>
 
           <Route path="/dept-admin" element={<DeptAdminLayout />}>
@@ -740,6 +808,10 @@ function App() {
 
       {/* <h1>XCEED-Timetable Module</h1>  */}
       <Navbar />
+      {/* Asks a signed-in account without a date of birth for one, on every
+          route (the Navbar hides itself on several), and hosts the one-time
+          edit the account menus open. */}
+      <DobGate />
 
       {/* One boundary around the whole table rather than per route: a lazy
           element with no Suspense above it throws, and a single boundary here

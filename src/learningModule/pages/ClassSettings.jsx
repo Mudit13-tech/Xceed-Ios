@@ -145,7 +145,20 @@ export default function ClassSettings() {
         if (res.ok) {
           const data = await res.json();
           if (isMounted && data.timetableData) {
-            const roomSet = new Set();
+            /* Kept exactly as the timetable spells it.
+
+               This used to uppercase every room, and that was the one place in
+               the whole chain where the string changed. A room is picked from
+               the master room list when a department adds it, and picked from
+               that list again when a slot is filled in, so `masterroom.room`
+               reaches a timetable entry character for character — and then
+               "Lt-1" was stored on the class as "LT-1", which no longer matched
+               the record it came from.
+
+               Deduplicated by a folded key rather than by folding the value, so
+               the same room listed twice is still one room without the spelling
+               being rewritten. */
+            const roomByKey = new Map();
             Object.keys(data.timetableData).forEach(day => {
               if (day === 'sem' || day === 'code') return;
               const slots = data.timetableData[day];
@@ -156,7 +169,9 @@ export default function ClassSettings() {
                     if (Array.isArray(slotDataArray)) {
                       slotDataArray.forEach(entry => {
                         if (entry.subject === klass.subject && entry.room) {
-                          roomSet.add(String(entry.room).trim().toUpperCase());
+                          const name = String(entry.room).trim();
+                          const key = name.toLowerCase();
+                          if (name && !roomByKey.has(key)) roomByKey.set(key, name);
                         }
                       });
                     }
@@ -164,7 +179,7 @@ export default function ClassSettings() {
                 }
               });
             });
-            const fetchedRooms = [...roomSet].sort();
+            const fetchedRooms = [...roomByKey.values()].sort((a, b) => a.localeCompare(b));
             setLockedRooms(fetchedRooms);
             if (fetchedRooms.length > 0) {
               setForm(prev => ({ ...prev, room: fetchedRooms.join(', ') }));

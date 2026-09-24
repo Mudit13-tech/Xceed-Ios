@@ -22,6 +22,7 @@ import useStableNavigate from '../hooks/useStableNavigate';
 import NotificationPreferencesModal from '../components/NotificationPreferencesModal';
 import SubjectAttendanceStrip from '../components/SubjectAttendanceStrip';
 import ClassHeaderCard from '../components/ClassHeaderCard';
+import RoomWithMap from '../components/RoomWithMap';
 import { preloadPath } from '../../routePreload';
 
 // People and Settings are about the class rather than its work, so they sit in
@@ -158,8 +159,12 @@ export default function ClassLayout() {
               <Heading size="sm">{klass.name}</Heading>
               {klass.status === 'archived' && <Badge colorScheme="orange">Archived</Badge>}
             </Flex>
+            {/* The room is held out of the join so it can carry its pin — the
+                same treatment the phone's card gives it. See RoomWithMap. */}
             <Text fontSize="sm" opacity={0.9} mt={0.5}>
-              {[klass.section, klass.subject, klass.room].filter(Boolean).join(' · ')}
+              {[klass.section, klass.subject].filter(Boolean).join(' · ')}
+              {(klass.section || klass.subject) && klass.room ? ' · ' : ''}
+              <RoomWithMap room={klass.room} />
             </Text>
             <HStack fontSize="sm" opacity={0.85} mt={0.5} spacing={3} wrap="wrap">
               <Text whiteSpace="nowrap" display="flex" alignItems="center" gap={1.5}>

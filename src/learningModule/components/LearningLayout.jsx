@@ -44,6 +44,7 @@ import useTimetableChanges from '../hooks/useTimetableChanges';
 import { LmIcon } from './Icon';
 import { buttonTextStyles, BusyDots } from './common';
 import { clearNativeSession } from '../../mobile/session';
+import { openDobEditor } from '../../components/DobGate';
 
 // Split out of the shell: every student sees it exactly once, and nobody else
 // ever does, so it has no business in the bundle that loads on every page.
@@ -52,6 +53,7 @@ const CompleteProfile = lazy(() => import('../pages/CompleteProfile'));
 // Same reasoning: the one-time correction is opened by a handful of accounts,
 // once each, and never again — it has no business in the shell's bundle.
 const EditIdentityModal = lazy(() => import('./EditIdentityModal'));
+
 
 // Shared look for the header's square action buttons (theme toggle, logout) so
 // they read as one pair. Mirrors the attendance shell's SQUARE_BTN.
@@ -63,6 +65,32 @@ const SQUARE_BTN = {
   bg: 'transparent',
   borderWidth: '1px',
   borderRadius: '8px',
+};
+
+/**
+ * The XCEED mark needs something dark behind it.
+ *
+ * `clublogo.png` is a near-white wordmark on transparency — it was drawn for
+ * the platform's dark hero, and everything else that uses it sits on one. The
+ * header here is white in light mode, so the button was a white X on white: in
+ * daylight, on a phone, there was nothing there to press.
+ *
+ * So the mark carries its own background rather than borrowing the header's,
+ * and it carries the same one in both themes — the logo does not change colour
+ * between them, so neither should what it sits on. That also makes it read as
+ * a brand chip beside the plain outlined buttons, which is what it is: the one
+ * control in the row that leaves the module.
+ *
+ * Literal hexes rather than theme tokens: the attendance shell styles the same
+ * button inline and cannot read this theme, and the two headers sit one above
+ * the other for staff, where two shades of near-black would read as a mistake.
+ */
+const XCEED_MARK_BG = '#171923';
+const XCEED_MARK = {
+  bg: XCEED_MARK_BG,
+  borderColor: XCEED_MARK_BG,
+  _hover: { bg: '#2d3748', borderColor: '#2d3748' },
+  _active: { bg: '#000000' },
 };
 
 // Power glyph for the header's logout button — the same mark the attendance
@@ -658,6 +686,21 @@ export default function LearningLayout() {
                   />
                 }
                 {...SQUARE_BTN}
+                {...XCEED_MARK}
+              />
+              {/* The campus classroom locator. In the bar rather than the
+                  sidebar because it is wanted in the ten seconds before a
+                  class, usually on a phone, by somebody who is not looking for
+                  a menu — and it leaves the module, so a nav item among the
+                  class pages would misrepresent where it goes. */}
+              <IconButton
+                as={RouterLink}
+                to="/classrooms"
+                variant="ghost"
+                aria-label="Find a classroom"
+                title="Find a classroom"
+                icon={<LmIcon name="location" size={18} />}
+                {...SQUARE_BTN}
                 borderColor={headerBorderColor}
                 color={headerTitleColor}
               />
@@ -728,6 +771,11 @@ export default function LearningLayout() {
                       </HStack>
                     </MenuItem>
                   )}
+                  {/* The platform-wide one-time edit (see components/DobGate):
+                      the dialog itself says whether it is still available. */}
+                  <MenuItem color={menuTextColor} onClick={openDobEditor}>
+                    <Text fontSize="sm">Date of birth</Text>
+                  </MenuItem>
                   <MenuItem color={menuTextColor} onClick={logoutModal.onOpen}>
                     Log out
                   </MenuItem>
@@ -824,7 +872,21 @@ export default function LearningLayout() {
               href="/"
               w="full"
               variant="outline"
-              leftIcon={<Image src="/clublogo.png" alt="" boxSize="16px" objectFit="contain" />}
+              /* Same reason as the header's — see XCEED_MARK. Here the button
+                 itself stays outlined like the one below it, so only the mark
+                 gets the dark ground it needs. */
+              leftIcon={
+                <Box
+                  bg={XCEED_MARK_BG}
+                  borderRadius="6px"
+                  p="3px"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <Image src="/clublogo.png" alt="" boxSize="14px" objectFit="contain" />
+                </Box>
+              }
               justifyContent="flex-start"
               onClick={onClose}
             >

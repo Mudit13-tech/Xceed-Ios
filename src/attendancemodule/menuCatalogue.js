@@ -40,80 +40,101 @@ export const ALL_MENUS = [
 ];
 
 /**
- * The screens the two read-only leadership views actually carry today.
+ * The screens the two read-only leadership views can draw, with their routes.
  *
- * A much shorter list than the catalogue above, and deliberately so: the rest
- * of iLEED is somebody operating the system, which is exactly what a head of
- * department and the Dean (Academic) do not do here. The toggles for those
- * other menus are still stored for both audiences — they are one field per
- * audience and a key per menu — but nothing renders them, so an administrator
- * turning one on would be waiting for a link that never appears.
+ * Every entry here has a real page behind it inside both leadership shells —
+ * the same components the department admin uses, rendered against the
+ * leadership shell's own outlet context, which is why they come out scoped to
+ * the head's department (or, for the Dean, to the whole institute) without a
+ * second set of screens existing.
  *
- * Exported so the settings screen can SAY which those are rather than offering
- * eighteen switches of which five do something, and so that the day a screen is
- * added here, the settings screen learns about it without being edited.
+ * `path` is the suffix; each shell supplies its own base, because the two views
+ * are the same screens at two scopes and differ only in their URL. The one
+ * exception is the manual, which is the platform's rather than the module's:
+ * an absolute route, opened in a new tab, because losing the screen you were
+ * reading about is a poor way to read about it.
  *
- * `path` is the suffix; each layout supplies its own base, because the two
- * views are the same screens at two scopes and differ only in their URL.
+ * Being listed here does NOT mean a viewer gets the screen — every entry but
+ * the dashboard obeys its toggle on the Academic Administration screen, and
+ * the audience lists below decide which shell carries it at all.
  */
 export const LEADERSHIP_MENUS = [
-    { id: 'dashboard',         menuKey: 'dashboard',         path: 'dashboard',    label: 'Dashboard',          exact: true, color: '#6366f1' },
-    { id: 'attendanceReports', menuKey: 'attendanceReports', path: 'reports',      label: 'Attendance Reports',              color: '#14b8a6' },
-    { id: 'confidenceMonitor', menuKey: 'confidenceMonitor', path: 'confidence',   label: 'Confidence Monitor',              color: '#ef4444' },
-    { id: 'classVerification', menuKey: 'classVerification', path: 'verification', label: 'Class Verification',              color: '#ec4899' },
-    // The manual is the platform's, not the module's, so it has an absolute
-    // route and no base to hang off — and it opens in a new tab because losing
-    // the screen you were reading about is a poor way to read about it.
-    { id: 'helpManual',        menuKey: 'helpManual',        route: '/ams-manual', label: 'Help & Manual',      newTab: true, color: '#64748b' },
+    { id: 'dashboard',         menuKey: 'dashboard',         path: 'dashboard',               label: 'Dashboard',            exact: true, color: '#6366f1' },
+    { id: 'groundTruth',       menuKey: 'groundTruth',       path: 'live-rtsp',               label: 'Ground Truth Capture',              color: '#0ea5e9' },
+    { id: 'rollAssignment',    menuKey: 'rollAssignment',    path: 'assign-rolls',            label: 'Roll Assignment',                   color: '#10b981' },
+    { id: 'erpUpload',         menuKey: 'erpUpload',         path: 'erp-upload',              label: 'ERP Upload',                        color: '#f472b6' },
+    { id: 'attendanceReports', menuKey: 'attendanceReports', path: 'reports',                 label: 'Attendance Reports',                color: '#14b8a6' },
+    { id: 'classVerification', menuKey: 'classVerification', path: 'verification',            label: 'Class Verification',                color: '#ec4899' },
+    { id: 'cameraRegistry',    menuKey: 'cameraRegistry',    path: 'cameras',                 label: 'Camera Registry',                   color: '#f97316' },
+    { id: 'subjectEmbeddings', menuKey: 'subjectEmbeddings', path: 'embeddings',              label: 'Subject Embeddings',                color: '#f59e0b' },
+    { id: 'livePreview',       menuKey: 'livePreview',       path: 'preview',                 label: 'Live Preview',                      color: '#8b5cf6' },
+    { id: 'confidenceMonitor', menuKey: 'confidenceMonitor', path: 'confidence',              label: 'Confidence Monitor',                color: '#ef4444' },
+    { id: 'recordStream',      menuKey: 'recordStream',      path: 'record-stream',           label: 'Record Stream',                     color: '#7c3aed' },
+    { id: 'extraClasses',      menuKey: 'extraClasses',      path: 'extra-class',             label: 'Extra Classes',                     color: '#f59e0b' },
+    { id: 'alteringClasses',   menuKey: 'alteringClasses',   path: 'altering-class',          label: 'Altering Classes',                  color: '#d946ef' },
+    { id: 'instituteIdentification', menuKey: 'instituteIdentification', path: 'institute-identification', label: 'Institute Identification', color: '#8b5cf6' },
+    { id: 'erpOverrides',      menuKey: 'erpOverrides',      path: 'erp-overrides',           label: 'ERP Overrides',                     color: '#f59e0b' },
+    { id: 'attendanceDisputes', menuKey: 'attendanceDisputes', path: 'disputes',              label: 'Attendance Disputes',               color: '#0ea5e9' },
+    { id: 'bugReports',        menuKey: 'bugReports',        path: 'bug-report',              label: 'Raise a Bug / Suggestion',          color: '#ef4444' },
+    { id: 'helpManual',        menuKey: 'helpManual',        route: '/ams-manual',            label: 'Help & Manual',       newTab: true, color: '#64748b' },
 ];
 
 /**
- * The two screens a head of department is NOT offered, unlike the dean.
+ * Both leadership shells draw every screen above.
  *
- * Both judge the recognition system itself rather than report a department's
- * attendance — an operator's tools, and a head can act on nothing either
- * shows. They have no route inside `/ileed-hod` at all, so this is not merely
- * an unlinked page: it cannot be reached by typing the path either.
+ * The head of department's view was widened to the whole catalogue first and
+ * the Dean (Academic)'s followed, so there is no longer a per-audience list —
+ * one statement, and the two shells cannot drift apart by one being edited.
  *
- * It lives here rather than in HodLayout because the settings screen has to
- * know it too. While it did not, an administrator switching Class Verification
- * on for the heads was told the menu "has a screen" and then watched nothing
- * appear — a toggle that could never do anything, with nothing on screen
- * saying so.
+ * What is NOT shared, and must not become shared, is which of them a given
+ * viewer gets: `hodMenus` and `deanMenus` are separate documents with separate
+ * values, so an institute can show the dean a screen it does not show every
+ * head, and the other way round. Drawing the same catalogue is a statement
+ * about which screens EXIST in each shell; the toggles decide who sees them.
  *
- * Named as an exclusion rather than an inclusion so a screen added to the list
- * above reaches a head by default, the way this catalogue intends, instead of
- * being silently dropped by a list nobody remembered to extend.
+ * If the two ever do need different screens again, add the per-audience list
+ * back here AND make the settings screen's "has a screen" badge per-audience
+ * with it. Those two were once out of step, and the result was an
+ * administrator being told a switch had a screen behind it, turning it on, and
+ * waiting for a link that could never appear.
+ *
+ * The one asymmetry left is not here: the head's shell splices in their own
+ * Email Notifications, which a dean has no use for because they head no
+ * department. See HodLayout.
  */
-export const NOT_FOR_HEADS = ['confidenceMonitor', 'classVerification'];
 
-/** The leadership screens one audience actually draws. */
-export const leadershipMenusForAudience = (audience) =>
-    (audience === 'hod'
-        ? LEADERSHIP_MENUS.filter((menu) => !NOT_FOR_HEADS.includes(menu.id))
-        : LEADERSHIP_MENUS);
+/** Just the keys — what the settings screen marks as having a screen. */
+export const LEADERSHIP_MENU_KEYS = LEADERSHIP_MENUS
+    .map((menu) => menu.menuKey)
+    .filter(Boolean);
 
 /**
- * Just the keys one audience has a screen for — what the settings screen marks.
- *
- * Per audience, and there is deliberately no union of the two: asking "does
- * this menu have a screen *somewhere*" is what let the settings screen promise
- * a head of department the Dean's Class Verification, so the question can only
- * be asked about one audience at a time.
- */
-export const leadershipMenuKeysFor = (audience) =>
-    leadershipMenusForAudience(audience)
-        .map((menu) => menu.menuKey)
-        .filter(Boolean);
-
-/**
- * The leadership menu list for one view, with its routes resolved.
+ * The leadership menu list for one shell, with its routes resolved.
  *
  * @param {string} base e.g. '/ileed-hod' or '/ileed-dean'
- * @param {'hod'|'dean'} audience which view is asking — they draw different sets
  */
-export const leadershipMenusFor = (base, audience) =>
-    leadershipMenusForAudience(audience).map(({ path, route, ...menu }) => ({
+export const leadershipMenusFor = (base) =>
+    LEADERSHIP_MENUS.map(({ path, route, ...menu }) => ({
         ...menu,
         route: route || `${base}/${path}`,
     }));
+
+/**
+ * The catalogue menu a path inside a leadership shell belongs to, or null.
+ *
+ * Used by both shells to answer "is the screen being asked for one an
+ * administrator has switched off?". Longest match wins, so a detail page —
+ * `/ileed-hod/erp-overrides/:reportId` — is governed by the same toggle as the
+ * listing it was reached from rather than falling through as unknown.
+ *
+ * Null means the path is not a catalogue screen at all: the head's own Email
+ * Notifications, or something that does not exist. Neither is a toggle's to
+ * withhold, so both are left to the router.
+ */
+export const menuForPath = (base, pathname) => {
+    const clean = String(pathname || '').replace(/\/+$/, '');
+    return leadershipMenusFor(base)
+        .filter((menu) => menu.route.startsWith(`${base}/`))
+        .filter((menu) => clean === menu.route || clean.startsWith(`${menu.route}/`))
+        .sort((a, b) => b.route.length - a.route.length)[0] || null;
+};

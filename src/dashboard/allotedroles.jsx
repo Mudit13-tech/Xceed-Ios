@@ -26,6 +26,7 @@ import getEnvironment from '../getenvironment';
 import {
   EXCLUDED_ROLES,
   hasUnnamedHodDashboards,
+  hasTimetableHodDashboard,
   hasDeanDashboards,
   singleRoleTarget,
 } from '../authRedirect';
@@ -112,6 +113,21 @@ const ROLE_META = {
       "Head of Department view — your department's attendance, live classrooms and reports",
     icon: FiUserCheck,
     accent: 'cyan',
+  },
+  // The timetable card for a head. Appended on the bare `HOD` role with no
+  // equivalent of the `hasNamedHodRole` test the iLEED card carries: there is
+  // no named timetable-HOD role, so there is nothing that could have taken
+  // this dashboard away and no way to offer it twice.
+  //
+  // It exists because a head who wanted to see their department's load had to
+  // be given `DTTI` — the department coordinator's role, which does not show a
+  // timetable but edits one. This card reaches a read-only report instead.
+  'timetable-hod': {
+    name: 'Timetable — HOD',
+    description:
+      "Head of Department view — your department's semester-wise load: subjects, faculty and rooms",
+    icon: FiCalendar,
+    accent: 'blue',
   },
   STUDENT: {
     name: 'Student',
@@ -370,6 +386,13 @@ const AllocatedRolesPage = () => {
           if (hasRole(platformRoles, 'HOD') && !hasNamedHodRole) {
             extras.push({ role: 'ileed-hod' });
           }
+          // Unconditional on the appointment, unlike the iLEED card above:
+          // splitting the HOD role in two was about the learning and iLEED
+          // dashboards, and neither half was ever a way of taking the
+          // timetable view away — it did not exist then.
+          if (hasRole(platformRoles, 'HOD')) {
+            extras.push({ role: 'timetable-hod' });
+          }
           if (hasRole(platformRoles, 'DEAN')) {
             extras.push({ role: 'ileed-dean' });
           }
@@ -421,6 +444,11 @@ const AllocatedRolesPage = () => {
       // than off `extraCards`, which is set a tick later and would leave a
       // window where the redirect still wins the race.
       if (hasUnnamedHodDashboards(user.role)) return;
+      // Nor is a head who holds a named role: the timetable card below is
+      // appended on the appointment alone, so `hod-learning` plus `HOD` is one
+      // card here and two destinations in fact. Redirecting would hide the
+      // timetable view from every head who has one.
+      if (hasTimetableHodDashboard(user.role)) return;
       // And a dean is not one either: `DEAN` opens the Learning dean dashboard
       // and the iLEED one, and the second is the synthetic card above.
       if (hasDeanDashboards(user.role)) return;

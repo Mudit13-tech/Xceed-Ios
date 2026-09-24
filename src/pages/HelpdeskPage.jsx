@@ -295,6 +295,22 @@ const CSS = `
    document's width with it, so the entire page scrolled sideways. */
 .hd-notice span:first-child{flex:0 0 auto;}
 .hd-notice span+span{flex:1 1 auto;min-width:0;}
+.hd-rooms{position:relative;margin:0 0 14px;}
+.hd-rooms-mine{margin:8px 0 0;display:flex;flex-direction:column;gap:6px;}
+.hd-rooms-mine-h{font-size:.74rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+.hd-rooms-list{list-style:none;margin:6px 0 0;padding:0;border:1px solid var(--line);border-radius:10px;
+  background:var(--surface);overflow:hidden;}
+.hd-rooms-list li{border-bottom:1px solid var(--line);}
+.hd-rooms-list li:last-child{border-bottom:none;}
+.hd-room{display:flex;align-items:center;gap:10px;padding:9px 12px;color:inherit;text-decoration:none;}
+a.hd-room:hover,.hd-room.is-active{background:var(--accent-bg);}
+.hd-room-pin{flex:none;font-size:1rem;}
+.hd-room-main{flex:1 1 auto;min-width:0;}
+.hd-room-name{display:block;font-weight:700;font-size:.9rem;}
+.hd-room-where{display:block;font-size:.78rem;color:var(--muted);overflow-wrap:anywhere;}
+.hd-room-go{flex:none;font-size:.78rem;font-weight:700;color:var(--accent-dark);}
+.hd-room.no-map .hd-room-go{color:var(--muted);font-weight:400;}
+.hd-rooms-empty{font-size:.82rem;color:var(--muted);margin:6px 0 0;}
 .hd-field{margin:0 0 10px;}
 .hd-field label{display:block;font-size:.78rem;font-weight:700;margin-bottom:4px;color:var(--detail);}
 .hd-field .hd-help{display:block;font-weight:400;color:var(--muted);margin-top:2px;font-size:.75rem;}
@@ -347,6 +363,15 @@ textarea.hd-input{min-height:120px;resize:vertical;line-height:1.6;}
 .hd-foot a{color:var(--brand-dark);}
 .hd-foot button{background:none;border:none;color:var(--brand-dark);cursor:pointer;
   font:inherit;text-decoration:underline;padding:0;}
+
+/* ── the "still looking?" prompt ── */
+.hd-nudge-back{position:fixed;inset:0;z-index:50;background:rgba(15,23,42,.45);
+  display:flex;align-items:center;justify-content:center;padding:16px;}
+.hd-nudge{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:14px;
+  max-width:420px;width:100%;padding:18px 18px 16px;box-shadow:0 18px 40px rgba(15,23,42,.25);}
+.hd-nudge h2{margin:0 0 6px;font-size:1.02rem;}
+.hd-nudge p{margin:0 0 14px;font-size:.88rem;line-height:1.55;color:var(--secondary);}
+.hd-nudge .hd-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
 
 @media (max-width:640px){
   .hd-bubble{max-width:100%;}
@@ -462,6 +487,57 @@ const accentVars = (category) => {
    already ordered most-asked-first, so the cut is not arbitrary — what is
    hidden is what nobody asks. */
 const CHIPS_BEFORE_MORE = 8;
+
+/* After this many questions in one session, somebody is probably hunting
+   rather than reading: first the search bar is suggested, then the XCEED team.
+   Each prompt is shown once per session and "Continue" always carries on. */
+const NUDGE_SEARCH_AFTER = 5;
+const NUDGE_TEAM_AFTER = 10;
+
+const NUDGES = {
+  search: {
+    title: 'Looking for something specific?',
+    text: 'You have opened quite a few questions. Typing a word or two into the search bar — "roll number", "timetable", "code" — finds the right one faster.',
+    go: 'Use the search bar',
+  },
+  team: {
+    title: 'Still not finding it?',
+    text: 'If none of these answers has what you need, the XCEED team can take a look. Your message reaches them with your account details and the questions you have already opened attached.',
+    go: 'Email the XCEED team',
+  },
+};
+
+/** The prompt itself: a small dialog with its action and "Continue". Escape
+ *  and a click on the backdrop both mean "Continue". */
+function Nudge({ kind, onGo, onClose }) {
+  const goRef = useRef(null);
+  useEffect(() => {
+    goRef.current?.focus();
+    const onKey = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const copy = NUDGES[kind];
+  return (
+    <div className="hd-nudge-back" onClick={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="hd-nudge" role="dialog" aria-modal="true" aria-labelledby="hd-nudge-title">
+        <h2 id="hd-nudge-title">{copy.title}</h2>
+        <p>{copy.text}</p>
+        <div className="hd-row">
+          <button className="hd-btn ghost" type="button" onClick={onClose}>
+            Continue
+          </button>
+          <button className="hd-btn" type="button" ref={goRef} onClick={onGo}>
+            {copy.go}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** Matches a question the way somebody skimming would: all the words, any order. */
 const matches = (question, query) => {
@@ -597,8 +673,163 @@ function QuestionGroup({ entry, chip, onOpen }) {
 
 const STATE_MARK = { ok: '✓', warn: '!', bad: '✕', info: 'i' };
 
-function Block({ block }) {
+/* ── classroom search ───────────────────────────────────────────────────── */
+
+/** Only http(s) map links become anchors. The server already drops anything
+ *  else (see timetableOptionsController.safeMapLink); checked again here
+ *  because this is the line that puts it in an href. */
+const safeMapUrl = (value) => (/^https?:\/\//i.test(String(value || '').trim()) ? String(value).trim() : '');
+
+/** Case, spaces and dashes folded, so "lt1", "LT 1" and "LT-1" all find LT-1. */
+const roomFold = (value) => String(value || '').toLowerCase().replace(/[\s\-_.]/g, '');
+
+const ROOM_SUGGESTIONS = 8;
+
+function RoomRow({ room, label, active, id, option = false }) {
+  const mapUrl = safeMapUrl(room.mapUrl);
+  const where = [room.building, room.floor && `Floor ${room.floor}`].filter(Boolean).join(' · ');
+  const body = (
+    <>
+      <span className="hd-room-pin" aria-hidden="true">
+        📍
+      </span>
+      <span className="hd-room-main">
+        <span className="hd-room-name">{room.room}</span>
+        {label || where ? <span className="hd-room-where">{[label, where].filter(Boolean).join(' — ')}</span> : null}
+      </span>
+      <span className="hd-room-go">{mapUrl ? 'Open map ↗' : 'No location recorded'}</span>
+    </>
+  );
+  const className = `hd-room${active ? ' is-active' : ''}${mapUrl ? '' : ' no-map'}`;
+  return (
+    <li {...(option ? { role: 'option', id, 'aria-selected': Boolean(active) } : {})}>
+      {mapUrl ? (
+        /* Straight to Google Maps, in a new tab so the answer is still here
+           when the reader comes back. */
+        <a className={className} href={mapUrl} target="_blank" rel="noopener noreferrer">
+          {body}
+        </a>
+      ) : (
+        <div className={className}>{body}</div>
+      )}
+    </li>
+  );
+}
+
+/**
+ * Type a room, get suggestions, open the map.
+ *
+ * The whole room list (a few hundred rows) is fetched once when the answer is
+ * shown and filtered here on every keystroke, so suggestions keep up with
+ * typing on a slow connection and the server sees one request, not one per key.
+ * Before anything is typed, the rooms of the reader's own classes are offered.
+ */
+function RoomSearch({ block, call }) {
+  const [rooms, setRooms] = useState(null);
+  const [failed, setFailed] = useState('');
+  const [query, setQuery] = useState('');
+  const [active, setActive] = useState(-1);
+  const listId = useRef(`hd-rooms-${Math.random().toString(36).slice(2)}`).current;
+
+  useEffect(() => {
+    let live = true;
+    call(`${API}/rooms`)
+      .then((data) => live && setRooms(Array.isArray(data.rooms) ? data.rooms : []))
+      .catch((error) => live && setFailed(error.message || 'The room list could not be loaded.'));
+    return () => {
+      live = false;
+    };
+  }, [call]);
+
+  const folded = roomFold(query);
+  const matches =
+    rooms && folded
+      ? rooms
+          .filter((room) => roomFold(room.room).includes(folded) || roomFold(room.building).includes(folded))
+          // Names that start with what was typed first: "LT1" before "CLT12".
+          .sort((a, b) => Number(!roomFold(a.room).startsWith(folded)) - Number(!roomFold(b.room).startsWith(folded)))
+          .slice(0, ROOM_SUGGESTIONS)
+      : [];
+
+  const mine = (block.mine || []).map((row) => {
+    const known = (rooms || []).find((room) => roomFold(room.room) === roomFold(row.room));
+    return { room: known || { room: row.room }, label: row.label };
+  });
+
+  const onKeyDown = (event) => {
+    if (!matches.length) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActive((index) => (index + 1) % matches.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActive((index) => (index <= 0 ? matches.length - 1 : index - 1));
+    } else if (event.key === 'Enter') {
+      const pick = matches[active >= 0 ? active : 0];
+      const mapUrl = pick && safeMapUrl(pick.mapUrl);
+      if (mapUrl) {
+        event.preventDefault();
+        window.open(mapUrl, '_blank', 'noopener,noreferrer');
+      }
+    } else if (event.key === 'Escape') {
+      setQuery('');
+      setActive(-1);
+    }
+  };
+
+  return (
+    <div className="hd-rooms">
+      <input
+        className="hd-input"
+        type="search"
+        role="combobox"
+        aria-label="Search for a classroom"
+        aria-expanded={matches.length > 0}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={active >= 0 && matches[active] ? `${listId}-${active}` : undefined}
+        placeholder="Type a room, e.g. LT1, 205 or a block name"
+        autoComplete="off"
+        value={query}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setActive(-1);
+        }}
+        onKeyDown={onKeyDown}
+      />
+
+      {failed ? <p className="hd-rooms-empty">{failed}</p> : null}
+      {!failed && folded && !rooms ? <p className="hd-rooms-empty">Loading rooms…</p> : null}
+      {rooms && folded && !matches.length ? (
+        <p className="hd-rooms-empty">No room matches “{query}”. Try just the number, or the block name.</p>
+      ) : null}
+
+      {matches.length ? (
+        <ul className="hd-rooms-list" role="listbox" id={listId}>
+          {matches.map((room, index) => (
+            <RoomRow key={room.room} room={room} option active={index === active} id={`${listId}-${index}`} />
+          ))}
+        </ul>
+      ) : null}
+
+      {!folded && mine.length ? (
+        <div className="hd-rooms-mine">
+          <span className="hd-rooms-mine-h">Your classes</span>
+          <ul className="hd-rooms-list">
+            {mine.map((row) => (
+              <RoomRow key={row.room.room} room={row.room} label={row.label} />
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Block({ block, call }) {
   if (block.type === 'text') return <p>{block.text}</p>;
+
+  if (block.type === 'roomSearch') return <RoomSearch block={block} call={call} />;
 
   if (block.type === 'note') {
     return <div className="hd-note">{block.text}</div>;
@@ -986,6 +1217,13 @@ export default function HelpdeskPage() {
   /* The question just answered, so the list of what to ask next does not offer
      it back. */
   const [lastAsked, setLastAsked] = useState('');
+  /* The "still looking?" prompt: which one is open, how many questions have
+     been asked this session, and which prompts have already been shown. Refs
+     for the last two, since they are read inside askTopic and never drawn. */
+  const [nudge, setNudge] = useState('');
+  const askedCountRef = useRef(0);
+  const nudgedRef = useRef({ search: false, team: false });
+  const searchRef = useRef(null);
   /* A question named in the URL — /help?topic=no-account.
      Read once, at mount, and held until the gate opens: a link in a support
      reply or a manual arrives before anybody has verified an address, and
@@ -1308,10 +1546,15 @@ export default function HelpdeskPage() {
     setOpenModule(asked);
     setLastAsked(topic.id);
     setQuery('');
+    /* Opening the XCEED team question is the thing the second prompt would
+       suggest, so it is not counted and that prompt is not shown afterwards. */
+    if (topic.id === 'ask-a-human') nudgedRef.current.team = true;
+    else askedCountRef.current += 1;
     setThread((previous) => [...previous, { side: 'me', text: topic.question, category: asked }]);
     try {
       const data = await call(`${API}/topic/${topic.id}`);
       setThread((previous) => [...previous, { side: 'bot', category: asked, ...data.answer }]);
+      maybeNudge();
     } catch (failure) {
       if (failure.status === 401) return handleExpiry();
       setThread((previous) => [
@@ -1373,7 +1616,39 @@ export default function HelpdeskPage() {
     }
   };
 
+  /** Opens the next prompt the question count calls for, if any. After the
+   *  answer rather than before it, so the reader still gets what they asked. */
+  const maybeNudge = () => {
+    const count = askedCountRef.current;
+    const seen = nudgedRef.current;
+    if (count > NUDGE_TEAM_AFTER && !seen.team && menuTopic('ask-a-human')) {
+      seen.team = true;
+      // Suggesting the search bar after this would be going backwards.
+      seen.search = true;
+      setNudge('team');
+    } else if (count > NUDGE_SEARCH_AFTER && !seen.search && questionCount > CHIPS_BEFORE_MORE) {
+      seen.search = true;
+      setNudge('search');
+    }
+  };
+
+  const closeNudge = useCallback(() => setNudge(''), []);
+
+  const followNudge = () => {
+    const kind = nudge;
+    setNudge('');
+    if (kind === 'search') {
+      searchRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      searchRef.current?.focus();
+    } else if (kind === 'team' && menuTopic('ask-a-human')) {
+      askTopic(menuTopic('ask-a-human'));
+    }
+  };
+
   const startOver = () => {
+    setNudge('');
+    askedCountRef.current = 0;
+    nudgedRef.current = { search: false, team: false };
     setPass('');
     setOtp('');
     setEmail('');
@@ -1613,7 +1888,7 @@ export default function HelpdeskPage() {
                     <div className="hd-bubble">
                       {message.title ? <h2>{message.title}</h2> : null}
                       {(message.blocks || []).map((block, i) => (
-                        <Block block={block} key={i} />
+                        <Block block={block} call={call} key={i} />
                       ))}
                       {(message.actions || []).map((action) => (
                         <ActionCard key={action.id} action={action} busy={busy} onRun={runAction} />
@@ -1726,9 +2001,9 @@ export default function HelpdeskPage() {
                 </label>
                 <input
                   id="hd-search"
+                  ref={searchRef}
                   type="search"
                   className="hd-search-input"
-                  placeholder="roll number, timetable, code…"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   autoComplete="off"
@@ -1810,6 +2085,8 @@ export default function HelpdeskPage() {
                 this page cannot do either.
               </span>
             </div>
+
+            {nudge ? <Nudge kind={nudge} onGo={followNudge} onClose={closeNudge} /> : null}
           </>
         )}
 

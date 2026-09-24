@@ -344,6 +344,8 @@ const lmApi = {
   ttBranches: () => request('/timetable/branches'),
   ttSemesters: (code) => request(`/timetable/semesters${qs({ code })}`),
   ttSubjects: (code, sem) => request(`/timetable/subjects${qs({ code, sem })}`),
+  /** Where a class's rooms are, keyed by the name asked for. See the server. */
+  ttRoomLocations: (rooms) => request(`/timetable/room-locations${qs({ rooms })}`),
 
   /* classes */
   listClasses: (status) => request(`/classes${qs({ status })}`),
