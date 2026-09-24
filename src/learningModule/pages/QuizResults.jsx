@@ -1792,7 +1792,7 @@ export default function QuizResults() {
         setRefreshing(false);
       }
     },
-    [classId, quizId],
+    [classId, quizId, announceTerminations],
   );
 
   useEffect(() => {

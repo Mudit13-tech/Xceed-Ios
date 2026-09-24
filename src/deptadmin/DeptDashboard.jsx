@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Clock3, ScanFace, Users } from 'lucide-react';
 import getEnvironment from '../getenvironment';
 import { styles, theme } from '../attendancemodule/config';
 import DashboardProgress from '../attendancemodule/DashboardProgress';
 import PendingActionsCard from '../attendancemodule/PendingActionsCard';
-import LiveRoomCards from '../attendancemodule/LiveRoomCards';
+import LiveStatusPanel from '../attendancemodule/LiveStatusPanel';
 
 const apiUrl = getEnvironment();
 
@@ -29,7 +29,10 @@ function StatCard({ icon: Icon, label, value, detail, color }) {
 }
 
 function ReportRows({ reports }) {
-    if (!reports.length) {
+    // Defaulted rather than destructured bare: this renders whatever the stats
+    // endpoint returned, and a body without `recentReports` used to take the
+    // whole page down with it — see the guard in DeptDashboard below.
+    if (!Array.isArray(reports) || !reports.length) {
         return <div style={{ color: theme.textMuted, padding: '32px 0', textAlign: 'center' }}>No attendance sessions recorded yet.</div>;
     }
 
@@ -72,6 +75,7 @@ function ReportRows({ reports }) {
 export default function DeptDashboard({ readOnly = false }) {
     const [state, setState] = useState({ stats: null, loading: true, error: '' });
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     // Only honoured server-side for a full-access (iams-admin) caller — see
     // deptAdminController.getTodayAttendanceStats — so an actual dept admin
     // opening this URL still only ever sees their own department. Lets an
@@ -107,6 +111,31 @@ export default function DeptDashboard({ readOnly = false }) {
     }
 
     const stats = state.stats;
+
+    /* A 200 whose body is not the payload this page is built from.
+     *
+     * Every field below was read straight off `stats`, so anything unexpected
+     * — an empty body, a proxy's own JSON, a half-written response — threw
+     * during render. There is an ErrorBoundary above this route, so the whole
+     * screen became the words "Something went wrong": no department, no
+     * endpoint, nothing to act on, and identical to every other crash in the
+     * app. A head of department opening their iLEED card saw exactly that.
+     *
+     * The two arrays this page cannot do without are what it is checked on,
+     * because they are what it iterates. Say so plainly instead, and name the
+     * endpoint, so the next person reads one line rather than a stack trace.
+     */
+    if (!stats || !Array.isArray(stats.byYear)) {
+        return (
+            <div style={{ ...styles.card, color: theme.danger }}>
+                The attendance statistics could not be read — the server answered
+                {' '}<code>/attendancemodule/dept-admin/stats/today</code>{' '}
+                with something this page does not understand. Please report this to
+                an administrator.
+            </div>
+        );
+    }
+
     const maxYearPct = Math.max(100, ...stats.byYear.map((item) => item.attendancePct || 0));
 
     return (
@@ -134,18 +163,45 @@ export default function DeptDashboard({ readOnly = false }) {
                 <StatCard icon={CheckCircle2} label="Sessions today" value={stats.sessions} detail={`${stats.review} records need review`} color="#0ea5e9" />
             </div>
 
-            {/* Scoped server-side to this department's classes — see
-                schedulerController.liveStatus. Placed above the day's
-                summaries because it is the only part of this page that
-                changes minute to minute. */}
-            <LiveRoomCards title="Live classrooms" department={overrideDepartment} />
+            {/* The same cards as the standalone live screen, not a reduced
+                copy of them: camera state, the preflight checklist that says
+                WHY a room has not started, run progress and the counts.
+                Scoped server-side to this department's classes — see
+                schedulerController.liveStatus. Placed directly under the day's
+                totals because it is the only part of this page that changes
+                minute to minute. */}
+            <LiveStatusPanel
+                variant="panel"
+                title="Live classrooms"
+                department={overrideDepartment}
+                onOpenReport={(room, { date, slot }) => navigate(
+                    readOnly ? '/ileed-hod/reports' : '/dept-admin/reports',
+                    {
+                        state: {
+                            reportId: room.reportId,
+                            prefillDate: date,
+                            prefillSlot: slot,
+                            prefillRoom: room.room,
+                        },
+                    },
+                )}
+            />
 
             {/* Every item on this card is something to go and DO — approve a
                 cluster, resolve a dispute. A head of department can reach none
                 of them, so offering the list would be a page of dead ends. */}
             {!readOnly && <PendingActionsCard initialDepartment={overrideDepartment} />}
 
-            <DashboardProgress title="Acquisition and Roll Assignment Progress" compact initialDepartment={overrideDepartment} />
+            {/* Folded by default. The two rings stay visible as the headline;
+                the charts behind them are consulted when a ring looks wrong,
+                which is not often enough to earn a screenful under the live
+                cards on every load. */}
+            <DashboardProgress
+                title="Acquisition and Roll Assignment Progress"
+                compact
+                collapsibleCharts
+                initialDepartment={overrideDepartment}
+            />
 
             <section style={{ ...styles.card, marginTop: 18 }}>
                 <div

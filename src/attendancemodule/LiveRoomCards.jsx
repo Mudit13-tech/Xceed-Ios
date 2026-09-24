@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import getEnvironment from '../getenvironment';
 import { styles, theme } from './config';
 import usePeriods from './usePeriods';
+import usePolling from './usePolling';
 
 const LIVE_STATUS_API = `${getEnvironment()}/attendancemodule/scheduler/live-status`;
 
@@ -124,13 +125,9 @@ export default function LiveRoomCards({ title = 'Live classrooms', department = 
 
     useEffect(() => {
         alive.current = true;
-        load();
-        const id = setInterval(load, REFRESH_MS);
-        return () => {
-            alive.current = false;
-            clearInterval(id);
-        };
-    }, [load]);
+        return () => { alive.current = false; };
+    }, []);
+    usePolling(load, REFRESH_MS);
 
     const rooms = data?.rooms || [];
     const scoped = data?.scopedToDepartments;

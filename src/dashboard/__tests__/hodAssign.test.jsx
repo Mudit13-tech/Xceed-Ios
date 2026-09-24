@@ -14,7 +14,7 @@ import HodAssignPage from '../hodAssign';
  * enforces it; what is pinned here is that the screen says so *before* the
  * refusal — an admin should not have to submit a form to find out the post is
  * filled — and that removing somebody reports honestly whether the account kept
- * the HOD role, which it does when the same person still heads elsewhere.
+ * the HOD roles, which it does when the same person still heads elsewhere.
  */
 
 const HEADS = [
@@ -159,14 +159,14 @@ describe('HodAssignPage', () => {
       expect(globalThis.fetch.mock.calls.filter(([url]) => String(url).includes('/hods'))).toHaveLength(2));
   });
 
-  it('says when the account keeps the HOD role because it heads somewhere else', async () => {
+  it('says when the account keeps its HOD roles because it heads somewhere else', async () => {
     globalThis.fetch = routeFetch({ remove: async () => jsonResponse({ roleRemoved: false }) });
     await renderPage();
 
     await userEvent.click(screen.getByRole('button', { name: 'Remove the head of CSE' }));
 
     expect(
-      await screen.findByText('The account keeps the HOD role — it still heads another department.'),
+      await screen.findByText('The account keeps its HOD roles — it still heads another department.'),
     ).toBeInTheDocument();
   });
 });

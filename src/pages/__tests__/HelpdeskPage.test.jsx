@@ -36,6 +36,26 @@ const MENU = [
   { category: 'XCEED team', topics: [{ id: 'ask-a-human', question: 'My question is not answered here' }] },
 ];
 
+/* Enough questions that the search box appears and a module overflows its cap
+   — the two behaviours that only exist above a threshold, and would otherwise
+   be tested on a menu too small to have them. */
+const BIG_MENU = [
+  {
+    category: 'Learning module',
+    topics: Array.from({ length: 11 }, (_, index) => ({
+      id: `lm-${index}`,
+      question: `Learning question ${index}`,
+    })),
+  },
+  {
+    category: 'Attendance',
+    topics: [
+      { id: 'roll-number', question: 'My roll number is wrong' },
+      { id: 'attendance-missing', question: 'My attendance is missing' },
+    ],
+  },
+];
+
 /**
  * Replies chosen by URL rather than by call order: the menu and the
  * signed-in probe both fire on mount and their order is an implementation
@@ -67,6 +87,124 @@ const verifyAddress = async (user) => {
 beforeEach(() => {
   vi.restoreAllMocks();
   Element.prototype.scrollIntoView = vi.fn();
+});
+
+describe('the gate and a personal address', () => {
+  /**
+   * The help desk stays open to addresses with no account — "nobody has made me
+   * an account" is the question it exists to answer — so a personal address is
+   * asked about rather than refused. The server answers the first request with
+   * a 409 carrying the question; the confirmed retry gets the code.
+   */
+  const gateWithConfirmation = () => {
+    let codeCalls = 0;
+    const fetchMock = vi.fn((url, options) => {
+      const target = String(url);
+      if (target.endsWith('/menu')) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ menu: MENU }) });
+      }
+      if (target.endsWith('/session')) {
+        return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) });
+      }
+      if (target.endsWith('/code')) {
+        codeCalls += 1;
+        const sent = JSON.parse(options.body);
+        /* The server's rule, not a flag-only stand-in: it asks about the domain
+           and takes the confirmation as the answer, so a test that reaches the
+           code step on an institute address has shown the client added no step
+           of its own. */
+        const institute = /@(.+\.)?nitj\.ac\.in$/.test(sent.email.toLowerCase());
+        if (!institute && !sent.confirmNonInstitute) {
+          return Promise.resolve({
+            ok: false,
+            status: 409,
+            json: () =>
+              Promise.resolve({
+                message: `${sent.email} is not an institute address. Are you sure you want to continue with ${sent.email}?`,
+                confirmNonInstitute: true,
+              }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          json: () => Promise.resolve({ message: `A six-digit code has been sent to ${sent.email}.` }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return { fetchMock, codeCalls: () => codeCalls };
+  };
+
+  it('asks before sending a code to a personal address, and sends it once confirmed', async () => {
+    gateWithConfirmation();
+    const user = userEvent.setup();
+    render(<HelpdeskPage />);
+
+    await user.type(await screen.findByLabelText('Email address'), 'asha@gmail.com');
+    await user.click(screen.getByRole('button', { name: 'Send me a code' }));
+
+    // The question, and — the point of it — no way to press past it by reflex.
+    expect(await screen.findByText(/are you sure you want to continue/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send me a code' })).not.toBeInTheDocument();
+    // Still on the address step until they answer.
+    expect(screen.queryByLabelText('Six-digit code')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Yes, send the code anyway' }));
+    expect(await screen.findByLabelText('Six-digit code')).toBeInTheDocument();
+  });
+
+  it('shows the question as a question, not as an error', async () => {
+    gateWithConfirmation();
+    const user = userEvent.setup();
+    const { container } = render(<HelpdeskPage />);
+
+    await user.type(await screen.findByLabelText('Email address'), 'asha@gmail.com');
+    await user.click(screen.getByRole('button', { name: 'Send me a code' }));
+
+    await screen.findByText(/are you sure you want to continue/i);
+    // `call` throws on any non-2xx, so the 409 arrives down the error path; it
+    // must not land in the red box, which reads as a refusal.
+    expect(container.querySelector('.hd-error')).toBeNull();
+    expect(container.querySelector('.hd-confirm')).not.toBeNull();
+  });
+
+  it('takes the question back when the address is edited', async () => {
+    gateWithConfirmation();
+    const user = userEvent.setup();
+    render(<HelpdeskPage />);
+
+    const field = await screen.findByLabelText('Email address');
+    await user.type(field, 'asha@gmail.com');
+    await user.click(screen.getByRole('button', { name: 'Send me a code' }));
+    await screen.findByText(/are you sure you want to continue/i);
+
+    // A "yes" standing over from the old address would let a typo the person is
+    // in the middle of fixing through unasked.
+    await user.type(field, 'x');
+    await waitFor(() =>
+      expect(screen.queryByText(/are you sure you want to continue/i)).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'Send me a code' })).toBeInTheDocument();
+  });
+
+  it('never asks about an institute address', async () => {
+    const { fetchMock } = gateWithConfirmation();
+    const user = userEvent.setup();
+    render(<HelpdeskPage />);
+
+    await user.type(await screen.findByLabelText('Email address'), 'asha@nitj.ac.in');
+    await user.click(screen.getByRole('button', { name: 'Send me a code' }));
+
+    // The mock applies the server's own rule, so reaching the code step in one
+    // press is the assertion: an ordinary address collects no extra step on the
+    // way through, and the request carries no confirmation it was never asked
+    // for.
+    expect(await screen.findByLabelText('Six-digit code')).toBeInTheDocument();
+    const codeCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/code'));
+    expect(JSON.parse(codeCall[1].body)).toEqual({ email: 'asha@nitj.ac.in' });
+  });
 });
 
 describe('the gate', () => {
@@ -251,6 +389,495 @@ describe('the question list', () => {
   });
 });
 
+/**
+ * How often each question has been asked, shown to administrators.
+ *
+ * The number already ordered the menu; this shows it as a number. What is
+ * worth holding is that it is the *administrator's* view and nothing else's:
+ * the counts route is gated, and the page treats a refusal as "not an
+ * administrator" rather than asking anybody what they are. So a visitor sees
+ * exactly the page they always saw.
+ */
+describe('the ask counts', () => {
+  const signedIn = (extra = {}) => ({
+    '/menu': { body: { menu: MENU } },
+    '/session': { body: { pass: 'pass-1', email: 'asha@nitj.ac.in' } },
+    ...extra,
+  });
+
+  it('shows the count beside each question for an administrator', async () => {
+    routeFetch(signedIn({
+      '/topic-counts': { body: { counts: { 'no-account': 31, 'cannot-sign-in': 4 }, total: 35 } },
+    }));
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    const chip = await screen.findByRole('button', { name: 'Am I registered?' });
+    expect(chip).toHaveTextContent('31');
+    expect(screen.getByRole('button', { name: 'I cannot sign in' })).toHaveTextContent('4');
+  });
+
+  it('says nought for a question nobody has asked yet', async () => {
+    routeFetch(signedIn({
+      '/topic-counts': { body: { counts: { 'no-account': 31 }, total: 31 } },
+    }));
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    const chip = await screen.findByRole('button', { name: 'I cannot sign in' });
+    expect(chip).toHaveTextContent('0');
+  });
+
+  /* The count is a note on the button, not part of what the button is called.
+     Folding it into the name makes every chip read "Am I registered? 31",
+     which is worse for the administrator too — they navigate by the question
+     like anybody else. */
+  it('leaves the question as the name of the button', async () => {
+    routeFetch(signedIn({
+      '/topic-counts': { body: { counts: { 'no-account': 31 }, total: 31 } },
+    }));
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    const chip = await screen.findByRole('button', { name: 'Am I registered?' });
+    expect(chip).toHaveAttribute('title', expect.stringContaining('31'));
+  });
+
+  it('shows nothing at all when the counts route refuses', async () => {
+    routeFetch(signedIn({ '/topic-counts': { ok: false, status: 403, body: {} } }));
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    const chip = await screen.findByRole('button', { name: 'Am I registered?' });
+    expect(chip).toHaveTextContent('Am I registered?');
+    expect(chip.textContent).toBe('Am I registered?');
+    expect(chip).not.toHaveAttribute('title');
+  });
+
+  /* A 200 carrying something else — a proxy's error page, a stub — is not an
+     administrator's counts, and treating it as one would draw a nought beside
+     every question for a visitor who is not one. */
+  it('shows nothing when a 200 carries no counts', async () => {
+    routeFetch(signedIn({ '/topic-counts': { body: { something: 'else' } } }));
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    const chip = await screen.findByRole('button', { name: 'Am I registered?' });
+    expect(chip.textContent).toBe('Am I registered?');
+  });
+});
+
+/**
+ * Finding a question among forty-one of them.
+ *
+ * The page answers by menu rather than by text box on purpose — every answer
+ * is written and checked, and a box that takes a question invites the ones it
+ * cannot answer. Searching the *menu* is not that: it filters titles and
+ * nothing else, which is the difference between finding your question and
+ * reading all of them.
+ */
+describe('searching the questions', () => {
+  const big = (extra = {}) => ({
+    '/menu': { body: { menu: BIG_MENU } },
+    '/session': { body: { pass: 'pass-1', email: 'asha@nitj.ac.in' } },
+    ...extra,
+  });
+
+  it('offers a search box once there are enough questions to need one', async () => {
+    routeFetch(big());
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    expect(await screen.findByLabelText(/search the questions/i)).toBeInTheDocument();
+  });
+
+  it('does not offer one for a menu small enough to read', async () => {
+    routeFetch({ '/menu': { body: { menu: MENU } }, '/session': { body: { pass: 'p', email: 'a@nitj.ac.in' } } });
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    expect(screen.queryByLabelText(/search the questions/i)).not.toBeInTheDocument();
+  });
+
+  /* Somebody typing "roll number" does not know whether that lives under
+     Attendance or the Learning module — that is why they are typing. */
+  it('searches across every module, not the open one', async () => {
+    const user = userEvent.setup();
+    routeFetch(big());
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    await user.type(screen.getByLabelText(/search the questions/i), 'roll');
+
+    expect(await screen.findByRole('button', { name: 'My roll number is wrong' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Learning question 0' })).not.toBeInTheDocument();
+  });
+
+  it('matches all the words in any order', async () => {
+    const user = userEvent.setup();
+    routeFetch(big());
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    await user.type(screen.getByLabelText(/search the questions/i), 'wrong roll');
+
+    expect(await screen.findByRole('button', { name: 'My roll number is wrong' })).toBeInTheDocument();
+  });
+
+  /* A dead end is where this page loses people, so the empty state points at
+     the way out rather than just saying there is nothing. */
+  it('says so, usefully, when nothing matches', async () => {
+    const user = userEvent.setup();
+    routeFetch(big());
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    await user.type(screen.getByLabelText(/search the questions/i), 'zzzz');
+
+    expect(await screen.findByText(/nothing matches/i)).toBeInTheDocument();
+    expect(screen.getByText(/sends your question to a person/i)).toBeInTheDocument();
+  });
+
+  it('clears itself when a question is asked, so the answer is not buried', async () => {
+    const user = userEvent.setup();
+    routeFetch(big({
+      '/topic/roll-number': {
+        body: { answer: { id: 'roll-number', title: 'Roll numbers', blocks: [], actions: [], followUps: [] } },
+      },
+    }));
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    const box = screen.getByLabelText(/search the questions/i);
+    await user.type(box, 'roll');
+    await user.click(await screen.findByRole('button', { name: 'My roll number is wrong' }));
+    await screen.findByText('Roll numbers');
+
+    expect(box).toHaveValue('');
+  });
+});
+
+/**
+ * A module with fifteen questions in it.
+ *
+ * The modules are lopsided — fifteen under the Learning module, one under
+ * Conferences — and every question of every module at once is a wall. The menu
+ * arrives ordered most-asked-first, so showing the first few and offering the
+ * rest hides what nobody asks rather than an arbitrary tail.
+ */
+describe('a module with more questions than fit', () => {
+  it('shows the most-asked few and offers the rest', async () => {
+    routeFetch({
+      '/menu': { body: { menu: BIG_MENU } },
+      '/session': { body: { pass: 'p', email: 'a@nitj.ac.in' } },
+    });
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    expect(await screen.findByRole('button', { name: 'Learning question 0' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Learning question 10' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /3 more/ })).toBeInTheDocument();
+  });
+
+  it('shows them all on request', async () => {
+    const user = userEvent.setup();
+    routeFetch({
+      '/menu': { body: { menu: BIG_MENU } },
+      '/session': { body: { pass: 'p', email: 'a@nitj.ac.in' } },
+    });
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    await user.click(await screen.findByRole('button', { name: /3 more/ }));
+
+    expect(screen.getByRole('button', { name: 'Learning question 10' })).toBeInTheDocument();
+  });
+
+  /* A module that fits keeps every question on screen. */
+  it('leaves a small module alone', async () => {
+    routeFetch({
+      '/menu': { body: { menu: BIG_MENU } },
+      '/session': { body: { pass: 'p', email: 'a@nitj.ac.in' } },
+    });
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    expect(await screen.findByRole('button', { name: 'My roll number is wrong' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'My attendance is missing' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * A link straight to one answer.
+ *
+ * A support reply, a mail or the manual can now point at the answer rather
+ * than at "go to the help desk and look for". The link arrives before anybody
+ * has verified an address, which is the whole reason it has to survive the
+ * gate rather than being read once on the way in.
+ */
+describe('a question named in the URL', () => {
+  const withSearch = (search) => {
+    const url = new URL(window.location.href);
+    url.search = search;
+    window.history.replaceState({}, '', url);
+  };
+
+  afterEach(() => withSearch(''));
+
+  it('asks it as soon as the gate is open', async () => {
+    withSearch('?topic=cannot-sign-in');
+    const fetchMock = routeFetch({
+      '/menu': { body: { menu: MENU } },
+      '/session': { body: { pass: 'p', email: 'a@nitj.ac.in' } },
+      '/topic/cannot-sign-in': {
+        body: { answer: { id: 'cannot-sign-in', title: 'Signing in', blocks: [], actions: [], followUps: [] } },
+      },
+    });
+    render(<HelpdeskPage />);
+
+    /* Three requests deep: the session opens the gate, the menu turns the id
+       into a question, and only then is the answer asked for. The default
+       one-second wait is tight for that chain under a loaded suite. */
+    /* Waited for on the request rather than on the rendered answer. The deep
+       link's contract is that the page asks the question by itself; that the
+       answer then renders is the ordinary answer path every other test here
+       covers. Polling the DOM for it instead makes this assertion depend on
+       when React flushes three chained fetches, which is not what is under
+       test and is not stable across a loaded suite. */
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/topic/cannot-sign-in'))).toBe(true),
+    );
+    expect(await screen.findByText('Signing in', {}, { timeout: 4000 })).toBeInTheDocument();
+  });
+
+  /* A stale link in an old mail should land somebody on the help desk, which
+     is useful — not on a complaint about a link they did not write. */
+  it('ignores an id that is not a question, in silence', async () => {
+    withSearch('?topic=this-never-existed');
+    routeFetch({
+      '/menu': { body: { menu: MENU } },
+      '/session': { body: { pass: 'p', email: 'a@nitj.ac.in' } },
+    });
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    expect(screen.queryByText(/did not work/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Am I registered?' })).toBeInTheDocument();
+  });
+
+  it('asks it once, not on every render', async () => {
+    withSearch('?topic=cannot-sign-in');
+    const fetchMock = routeFetch({
+      '/menu': { body: { menu: MENU } },
+      '/session': { body: { pass: 'p', email: 'a@nitj.ac.in' } },
+      '/topic/cannot-sign-in': {
+        body: { answer: { id: 'cannot-sign-in', title: 'Signing in', blocks: [], actions: [], followUps: [] } },
+      },
+    });
+    render(<HelpdeskPage />);
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/topic/cannot-sign-in'))).toBe(true),
+    );
+
+    const asks = fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/topic/cannot-sign-in'));
+    expect(asks).toHaveLength(1);
+  });
+});
+
+/**
+ * Whether the answer helped.
+ *
+ * The count says an answer is popular; this says whether it works, and the gap
+ * between the two is the work queue.
+ */
+describe('rating an answer', () => {
+  const answered = (extra = {}) => ({
+    '/menu': { body: { menu: MENU } },
+    '/session': { body: { pass: 'p', email: 'a@nitj.ac.in' } },
+    '/topic/no-account': {
+      body: { answer: { id: 'no-account', title: 'About your account', blocks: [], actions: [], followUps: [] } },
+    },
+    ...extra,
+  });
+
+  const ask = async (user) => {
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+    await user.click(screen.getByRole('button', { name: 'Am I registered?' }));
+    await screen.findByText('About your account');
+  };
+
+  it('asks after an answer', async () => {
+    const user = userEvent.setup();
+    routeFetch(answered());
+    await ask(user);
+
+    expect(screen.getByText(/did this answer help/i)).toBeInTheDocument();
+  });
+
+  it('sends the rating with the question it is about', async () => {
+    const user = userEvent.setup();
+    const fetchMock = routeFetch(answered({ '/action/rate-answer': { body: {} } }));
+    await ask(user);
+
+    await user.click(screen.getByRole('button', { name: 'Yes' }));
+
+    const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/action/rate-answer'));
+    expect(call).toBeDefined();
+    expect(JSON.parse(call[1].body)).toEqual({ topicId: 'no-account', helpful: true });
+  });
+
+  it('distinguishes a no from a yes', async () => {
+    const user = userEvent.setup();
+    const fetchMock = routeFetch(answered({ '/action/rate-answer': { body: {} } }));
+    await ask(user);
+
+    await user.click(screen.getByRole('button', { name: 'No' }));
+
+    const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/action/rate-answer'));
+    expect(JSON.parse(call[1].body).helpful).toBe(false);
+  });
+
+  /* The press has to be visibly received, or it gets pressed again. */
+  it('thanks the reader and stops asking', async () => {
+    const user = userEvent.setup();
+    routeFetch(answered({ '/action/rate-answer': { body: {} } }));
+    await ask(user);
+
+    await user.click(screen.getByRole('button', { name: 'Yes' }));
+
+    expect(await screen.findByText(/thank you/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Yes' })).not.toBeInTheDocument();
+  });
+
+  /* The visitor did their part. A rating that did not record is the page's
+     problem, not something to report back as their failure. */
+  it('says nothing when the rating cannot be sent', async () => {
+    const user = userEvent.setup();
+    routeFetch(answered({ '/action/rate-answer': { ok: false, status: 500, body: {} } }));
+    await ask(user);
+
+    await user.click(screen.getByRole('button', { name: 'Yes' }));
+
+    expect(await screen.findByText(/thank you/i)).toBeInTheDocument();
+    expect(screen.queryByText(/did not work/i)).not.toBeInTheDocument();
+  });
+
+  /* "Was this helpful?" under "that did not work" is a poor joke. */
+  it('does not ask about an error', async () => {
+    const user = userEvent.setup();
+    routeFetch({
+      '/menu': { body: { menu: MENU } },
+      '/session': { body: { pass: 'p', email: 'a@nitj.ac.in' } },
+      '/topic/no-account': { ok: false, status: 500, body: { message: 'boom' } },
+    });
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    await user.click(screen.getByRole('button', { name: 'Am I registered?' }));
+    await screen.findByText('That did not work');
+
+    expect(screen.queryByText(/did this answer help/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The administrator's report.
+ *
+ * Behind the same gate as the counts on the chips: the route decides, and a
+ * refusal means the page draws nothing.
+ */
+describe('the insights panel', () => {
+  const INSIGHTS = {
+    counts: { 'no-account': 300, 'cannot-sign-in': 20 },
+    total: 320,
+    windowDays: 30,
+    recent: { 'no-account': 12 },
+    misses: { 'cannot-sign-in': 9 },
+    unhelpful: {},
+    feedback: { 'no-account': { helpful: 8, notHelpful: 2 } },
+    notices: {},
+    funnel: { requested: 200, verified: 150, completion: 75 },
+  };
+
+  const asAdmin = () => routeFetch({
+    '/menu': { body: { menu: MENU } },
+    '/session': { body: { pass: 'p', email: 'a@nitj.ac.in' } },
+    '/topic-counts': { body: INSIGHTS },
+  });
+
+  it('is offered to an administrator, folded away', async () => {
+    asAdmin();
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    expect(await screen.findByRole('button', { name: /how this page is doing/i })).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('is not offered when the counts route refuses', async () => {
+    routeFetch({
+      '/menu': { body: { menu: MENU } },
+      '/session': { body: { pass: 'p', email: 'a@nitj.ac.in' } },
+      '/topic-counts': { ok: false, status: 403, body: {} },
+    });
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+
+    expect(screen.queryByRole('button', { name: /how this page is doing/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the total, the window and the gate funnel', async () => {
+    const user = userEvent.setup();
+    asAdmin();
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+    await user.click(await screen.findByRole('button', { name: /how this page is doing/i }));
+
+    expect(screen.getByText('320')).toBeInTheDocument();
+    expect(screen.getByText('75%')).toBeInTheDocument();
+    expect(screen.getByText(/150 of 200/)).toBeInTheDocument();
+  });
+
+  /* The queue: the answer most often read and then abandoned is the one to
+     rewrite next, whatever its total. */
+  it('puts the answers people gave up on at the top', async () => {
+    const user = userEvent.setup();
+    asAdmin();
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+    await user.click(await screen.findByRole('button', { name: /how this page is doing/i }));
+
+    const rows = screen.getAllByRole('row').slice(1); // past the header
+    expect(rows[0]).toHaveTextContent('I cannot sign in');
+    expect(rows[0]).toHaveTextContent('9');
+  });
+
+  it('shows a dash rather than nought when nobody reached the gate', async () => {
+    const user = userEvent.setup();
+    routeFetch({
+      '/menu': { body: { menu: MENU } },
+      '/session': { body: { pass: 'p', email: 'a@nitj.ac.in' } },
+      '/topic-counts': { body: { ...INSIGHTS, funnel: { requested: 0, verified: 0, completion: null } } },
+    });
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+    await user.click(await screen.findByRole('button', { name: /how this page is doing/i }));
+
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('says outright that none of it records who asked', async () => {
+    const user = userEvent.setup();
+    asAdmin();
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+    await user.click(await screen.findByRole('button', { name: /how this page is doing/i }));
+
+    expect(screen.getByText(/record who asked/i)).toBeInTheDocument();
+  });
+});
+
 describe('the question sent to a person', () => {
   it('sends the module, the question and what was already asked', async () => {
     const fetchMock = routeFetch({
@@ -393,5 +1020,166 @@ describe('where the page is left scrolled', () => {
     for (const call of Element.prototype.scrollIntoView.mock.calls) {
       expect(call[0]).toMatchObject({ block: 'start' });
     }
+  });
+});
+
+/**
+ * The classroom search in the "find my classroom" answer: suggestions as the
+ * reader types, each one a link straight to its Google Maps location, and the
+ * reader's own class rooms offered before anything is typed.
+ */
+describe('the classroom search', () => {
+  const ROOMS = [
+    { room: 'LT-1', building: 'Lecture Theatre Complex', floor: 'Ground', mapUrl: 'https://maps.app.goo.gl/lt1' },
+    { room: 'LT-2', building: 'Lecture Theatre Complex', floor: '1', mapUrl: 'https://maps.app.goo.gl/lt2' },
+    { room: 'CR205', building: 'IT Building', floor: '2', mapUrl: '' },
+    { room: 'BAD', building: '', floor: '', mapUrl: 'javascript:alert(1)' },
+  ];
+
+  const openAnswer = async (mine = []) => {
+    const user = userEvent.setup();
+    const fetchMock = routeFetch({
+      '/menu': {
+        body: { menu: [{ category: 'Timetable', topics: [{ id: 'find-classroom', question: 'How do I find my classroom?' }] }] },
+      },
+      '/session': { body: { pass: 'pass-1', email: 'asha@nitj.ac.in' } },
+      '/topic/find-classroom': {
+        body: {
+          answer: {
+            id: 'find-classroom',
+            category: 'Timetable',
+            title: 'Finding a classroom',
+            blocks: [{ type: 'roomSearch', mine }],
+            actions: [],
+            followUps: [],
+          },
+        },
+      },
+      '/rooms': { body: { rooms: ROOMS } },
+    });
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+    await user.click(screen.getByRole('button', { name: 'How do I find my classroom?' }));
+    await screen.findByText('Finding a classroom');
+    return { user, fetchMock };
+  };
+
+  it('suggests rooms as you type and links each straight to Google Maps', async () => {
+    const { user, fetchMock } = await openAnswer();
+
+    await user.type(screen.getByRole('combobox', { name: 'Search for a classroom' }), 'lt1');
+
+    const link = await screen.findByRole('link', { name: /LT-1/ });
+    expect(link).toHaveAttribute('href', 'https://maps.app.goo.gl/lt1');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(screen.queryByText('LT-2')).not.toBeInTheDocument();
+
+    // One fetch for the list, however many keys were typed.
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/rooms'))).toHaveLength(1);
+    const [, options] = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/rooms'));
+    expect(options.headers['X-Helpdesk-Pass']).toBe('pass-1');
+  });
+
+  it('matches on the building too, and says when a room has no location', async () => {
+    const { user } = await openAnswer();
+
+    await user.type(screen.getByRole('combobox', { name: 'Search for a classroom' }), 'it building');
+
+    expect(await screen.findByText('CR205')).toBeInTheDocument();
+    expect(screen.getByText('No location recorded')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /CR205/ })).not.toBeInTheDocument();
+  });
+
+  it('never turns a non-http map link into an anchor', async () => {
+    const { user } = await openAnswer();
+
+    await user.type(screen.getByRole('combobox', { name: 'Search for a classroom' }), 'bad');
+
+    expect(await screen.findByText('BAD')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /BAD/ })).not.toBeInTheDocument();
+  });
+
+  it('offers the rooms of your own classes before anything is typed', async () => {
+    await openAnswer([{ room: 'LT-2', label: 'CS201 Data Structures' }]);
+
+    const link = await screen.findByRole('link', { name: /LT-2/ });
+    expect(link).toHaveAttribute('href', 'https://maps.app.goo.gl/lt2');
+    expect(screen.getByText(/CS201 Data Structures/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Somebody opening question after question is hunting, not reading. After the
+ * fifth they are pointed at the search bar, after the tenth at the XCEED team,
+ * each once, and "Continue" always simply carries on.
+ */
+describe('the "still looking?" prompts', () => {
+  const menuWithTeam = [
+    ...BIG_MENU,
+    { category: 'XCEED team', topics: [{ id: 'ask-a-human', question: 'My question is not answered here' }] },
+  ];
+  const reply = (id) => ({ body: { answer: { id, title: `Answer ${id}`, blocks: [], actions: [], followUps: [] } } });
+
+  const signedIn = () => {
+    const fetchMock = routeFetch({
+      '/menu': { body: { menu: menuWithTeam } },
+      '/session': { body: { pass: 'pass-1', email: 'asha@nitj.ac.in' } },
+      '/topic/lm-0': reply('lm-0'),
+      '/topic/lm-1': reply('lm-1'),
+      '/topic/ask-a-human': reply('ask-a-human'),
+    });
+    render(<HelpdeskPage />);
+    return fetchMock;
+  };
+
+  /* Alternates between two questions: the one just asked drops out of the
+     narrowed list, so the other is always on screen to click. */
+  const askQuestions = async (user, from, to) => {
+    for (let n = from; n <= to; n += 1) {
+      const id = n % 2 ? 'lm-0' : 'lm-1';
+      const index = id === 'lm-0' ? 0 : 1;
+      await user.click(await screen.findByRole('button', { name: `Learning question ${index}` }));
+      await waitFor(() => expect(screen.getAllByText(`Answer ${id}`).length).toBeGreaterThan(0));
+    }
+  };
+
+  it('suggests the search bar after the fifth question, once, and focuses it', async () => {
+    signedIn();
+    const user = userEvent.setup();
+    await screen.findByText(/You are signed in as/);
+
+    await askQuestions(user, 1, 5);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await askQuestions(user, 6, 6);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent(/search bar/i);
+
+    await user.click(screen.getByRole('button', { name: 'Use the search bar' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Search the questions')).toHaveFocus();
+
+    // Not again for the questions after it, until the tenth.
+    await askQuestions(user, 7, 10);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('offers the XCEED team after the tenth, and Continue just carries on', async () => {
+    const fetchMock = signedIn();
+    const user = userEvent.setup();
+    await screen.findByText(/You are signed in as/);
+
+    await askQuestions(user, 1, 6);
+    await user.click(await screen.findByRole('button', { name: 'Continue' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await askQuestions(user, 7, 11);
+    expect(await screen.findByRole('dialog')).toHaveTextContent(/XCEED team/);
+
+    await user.click(screen.getByRole('button', { name: 'Email the XCEED team' }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/topic/ask-a-human'))).toBe(true),
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

@@ -1292,6 +1292,21 @@ function QuestionCard({ classId, tutorialId, question, index, onChange, onRemove
   );
 }
 
+/** What pushing an edit through to the issued papers did, for a toast. */
+const reworkSummary = (result) =>
+  [
+    result.added ? `${result.added} new question${result.added === 1 ? '' : 's'} added to papers` : null,
+    result.removed ? `${result.removed} deleted question${result.removed === 1 ? '' : 's'} removed from unsubmitted papers` : null,
+    result.remarked ? `${result.remarked} submitted paper${result.remarked === 1 ? '' : 's'} re-marked` : null,
+    result.scoreChanged ? `${result.scoreChanged} score${result.scoreChanged === 1 ? '' : 's'} changed` : null,
+    result.orphanQuestions
+      ? `${result.orphanQuestions} answered question${result.orphanQuestions === 1 ? '' : 's'} no longer on the tutorial, kept on submitted papers`
+      : null,
+    ...(result.warnings || []),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
 export default function TutorialEditor() {
   const { classId, klass } = useOutletContext();
   const { tutorialId } = useParams();
@@ -1385,17 +1400,7 @@ export default function TutorialEditor() {
       toast({
         status: result.warnings?.length ? 'warning' : 'success',
         title: `${result.updated} paper${result.updated === 1 ? '' : 's'} re-worked`,
-        description:
-          [
-            result.remarked ? `${result.remarked} re-marked` : null,
-            result.scoreChanged ? `${result.scoreChanged} score${result.scoreChanged === 1 ? '' : 's'} changed` : null,
-            result.orphanQuestions
-              ? `${result.orphanQuestions} answered question${result.orphanQuestions === 1 ? '' : 's'} no longer on the tutorial, left as they were`
-              : null,
-            ...(result.warnings || []),
-          ]
-            .filter(Boolean)
-            .join(' · ') || 'Nothing needed changing.',
+        description: reworkSummary(result) || 'Nothing needed changing.',
         duration: 10000,
         isClosable: true,
       });
@@ -1418,13 +1423,24 @@ export default function TutorialEditor() {
     if (!current) return false;
     if (!quiet) setSaving(true);
     try {
-      await lmApi.updateTutorial(classId, tutorialId, toPayload(current));
+      const saved = await lmApi.updateTutorial(classId, tutorialId, toPayload(current));
       // Adopting the server's copy replaces everything on screen, which is fine
       // when a teacher pressed Save and is watching, and is not fine thirty
       // seconds after they stopped typing.
       if (quiet) return true;
       autosave.markSaved();
-      toast({ status: 'success', title: 'Tutorial saved' });
+      // A published tutorial's question edits go straight out to every paper
+      // already issued (and re-mark submitted ones), so say how far they went.
+      const papers = saved?.papers;
+      toast({
+        status: papers?.warnings?.length ? 'warning' : 'success',
+        title: papers?.updated
+          ? `Tutorial saved · ${papers.updated} student paper${papers.updated === 1 ? '' : 's'} updated`
+          : 'Tutorial saved',
+        description: papers?.updated ? reworkSummary(papers) : undefined,
+        duration: papers?.updated ? 8000 : 3000,
+        isClosable: true,
+      });
       await load();
       return true;
     } catch (err) {

@@ -27,6 +27,12 @@ import getEnvironment from '../getenvironment';
 
 const apiUrl = getEnvironment();
 
+/* The appointment and its two dashboards. Each is scoped to the account's own
+   department, so each makes the Department field below required — see the
+   Department group in ROLE_GROUPS, and services/departmentHeads.js on the
+   server for what the three are. */
+const HOD_ROLES = ['HOD', 'hod-learning', 'hod-ileed'];
+
 const ROLE_GROUPS = [
   {
     group: 'Platform',
@@ -54,10 +60,17 @@ const ROLE_GROUPS = [
   {
     group: 'Department',
     roles: [
-      // Reads its department from the account's primary department, so the
-      // form's Department field is required alongside it — the server refuses
-      // the role without one.
+      // All three read their department from the account's primary department,
+      // so the form's Department field is required alongside any of them — the
+      // server refuses them without one.
+      //
+      // `HOD` is the appointment and says nothing about what a head may open;
+      // the two below are the dashboards, one each, so an account can be given
+      // the Learning view without the attendance one or the other way round.
+      // Assigning a head from /superadmin/hods grants all three.
       { value: 'HOD', label: 'Head of Department' },
+      { value: 'hod-learning', label: 'HOD — Xceed Learning Dashboard' },
+      { value: 'hod-ileed', label: 'HOD — iLEED Dashboard' },
       /* The institute-wide counterpart: the same screens read across every
          department. Deliberately *not* department-scoped, so unlike HOD above
          it needs no Department field — there is nothing to scope it to. The
@@ -168,9 +181,9 @@ const RegistrationForm = () => {
       setError('Department is required for an iLEED Department Admin.');
       return;
     }
-    // HOD is department-scoped everywhere it is read, so an HOD account without
-    // one opens an empty dashboard. The server refuses it too.
-    if (formData.roles.includes('HOD') && !formData.dept) {
+    // Every HOD role is department-scoped everywhere it is read, so an HOD
+    // account without one opens an empty dashboard. The server refuses them too.
+    if (HOD_ROLES.some((role) => formData.roles.includes(role)) && !formData.dept) {
       setError('Department is required for a Head of Department.');
       return;
     }
@@ -300,7 +313,8 @@ const RegistrationForm = () => {
             <FormControl
               mb={6}
               isRequired={
-                formData.roles.includes('iams-dept-admin') || formData.roles.includes('HOD')
+                formData.roles.includes('iams-dept-admin')
+                || HOD_ROLES.some((role) => formData.roles.includes(role))
               }
             >
               <FormLabel>Department</FormLabel>

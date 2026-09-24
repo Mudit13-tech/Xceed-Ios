@@ -11,6 +11,18 @@
  * Because this replaces the file outright it inherits nothing from AMS - with
  * the one exception re-exported at the bottom. Run npm run drift to see what
  * upstream has changed here. See build/mobileOverrides.js.
+ *
+ * Reviewed 2026-09-20 against the +22/-7 of that day's AMS sync, and nothing
+ * needed porting - recorded because the drift report cannot tell "arrives
+ * through the re-export" from "not looked at yet". Upstream added the quiz list
+ * to the keys it refuses to persist (the room code and the Safe Exam Browser
+ * code are served in the clear on it), which reaches this file through the
+ * `shouldPersistQuery` re-export at the bottom and is exactly why that is a
+ * re-export rather than a copy. Their other change swaps `window.localStorage`
+ * for safeStorage's `safeLocalStorage`, which only concerns the persister
+ * object they build and this file never uses - though it does make the import
+ * below safer on the way past, since that construction now cannot throw in a
+ * WebView told to keep no site data.
  */
 import { Preferences } from '@capacitor/preferences';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';

@@ -13,6 +13,7 @@ import { API_BASE, DEGREES, theme, styles, cssReset } from './config';
 import { useDepartments } from './useDepartments';
 import { useBatchYears } from './useBatchYears';
 import { GT_OPTIONS } from './gtOptions';
+import usePolling from './usePolling';
 
 const _apiUrl    = getEnvironment();
 const CAMERA_API = `${_apiUrl}/attendancemodule/cameras`;
@@ -288,7 +289,7 @@ const LivePreview = ({ apiBase, isRunning, acquisitionId, cameraLabel }) => {
                     {isRunning && acquisitionId && (
                         <img
                             key={sessionKey}
-                            src={`${apiBase}/gt-acquisition/preview?acquisitionId=${encodeURIComponent(acquisitionId)}${localStorage.getItem('token') ? `&_stream_auth_token=${encodeURIComponent(localStorage.getItem('token'))}` : ''}`}
+                            src={`${apiBase}/gt-acquisition/preview?acquisitionId=${encodeURIComponent(acquisitionId)}`}
                             alt="Live RTSP Preview"
                             style={{ width: '100%', display: 'block' }}
                             onLoad={handleImgLoad}
@@ -456,9 +457,11 @@ export default function GroundTruthRTSP({
                 });
             })
             .catch(() => {});
-        const id = setInterval(() => setNowMin(nowMinIST()), 30000);
-        return () => clearInterval(id);
     }, []);
+
+    // Clock label only — nothing to recompute while the tab is hidden, and it
+    // re-reads the real clock as soon as it is back.
+    usePolling(useCallback(() => setNowMin(nowMinIST()), []), 30000);
 
     const windowOpen = !gtWindow.enabled || (
         nowMin >= timeStrToMin(gtWindow.start, 510) &&
@@ -688,14 +691,10 @@ export default function GroundTruthRTSP({
         } catch { /* ignore */ }
     }, [attachToJob]);
 
-    useEffect(() => {
-        refreshActiveJobs();
-        const id = setInterval(refreshActiveJobs, 8000);
-        return () => {
-            clearInterval(id);
-            if (streamAbort.current) streamAbort.current.abort();
-        };
-    }, [refreshActiveJobs]);
+    usePolling(refreshActiveJobs, 8000);
+    useEffect(() => () => {
+        if (streamAbort.current) streamAbort.current.abort();
+    }, []);
 
     // ── Live elapsed timer for the attached job ──────────────────────────────
     useEffect(() => {
@@ -703,11 +702,19 @@ export default function GroundTruthRTSP({
             if (summary?.elapsedSec != null) setElapsedSec(summary.elapsedSec);
             return;
         }
-        const tick = () => setElapsedSec(Math.floor((Date.now() - startedAt) / 1000));
-        tick();
-        const id = setInterval(tick, 1000);
-        return () => clearInterval(id);
+        setElapsedSec(Math.floor((Date.now() - startedAt) / 1000));
     }, [startedAt, status, summary]);
+
+    // Elapsed-time label only, so it has nothing to say while the tab is
+    // hidden; it re-reads the real clock the moment it comes back.
+    usePolling(
+        useCallback(
+            () => setElapsedSec(Math.floor((Date.now() - startedAt) / 1000)),
+            [startedAt],
+        ),
+        1000,
+        { enabled: !!startedAt && (status === 'running' || status === 'stopping') },
+    );
 
     // ── Start a new server-side job ──────────────────────────────────────────
     const startJob = useCallback(async (jobMode, cameras) => {

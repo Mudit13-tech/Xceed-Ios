@@ -4,29 +4,12 @@ import { theme, cssReset } from './config';
 
 const apiUrl = getEnvironment();
 
-// ─── Master menu list ───────────────────────────────────────────────────────
-// To add a new menu in future: just add one entry here + add the key in batch.js model.
-// Nothing else needs to change.
-const ALL_MENUS = [
-    { key: 'dashboard',         label: 'Dashboard',            desc: 'Main overview and stats',                color: '#6366f1' },
-    { key: 'groundTruth',       label: 'Ground Truth Capture', desc: 'RTSP stream capture for training data',  color: '#0ea5e9' },
-    { key: 'rollAssignment',    label: 'Roll Assignment',       desc: 'Assign roll numbers to student faces',   color: '#10b981' },
-    { key: 'erpUpload',         label: 'ERP Upload',            desc: 'Upload student data from ERP',           color: '#f472b6' },
-    { key: 'attendanceReports', label: 'Attendance Reports',    desc: 'View and export attendance records',     color: '#14b8a6' },
-    { key: 'classVerification', label: 'Class Verification',    desc: 'Frame-level attendance verification',    color: '#ec4899' },
-    { key: 'cameraRegistry',    label: 'Camera Registry',       desc: 'Manage registered cameras',              color: '#f97316' },
-    { key: 'subjectEmbeddings', label: 'Subject Embeddings',    desc: 'Generate face embeddings per subject',   color: '#f59e0b' },
-    { key: 'livePreview',       label: 'Live Preview',          desc: 'Live camera feed preview',               color: '#8b5cf6' },
-    { key: 'confidenceMonitor', label: 'Confidence Monitor',    desc: 'Model confidence tracking',              color: '#ef4444' },
-    { key: 'recordStream',      label: 'Record Stream',         desc: 'Save and schedule RTSP recordings',      color: '#7c3aed' },
-    { key: 'extraClasses',      label: 'Extra Classes',         desc: 'Schedule extra classes outside the timetable', color: '#f59e0b' },
-    { key: 'alteringClasses',   label: 'Altering Classes',      desc: 'One-time faculty/subject swaps',          color: '#d946ef' },
-    { key: 'instituteIdentification', label: 'Institute Identification', desc: 'Identify students institute-wide from video/stream', color: '#8b5cf6' },
-    { key: 'erpOverrides',      label: 'ERP Overrides',         desc: 'Audit manually/ERP-overridden attendance records',      color: '#f59e0b' },
-    { key: 'attendanceDisputes', label: 'Attendance Disputes',  desc: 'Accept or reject student challenges to a marking',      color: '#0ea5e9' },
-    { key: 'bugReports',        label: 'Raise a Bug / Suggestion', desc: 'Report defects and ideas to the platform admins', color: '#ef4444' },
-    { key: 'helpManual',        label: 'Help & Manual',         desc: 'Documentation and user guide',           color: '#64748b' },
-];
+// The master menu list moved to ./menuCatalogue.js when the HOD toggles gained
+// a second home on the Academic Administration screen and the Dean (Academic)
+// gained a set of their own. Three screens reading one list is the only thing
+// that keeps them agreeing about what a menu is; to add one, edit that file and
+// the three menu fields on the batch.js model.
+import { ALL_MENUS } from './menuCatalogue';
 
 /**
  * One toggle set: loads it, saves each change immediately, reverts on failure.

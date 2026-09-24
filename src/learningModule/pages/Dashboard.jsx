@@ -45,10 +45,12 @@ import {
   EmptyState,
   ErrorState,
   Loading,
+  PageHeader,
   StatTile,
   StatTileSkeleton,
 } from '../components/common';
 import { LmIcon } from '../components/Icon';
+import RoomWithMap from '../components/RoomWithMap';
 import { CLASS_COLORS } from '../format';
 import { canCreateClass } from '../roles';
 
@@ -56,7 +58,7 @@ import { canCreateClass } from '../roles';
 // Sunday (see server's ttInternals.DAYS), so that index is left unmapped.
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-function ClassCard({ klass, onOpen }) {
+function ClassCard({ klass, onOpen, timetableChanged = false }) {
   const cardBg = useColorModeValue('white', 'gray.800');
   const cardBorder = useColorModeValue('gray.200', 'gray.700');
   const ownerColor = useColorModeValue('gray.600', 'gray.300');
@@ -69,13 +71,25 @@ function ClassCard({ klass, onOpen }) {
   const todayName = WEEKDAY_NAMES[new Date().getDay()];
   return (
         <Box
-      as="button"
+      /* A div that behaves as a button rather than a real one, because the
+         card now contains a link — the room's map pin — and an anchor inside a
+         button is invalid markup that browsers resolve however they like.
+         Keyboard operation is kept by hand below so nothing is lost by it. */
+      role="button"
+      tabIndex={0}
       textAlign="left"
       display="flex"
       flexDirection="column"
       alignItems="stretch"
       width="100%"
+      cursor="pointer"
       onClick={() => onOpen(klass)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpen(klass);
+        }
+      }}
       bg={cardBg}
       borderWidth="1px"
       borderColor={cardBorder}
@@ -101,6 +115,28 @@ function ClassCard({ klass, onOpen }) {
         >
           {isTeacher ? 'Teaching' : 'Student'}
         </Badge>
+        {/* A published timetable for this class's semester moved and the
+            student has not opened the class since. Opening it is what clears
+            the mark — see useTimetableChanges. */}
+        {timetableChanged && (
+          <Badge
+            position="absolute"
+            bottom={-2}
+            left={5}
+            colorScheme="orange"
+            borderRadius="full"
+            fontSize="0.65rem"
+            px={2}
+            py={0.5}
+            boxShadow="sm"
+            display="flex"
+            alignItems="center"
+            gap={1}
+          >
+            <LmIcon name="timetable" size={11} />
+            Timetable updated
+          </Badge>
+        )}
       </Box>
       <Box px={5} py={4}>
         <Text fontSize="sm" color={ownerColor} noOfLines={1}>
@@ -193,6 +229,16 @@ function ClassCard({ klass, onOpen }) {
               );
             })}
           </Wrap>
+        )}
+
+        {/* Under the schedule, because it answers the question the schedule
+            raises: the slots say when, this says where. One room when every
+            slot is in the same one, one per room when they are not —
+            RoomWithMap collapses the repeats. */}
+        {klass.room && (
+          <Flex mt={2} align="center" gap={1} fontSize="xs" color={metaColor}>
+            <RoomWithMap room={klass.room} fontSize="xs" iconSize={12} />
+          </Flex>
         )}
 
         {/* Quiz marks released and not yet read. Deliberately on the subject
@@ -681,7 +727,7 @@ function OpenExamBanner({ exam, muted }) {
 
 
 export default function Dashboard() {
-  const { me, overview, reloadOverview } = useOutletContext() || {};
+  const { me, overview, reloadOverview, timetableChanges } = useOutletContext() || {};
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -739,7 +785,12 @@ export default function Dashboard() {
     reloadOverview?.();
   }, [reloadOverview]);
 
-  const openClass = (klass) => navigate(`/learning/class/${klass._id}`);
+  const openClass = (klass) => {
+    // Opening the class is the acknowledgement the mark was waiting for: it
+    // is the one gesture that proves the student saw it.
+    timetableChanges?.acknowledgeClass?.(klass._id);
+    navigate(`/learning/class/${klass._id}`);
+  };
 
   const afterChange = async () => {
     closeModals();
@@ -766,35 +817,40 @@ export default function Dashboard() {
         <OpenExamBanner key={exam._id} exam={exam} muted={secondaryTextColor} />
       ))}
 
-      <Flex justify="space-between" align="center" mb={5} wrap="wrap" gap={3}>
-        <Box>
+      {/* Creating a class lives only in the module header, so it is not
+          offered twice on the same screen. Joining stays here: it is the
+          action a student came for. */}
+      <PageHeader
+        mb={5}
+        title={
           <Heading size="lg" color={headingColor}>
             Your classes
           </Heading>
-          <Text color={secondaryTextColor} fontSize="sm">
+        }
+        description={
+          <Text color={secondaryTextColor} fontSize="sm" mt={1}>
             Everything you teach or are enrolled in.
           </Text>
-        </Box>
-        {/* Creating a class lives only in the module header, so it is not
-            offered twice on the same screen. Joining stays here: it is the
-            action a student came for. */}
-        <HStack wrap="wrap" w={{ base: '100%', md: 'auto' }}>
-          {/* The introduction to the whole module. Public, so a teacher who has
-              not set anything up yet can also forward it to a colleague. */}
-          <Button as="a" href="/learning/manual" target="_blank" rel="noreferrer" variant="ghost">
-            <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
-            Getting started
-          </Button>
-          <Button variant="outline" onClick={() => setSearchParams({ join: '1' })}>
-            Join class
-          </Button>
-          {mayCreateClass && (
-            <Button colorScheme="blue" onClick={() => setSearchParams({ create: '1' })}>
-              Create class
+        }
+        actions={
+          <>
+            {/* The introduction to the whole module. Public, so a teacher who
+                has not set anything up yet can also forward it to a colleague. */}
+            <Button as="a" href="/learning/manual" target="_blank" rel="noreferrer" variant="ghost">
+              <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
+              Getting started
             </Button>
-          )}
-        </HStack>
-      </Flex>
+            <Button variant="outline" onClick={() => setSearchParams({ join: '1' })}>
+              Join class
+            </Button>
+            {mayCreateClass && (
+              <Button colorScheme="blue" onClick={() => setSearchParams({ create: '1' })}>
+                Create class
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {overview ? (
         <Grid templateColumns={{ base: '1fr 1fr', md: 'repeat(4, 1fr)' }} gap={4} mb={6}>
@@ -866,7 +922,14 @@ export default function Dashboard() {
               ) : (
                 <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5}>
                   {classes.map((klass) => (
-                    <ClassCard key={klass._id} klass={klass} onOpen={openClass} />
+                    <ClassCard
+                      key={klass._id}
+                      klass={klass}
+                      onOpen={openClass}
+                      timetableChanged={timetableChanges?.changedClassIds?.has(
+                        String(klass._id),
+                      )}
+                    />
                   ))}
                 </SimpleGrid>
               )}
@@ -877,7 +940,14 @@ export default function Dashboard() {
               ) : (
                 <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5}>
                   {completed.map((klass) => (
-                    <ClassCard key={klass._id} klass={klass} onOpen={openClass} />
+                    <ClassCard
+                      key={klass._id}
+                      klass={klass}
+                      onOpen={openClass}
+                      timetableChanged={timetableChanges?.changedClassIds?.has(
+                        String(klass._id),
+                      )}
+                    />
                   ))}
                 </SimpleGrid>
               )}
@@ -888,7 +958,14 @@ export default function Dashboard() {
               ) : (
                 <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={5}>
                   {archived.map((klass) => (
-                    <ClassCard key={klass._id} klass={klass} onOpen={openClass} />
+                    <ClassCard
+                      key={klass._id}
+                      klass={klass}
+                      onOpen={openClass}
+                      timetableChanged={timetableChanges?.changedClassIds?.has(
+                        String(klass._id),
+                      )}
+                    />
                   ))}
                 </SimpleGrid>
               )}

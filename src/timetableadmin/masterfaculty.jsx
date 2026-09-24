@@ -40,6 +40,7 @@ import {
   FormControl,
   FormLabel,
   FormHelperText,
+  SimpleGrid,
   Switch,
   Divider,
   Spinner,
@@ -184,6 +185,20 @@ function Subject() {
     if (editedRow) {
       setEditedData({ ...editedRow });
     }
+  };
+
+  const cancelEdit = () => {
+    setEditRowId(null);
+    setEditedData({
+      facultyID: '',
+      name: '',
+      designation: '',
+      dept: '',
+      email: '',
+      extension: '',
+      type: '',
+      notifyByEmail: true,
+    });
   };
 
   const handleSaveEdit = () => {
@@ -802,152 +817,53 @@ function Subject() {
                       {tableData.map((row) => (
                         <Tr key={row._id}>
                           <Td textAlign="center">
-                            {editRowId === row._id ? (
-                              <Input
-                                type="text"
-                                value={editedData.facultyID}
-                                onChange={(e) =>
-                                  setEditedData({
-                                    ...editedData,
-                                    facultyID: e.target.value,
-                                  })
-                                }
-                                size="sm"
-                              />
-                            ) : (
-                              row.facultyID
-                            )}
+                            {row.facultyID}
                           </Td>
                           <Td textAlign="center">
-                            {editRowId === row._id ? (
-                              <Input
-                                type="text"
-                                value={editedData.name}
-                                onChange={(e) =>
-                                  setEditedData({ ...editedData, name: e.target.value })
-                                }
-                                size="sm"
-                              />
-                            ) : (
-                              row.name
-                            )}
+                            {row.name}
                           </Td>
                           <Td textAlign="center">
-                            {editRowId === row._id ? (
-                              <Input
-                                type="text"
-                                value={editedData.designation}
-                                onChange={(e) =>
-                                  setEditedData({
-                                    ...editedData,
-                                    designation: e.target.value,
-                                  })
-                                }
-                                size="sm"
-                              />
-                            ) : (
-                              row.designation
-                            )}
+                            {row.designation}
                           </Td>
                           <Td textAlign="center">
-                            {editRowId === row._id ? DepartmentSelect() : row.dept}
+                            {row.dept}
                           </Td>
                           <Td textAlign="center">
-                            {editRowId === row._id ? (
-                              <Input
-                                type="text"
-                                value={editedData.type}
-                                onChange={(e) =>
-                                  setEditedData({ ...editedData, type: e.target.value })
-                                }
-                                size="sm"
-                              />
-                            ) : (
-                              row.type
-                            )}
+                            {row.type}
                           </Td>
                           <Td textAlign="center">
-                            {editRowId === row._id ? (
-                              <Input
-                                type="text"
-                                value={editedData.email}
-                                onChange={(e) =>
-                                  setEditedData({ ...editedData, email: e.target.value })
-                                }
-                                size="sm"
-                              />
-                            ) : (
-                              row.email
-                            )}
+                            {row.email}
                           </Td>
                           <Td textAlign="center">
-                            {editRowId === row._id ? (
-                              <Input
-                                type="text"
-                                value={editedData.extension}
-                                onChange={(e) =>
-                                  setEditedData({
-                                    ...editedData,
-                                    extension: e.target.value,
-                                  })
-                                }
-                                size="sm"
-                              />
-                            ) : (
-                              row.extension
-                            )}
+                            {row.extension}
                           </Td>
                           <Td textAlign="center">
-                            {editRowId === row._id ? (
-                              <Switch
-                                colorScheme="green"
-                                size="sm"
-                                isChecked={editedData.notifyByEmail !== false}
-                                onChange={(e) =>
-                                  setEditedData({
-                                    ...editedData,
-                                    notifyByEmail: e.target.checked,
-                                  })
-                                }
-                              />
-                            ) : (
-                              <Badge
+                            {<Badge
                                 colorScheme={
                                   row.notifyByEmail === false ? 'gray' : 'green'
                                 }
                                 variant="subtle"
                               >
                                 {row.notifyByEmail === false ? 'No' : 'Yes'}
-                              </Badge>
-                            )}
+                              </Badge>}
                           </Td>
                           <Td textAlign="center">
-                            {editRowId === row._id ? (
-                              <Button
-                                colorScheme="green"
+                            <HStack spacing={2} justify="center">
+                              <IconButton
+                                icon={<EditIcon />}
+                                colorScheme="blue"
                                 size="sm"
-                                onClick={handleSaveEdit}
-                              >
-                                Save
-                              </Button>
-                            ) : (
-                              <HStack spacing={2} justify="center">
-                                <IconButton
-                                  icon={<EditIcon />}
-                                  colorScheme="blue"
-                                  size="sm"
-                                  aria-label="Edit"
-                                  onClick={() => handleEditClick(row._id)}
-                                />
-                                <IconButton
-                                  icon={<DeleteIcon />}
-                                  colorScheme="red"
-                                  size="sm"
-                                  aria-label="Delete"
-                                  onClick={() => handleDeleteClick(row._id)}
-                                />
-                              </HStack>
-                            )}
+                                aria-label="Edit"
+                                onClick={() => handleEditClick(row._id)}
+                              />
+                              <IconButton
+                                icon={<DeleteIcon />}
+                                colorScheme="red"
+                                size="sm"
+                                aria-label="Delete"
+                                onClick={() => handleDeleteClick(row._id)}
+                              />
+                            </HStack>
                           </Td>
                         </Tr>
                       ))}
@@ -959,6 +875,146 @@ function Subject() {
           </Card>
         </VStack>
       </Container>
+
+      {/* Edit Faculty Modal
+          Eight fields edited in the row itself meant eight cramped inputs
+          across a table that scrolls sideways — the mail switch and the
+          extension sat off the right edge on most screens, and reaching them
+          meant scrolling a row that was mid-edit. The dialog fits the fields
+          to the screen instead. */}
+      <Modal
+        isOpen={Boolean(editRowId)}
+        onClose={cancelEdit}
+        size="xl"
+        isCentered
+        scrollBehavior="inside"
+      >
+        <ModalOverlay bg="blackAlpha.700" backdropFilter="blur(10px)" zIndex={1400} />
+        <ModalContent zIndex={1400}>
+          <ModalHeader bgGradient="linear(to-r, orange.400, pink.400)" color="white" borderTopRadius="md">
+            <HStack spacing={3}>
+              <Icon as={EditIcon} boxSize={5} />
+              <Text>Edit Faculty{editedData.name ? ` — ${editedData.name}` : ''}</Text>
+            </HStack>
+          </ModalHeader>
+          <ModalCloseButton color="white" />
+          <ModalBody p={6}>
+            <VStack spacing={4} align="stretch">
+              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                <FormControl>
+                  <FormLabel fontWeight="semibold" color="gray.700">Faculty ID</FormLabel>
+                  <Input
+                    value={editedData.facultyID || ''}
+                    onChange={(e) => setEditedData({ ...editedData, facultyID: e.target.value })}
+                    placeholder="Enter faculty ID"
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel fontWeight="semibold" color="gray.700">Name</FormLabel>
+                  <Input
+                    value={editedData.name || ''}
+                    onChange={(e) => setEditedData({ ...editedData, name: e.target.value })}
+                    placeholder="Enter name"
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel fontWeight="semibold" color="gray.700">Designation</FormLabel>
+                  <Input
+                    value={editedData.designation || ''}
+                    onChange={(e) => setEditedData({ ...editedData, designation: e.target.value })}
+                    placeholder="Enter designation"
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel fontWeight="semibold" color="gray.700">Type</FormLabel>
+                  <Input
+                    value={editedData.type || ''}
+                    onChange={(e) => setEditedData({ ...editedData, type: e.target.value })}
+                    placeholder="Enter type"
+                  />
+                </FormControl>
+              </SimpleGrid>
+
+              <FormControl>
+                <FormLabel fontWeight="semibold" color="gray.700">Department</FormLabel>
+                {/* The same picker the add form uses, so one list serves both.
+                    A department the master list no longer offers is kept
+                    rather than silently blanked when anything else is saved. */}
+                {editedData.dept &&
+                  !departments.some((item) => item === editedData.dept) && (
+                    <Select
+                      value={editedData.dept}
+                      onChange={(e) => setEditedData({ ...editedData, dept: e.target.value })}
+                      size="md"
+                      mb={2}
+                    >
+                      <option value={editedData.dept}>{editedData.dept}</option>
+                      {departments.map((item, key) => (
+                        <option key={key} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                {(!editedData.dept ||
+                  departments.some((item) => item === editedData.dept)) &&
+                  DepartmentSelect()}
+              </FormControl>
+
+              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                <FormControl>
+                  <FormLabel fontWeight="semibold" color="gray.700">Email</FormLabel>
+                  <Input
+                    type="email"
+                    value={editedData.email || ''}
+                    onChange={(e) => setEditedData({ ...editedData, email: e.target.value })}
+                    placeholder="Enter email"
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel fontWeight="semibold" color="gray.700">Extension</FormLabel>
+                  <Input
+                    value={editedData.extension || ''}
+                    onChange={(e) => setEditedData({ ...editedData, extension: e.target.value })}
+                    placeholder="Enter extension"
+                  />
+                </FormControl>
+              </SimpleGrid>
+
+              <FormControl display="flex" alignItems="center" gap={3}>
+                <Switch
+                  colorScheme="green"
+                  isChecked={editedData.notifyByEmail !== false}
+                  onChange={(e) =>
+                    setEditedData({ ...editedData, notifyByEmail: e.target.checked })
+                  }
+                />
+                <Box>
+                  <FormLabel fontWeight="semibold" color="gray.700" mb={0}>
+                    Send timetable email
+                  </FormLabel>
+                  {/* Turning this off stops both the change notice and the
+                      published-timetable mail for this person. */}
+                  <Text fontSize="xs" color="gray.500">
+                    Off means this faculty member is not emailed when their
+                    timetable changes.
+                  </Text>
+                </Box>
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter bg="gray.50">
+            <HStack spacing={3}>
+              <Button variant="ghost" onClick={cancelEdit}>
+                Cancel
+              </Button>
+              <Button colorScheme="green" onClick={handleSaveEdit}>
+                Save Changes
+              </Button>
+            </HStack>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal isOpen={isOpen} onClose={cancelDelete} size="md" isCentered>

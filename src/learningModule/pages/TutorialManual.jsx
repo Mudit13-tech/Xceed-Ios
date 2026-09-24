@@ -491,7 +491,7 @@ function TabGotchas() {
         'Deleting a tutorial deletes every student\'s attempt at it, with no way to keep the tutorial and wipe only the responses (unlike quizzes, which separate the two).',
         'There is no CSV/bulk export on the Results page — only what you can read on-screen and the per-attempt manual adjustment.',
         'Preview always rolls against the saved server copy, never unsaved edits in front of you.',
-        'Numerical Assignments use the exact same engine under a different name for a different purpose — see the separate Assignment manual if you want this mechanic to count toward a grade.',
+        'Assignments use the exact same engine under a different name for a different purpose — see the separate Assignment manual if you want this mechanic to count toward a grade.',
         'Only "Numerical with random variables" gives each student different numbers. MCQ, MSQ and plain Numerical questions are the same for the whole class, so an answer passed along works for them.',
         'A multiple-answers question has no partial credit: one missed or one extra tick scores zero, exactly as in a quiz.',
         'A paper is fixed when a student first opens it. Questions added, re-keyed or changed to another type afterwards reach existing papers only through Re-evaluate, or on a new attempt.',

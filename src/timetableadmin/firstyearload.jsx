@@ -41,6 +41,8 @@ import { ChevronDownIcon, ChevronUpIcon, AddIcon, DeleteIcon, ArrowBackIcon } fr
 import { Link } from "react-router-dom";
 import { useToast } from "@chakra-ui/react";
 import Header from "../components/header";
+import MailProgressModal from "./mailProgressModal";
+import { notifyGate } from "./notifyGate";
 
 function FirstYearLoad() {
   const toast = useToast();
@@ -53,6 +55,16 @@ function FirstYearLoad() {
   // Locking can mail faculty server-side, so a second click while the first
   // request is running duplicates every notification.
   const [isLocking, setIsLocking] = useState(false);
+  // Which timetables belong to the session running now, and the per-teacher
+  // outcome of the notification mails — the same two things the department
+  // timetable page keeps, because this page locks a timetable exactly as it
+  // does and until now could not notify anybody at all.
+  const [currentSessionCodes, setCurrentSessionCodes] = useState([]);
+  const [mailReport, setMailReport] = useState(null);
+  // The first-year table itself, not the department table this page was opened
+  // from: whether *it* is published is what decides if a change to it is
+  // mailed without asking.
+  const [firstYearTable, setFirstYearTable] = useState(null);
   const [currentDepartment, setCurrentDepartment] = useState("");
   const [currentSession, setCurrentSession] = useState("");
   const [availableSubjects, setAvailableSubjects] = useState([]);
@@ -64,7 +76,10 @@ function FirstYearLoad() {
   const [expandedDept, setExpandedDept] = useState({});
 
   const [timetableData, setTimetableData] = useState({});
-  const [firstYearCode, setFirstYearCode] = useState({});
+  // Empty string, not `{}`: every use of this is a URL segment or a request
+  // body field, and an object put `/viewclasstt/[object Object]/undefined` on
+  // the wire before the subjects had loaded.
+  const [firstYearCode, setFirstYearCode] = useState("");
   const [subjects, setSubjects] = useState([]);
 
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
@@ -82,6 +97,51 @@ function FirstYearLoad() {
   useEffect(() => {
     fetchTTData(currentCode);
   }, []);
+
+  // The first-year table spans every department, so a change to it is mailed on
+  // the same terms as any other: only for the session being taught now.
+  useEffect(() => {
+    const fetchCurrentSession = async () => {
+      try {
+        const response = await fetch(
+          `${apiUrl}/timetablemodule/timetable/get-current-session`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+          }
+        );
+        if (!response.ok) throw new Error("Failed to get current session");
+        const data = await response.json();
+        setCurrentSessionCodes(data.codes || []);
+      } catch (error) {
+        // Left empty: notifyGate then says the session could not be read,
+        // rather than the page pretending the teachers were told.
+        setCurrentSessionCodes([]);
+      }
+    };
+    fetchCurrentSession();
+  }, [apiUrl]);
+
+  useEffect(() => {
+    if (!firstYearCode || typeof firstYearCode !== "string") return;
+    const fetchFirstYearTable = async () => {
+      try {
+        const response = await fetch(
+          `${apiUrl}/timetablemodule/timetable/alldetails/${firstYearCode}`,
+          { credentials: "include" }
+        );
+        if (!response.ok) throw new Error("Failed to read the first year timetable");
+        const data = await response.json();
+        setFirstYearTable(Array.isArray(data) ? data[0] : data);
+      } catch (error) {
+        // Left null: the gate reads that as an unknown publish state, which
+        // for a current-session table means mail the teachers anyway.
+        setFirstYearTable(null);
+      }
+    };
+    fetchFirstYearTable();
+  }, [apiUrl, firstYearCode]);
 
   useEffect(() => {
     fetchFirstYearSubjects(currentCode, currentDepartment);
@@ -114,60 +174,122 @@ function FirstYearLoad() {
     }
   };
 
+  // A lock that the server refuses has to say so. A refusal here — a department
+  // the account may not change, a code that matches no timetable — used to be
+  // written to the browser console and nowhere else, so the button looked dead:
+  // pressed, nothing happened, no reason given.
+  const lockFailed = (description) => {
+    setMessage("");
+    toast({
+      title: 'Timetable Lock Failed',
+      description,
+      status: 'error',
+      duration: 6000,
+      isClosable: true,
+      position: 'top',
+    });
+  };
+
   const handleLockTT = async () => {
     if (isLocking) return;
 
+    // Answering "cancel" is not a failure, and used to raise the same alarming
+    // toast as one.
     const isConfirmed = window.confirm('Are you sure you want to lock the timetable?');
+    if (!isConfirmed) return;
 
-    if (isConfirmed) {
-      setIsLocking(true);
-      setMessage("Data is being saved....");
-      setMessage("Data saved. Commencing lock");
-      setMessage("Data is being locked");
-      const Url = `${apiUrl}/timetablemodule/lock/locktt`;
-      const code = firstYearCode;
-      const sem = selectedSemester;
-      try {
-        const response = await fetch(Url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ code }),
-          credentials: "include",
-        });
+    // The server only mails the affected teachers when the lock asks it to.
+    // This page never asked, so a first-year change — a class moved, a subject
+    // handed to somebody else — reached nobody, while the same change on a
+    // department timetable was mailed out. Same question, same rule.
+    const gate = notifyGate({
+      code: firstYearCode,
+      currentSessionCodes,
+      // The raw flag: "not loaded" and "explicitly a draft" differ.
+      published: firstYearTable?.publish,
+    });
+    const toInform =
+      gate.mode === 'auto' ||
+      (gate.mode === 'ask' &&
+        window.confirm(
+          'Do you want to inform the teachers about the timetable changes?'
+        ));
 
-        if (response.ok) {
-          const data = await response.json();
-          console.log('response from backend for lock', data);
-          setMessage("");
-          toast({
-            title: 'Timetable Locked',
-            status: 'success',
-            duration: 6000,
-            isClosable: true,
-            position: 'top',
+    setIsLocking(true);
+    setMessage("Data is being locked");
+    // The mails go out inside the request, so the modal opens before it.
+    if (toInform) setMailReport({ phase: 'sending' });
+    const Url = `${apiUrl}/timetablemodule/lock/locktt`;
+    const code = firstYearCode;
+    try {
+      const response = await fetch(Url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ code, toInform }),
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (toInform) {
+          // Per teacher, and held still until dismissed: what a coordinator
+          // needs is which teacher does not know their class moved, and the
+          // link that can send it again.
+          setMailReport({
+            phase: 'done',
+            results: data.results || [],
+            logId: data.logId,
+            note:
+              'Delivery times are recorded against this change on the ' +
+              'Change Logs page.',
           });
         } else {
-          console.error(
-            "Failed to send data to the backend. HTTP status:",
-            response.status
-          );
+          setMailReport(null);
         }
-      } catch (error) {
-        console.error("Error sending data to the backend:", error);
-      } finally {
-        setIsLocking(false);
+        setMessage("");
+        toast({
+          title: 'Timetable Locked',
+          description: gate.canNotify
+            ? undefined
+            : `No one was emailed: ${gate.reason}.`,
+          status: 'success',
+          duration: gate.canNotify ? 6000 : 8000,
+          isClosable: true,
+          position: 'top',
+        });
+      } else {
+        // The guards in this module explain themselves in `error`; show that
+        // rather than a status code the person cannot act on.
+        const data = await response.json().catch(() => ({}));
+        const reason =
+          data?.error ||
+          `The server refused the lock (HTTP ${response.status}).`;
+        lockFailed(reason);
+        if (toInform) {
+          setMailReport({
+            phase: 'done',
+            results: [],
+            heading: 'Lock failed — no notifications sent',
+            note: `${reason} Nothing was emailed.`,
+          });
+        }
       }
-    } else {
-      toast({
-        title: 'Timetable Lock Failed',
-        description: 'An error occurred while attempting to lock the timetable.',
-        status: 'error',
-        duration: 6000,
-        isClosable: true,
-        position: 'top',
-      });
+    } catch (error) {
+      lockFailed('The server could not be reached. Please try again.');
+      if (toInform) {
+        setMailReport({
+          phase: 'done',
+          results: [],
+          heading: 'Lock request failed',
+          note:
+            'The request did not reach the server, so it is not known ' +
+            'whether any notifications were sent. Check the Change Logs page.',
+        });
+      }
+    } finally {
+      setIsLocking(false);
     }
   };
 
@@ -232,7 +354,9 @@ function FirstYearLoad() {
       setTimetableData(data);
     };
 
-    fetchTimetableData(selectedSemester, firstYearCode);
+    // Before the subjects land there is no first year code to ask about, and
+    // the request went out as `/viewclasstt/undefined/undefined`.
+    if (firstYearCode) fetchTimetableData(selectedSemester, firstYearCode);
     fetchFacultyData(currentCode, currentDepartment, selectedSemester)
   }, [selectedSemester, apiUrl, currentCode, firstYearCode]);
 
@@ -358,17 +482,39 @@ function FirstYearLoad() {
       });
 
       if (response.ok) {
-        const data = await response.json();
-      } else {
-        console.error(
-          "Failed to send data to the backend. HTTP status:",
-          response.status
-        );
+        setMessage("Data saved successfully");
+        return;
       }
+
+      // "Data saved successfully" used to be set in a `finally`, so a refused
+      // save — a 403 from the department guard, say — told the coordinator
+      // their allotment was stored when the server had thrown it away.
+      const data = await response.json().catch(() => ({}));
+      console.error(
+        "Failed to send data to the backend. HTTP status:",
+        response.status
+      );
+      setMessage("");
+      toast({
+        title: 'Save failed',
+        description:
+          data.error || `The server refused the save (HTTP ${response.status}).`,
+        status: 'error',
+        duration: 8000,
+        isClosable: true,
+        position: 'top',
+      });
     } catch (error) {
       console.error("Error sending data to the backend:", error);
-    } finally {
-      setMessage("Data saved successfully");
+      setMessage("");
+      toast({
+        title: 'Save failed',
+        description: 'The request did not reach the server. Check your connection and try again.',
+        status: 'error',
+        duration: 8000,
+        isClosable: true,
+        position: 'top',
+      });
     }
   };
 
@@ -596,6 +742,16 @@ function FirstYearLoad() {
                 Lock First Year Time Table
               </Button>
             </HStack>
+
+            <MailProgressModal
+              isOpen={Boolean(mailReport)}
+              onClose={() => setMailReport(null)}
+              phase={mailReport?.phase}
+              results={mailReport?.results}
+              logId={mailReport?.logId}
+              heading={mailReport?.heading}
+              note={mailReport?.note}
+            />
 
             <Portal>
               <Box

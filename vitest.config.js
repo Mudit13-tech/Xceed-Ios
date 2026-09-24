@@ -1,23 +1,8 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
-import { mobileOverrides } from './build/mobileOverrides.js'
-
-// This used to mirror vite.config.js's __APP_VERSION__ define, without which
-// every module referencing it threw under test. There is no define to mirror
-// any more: the app's version now reaches src/main.jsx through a <meta> tag
-// that vite.config.js injects into index.html, so that a new version cannot
-// rename the chunk every route imports. See the note there.
-//
-// Deliberately not reproduced for tests. Nothing renders index.html under
-// jsdom, so the tag is absent and main.jsx falls back to 'dev' - which is
-// correct, since no test persists a query cache worth busting. Should a test
-// ever need a real version there, set the meta tag in src/test/setup.js rather
-// than reintroducing a define here; a define would put the value back inside
-// the module graph, which is the whole thing this avoids.
-
 export default defineConfig({
-  plugins: [mobileOverrides(), react()],
+  plugins: [react()],
   test: {
     environment: 'jsdom',
     globals: true,
@@ -26,12 +11,10 @@ export default defineConfig({
      * An agent session working in a git worktree puts a full second copy of
      * the repo under .claude/worktrees/, tests included. Vitest's default
      * exclude does not cover it, so every such worktree lying around adds
-     * another complete run of the suite to `npm test` - three copies of every
-     * file, thirteen minutes, and failures reported against paths that are not
-     * the tree you are working in.
+     * another complete run of the suite to `npm test`.
      *
-     * The default exclude list is replaced rather than extended when this
-     * option is set, so node_modules and dist are repeated here deliberately.
+     * Setting this replaces the default exclude list rather than extending it,
+     * so node_modules and dist are repeated here deliberately.
      */
     exclude: [
       '**/node_modules/**',

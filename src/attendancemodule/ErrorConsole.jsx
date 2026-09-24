@@ -1,11 +1,12 @@
 // client/src/attendancemodule/ErrorConsole.jsx
 // Rendered below the log stream on the Node server console (NodeConsole.jsx).
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import getEnvironment from '../getenvironment';
 import { theme as T } from './config';
 import { mergeErrorRows } from './errorConsoleRows';
+import usePolling from './usePolling';
 
 const apiUrl = getEnvironment();
 const METRICS_URL = `${apiUrl}/api/v1/attendancemodule/health/metrics`;
@@ -78,40 +79,32 @@ export default function ErrorConsole({ limit = 200, pollMs = POLL_MS }) {
   const [filter, setFilter] = useState('all');
   const [paused, setPaused] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  const load = useCallback(async () => {
+    // Settled rather than all: one endpoint being refused must not blank the
+    // half of the picture the other one still has.
+    const [metrics, nodeLogs] = await Promise.allSettled([
+      axios.get(METRICS_URL, { timeout: 5000, withCredentials: true }),
+      axios.get(NODE_LOGS_URL, { timeout: 5000, params: { limit } }),
+    ]);
 
-    async function load() {
-      // Settled rather than all: one endpoint being refused must not blank the
-      // half of the picture the other one still has.
-      const [metrics, nodeLogs] = await Promise.allSettled([
-        axios.get(METRICS_URL, { timeout: 5000, withCredentials: true }),
-        axios.get(NODE_LOGS_URL, { timeout: 5000, params: { limit } }),
-      ]);
-      if (cancelled) return;
-
-      if (metrics.status === 'fulfilled') {
-        setRecentErrors(metrics.value.data?.recentErrors || []);
-      }
-      if (nodeLogs.status === 'fulfilled') {
-        setLogs(nodeLogs.value.data?.logs || []);
-      }
-
-      if (metrics.status === 'rejected' && nodeLogs.status === 'rejected') {
-        setUnreachable(metrics.reason?.message || 'Cannot reach the server');
-      } else {
-        setUnreachable('');
-      }
+    if (metrics.status === 'fulfilled') {
+      setRecentErrors(metrics.value.data?.recentErrors || []);
+    }
+    if (nodeLogs.status === 'fulfilled') {
+      setLogs(nodeLogs.value.data?.logs || []);
     }
 
-    load();
-    if (paused) return () => { cancelled = true; };
-    const interval = setInterval(load, pollMs);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [limit, pollMs, paused]);
+    if (metrics.status === 'rejected' && nodeLogs.status === 'rejected') {
+      setUnreachable(metrics.reason?.message || 'Cannot reach the server');
+    } else {
+      setUnreachable('');
+    }
+  }, [limit]);
+
+  // Pausing still loads once, so the console shows the state at the moment it
+  // was paused rather than whatever was last on screen.
+  useEffect(() => { if (paused) void load(); }, [paused, load]);
+  usePolling(load, pollMs, { enabled: !paused });
 
   const rows = useMemo(() => mergeErrorRows(recentErrors, logs), [recentErrors, logs]);
   const visible = useMemo(

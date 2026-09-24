@@ -9,17 +9,14 @@ import {
   Button,
   Flex,
   IconButton,
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
   useColorMode,
   useDisclosure,
 } from '@chakra-ui/react';
+import LogoutConfirmModal from '../LogoutConfirmModal';
+import { openDobEditor } from '../DobGate';
 import { loginPathFor } from '../../authRedirect';
 import { clearNativeSession } from '../../mobile/session';
+import { isNativeApp } from '../../utils/nativeCapabilities';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import lmApi from '../../learningModule/api/lmApi';
 
@@ -86,6 +83,11 @@ const PUBLIC_PATHS = [
   // asked about (a visitor who *is* signed in skips it), and every answer is
   // scoped to that address. See modules/helpdeskModule on the server.
   '/help',
+  // The explainer videos, linked from the help desk. Public for the same
+  // reason, and GET /api/v1/explainers is unauthenticated to match (see
+  // server/src/modules/explainerModule). Without this entry a signed-in
+  // student was bounced to /learning and a visitor to /login.
+  '/explainers',
   '/privacy',
   '/forgot-password',
   '/nirf',
@@ -106,6 +108,10 @@ const PUBLIC_PATHS = [
   '/404',
   '/ml/t1',
 ];
+
+// The landing page: '/' on the web. The installed app opens '/' on the login
+// screen, so there the landing page lives at '/home' (see App.jsx).
+const homePath = isNativeApp() ? '/home' : '/';
 
 export default function Navbar() {
   const { colorMode, toggleColorMode } = useColorMode();
@@ -136,6 +142,7 @@ export default function Navbar() {
       return response.json();
     },
     retry: false,
+    staleTime: 5 * 60 * 1000,
   });
 
   // A refetch that fails leaves the *last successful* `data` in place — that is
@@ -158,10 +165,12 @@ export default function Navbar() {
       queryClient.prefetchQuery({
         queryKey: ['learning', 'classes', 'active'],
         queryFn: () => lmApi.listClasses(),
+        staleTime: 5 * 60 * 1000,
       });
       queryClient.prefetchQuery({
         queryKey: ['learning', 'classes', 'archived'],
         queryFn: () => lmApi.listClasses('archived'),
+        staleTime: 5 * 60 * 1000,
       });
     }
   }, [isAuthenticated, queryClient]);
@@ -183,7 +192,6 @@ export default function Navbar() {
   const logoutModal = useDisclosure();
 
   const handleLogout = async () => {
-    logoutModal.onClose();
     try {
       const response = await fetch(`${apiUrl}/user/getuser/logout`, {
         method: 'POST',
@@ -197,13 +205,28 @@ export default function Navbar() {
       if (!response.ok) {
         throw new Error('Failed to logout');
       }
-      localStorage.removeItem('token');
       await clearNativeSession();
       navigate('/login');
     } catch (error) {
       console.error('Error during logout:', error.message);
+    } finally {
+      /* Closed here rather than on the button press: the dialog now shows the
+         request running, and closing it first would put that progress on a
+         screen the user has already been sent away from. The local session is
+         cleared above either way, so a failed request still ends signed out. */
+      logoutModal.onClose();
     }
   };
+
+  /* Who is being logged out, for the dialog to name. Address before display
+     name — on a shared machine the address is what distinguishes two people,
+     and a name is what they have in common with the last person to sit down. */
+  const accountLabel =
+    (Array.isArray(userDetails?.user?.email)
+      ? userDetails.user.email[0]
+      : userDetails?.user?.email) ||
+    userDetails?.user?.name ||
+    '';
 
   useEffect(() => {
     const isPublicPath =
@@ -278,7 +301,7 @@ export default function Navbar() {
     >
       <div className="tw-max-w-screen-xl tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-mx-auto tw-p-4">
         <Link
-          to="/home"
+          to={homePath}
           className="tw-flex tw-items-center tw-space-x-3 rtl:tw-space-x-reverse"
         >
           <img src="/clublogo.png" className="tw-h-8" alt="Xceed Logo" />
@@ -305,7 +328,7 @@ export default function Navbar() {
           <ul className="tw-font-medium tw-flex tw-flex-col tw-items-center tw-p-4 md:tw-p-0 tw-mt-4 tw-border tw-rounded-lg tw-space-y-5 md:tw-space-y-0 md:tw-flex-row md:tw-space-x-8 rtl:tw-space-x-reverse md:tw-mt-0 md:tw-border-0 tw-bg-gray-900 tw-border-gray-700 tw-list-none">
             <li>
               <a
-                href="/home"
+                href={homePath}
                 className="tw-block tw-py-2 tw-px-3 tw-text-cyan-300 tw-rounded md:tw-bg-transparent md:tw-text-cyan-300 md:tw-p-0 hover:tw-text-cyan-500"
                 aria-current="page"
               >
@@ -405,6 +428,19 @@ export default function Navbar() {
                         }}
                       />
 
+                      {/* The one-time date-of-birth edit; the dialog says
+                          whether it is still available. */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        color="white"
+                        fontWeight="normal"
+                        _hover={{ color: 'cyan.300' }}
+                        onClick={openDobEditor}
+                      >
+                        Date of birth
+                      </Button>
+
                       <Button
                         variant="outline"
                         size="sm"
@@ -436,23 +472,12 @@ export default function Navbar() {
           </ul>
         </div>
       </div>
-      <Modal isOpen={logoutModal.isOpen} onClose={logoutModal.onClose} isCentered size="sm">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader fontSize="lg">Log out</ModalHeader>
-          <ModalBody>
-            <Text>Are you sure you want to log out?</Text>
-          </ModalBody>
-          <ModalFooter gap={3}>
-            <Button variant="ghost" onClick={logoutModal.onClose}>
-              Cancel
-            </Button>
-            <Button colorScheme="red" onClick={handleLogout}>
-              Log out
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+      <LogoutConfirmModal
+        isOpen={logoutModal.isOpen}
+        onClose={logoutModal.onClose}
+        onConfirm={handleLogout}
+        accountLabel={accountLabel}
+      />
     </nav>
   );
 }

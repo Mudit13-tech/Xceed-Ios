@@ -36,6 +36,92 @@ import { SearchIcon } from '@chakra-ui/icons';
 import Header from '../components/header';
 import { Helmet } from 'react-helmet-async';
 
+/* Room records are typed into the timetable module by hand and a field can be
+   missing. Every comparison and search below goes through this, so one row
+   without a department cannot throw and blank the directory. */
+const text = (value) => String(value ?? '');
+
+/**
+ * One classroom, for a phone.
+ *
+ * The directory is a six-column table, which on a phone is a horizontal
+ * scroller: the room number and the map button are at opposite ends of it, so
+ * finding a room means reading one side, scrolling, and hoping the row has not
+ * been lost. The card puts the room number and the map in the same glance, and
+ * the whole card is the link — the pin is a signpost, not the only target.
+ *
+ * A room with no location recorded is not a link and says so, rather than
+ * being a card that appears to be one and opens a blank tab.
+ */
+function RoomCard({ room }) {
+  const hasMap = Boolean(room.landMark);
+
+  return (
+    <Card
+      as={hasMap ? 'a' : 'div'}
+      href={hasMap ? room.landMark : undefined}
+      target={hasMap ? '_blank' : undefined}
+      rel={hasMap ? 'noopener noreferrer' : undefined}
+      borderWidth="1px"
+      borderColor="gray.200"
+      borderRadius="xl"
+      shadow="sm"
+      transition="all 0.15s"
+      _hover={hasMap ? { shadow: 'md', borderColor: 'teal.300', textDecoration: 'none' } : undefined}
+      _active={hasMap ? { transform: 'scale(0.995)' } : undefined}
+    >
+      <CardBody p={4}>
+        <Flex align="center" gap={3}>
+          <Box flex="1" minW={0}>
+            <Heading size="md" wordBreak="break-word">
+              {room.room}
+            </Heading>
+            <Flex wrap="wrap" gap={2} mt={2}>
+              {room.type && (
+                <Badge colorScheme="purple" fontSize="xs" px={2} py={1}>
+                  {room.type}
+                </Badge>
+              )}
+              {room.building && (
+                <Badge colorScheme="blue" fontSize="xs" px={2} py={1}>
+                  {room.building}
+                </Badge>
+              )}
+              {room.floor ? (
+                <Badge colorScheme="gray" fontSize="xs" px={2} py={1}>
+                  Floor {room.floor}
+                </Badge>
+              ) : null}
+            </Flex>
+            {room.dept && (
+              <Text fontSize="xs" color="gray.600" mt={2} noOfLines={2}>
+                {room.dept}
+              </Text>
+            )}
+          </Box>
+
+          <Flex
+            direction="column"
+            align="center"
+            justify="center"
+            flexShrink={0}
+            w="52px"
+            py={2}
+            borderRadius="lg"
+            bg={hasMap ? 'red.50' : 'gray.50'}
+            color={hasMap ? 'red.500' : 'gray.400'}
+          >
+            <Box as={FaMapMarkerAlt} boxSize="20px" aria-hidden="true" />
+            <Text fontSize="10px" fontWeight="600" mt={1}>
+              {hasMap ? 'Map' : 'No map'}
+            </Text>
+          </Flex>
+        </Flex>
+      </CardBody>
+    </Card>
+  );
+}
+
 function MasterRoomTable() {
   const [masterRoomData, setMasterRoomData] = useState([]);
   const [filteredRooms, setFilteredRooms] = useState([]);
@@ -60,8 +146,11 @@ function MasterRoomTable() {
         return response.json();
       })
       .then((data) => {
-        // Sort the data based on 'dept' in alphabetical order
-        const sortedData = data.sort((a, b) => a.dept.localeCompare(b.dept));
+        // Sort the data based on 'dept' in alphabetical order. Compared as
+        // strings rather than by calling localeCompare on the field itself: a
+        // row with no department threw here, and one bad row taking the whole
+        // page down matters more now that this is where a phone looks.
+        const sortedData = data.sort((a, b) => text(a.dept).localeCompare(text(b.dept)));
         setMasterRoomData(sortedData);
         setLoading(false);
       })
@@ -73,7 +162,7 @@ function MasterRoomTable() {
 
   function sanitizeString(str) {
     // Remove special characters and spaces from the string
-    return str.replace(/[^\w\d]/gi, '').toLowerCase();
+    return text(str).replace(/[^\w\d]/gi, '').toLowerCase();
   }
 
   useEffect(() => {
@@ -87,8 +176,8 @@ function MasterRoomTable() {
 
     // Sort the filtered rooms based on the selected column and order
     const sortedRooms = filteredRooms.sort((a, b) => {
-      const columnA = a[sortColumn];
-      const columnB = b[sortColumn];
+      const columnA = text(a[sortColumn]);
+      const columnB = text(b[sortColumn]);
 
       if (sortOrder === 'asc') {
         return columnA.localeCompare(columnB);
@@ -118,7 +207,10 @@ function MasterRoomTable() {
   };
 
   const redirectToMap = (landmark) => {
-    window.open(landmark, '_blank'); // Open the link in a new tab
+    // A room with no location recorded used to open an empty tab, which reads
+    // as the map having failed rather than as there being nothing to show.
+    if (!landmark) return;
+    window.open(landmark, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -251,8 +343,13 @@ function MasterRoomTable() {
               <Flex justify="space-between" align="center" flexWrap="wrap" gap={2}>
                 <VStack align="start" spacing={0}>
                   <Heading size={{ base: "sm", md: "md" }}>Classroom Directory</Heading>
-                  <Text fontSize="xs" color="whiteAlpha.800" mt={1}>
+                  {/* The hint has to follow the layout: there are no column
+                      headers to click on a phone, where this is a card list. */}
+                  <Text fontSize="xs" color="whiteAlpha.800" mt={1} display={{ base: "none", md: "block" }}>
                     Click on column headers to sort
+                  </Text>
+                  <Text fontSize="xs" color="whiteAlpha.800" mt={1} display={{ base: "block", md: "none" }}>
+                    Tap a classroom to open it on the map
                   </Text>
                 </VStack>
                 <Badge colorScheme="orange" fontSize={{ base: "sm", md: "md" }} px={3} py={1}>
@@ -282,7 +379,23 @@ function MasterRoomTable() {
                   </Alert>
                 </Box>
               ) : (
+                <>
+                {/* Cards on a phone, the table from md up. Both are rendered
+                    and one is hidden: which layout is right is a question about
+                    the viewport, and CSS answers it without the page having to
+                    re-render on a rotation. */}
+                <Stack
+                  display={{ base: 'flex', md: 'none' }}
+                  spacing={3}
+                  p={4}
+                >
+                  {filteredRooms.map((room) => (
+                    <RoomCard key={room._id} room={room} />
+                  ))}
+                </Stack>
+
                 <Box
+                  display={{ base: 'none', md: 'block' }}
                   overflowX="auto"
                   w="100%"
                   sx={{
@@ -492,7 +605,12 @@ function MasterRoomTable() {
                               variant="ghost"
                               size={{ base: "sm", md: "md" }}
                               onClick={() => redirectToMap(room.landMark)}
-                              aria-label="View location on map"
+                              isDisabled={!room.landMark}
+                              aria-label={
+                                room.landMark
+                                  ? `View ${room.room} on map`
+                                  : `No location recorded for ${room.room}`
+                              }
                               _hover={{ bg: "red.50", transform: "scale(1.1)" }}
                               transition="all 0.2s"
                             />
@@ -502,6 +620,7 @@ function MasterRoomTable() {
                     </Tbody>
                   </Table>
                 </Box>
+                </>
               )}
             </CardBody>
           </Card>

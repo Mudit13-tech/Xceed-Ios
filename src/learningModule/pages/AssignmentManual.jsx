@@ -130,13 +130,13 @@ function TabOverview() {
                 questions alongside those — see the Question Types tab.
             </Note>
 
-            <Shot src={shotList} alt="Numerical Assignments list for a class"
-                caption="The Numerical Assignments tab. Auto-marked questions at the top; document hand-ins, which are forms, sit under Document Submissions below them." />
+            <Shot src={shotList} alt="Assignments list for a class"
+                caption="The Assignments tab. Auto-marked questions at the top; document hand-ins, which are forms, sit under Document Submissions below them." />
 
             <SectionTitle>Document Hand-ins Are Forms</SectionTitle>
             <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.9, marginBottom: 8 }}>
-                The class tab is called <strong>Numerical Assignments</strong> because everything authored here
-                has an answer the system can mark itself — formula questions where every student sees
+                Everything authored on the class <strong>Assignments</strong> tab has an answer the system
+                can mark itself — formula questions where every student sees
                 different numbers, plus multiple-choice, multiple-answer and plain numerical ones. Students
                 type or tick their answers directly; they cannot upload a file to one of these.
             </div>
@@ -567,7 +567,7 @@ export default function AssignmentManual({ standalone = false }) {
                             color: '#fff',
                         }}><LmIcon name="geometry" size={16} /></div>
                         <span style={{ fontSize: 14, fontWeight: 700, color: '#fed7aa' }}>
-                            Numerical Assignments — Teacher Manual
+                            Assignments — Teacher Manual
                         </span>
                     </div>
                     {isAuthenticated && (
@@ -593,7 +593,7 @@ export default function AssignmentManual({ standalone = false }) {
                         color: '#fff',
                     }}><LmIcon name="geometry" size={21} /></div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <div className="agm-title" style={{ fontWeight: 800, color: T.text }}>Numerical Assignments — Teacher Manual</div>
+                        <div className="agm-title" style={{ fontWeight: 800, color: T.text }}>Assignments — Teacher Manual</div>
                         <div className="agm-subtitle" style={{ color: T.textMuted, marginTop: 2 }}>
                             Assessed numerical work, formula-graded per student · XCEED Learning
                         </div>

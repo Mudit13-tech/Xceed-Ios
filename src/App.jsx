@@ -15,7 +15,9 @@
 // flash of missing chrome for no saving.
 
 import React, { Suspense } from 'react';
+import RouteFallback from './components/RouteFallback';
 import MobileShell from './mobile/MobileShell';
+import { isNativeApp } from './utils/nativeCapabilities';
 import {
   BrowserRouter as Router,
   Routes,
@@ -58,6 +60,8 @@ const MessagesPage = lazyWithPreload(() => import('./timetableadmin/viewMessages
 // import LockedView from './timetableviewer/viewer';
 const Note = lazyWithPreload(() => import('./timetableadmin/addnote'));
 import Navbar from './components/home/Navbar';
+// Eager for the same reason as Navbar: it guards every signed-in page.
+import DobGate from './components/DobGate';
 import ErrorBoundary from './components/ErrorBoundary';
 const PrintSummary = lazyWithPreload(() => import('./timetableadmin/printSummary'));
 const LoadDistribution = lazyWithPreload(() => import('./timetableadmin/loaddistribution'));
@@ -97,6 +101,7 @@ const XceedLearningIntro = lazyWithPreload(() => import('./pages/XceedLearningIn
 const ILeedIntro = lazyWithPreload(() => import('./pages/ILeedIntro'));
 const GuidePage = lazyWithPreload(() => import('./pages/GuidePage'));
 const HelpdeskPage = lazyWithPreload(() => import('./pages/HelpdeskPage'));
+const ExplainersPage = lazyWithPreload(() => import('./pages/ExplainersPage'));
 const PrivacyPolicy = lazyWithPreload(() => import('./pages/PrivacyPolicy'));
 const ErrorPage = lazyWithPreload(() => import('./pages/ErrorPage.jsx'));
 const NotFound = lazyWithPreload(() => import('./pages/NotFound.jsx'));
@@ -228,6 +233,11 @@ const DeptAdminLayout = lazyWithPreload(() => import('./deptadmin/DeptAdminLayou
 const DeptDashboard = lazyWithPreload(() => import('./deptadmin/DeptDashboard'));
 const HodLayout = lazyWithPreload(() => import('./hodadmin/HodLayout'));
 const HodDashboard = lazyWithPreload(() => import('./hodadmin/HodDashboard'));
+const HodNotificationSettings = lazyWithPreload(() => import('./hodadmin/HodNotificationSettings'));
+const DeanLayout = lazyWithPreload(() => import('./deanadmin/DeanLayout'));
+const DeanDashboard = lazyWithPreload(() => import('./deanadmin/DeanDashboard'));
+const TimetableHodLayout = lazyWithPreload(() => import('./timetablehod/TimetableHodLayout'));
+const TimetableHodDashboard = lazyWithPreload(() => import('./timetablehod/TimetableHodDashboard'));
 const DeptReports = lazyWithPreload(() => import('./deptadmin/DeptReports'));
 const DeptBugReports = lazyWithPreload(() => import('./deptadmin/DeptBugReports'));
 const DeptDisputes = lazyWithPreload(() => import('./deptadmin/DeptDisputes'));
@@ -235,6 +245,9 @@ const DeptAssignRolls = lazyWithPreload(() => import('./deptadmin/DeptAdminTools
 const DeptLiveRTSP = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptLiveRTSP })));
 const DeptGroundTruthUpload = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptGroundTruthUpload })));
 const DeptAttendanceReport = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptAttendanceReport })));
+// The same screen with the room list drawn from the saved reports rather than
+// the institute-wide camera registry — see LeadershipAttendanceReport.
+const LeadershipAttendanceReport = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.LeadershipAttendanceReport })));
 const DeptClassVerification = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptClassVerification })));
 const DeptSubjectEmbeddings = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptSubjectEmbeddings })));
 const DeptConfidenceMonitor = lazyWithPreload(() => import('./deptadmin/DeptAdminTools').then((m) => ({ default: m.DeptConfidenceMonitor })));
@@ -250,69 +263,6 @@ const MLDataFolder = lazyWithPreload(() => import('./attendancemodule/MLDataFold
 const MLFineTuning = lazyWithPreload(() => import('./attendancemodule/MLFineTuning'));
 
 /**
- * What fills the page while a route's chunk is in flight.
- *
- * Inline styles and no component library on purpose: this is the one thing that
- * has to render before anything else has loaded, on the slow connection that
- * made splitting worth doing in the first place.
- *
- * The shimmer uses a CSS animation injected once via a <style> tag — no deps,
- * no import, and it survives rendering before Chakra or anything else is ready.
- * The bar mirrors the skeleton shimmer already used inside the learning module,
- * giving a consistent "loading" signal across the whole app.
- */
-const _routeFallbackStyle = `
-@keyframes _rfShimmer {
-  0%   { background-position: -600px 0; }
-  100% { background-position:  600px 0; }
-}
-._rfBar {
-  height: 4px;
-  border-radius: 2px;
-  background: linear-gradient(
-    90deg,
-    #e8e8e8 25%,
-    #f5f5f5 50%,
-    #e8e8e8 75%
-  );
-  background-size: 1200px 100%;
-  animation: _rfShimmer 1.4s ease-in-out infinite;
-}
-`;
-
-// Most chunk fetches finish well inside this, and a bar that appears for a few
-// frames and vanishes reads as a glitch line above the page rather than as
-// progress. Only a fetch that is actually slow gets to show it.
-const ROUTE_FALLBACK_DELAY_MS = 400;
-
-let _rfStyleInjected = false;
-function RouteFallback() {
-  const [visible, setVisible] = React.useState(false);
-  React.useEffect(() => {
-    const timer = setTimeout(() => setVisible(true), ROUTE_FALLBACK_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (!_rfStyleInjected && typeof document !== 'undefined') {
-    const tag = document.createElement('style');
-    tag.textContent = _routeFallbackStyle;
-    document.head.appendChild(tag);
-    _rfStyleInjected = true;
-  }
-  if (!visible) return null;
-  return (
-    <div
-      style={{ padding: '48px 24px' }}
-      role="status"
-      aria-live="polite"
-      aria-label="Loading page"
-    >
-      <div className="_rfBar" style={{ maxWidth: 480, margin: '0 auto' }} />
-    </div>
-  );
-}
-
-/**
  * The route table, built once at module load rather than per render, so that
  * `registerRouteTree` can read it: the preloader needs the same patterns the
  * router matches, and taking them from anywhere else is a second list to keep
@@ -321,12 +271,10 @@ function RouteFallback() {
 const APP_ROUTES = (
         <Routes>
           {/* Landing Page */}
-          {/* The app opens on the login screen, not on the web landing page:
-              an installed app has one job on launch and a marketing page is
-              not it. Home keeps a route of its own so the links into it —
-              Navbar's brand, the intro pages' calls to action — still land
-              somewhere. */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          {/* The installed app opens on the login screen rather than the landing
+              page; /home reaches the landing page from inside it. On the web
+              both paths are the landing page. */}
+          <Route path="/" element={isNativeApp() ? <Navigate to="/login" replace /> : <Home />} />
           <Route path="/home" element={<Home />} />
           {/* Module introductions. Public on purpose — their audience is the
               faculty and department staff being introduced to a module before
@@ -341,6 +289,13 @@ const APP_ROUTES = (
               the address being asked about — and every answer is scoped to that
               address. See modules/helpdeskModule on the server. */}
           <Route path="/help" element={<HelpdeskPage />} />
+          {/* Every explainer recording in one place, grouped by feature. Public
+              for the same reason /help is: someone who cannot sign in is
+              exactly who needs to see how joining a class works. The MP4s
+              themselves are static files under /explainer-videos — note the
+              different path, so the directory does not sit in front of this
+              route on whichever host resolves the two first. */}
+          <Route path="/explainers" element={<ExplainersPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/nirf" element={<NirfRanking />} />
 
@@ -686,12 +641,102 @@ const APP_ROUTES = (
 
           {/* ─── Department Admin Routes ────────────────────────────── */}
           {/* ─── iLEED Head of Department (read-only) ───────────────── */}
+          {/* Every screen in the iLEED menu catalogue, drawn at the head's own
+              department. The head used to get four of them; an institute asked
+              for the lot, and what makes that safe is not a short list but the
+              server's read-only rule — `attendanceLeadershipReadAccess` admits
+              the role and `refuseAttendanceWrites` refuses every method but a
+              read, so the operational screens (capture, roll assignment, ERP
+              upload, embeddings, extra and altering classes) show their data
+              and change nothing.
+
+              Deliberately the SAME components as /dept-admin, not copies. They
+              read their scope from the shell's outlet context, which HodLayout
+              fills from the server's own answer, so a head gets their
+              department without any of these pages knowing a head exists.
+
+              Which of them a head actually sees is an administrator's
+              decision, one toggle at a time, on the Academic Administration
+              screen — see HodLayout, which draws only the ones switched on.
+              These routes stay mounted either way, so a link somebody was sent
+              opens the screen rather than a blank shell. */}
           <Route path="/ileed-hod" element={<HodLayout />}>
             <Route index element={<HodDashboard />} />
             <Route path="dashboard" element={<HodDashboard />} />
-            <Route path="reports" element={<DeptAttendanceReport />} />
-            <Route path="confidence" element={<DeptConfidenceMonitor />} />
+            <Route path="reports" element={<LeadershipAttendanceReport />} />
+            <Route path="live-rtsp" element={<DeptLiveRTSP />} />
+            <Route path="assign-rolls" element={<DeptAssignRolls />} />
+            <Route path="erp-upload" element={<DeptGroundTruthUpload />} />
             <Route path="verification" element={<DeptClassVerification />} />
+            <Route path="cameras" element={<CameraRegistry />} />
+            <Route path="embeddings" element={<DeptSubjectEmbeddings />} />
+            <Route path="preview" element={<CameraPreview />} />
+            <Route path="confidence" element={<DeptConfidenceMonitor />} />
+            <Route path="record-stream" element={<RecordStream />} />
+            <Route path="extra-class" element={<ExtraClassPage />} />
+            <Route path="altering-class" element={<AlterClassPage />} />
+            <Route path="institute-identification" element={<InstituteIdentification />} />
+            <Route path="erp-overrides" element={<ErpOverrides />} />
+            {/* The drill-down the list links to. Without it a head clicking a
+                row lands on the shell's catch-all instead of the analysis. */}
+            <Route path="erp-overrides/:reportId" element={<ErpOverrideAnalysis />} />
+            <Route path="disputes" element={<DeptDisputes />} />
+            <Route path="bug-report" element={<DeptBugReports />} />
+            <Route path="notifications" element={<HodNotificationSettings />} />
+          </Route>
+
+          {/* ─── iLEED Dean (Academic) (read-only, every department) ── */}
+          {/* The head of department's block above, at institute scope — the
+              same screens, the same components, one shell up.
+
+              The components are shared deliberately: the server decides the
+              scope from the role, answering a dean with institute access and
+              no department, so a second set of pages would be two ways of
+              answering one question. Read-only is the same rule too —
+              `refuseAttendanceWrites` refuses a dean every method but a read,
+              which is what makes it safe to hand an institute-wide viewer the
+              operational screens.
+
+              What is NOT shared is which of them a dean gets: `deanMenus` is
+              its own document, so an institute can show the dean a screen it
+              does not show every head, and the other way round.
+
+              No `notifications` route, unlike the head's block. Those
+              preferences are a head's alerts for the department they head, and
+              a dean heads none — it is also the one thing in either view that
+              a viewer may WRITE, so leaving it out keeps the dean's view
+              read-only with no exception to explain. */}
+          <Route path="/ileed-dean" element={<DeanLayout />}>
+            <Route index element={<DeanDashboard />} />
+            <Route path="dashboard" element={<DeanDashboard />} />
+            <Route path="reports" element={<LeadershipAttendanceReport />} />
+            <Route path="live-rtsp" element={<DeptLiveRTSP />} />
+            <Route path="assign-rolls" element={<DeptAssignRolls />} />
+            <Route path="erp-upload" element={<DeptGroundTruthUpload />} />
+            <Route path="verification" element={<DeptClassVerification />} />
+            <Route path="cameras" element={<CameraRegistry />} />
+            <Route path="embeddings" element={<DeptSubjectEmbeddings />} />
+            <Route path="preview" element={<CameraPreview />} />
+            <Route path="confidence" element={<DeptConfidenceMonitor />} />
+            <Route path="record-stream" element={<RecordStream />} />
+            <Route path="extra-class" element={<ExtraClassPage />} />
+            <Route path="altering-class" element={<AlterClassPage />} />
+            <Route path="institute-identification" element={<InstituteIdentification />} />
+            <Route path="erp-overrides" element={<ErpOverrides />} />
+            {/* The drill-down the list links to, same as the head's block. */}
+            <Route path="erp-overrides/:reportId" element={<ErpOverrideAnalysis />} />
+            <Route path="disputes" element={<DeptDisputes />} />
+            <Route path="bug-report" element={<DeptBugReports />} />
+          </Route>
+
+          {/* ─── Timetable Head of Department (read-only) ───────────── */}
+          {/* A head used to be given DTTI — the department coordinator's
+              editing role — just to see their department's load. These pages
+              read it instead; the API behind them admits the HOD role and
+              refuses anything that is not a GET. */}
+          <Route path="/timetable-hod" element={<TimetableHodLayout />}>
+            <Route index element={<TimetableHodDashboard />} />
+            <Route path="dashboard" element={<TimetableHodDashboard />} />
           </Route>
 
           <Route path="/dept-admin" element={<DeptAdminLayout />}>
@@ -753,7 +798,7 @@ function App() {
        page already on screen up while the next one's chunk is still coming
        down. Without it a click on a link whose chunk had not been fetched
        suspended the boundary below and replaced the entire app — header, rail
-       and class switcher included — with the 4px loading bar, for as long as
+       and class switcher included — with the loading skeleton, for as long as
        the download took (#2413). React Router has done this under the flag
        since 6.13; it is the default in v7. */
     <Router future={{ v7_startTransition: true }}>
@@ -762,12 +807,17 @@ function App() {
 
       {/* <h1>XCEED-Timetable Module</h1>  */}
       <Navbar />
+      {/* Asks a signed-in account without a date of birth for one, on every
+          route (the Navbar hides itself on several), and hosts the one-time
+          edit the account menus open. */}
+      <DobGate />
 
       {/* One boundary around the whole table rather than per route: a lazy
           element with no Suspense above it throws, and a single boundary here
-          cannot be forgotten when a route is added. The fallback is deliberately
-          plain — it shows for the length of one chunk fetch, and anything
-          heavier would need its own bytes to render. */}
+          cannot be forgotten when a route is added. The fallback is a skeleton
+          drawn from injected CSS rather than components — it shows for the
+          length of one chunk fetch, and anything heavier would need its own
+          bytes to render before those bytes had arrived. */}
       {/* ErrorBoundary sits outside Suspense (Suspense only catches a pending
           lazy import, not a render crash) and outside the routes but inside
           Navbar, so a page that crashes still leaves the navbar clickable —

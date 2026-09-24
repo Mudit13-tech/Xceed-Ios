@@ -10,7 +10,6 @@ import {
   Code,
   Collapse,
   Divider,
-  Spinner,
   Switch,
   Table,
   Tbody,
@@ -23,7 +22,7 @@ import {
 } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
 import useShortStream from '../hooks/useShortStream';
-import { ErrorState, Loading, SectionCard, SectionCardSkeleton } from '../components/common';
+import { BusyDots, ErrorState, Loading, SectionCard, SectionCardSkeleton } from '../components/common';
 import RichText from '../components/RichText';
 import QuestionTypeBadge from '../components/QuestionTypeBadge';
 import { decimalPlacesHint } from '../format';
@@ -195,15 +194,43 @@ const stickyColumn = {
   maxW: { base: '140px', md: '240px' },
 };
 
+/**
+ * Where a student is in the session.
+ *
+ * Only students who joined this run are on the board, so there are just the two
+ * states: still answering, or finished. Anyone who has not joined is named
+ * under the board instead of carrying a row of their own — they have no
+ * progress in this room to report.
+ */
+const STUDENT_STATUS = {
+  working: { label: 'Working', colorScheme: 'blue' },
+  finished: { label: 'Finished', colorScheme: 'green' },
+};
+
+const statusOf = (student) => (student.status === 'in_progress' ? 'working' : 'finished');
+
+function StatusBadge({ status }) {
+  const meta = STUDENT_STATUS[status];
+  return (
+    <Badge colorScheme={meta.colorScheme} variant="subtle" textTransform="none" whiteSpace="nowrap">
+      {meta.label}
+    </Badge>
+  );
+}
+
 /** One student's row. Re-rendered only when that student's numbers change. */
 const StudentRowView = memo(function StudentRowView({ student, openedIndexes }) {
   const byIndex = new Map((student.perQuestion || []).map((cell) => [cell.index, cell]));
+  const status = statusOf(student);
   return (
     <Tr>
       <Td {...stickyColumn} px={2}>
         <Text fontSize="sm" noOfLines={1} title={student.name || student.email}>
           {student.name || student.email}
         </Text>
+      </Td>
+      <Td px={2}>
+        <StatusBadge status={status} />
       </Td>
       {openedIndexes.map((index) => (
         <ProgressCell key={index} cell={byIndex.get(index)} />
@@ -311,7 +338,7 @@ const QuestionRow = memo(function QuestionRow({
             <Text fontSize="xs" color="lmFg.muted">
               Hint
             </Text>
-            {hintPending && <Spinner size="xs" color="blue.400" />}
+            {hintPending && <BusyDots size="4px" color="blue.400" label="Saving the hint switch" />}
             <Switch
               size="sm"
               colorScheme="blue"
@@ -410,6 +437,16 @@ export default function TutorialPresent() {
     setPending('');
   };
 
+  const openAll = async () => {
+    if (pending) return;
+    const closed = (state?.questionCount || 0) - (state?.openedCount || 0);
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(`Open all ${closed} remaining question${closed === 1 ? '' : 's'} to every student now?`)) return;
+    setPending('openAll');
+    await control('openAll');
+    setPending('');
+  };
+
   const toggleShown = useCallback((index) => setShown((prev) => ({ ...prev, [index]: !prev[index] })), []);
 
   const setHint = useCallback(
@@ -454,7 +491,20 @@ export default function TutorialPresent() {
 
   const questionCount = state.questionCount || 0;
   const ended = state.status === 'ended';
-  const students = state.students || [];
+  // The board is the room: one row per student who joined this session. The
+  // rest of the roster is named under it, where "has not started" cannot be
+  // mistaken for "started and has answered nothing".
+  const board = state.students || [];
+  const notJoined = state.notJoined || [];
+  const statusCounts = board.reduce((counts, student) => {
+    const status = statusOf(student);
+    return { ...counts, [status]: (counts[status] || 0) + 1 };
+  }, {});
+  const statusSummary = Object.keys(STUDENT_STATUS)
+    .filter((status) => statusCounts[status])
+    .map((status) => `${statusCounts[status]} ${STUDENT_STATUS[status].label.toLowerCase()}`)
+    .join(' · ');
+  const allOpen = openedCount >= questionCount;
   const cardPadding = { base: 3, md: 5 };
 
   return (
@@ -484,7 +534,7 @@ export default function TutorialPresent() {
             {state.participantCount === 1 ? '' : 's'} joined
           </Text>
         </Box>
-        <HStack spacing={2} flexShrink={0}>
+        <Flex gap={2} flexShrink={0} wrap="wrap">
           <Button
             size={{ base: 'md', md: 'sm' }}
             flex={{ base: 1, md: 'initial' }}
@@ -497,7 +547,7 @@ export default function TutorialPresent() {
             }
             isLoading={pending === 'openNext'}
             loadingText="Opening…"
-            isDisabled={Boolean(pending) || ended || openedCount >= questionCount}
+            isDisabled={Boolean(pending) || ended || allOpen}
           >
             {openedCount === 0
               ? 'Open first question'
@@ -515,6 +565,28 @@ export default function TutorialPresent() {
                   </>
                 )}
           </Button>
+          {/* For when the paced part is over: everything still closed goes out
+              at once, so the class can work through the rest on their own. */}
+          {!ended && !allOpen && (
+            <Button
+              size={{ base: 'md', md: 'sm' }}
+              flex={{ base: 1, md: 'initial' }}
+              variant="outline"
+              colorScheme="teal"
+              onClick={openAll}
+              aria-label="Open all questions"
+              isLoading={pending === 'openAll'}
+              loadingText="Opening…"
+              isDisabled={Boolean(pending)}
+            >
+              <Box as="span" display={{ base: 'none', md: 'inline' }}>
+                Open all questions
+              </Box>
+              <Box as="span" display={{ base: 'inline', md: 'none' }}>
+                Open all
+              </Box>
+            </Button>
+          )}
           {!ended && (
             <Button
               size={{ base: 'md', md: 'sm' }}
@@ -528,7 +600,7 @@ export default function TutorialPresent() {
               End session
             </Button>
           )}
-        </HStack>
+        </Flex>
       </Flex>
 
       {/* The question list: what is open, and a per-question hint switch the
@@ -556,36 +628,20 @@ export default function TutorialPresent() {
         )}
       </SectionCard>
 
-      {/* Who is not in the room. Worth chasing before you end the session: the
-          tutorial is entered here, so anyone still listed will not be able to
-          start it afterwards. */}
-      {(state.notJoined || []).length > 0 && (
-        <SectionCard
-          title={`Not joined (${state.notJoined.length})`}
-          subtitle="On the roster but not in this session. They can only start the tutorial while you are presenting — anyone still here when you end it will need you to present again."
-          mb={4}
-          p={cardPadding}
-        >
-          <Flex wrap="wrap" gap={2} maxH="160px" overflowY="auto">
-            {state.notJoined.map((student) => (
-              <Badge key={student.studentId} colorScheme="orange" variant="subtle" textTransform="none">
-                {student.name || student.email}
-              </Badge>
-            ))}
-          </Flex>
-        </SectionCard>
-      )}
-
       {/* Per-student progress across the opened questions — the live "answer now"
           board. Each cell is correct/total answer slots, green when complete. */}
-      <SectionCard title={`Student progress${students.length ? ` (${students.length})` : ''}`} p={cardPadding}>
+      <SectionCard
+        title={`Student progress${board.length ? ` (${board.length})` : ''}`}
+        subtitle={statusSummary || undefined}
+        p={cardPadding}
+      >
         {openedCount === 0 ? (
           <Text fontSize="sm" color="lmFg.muted">
             Open the first question to start the board.
           </Text>
-        ) : students.length === 0 ? (
+        ) : board.length === 0 ? (
           <Text fontSize="sm" color="lmFg.muted">
-            No students have opened the tutorial yet.
+            No students have joined yet.
           </Text>
         ) : (
           // Scrolls inside its own box with the header pinned, so a long roster
@@ -597,6 +653,7 @@ export default function TutorialPresent() {
                   <Th {...stickyColumn} px={2} zIndex={3}>
                     Student
                   </Th>
+                  <Th px={2}>Status</Th>
                   {openedIndexes.map((index) => (
                     <Th key={index} textAlign="center" px={2}>
                       Q{index + 1}
@@ -608,11 +665,37 @@ export default function TutorialPresent() {
                 </Tr>
               </Thead>
               <Tbody>
-                {students.map((student) => (
+                {board.map((student) => (
                   <StudentRow key={String(student.studentId)} student={student} openedIndexes={openedIndexes} />
                 ))}
               </Tbody>
             </Table>
+          </Box>
+        )}
+        {/* Worth chasing before you end the session: the tutorial is entered
+            here, so anyone not joined when it ends cannot start it afterwards. */}
+        {!ended && notJoined.length > 0 && (
+          <Box mt={3}>
+            <Text fontSize="xs" color="orange.600">
+              {notJoined.length} student{notJoined.length === 1 ? ' has' : 's have'} not joined. They can only start
+              the tutorial while you are presenting — anyone who has not joined when you end it will need you to
+              present again.
+            </Text>
+            {/* Named, not tabulated: a register to read down while there is
+                still time to chase someone, kept clear of the progress rows. */}
+            <Flex wrap="wrap" gap={1} mt={2}>
+              {notJoined.map((student) => (
+                <Badge
+                  key={String(student.studentId)}
+                  colorScheme="orange"
+                  variant="subtle"
+                  textTransform="none"
+                  fontWeight="500"
+                >
+                  {student.name || student.email}
+                </Badge>
+              ))}
+            </Flex>
           </Box>
         )}
       </SectionCard>

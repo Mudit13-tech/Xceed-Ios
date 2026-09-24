@@ -22,7 +22,17 @@ import { FiChevronDown } from 'react-icons/fi';
 
 import lmApi from '../api/lmApi';
 import { useQuery } from '@tanstack/react-query';
-import { EmptyState, ErrorState, Loading, SectionCard, ShortsListSkeleton } from '../components/common';
+import {
+  CardActions,
+  CardBody,
+  CardRow,
+  EmptyState,
+  ErrorState,
+  Loading,
+  PageHeader,
+  SectionCard,
+  ShortsListSkeleton,
+} from '../components/common';
 import { relativeTime } from '../format';
 import { LmIcon } from '../components/Icon';
 import DeleteButton from '../components/DeleteButton';
@@ -161,29 +171,33 @@ export default function Shorts() {
 
   return (
     <VStack align="stretch" spacing={5}>
-      <Flex align="center" gap={3} wrap="wrap">
-        <Box>
-          <Heading size="md">Shorts</Heading>
-          <Text fontSize="sm" opacity={0.7}>
+      <PageHeader
+        mb={0}
+        title="Shorts"
+        description={
+          <Text fontSize="sm" opacity={0.7} mt={1}>
             Instant questions the room answers on their phones, live.
           </Text>
-        </Box>
-        <Box flex="1" />
-        <Button as={RouterLink} to="/learning/short/join" variant="outline" size="sm">
-          Join with a code
-        </Button>
-        {isTeacher && (
+        }
+        actions={
           <>
-            <Button as="a" href="/learning/shortsmanual" target="_blank" rel="noreferrer" variant="ghost" size="sm">
-              <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
-            Manual
+            <Button as={RouterLink} to="/learning/short/join" variant="outline" size="sm">
+              Join with a code
             </Button>
-            <Button colorScheme="purple" size="sm" onClick={create} isLoading={busy === 'new'}>
-              New short
-            </Button>
+            {isTeacher && (
+              <>
+                <Button as="a" href="/learning/shortsmanual" target="_blank" rel="noreferrer" variant="ghost" size="sm">
+                  <LmIcon name="manual" size={14} style={{ marginRight: 6 }} />
+                  Manual
+                </Button>
+                <Button colorScheme="purple" size="sm" onClick={create} isLoading={busy === 'new'}>
+                  New short
+                </Button>
+              </>
+            )}
           </>
-        )}
-      </Flex>
+        }
+      />
 
       {live.length > 0 && (
         <Alert status="info" borderRadius="md">
@@ -226,8 +240,8 @@ export default function Shorts() {
         <VStack align="stretch" spacing={3}>
           {shorts.map((short) => (
             <SectionCard key={short._id}>
-              <Flex gap={4} wrap="wrap" align="flex-start">
-                <Box flex="1" minW="220px">
+              <CardRow align="flex-start">
+                <CardBody>
                   <HStack spacing={2} mb={1} wrap="wrap">
                     <Text fontWeight="700">{short.title}</Text>
                     {short.liveSession && (
@@ -260,82 +274,82 @@ export default function Shorts() {
                       ))}
                     </HStack>
                   ) : null}
-                </Box>
+                </CardBody>
 
-                {isTeacher ? (
-                  <HStack spacing={2} wrap="wrap">
-                    {/* A live deck gets a split button whose caret carries the
-                        way out, so ending a session does not mean opening the
-                        presenter view first. */}
-                    {short.liveSession ? (
-                      <HStack spacing={0}>
-                        <Button
-                          size="sm"
-                          colorScheme="red"
-                          onClick={() => present(short)}
-                          isLoading={busy === short._id}
-                          borderRightRadius={0}
-                        >
-                          Back to presenting
-                        </Button>
-                        <Menu placement="bottom-end">
-                          <MenuButton
-                            as={IconButton}
-                            aria-label="Session options"
-                            icon={<FiChevronDown />}
+                <CardActions>
+                  {isTeacher ? (
+                    <>
+                      {/* A live deck gets a split button whose caret carries the
+                          way out, so ending a session does not mean opening the
+                          presenter view first. */}
+                      {short.liveSession ? (
+                        <HStack spacing={0} data-card-action-wide>
+                          <Button
                             size="sm"
                             colorScheme="red"
-                            borderLeftRadius={0}
-                            borderLeftWidth="1px"
-                            borderLeftColor="whiteAlpha.400"
-                            isDisabled={busy === short._id}
-                          />
-                          <MenuList>
-                            <MenuItem color="red.500" onClick={() => endSession(short)}>
-                              End session
-                            </MenuItem>
-                          </MenuList>
-                        </Menu>
-                      </HStack>
-                    ) : (
+                            onClick={() => present(short)}
+                            isLoading={busy === short._id}
+                            borderRightRadius={0}
+                          >
+                            Back to presenting
+                          </Button>
+                          <Menu placement="bottom-end">
+                            <MenuButton
+                              as={IconButton}
+                              aria-label="Session options"
+                              icon={<FiChevronDown />}
+                              size="sm"
+                              colorScheme="red"
+                              borderLeftRadius={0}
+                              borderLeftWidth="1px"
+                              borderLeftColor="whiteAlpha.400"
+                              isDisabled={busy === short._id}
+                            />
+                            <MenuList>
+                              <MenuItem color="red.500" onClick={() => endSession(short)}>
+                                End session
+                              </MenuItem>
+                            </MenuList>
+                          </Menu>
+                        </HStack>
+                      ) : (
+                        <Button
+                          size="sm"
+                          colorScheme="purple"
+                          onClick={() => present(short)}
+                          isLoading={busy === short._id}
+                        >
+                          Present
+                        </Button>
+                      )}
                       <Button
                         size="sm"
-                        colorScheme="purple"
-                        onClick={() => present(short)}
-                        isLoading={busy === short._id}
+                        variant="outline"
+                        colorScheme="yellow"
+                        as={RouterLink}
+                        to={`/learning/class/${classId}/short/${short._id}/preview`}
                       >
-                        Present
+                        Preview
                       </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      colorScheme="yellow"
-                      as={RouterLink}
-                      to={`/learning/class/${classId}/short/${short._id}/preview`}
-                    >
-                      Preview
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      as={RouterLink}
-                      to={`/learning/class/${classId}/short/${short._id}/edit`}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      as={RouterLink}
-                      to={`/learning/class/${classId}/short/${short._id}/sessions`}
-                    >
-                      Reports
-                    </Button>
-                    <DeleteButton label="Delete short" onClick={() => remove(short)} />
-                  </HStack>
-                ) : (
-                  short.liveSession ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        as={RouterLink}
+                        to={`/learning/class/${classId}/short/${short._id}/edit`}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        as={RouterLink}
+                        to={`/learning/class/${classId}/short/${short._id}/sessions`}
+                      >
+                        Reports
+                      </Button>
+                      <DeleteButton label="Delete short" onClick={() => remove(short)} />
+                    </>
+                  ) : short.liveSession ? (
                     <Button
                       as={RouterLink}
                       to={`/learning/short/join/${short.liveSession.joinCode}`}
@@ -344,7 +358,7 @@ export default function Shorts() {
                     >
                       Join
                     </Button>
-                  ) : short.runCount > 0 && short.participated === false && (
+                  ) : short.runCount > 0 && short.participated === false ? (
                     <Badge
                       colorScheme="red"
                       variant="subtle"
@@ -360,9 +374,9 @@ export default function Shorts() {
                     >
                       Missed
                     </Badge>
-                  )
-                )}
-              </Flex>
+                  ) : null}
+                </CardActions>
+              </CardRow>
             </SectionCard>
           ))}
         </VStack>

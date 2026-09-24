@@ -22,6 +22,23 @@ const UF_BASE = `${apiUrl}/attendancemodule/settings/unknown-face-cleanup`;
 // Nightly subject-embedding rebuild — again its own settings document, because
 // it carries run state rather than a policy flag.
 const NE_BASE = `${apiUrl}/attendancemodule/settings/nightly-embedding-rebuild`;
+// Lecture-recording retention. The only one of these retention cards whose job
+// deletes content rather than debris, which is why it has two windows instead
+// of one — see recordingRetentionSettings.js.
+const RR_BASE = `${apiUrl}/attendancemodule/settings/recording-retention`;
+
+// Retention stats report bytes; "1.4 GB" is the number an operator deciding a
+// window actually reasons about, and a raw byte count is not.
+function humanBytes(bytes) {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = Number(bytes) || 0;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(value >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
 
 function formatDate(d) {
   if (!d) return 'never';
@@ -59,6 +76,16 @@ export default function OtherControlsSettingsTab() {
   const [ufLastRunAt, setUfLastRunAt] = useState(null);
   const [ufLastRunStats, setUfLastRunStats] = useState(null);
   const [ufRunning, setUfRunning] = useState(false);
+
+  const [rrEnabled, setRrEnabled] = useState(true);
+  const [rrRetention, setRrRetention] = useState(30);
+  const [rrRetentionInput, setRrRetentionInput] = useState('30');
+  const [rrTranscribed, setRrTranscribed] = useState(7);
+  const [rrTranscribedInput, setRrTranscribedInput] = useState('7');
+  const [rrRequireTranscript, setRrRequireTranscript] = useState(false);
+  const [rrLastRunAt, setRrLastRunAt] = useState(null);
+  const [rrLastRunStats, setRrLastRunStats] = useState(null);
+  const [rrRunning, setRrRunning] = useState(false);
 
   // Nightly subject-embedding rebuild
   const [neEnabled, setNeEnabled] = useState(false);
@@ -123,6 +150,13 @@ export default function OtherControlsSettingsTab() {
     fetch(`${NE_BASE}/`, { credentials: 'include' })
       .then((r) => r.json())
       .then((d) => applyNeSettings(d.settings, d.queue))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch(`${RR_BASE}/`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => applyRrSettings(d.settings))
       .catch(() => {});
   }, []);
 
@@ -260,6 +294,65 @@ export default function OtherControlsSettingsTab() {
       showMsg('Error: ' + err.message, 'error');
     } finally {
       setUfRunning(false);
+    }
+  };
+
+  const applyRrSettings = (s) => {
+    if (!s) return;
+    setRrEnabled(!!s.enabled);
+    setRrRetention(s.retentionDays ?? 30);
+    setRrRetentionInput(String(s.retentionDays ?? 30));
+    setRrTranscribed(s.transcribedRetentionDays ?? 7);
+    setRrTranscribedInput(String(s.transcribedRetentionDays ?? 7));
+    setRrRequireTranscript(!!s.requireTranscriptBeforeDelete);
+    setRrLastRunAt(s.lastRunAt ?? null);
+    setRrLastRunStats(s.lastRunStats ?? null);
+  };
+
+  const saveRr = async (patch, revert) => {
+    try {
+      const res = await fetch(`${RR_BASE}/`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update');
+      applyRrSettings(data.settings);
+      // The server clamps the transcribed window to the untranscribed one.
+      // Saying so beats letting the field read back a number the job will not
+      // actually use.
+      if (data.effective
+          && data.effective.transcribedRetentionDays !== data.settings.transcribedRetentionDays) {
+        showMsg(
+          `Saved, but transcribed recordings will be kept `
+          + `${data.effective.transcribedRetentionDays} day(s): that window cannot exceed the `
+          + `${data.effective.retentionDays}-day window for untranscribed ones.`,
+          'error',
+        );
+      }
+    } catch (err) {
+      if (revert) revert();
+      showMsg('Error: ' + err.message, 'error');
+    }
+  };
+
+  const handleRrRunNow = async () => {
+    setRrRunning(true);
+    try {
+      const res = await fetch(`${RR_BASE}/run-now`, { method: 'POST', credentials: 'include' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to run cleanup');
+      applyRrSettings(data.settings);
+      showMsg(
+        `Cleanup complete — scanned ${data.stats.scanned} recording(s), removed `
+        + `${data.stats.deleted} (${humanBytes(data.stats.bytesDeleted)}).`
+      );
+    } catch (err) {
+      showMsg('Error: ' + err.message, 'error');
+    } finally {
+      setRrRunning(false);
     }
   };
 
@@ -770,6 +863,193 @@ export default function OtherControlsSettingsTab() {
                 Reviewed kept
                 <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
                   {ufLastRunStats.preserved ?? 0}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <ToggleCard
+        enabled={rrEnabled}
+        title={`Automatic lecture-recording cleanup ${rrEnabled ? 'enabled' : 'disabled'}`}
+        description={
+          rrEnabled
+            ? `Runs nightly at 02:45 over ml-data/recordings/. A recording whose transcript is `
+              + `saved is removed after ${rrTranscribed} day(s) — the notes in the learning module `
+              + `are the artefact, the audio is a copy of them. One nobody has transcribed is kept `
+              + `${rrRequireTranscript ? 'indefinitely' : `for ${rrRetention} day(s)`}. A recording `
+              + `being transcribed right now is never removed, whatever its age.`
+            : 'The job is paused — every lecture recording will be kept indefinitely. Slot '
+              + 'recordings are audio by default at roughly 58 MB an hour, so a full timetable '
+              + 'still reaches tens of GB a month; a room set to video is twenty times that.'
+        }
+        onToggle={() => {
+          const prev = rrEnabled;
+          setRrEnabled(!prev);
+          saveRr({ enabled: !prev }, () => setRrEnabled(prev));
+        }}
+      />
+
+      <ToggleCard
+        enabled={rrRequireTranscript}
+        title={`Keep untranscribed recordings ${rrRequireTranscript ? '— never deleted on age alone' : '— expire like any other'}`}
+        description={
+          rrRequireTranscript
+            ? 'A recording nobody has turned into notes is the only copy of that lecture, so it '
+              + 'survives whatever its age and the window below does nothing. Recordings that have '
+              + 'been transcribed still expire. This is the safe setting, and the one that fills a disk.'
+            : 'An untranscribed recording expires on the window below. Nothing else holds a copy of '
+              + 'that lecture, so set the window to cover however long a teacher might reasonably '
+              + 'come back for it.'
+        }
+        onToggle={() => {
+          const prev = rrRequireTranscript;
+          setRrRequireTranscript(!prev);
+          saveRr({ requireTranscriptBeforeDelete: !prev }, () => setRrRequireTranscript(prev));
+        }}
+      />
+
+      <div className="oc-card">
+        <div className="oc-card-body">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+              marginBottom: 10,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
+                  Keep untranscribed recordings for
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={rrRetentionInput}
+                  onChange={(e) => setRrRetentionInput(e.target.value)}
+                  onBlur={() => {
+                    const n = Number.parseInt(rrRetentionInput, 10);
+                    if (!Number.isInteger(n) || n < 1 || n > 365) {
+                      setRrRetentionInput(String(rrRetention));
+                      showMsg('Retention must be a whole number of days, 1–365', 'error');
+                      return;
+                    }
+                    if (n !== rrRetention) saveRr({ retentionDays: n });
+                  }}
+                  style={{
+                    width: 70,
+                    padding: '5px 8px',
+                    fontSize: 13,
+                    borderRadius: 6,
+                    border: `1px solid ${T.border}`,
+                    background: T.surface || '#fff',
+                    color: T.text,
+                  }}
+                />
+                <span style={{ fontSize: 12, color: T.textMuted }}>day(s), 1–365</span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
+                  Transcribed ones for
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={rrTranscribedInput}
+                  onChange={(e) => setRrTranscribedInput(e.target.value)}
+                  onBlur={() => {
+                    const n = Number.parseInt(rrTranscribedInput, 10);
+                    if (!Number.isInteger(n) || n < 1 || n > 365) {
+                      setRrTranscribedInput(String(rrTranscribed));
+                      showMsg('Retention must be a whole number of days, 1–365', 'error');
+                      return;
+                    }
+                    if (n !== rrTranscribed) saveRr({ transcribedRetentionDays: n });
+                  }}
+                  style={{
+                    width: 70,
+                    padding: '5px 8px',
+                    fontSize: 13,
+                    borderRadius: 6,
+                    border: `1px solid ${T.border}`,
+                    background: T.surface || '#fff',
+                    color: T.text,
+                  }}
+                />
+                <span style={{ fontSize: 12, color: T.textMuted }}>day(s), at most the above</span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleRrRunNow}
+              disabled={rrRunning}
+              style={{
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 600,
+                borderRadius: 6,
+                border: 'none',
+                cursor: rrRunning ? 'not-allowed' : 'pointer',
+                background: T.accent,
+                color: '#fff',
+                opacity: rrRunning ? 0.6 : 1,
+              }}
+              title="Deletes expired lecture recordings immediately, regardless of the toggle above."
+            >
+              {rrRunning ? 'Running…' : 'Run now'}
+            </button>
+          </div>
+
+          <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 10 }}>
+            Last run: {formatDate(rrLastRunAt)}
+          </div>
+
+          {rrLastRunStats && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                gap: 10,
+                fontSize: 12,
+                color: T.textMuted,
+              }}
+            >
+              <div>
+                Recordings scanned
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+                  {rrLastRunStats.scanned ?? 0}
+                </div>
+              </div>
+              <div>
+                Removed
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+                  {rrLastRunStats.deleted ?? 0}
+                </div>
+              </div>
+              <div>
+                Space freed
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+                  {humanBytes(rrLastRunStats.bytesDeleted)}
+                </div>
+              </div>
+              <div>
+                Kept, untranscribed
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+                  {rrLastRunStats.keptUntranscribed ?? 0}
+                </div>
+              </div>
+              <div>
+                Kept, in flight
+                <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+                  {rrLastRunStats.keptInFlight ?? 0}
                 </div>
               </div>
             </div>

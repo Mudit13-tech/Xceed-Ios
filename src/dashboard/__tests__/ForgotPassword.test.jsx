@@ -9,7 +9,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ChakraProvider } from '@chakra-ui/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -40,13 +40,52 @@ const queueFetch = (...replies) => {
   return fetchMock;
 };
 
+/** The date of birth the form now asks for alongside the address. */
+const fillDob = (value = '2004-05-06') =>
+  fireEvent.change(screen.getByLabelText(/Date of birth/), { target: { value } });
+
 const requestOtp = async (user) => {
   await user.type(screen.getByPlaceholderText('you@nitj.ac.in'), 'asha@nitj.ac.in');
+  fillDob();
   await user.click(screen.getByRole('button', { name: 'Send OTP' }));
 };
 
 beforeEach(() => {
   vi.restoreAllMocks();
+});
+
+describe('ForgotPassword institute addresses', () => {
+  // Every XCEED account is provisioned against an institute mailbox, so a
+  // personal address here is a mistyped one. The server refuses it too; this
+  // says so before the round trip, and — more to the point — before the person
+  // is told an OTP may be coming and goes off to wait for it.
+  it('refuses a personal address without asking the server', async () => {
+    const fetchMock = queueFetch({ ok: true, body: { success: true } });
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.type(screen.getByPlaceholderText('you@nitj.ac.in'), 'asha@gmail.com');
+    fillDob();
+  await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+
+    expect(await screen.findByText(/not an institute address/i)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+    // Still on the address step: nothing to verify, so no OTP boxes.
+    expect(screen.queryByText(/If this email and date of birth match an account/)).not.toBeInTheDocument();
+  });
+
+  it('lets a department subdomain through', async () => {
+    const fetchMock = queueFetch({ ok: true, body: { success: true } });
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.type(screen.getByPlaceholderText('you@nitj.ac.in'), 'asha@cse.nitj.ac.in');
+    fillDob();
+  await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+
+    await screen.findByText(/If this email and date of birth match an account/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('ForgotPassword captcha', () => {
@@ -57,7 +96,7 @@ describe('ForgotPassword captcha', () => {
 
     await requestOtp(user);
 
-    await screen.findByText(/If an account with this email exists/);
+    await screen.findByText(/If this email and date of birth match an account/);
     expect(screen.queryByAltText('Characters to type')).not.toBeInTheDocument();
   });
 
@@ -105,7 +144,8 @@ describe('ForgotPassword captcha', () => {
     await screen.findByAltText('Characters to type');
 
     await user.type(screen.getByPlaceholderText('Characters from the image'), 'ac4kp');
-    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+    fillDob();
+  await user.click(screen.getByRole('button', { name: 'Send OTP' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     const sent = JSON.parse(fetchMock.mock.calls[2][1].body);
@@ -125,7 +165,8 @@ describe('ForgotPassword captcha', () => {
     await requestOtp(user);
     await screen.findByAltText('Characters to type');
     await user.type(screen.getByPlaceholderText('Characters from the image'), 'wrong');
-    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+    fillDob();
+  await user.click(screen.getByRole('button', { name: 'Send OTP' }));
 
     // Three calls, not four: no new challenge was requested for a plain typo.
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
@@ -144,7 +185,8 @@ describe('ForgotPassword captcha', () => {
     await requestOtp(user);
     await screen.findByAltText('Characters to type');
     await user.type(screen.getByPlaceholderText('Characters from the image'), 'ac4kp');
-    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+    fillDob();
+  await user.click(screen.getByRole('button', { name: 'Send OTP' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     await screen.findByText(/Enter the OTP you received/);
@@ -204,5 +246,33 @@ describe('ForgotPassword help desk link', () => {
         screen.queryByRole('link', { name: /open the help desk/i }),
       ).not.toBeInTheDocument(),
     );
+  });
+});
+
+describe('ForgotPassword date of birth', () => {
+  it('asks for it before contacting the server', async () => {
+    const fetchMock = queueFetch({ ok: true, body: { success: true } });
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.type(screen.getByPlaceholderText('you@nitj.ac.in'), 'asha@nitj.ac.in');
+    await user.click(screen.getByRole('button', { name: 'Send OTP' }));
+
+    expect(await screen.findByText('Enter your date of birth.')).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('sends it with the address', async () => {
+    const fetchMock = queueFetch({ ok: true, body: { success: true } });
+    const user = userEvent.setup();
+    renderForm();
+
+    await requestOtp(user);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      email: 'asha@nitj.ac.in',
+      dob: '2004-05-06',
+    });
   });
 });

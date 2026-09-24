@@ -16,6 +16,16 @@
  * decide what to port; the drift report is the only thing standing between
  * this file and the slow rot that turned getenvironment.js into a copy of a
  * version of AMS from months earlier.
+ *
+ * ## One upstream change that does not belong here
+ *
+ * Upstream moved its token write to `writeLocal` so a Safe Exam Browser profile
+ * with `removeLocalStorage` cannot throw on the last line before the redirect.
+ * There is nothing to port: this fork never writes the token to localStorage at
+ * all. It hands the token to the account manager, which keeps it per account so
+ * the switcher and the PIN have something to restore. Re-deriving that every
+ * time the drift report lists LoginForm is the cost of not writing it down, so
+ * it is written down.
  */
 import React, { useState, useEffect } from 'react'
 import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
@@ -71,6 +81,9 @@ const LoginForm = () => {
   const [captchaAnswer, setCaptchaAnswer] = useState('')
   const [emailCode, setEmailCode] = useState(false)
   const [sendingCode, setSendingCode] = useState(false)
+  // Set when the server has locked this account for too many failures. An
+  // emailed code lifts the lock, so the form offers one instead of a wait.
+  const [accountLocked, setAccountLocked] = useState(false)
   
   const apiUrl = getEnvironment()
   const navigate = useNavigate();
@@ -251,6 +264,11 @@ const LoginForm = () => {
 
       if (!response.ok) {
         setMessage(`Login failed: ${responseData.message || `${response.status} ${response.statusText}`}`);
+        setAccountLocked(Boolean(responseData.accountLocked))
+        if (responseData.accountLocked) {
+          // The emailed code is the way through; an image cannot lift the lock.
+          return
+        }
         if (responseData.captchaRequired) {
           if (!captcha || responseData.captchaStale) await loadCaptcha()
           else setCaptchaAnswer('')
@@ -367,7 +385,10 @@ const LoginForm = () => {
                   type='email'
                   placeholder='Enter your email'
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    setAccountLocked(false)
+                  }}
                 />
               </FormControl>
               <FormControl>
@@ -381,7 +402,19 @@ const LoginForm = () => {
                 />
               </FormControl>
               
-              {captcha && (
+              {accountLocked && !emailCode && (
+                <Button
+                  width='100%'
+                  variant='outline'
+                  colorScheme='blue'
+                  bg='transparent'
+                  isLoading={sendingCode}
+                  onClick={requestEmailCode}
+                >
+                  Email me a code to sign in now
+                </Button>
+              )}
+              {captcha && (!accountLocked || emailCode) && (
                 <FormControl>
                   <FormLabel>
                     {emailCode ? 'Enter the code we emailed you' : 'Type the characters shown'}
@@ -395,7 +428,7 @@ const LoginForm = () => {
                         borderWidth="1px"
                         borderRadius="md"
                       />
-                      <Button size="sm" variant="ghost" onClick={loadCaptcha}>
+                      <Button size="sm" variant="ghost" bg="transparent" onClick={loadCaptcha}>
                         New image
                       </Button>
                     </HStack>
@@ -414,11 +447,17 @@ const LoginForm = () => {
                         ? 'The code expires in five minutes and works once.'
                         : 'Asked for after several failed attempts. Not case sensitive.'}
                     </Text>
+                    {/* bg stated outright: a global `button { background-color: #007bff }`
+                        in timetableadmin/Timetable.css matches this element directly, and
+                        the link variant sets no background of its own to beat it. */}
                     {!emailCode && (
                       <Button
                         variant='link'
                         size='sm'
                         colorScheme='blue'
+                        bg='transparent'
+                        _hover={{ bg: 'transparent', textDecoration: 'underline' }}
+                        _active={{ bg: 'transparent' }}
                         mt={1}
                         isLoading={sendingCode}
                         onClick={requestEmailCode}

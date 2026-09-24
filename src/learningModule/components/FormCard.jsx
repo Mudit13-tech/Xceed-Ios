@@ -1,8 +1,16 @@
 import React from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Badge, Box, Button, Flex, HStack, Heading, Text } from '@chakra-ui/react';
+import { Badge, Button, HStack, Heading, Text } from '@chakra-ui/react';
 import lmApi from '../api/lmApi';
-import { CopyLinkButton, DeadlineCountdown, SectionCard, requestFullscreen } from './common';
+import {
+  CardActions,
+  CardBody,
+  CardRow,
+  CopyLinkButton,
+  DeadlineCountdown,
+  SectionCard,
+  requestFullscreen,
+} from './common';
 import DeleteButton from './DeleteButton';
 
 /**
@@ -12,8 +20,8 @@ import DeleteButton from './DeleteButton';
 export default function FormCard({ form, classId, isTeacher, onDeleted, onPreview, showCategory = true }) {
   return (
     <SectionCard mb={3}>
-      <Flex align="center" gap={4} wrap="wrap">
-        <Box flex="1" minW="220px">
+      <CardRow>
+        <CardBody>
           <HStack wrap="wrap">
             <Heading size="sm">{form.title}</Heading>
             {showCategory && form.category === 'assignment' && <Badge colorScheme="orange">Assignment</Badge>}
@@ -42,9 +50,9 @@ export default function FormCard({ form, classId, isTeacher, onDeleted, onPrevie
               : ''}
           </Text>
           {!isTeacher && form.responded && <Badge colorScheme="green" mt={1}>Responded</Badge>}
-        </Box>
+        </CardBody>
 
-        <HStack>
+        <CardActions>
           {isTeacher ? (
             <>
               {form.published && form.shareCode && (
@@ -100,8 +108,8 @@ export default function FormCard({ form, classId, isTeacher, onDeleted, onPrevie
               {form.closed ? 'Closed' : form.responded ? 'View / edit response' : 'Fill in'}
             </Button>
           )}
-        </HStack>
-      </Flex>
+        </CardActions>
+      </CardRow>
     </SectionCard>
   );
 }

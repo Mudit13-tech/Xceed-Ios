@@ -21,8 +21,28 @@ import {
 } from '@chakra-ui/react';
 import getEnvironment from '../../getenvironment';
 import lmApi from '../api/lmApi';
-import { ClassCardPreview, ColorPicker, SectionCard } from '../components/common';
+import {
+  CardActions,
+  CardBody,
+  CardRow,
+  ClassCardPreview,
+  ColorPicker,
+  SectionCard,
+} from '../components/common';
 import { CLASS_COLORS } from '../format';
+
+/* Departments are typed by hand across the platform and arrive spelled every
+   which way. Folded to compare, exactly as services/departmentHeads.deptKeyOf
+   does on the server — the two have to agree or a class resolves to a branch
+   here and to nothing there. */
+const deptKey = (value) =>
+  String(value || '').trim().replace(/[\s_.-]+/g, '').toUpperCase();
+
+/* The value of the "(current)" option in the Subject dropdown — the subject the
+   class already carries, shown when the timetable list does not contain it. A
+   sentinel rather than the subject's own code, which could collide with a row
+   or, when the class has no code, with the placeholder's empty value. */
+const CURRENT_SUBJECT = '__current_subject__';
 
 export default function ClassSettings() {
   const { classId, klass, reloadClass } = useOutletContext();
@@ -63,18 +83,42 @@ export default function ClassSettings() {
   const [loadingSemesters, setLoadingSemesters] = useState(false);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
   const [branchCode, setBranchCode] = useState(null);
+  const [branches, setBranches] = useState([]);
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  // Which timetable row the Subject dropdown has selected. See the note on the
+  // control itself for why a row id and not the subject code.
+  const [subjectRowId, setSubjectRowId] = useState('');
 
   const { onCopy, hasCopied } = useClipboard(code);
 
-  // Resolve branch code from dept name
+  /* The class's department, resolved to the timetable branch whose subjects it
+     may pick from.
+     
+     Matched on a folded key rather than by `===`, which is what this did and
+     why the Subject dropdown was inert for most classes: department names are
+     typed by hand in half a dozen places and reach the database as "Computer
+     Science and Engineering", "computer science & engineering" and
+     "Computer_Science". An exact comparison against the timetable's spelling
+     missed, `branchCode` stayed null, and with no branch there are no
+     semesters and no subjects — so the control rendered, disabled and empty,
+     with nothing to say why. The same folding the rest of the module uses for
+     this (services/departmentHeads deptKeyOf).
+     
+     Creation never hit this: there the teacher picks the branch from a list,
+     so the code is in hand rather than inferred. */
   useEffect(() => {
-    if (!klass.dept) return;
     let cancelled = false;
-    lmApi.ttBranches().then(branches => {
-      if (cancelled) return;
-      const branch = branches.find(b => b.dept === klass.dept);
-      if (branch) setBranchCode(branch.code);
-    }).catch(console.error);
+    setLoadingBranches(true);
+    lmApi
+      .ttBranches()
+      .then((list) => {
+        if (cancelled) return;
+        setBranches(list);
+        const match = list.find((b) => deptKey(b.dept) === deptKey(klass.dept));
+        if (match) setBranchCode(match.code);
+      })
+      .catch(() => !cancelled && setBranches([]))
+      .finally(() => !cancelled && setLoadingBranches(false));
     return () => { cancelled = true; };
   }, [klass.dept]);
 
@@ -101,7 +145,20 @@ export default function ClassSettings() {
         if (res.ok) {
           const data = await res.json();
           if (isMounted && data.timetableData) {
-            const roomSet = new Set();
+            /* Kept exactly as the timetable spells it.
+
+               This used to uppercase every room, and that was the one place in
+               the whole chain where the string changed. A room is picked from
+               the master room list when a department adds it, and picked from
+               that list again when a slot is filled in, so `masterroom.room`
+               reaches a timetable entry character for character — and then
+               "Lt-1" was stored on the class as "LT-1", which no longer matched
+               the record it came from.
+
+               Deduplicated by a folded key rather than by folding the value, so
+               the same room listed twice is still one room without the spelling
+               being rewritten. */
+            const roomByKey = new Map();
             Object.keys(data.timetableData).forEach(day => {
               if (day === 'sem' || day === 'code') return;
               const slots = data.timetableData[day];
@@ -112,7 +169,9 @@ export default function ClassSettings() {
                     if (Array.isArray(slotDataArray)) {
                       slotDataArray.forEach(entry => {
                         if (entry.subject === klass.subject && entry.room) {
-                          roomSet.add(String(entry.room).trim().toUpperCase());
+                          const name = String(entry.room).trim();
+                          const key = name.toLowerCase();
+                          if (name && !roomByKey.has(key)) roomByKey.set(key, name);
                         }
                       });
                     }
@@ -120,7 +179,7 @@ export default function ClassSettings() {
                 }
               });
             });
-            const fetchedRooms = [...roomSet].sort();
+            const fetchedRooms = [...roomByKey.values()].sort((a, b) => a.localeCompare(b));
             setLockedRooms(fetchedRooms);
             if (fetchedRooms.length > 0) {
               setForm(prev => ({ ...prev, room: fetchedRooms.join(', ') }));
@@ -169,6 +228,26 @@ export default function ClassSettings() {
       cancelled = true;
     };
   }, [branchCode, form.semester]);
+
+  /**
+   * The class's stored subject, found again in the list once it loads.
+   *
+   * Matched on the code *and* the name, not the code alone: a lab split across
+   * batches is one timetable row per batch, all sharing `subCode` and differing
+   * only in `subName` — which is the field the dropdown renders. By code alone
+   * a class taught to B3b comes back selected as B3a.
+   */
+  useEffect(() => {
+    if (!subjects.length) {
+      setSubjectRowId('');
+      return;
+    }
+    const code = form.subjectCode || '';
+    const name = form.subject || '';
+    const exact = subjects.find((s) => s.subCode === code && (s.subName || s.name) === name);
+    const byCode = code ? subjects.find((s) => s.subCode === code) : null;
+    setSubjectRowId((exact || byCode)?.id || '');
+  }, [subjects, form.subjectCode, form.subject]);
 
   const set = (field) => (event) => setForm((prev) => ({ ...prev, [field]: event.target.value }));
   const setSetting = (field, value) => setSettings((prev) => ({ ...prev, [field]: value }));
@@ -254,20 +333,55 @@ export default function ClassSettings() {
           <FormControl>
             <FormLabel fontSize="sm">Subject</FormLabel>
             <Select
-              value={subjects.find(s => s.subCode === form.subjectCode)?.id || ''}
+              /**
+               * Keyed by the timetable row id, the way the create-class picker
+               * is, because a subject code does not identify a row.
+               *
+               * This was keyed by `subCode`, and two things followed. A lab
+               * split across batches is one row per batch sharing the code
+               * (see the server's listSubjects), so the dropdown carried
+               * several options with the same value and the browser selected
+               * the first of them whatever was clicked — the second batch of a
+               * lab could not be picked at all. And a timetable row with no
+               * code at all rendered as value="", which is the placeholder's
+               * value, so choosing it read as "No subject" and cleared the
+               * field instead of setting it.
+               */
+              value={subjectRowId || (form.subjectCode || form.subject ? CURRENT_SUBJECT : '')}
               onChange={(event) => {
-                const selected = subjects.find(s => s.id === event.target.value);
-                if (selected) {
-                  setForm(prev => ({
-                    ...prev,
-                    subject: selected.subName || selected.name,
-                    subjectCode: selected.subCode
-                  }));
+                const id = event.target.value;
+                // Already the subject on the class; there is nothing to apply.
+                if (id === CURRENT_SUBJECT) return;
+                if (!id) {
+                  setSubjectRowId('');
+                  setForm(prev => ({ ...prev, subject: '', subjectCode: '' }));
+                  return;
                 }
+                const selected = subjects.find(s => s.id === id);
+                if (!selected) return;
+                setSubjectRowId(id);
+                setForm(prev => ({
+                  ...prev,
+                  // What creation stores, so a class edited here and a class
+                  // created there carry the same thing.
+                  subject: selected.subName || selected.name || '',
+                  subjectCode: selected.subCode || '',
+                }));
               }}
-              placeholder={loadingSubjects ? 'Loading…' : 'Select subject'}
-              isDisabled={!form.semester || loadingSubjects}
+              placeholder={loadingSubjects ? 'Loading…' : 'No subject'}
+              isDisabled={loadingSubjects || (!subjects.length && !form.subjectCode)}
             >
+              {/* The subject the class already has, when the list does not
+                  carry it — a different semester, a subject since retired, or
+                  a branch that could not be resolved. Without this the field
+                  reads as empty for a class that plainly has a subject, and
+                  saving would then clear it. Its own sentinel value, so it can
+                  never collide with a row's id or with the placeholder. */}
+              {!subjectRowId && (form.subjectCode || form.subject) ? (
+                <option value={CURRENT_SUBJECT}>
+                  {[form.subjectCode, form.subject].filter(Boolean).join(' — ')} (current)
+                </option>
+              ) : null}
               {subjects.map((item) => (
                 <option key={item.id} value={item.id}>
                   {[item.subCode, item.subName || item.name].filter(Boolean).join(' — ')}
@@ -275,7 +389,44 @@ export default function ClassSettings() {
                 </option>
               ))}
             </Select>
+            {/* Why the list is empty, rather than a disabled control and no
+                explanation — which is what this was. */}
+            {!loadingSubjects && !subjects.length ? (
+              <FormHelperText fontSize="xs">
+                {!branchCode
+                  ? 'No timetable branch matches this class\u2019s department, so its subjects cannot be listed. Pick the branch below.'
+                  : !form.semester
+                    ? 'Choose a semester and its subjects will be listed here.'
+                    : 'The timetable lists no subjects for this branch and semester.'}
+              </FormHelperText>
+            ) : null}
           </FormControl>
+
+          {/* Offered only when the department did not resolve to a branch on
+              its own. A class whose department is blank, or spelled in a way
+              the timetable does not carry, could otherwise never have its
+              subject changed at all — the dropdown had nothing to offer and no
+              way to be given anything. */}
+          {!branchCode && !loadingBranches ? (
+            <FormControl>
+              <FormLabel fontSize="sm">Subject list from</FormLabel>
+              <Select
+                value={branchCode || ''}
+                onChange={(event) => setBranchCode(event.target.value || null)}
+                placeholder="Select a branch"
+              >
+                {branches.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.dept || item.code}
+                  </option>
+                ))}
+              </Select>
+              <FormHelperText fontSize="xs">
+                Only decides which subjects are offered here. The class stays in{' '}
+                {klass.dept || 'its own department'}.
+              </FormHelperText>
+            </FormControl>
+          ) : null}
           <FormControl>
             <FormLabel fontSize="sm">Room</FormLabel>
             <Input 
@@ -303,6 +454,12 @@ export default function ClassSettings() {
               placeholder={loadingSemesters ? 'Loading…' : 'Select semester'}
               isDisabled={loadingSemesters}
             >
+              {/* Same reason as the subject above: a semester the branch does
+                  not list still belongs to this class, and a field that reads
+                  blank invites somebody to "fix" it and lose what was there. */}
+              {form.semester && !semesters.includes(form.semester) ? (
+                <option value={form.semester}>{form.semester} (current)</option>
+              ) : null}
               {semesters.map((item) => (
                 <option key={item} value={item}>
                   {item}
@@ -340,17 +497,21 @@ export default function ClassSettings() {
       </SectionCard>
 
       <SectionCard title="Class code" subtitle="Students use this to join." mb={4}>
-        <Flex align="center" gap={4} wrap="wrap">
-          <Text fontSize="2xl" fontWeight="700" fontFamily="mono" letterSpacing="wider">
-            {code}
-          </Text>
-          <Button size="sm" variant="outline" onClick={onCopy}>
-            {hasCopied ? 'Copied!' : 'Copy'}
-          </Button>
-          <Button size="sm" variant="outline" onClick={regenerate}>
-            Generate new code
-          </Button>
-        </Flex>
+        <CardRow>
+          <CardBody minW="auto" flex="0 0 auto">
+            <Text fontSize="2xl" fontWeight="700" fontFamily="mono" letterSpacing="wider">
+              {code}
+            </Text>
+          </CardBody>
+          <CardActions justify={{ base: 'flex-start', md: 'flex-start' }} flex="1">
+            <Button size="sm" variant="outline" onClick={onCopy}>
+              {hasCopied ? 'Copied!' : 'Copy'}
+            </Button>
+            <Button size="sm" variant="outline" onClick={regenerate}>
+              Generate new code
+            </Button>
+          </CardActions>
+        </CardRow>
         <Wrap spacing={6} mt={4}>
           <WrapItem>
             <Checkbox

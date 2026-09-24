@@ -220,11 +220,19 @@ export function SectionCard({ title, subtitle, action, children, ...rest }) {
       borderWidth="1px"
       borderColor="lmBorder.base"
       borderRadius="lg"
-      p={5}
+      // 20px of padding costs a phone an eighth of its width on each side, and
+      // it is the card's own text that pays for it.
+      p={{ base: 4, md: 5 }}
       {...rest}
     >
       {(title || action) && (
-        <Flex justify="space-between" align="flex-start" mb={subtitle ? 1 : 4} gap={3}>
+        <Flex
+          justify="space-between"
+          align="flex-start"
+          mb={subtitle ? 1 : 4}
+          gap={3}
+          direction={{ base: 'column', sm: 'row' }}
+        >
           <Box>
             {title && (
               <Heading size="sm" color="lmFg.heading">
@@ -243,6 +251,142 @@ export function SectionCard({ title, subtitle, action, children, ...rest }) {
       {subtitle && <Box mb={4} />}
       {children}
     </Box>
+  );
+}
+
+/**
+ * The width at which a list card stops stacking and becomes a row.
+ *
+ * Written as a media query rather than a Chakra responsive prop because the
+ * rules below live inside `sx` child selectors, where one query covering the
+ * whole block is easier to read — and to keep in step with `CardRow` — than a
+ * breakpoint object repeated on every declaration. 48em is Chakra's `md`.
+ */
+const CARD_ROW_QUERY = '@media (min-width: 48em)';
+
+/**
+ * The body of a list card: the item on one side, its controls on the other.
+ *
+ * Side by side is a desktop shape. On a phone the two halves were sharing a
+ * wrapping row, so the controls came to rest wherever the text happened to
+ * stop — sometimes beside it, sometimes below, never twice the same on two
+ * cards in the same list. That is the clustering: not too many buttons, but no
+ * line anywhere for the eye to follow down the list.
+ *
+ * So below `md` the card is two stacked blocks — everything you read, then
+ * everything you tap — and every card in the list breaks in the same place.
+ * From `md` up it is the row it always was.
+ */
+export function CardRow({ children, align = 'center', ...rest }) {
+  return (
+    <Flex
+      direction={{ base: 'column', md: 'row' }}
+      align={{ base: 'stretch', md: align }}
+      gap={{ base: 3, md: 4 }}
+      {...rest}
+    >
+      {children}
+    </Flex>
+  );
+}
+
+/**
+ * The text half of a list card — title, badges, the line of detail under them.
+ *
+ * `minW` is the reason this exists rather than a bare `Box`: a card body needs
+ * a floor wide enough to keep the controls from crushing the title on a
+ * desktop row, and no floor at all on a phone, where any floor at all is a
+ * horizontal scrollbar on a 320px screen.
+ */
+export function CardBody({ children, minW = '220px', ...rest }) {
+  return (
+    <Box flex="1" minW={{ base: 0, md: minW }} maxW="100%" {...rest}>
+      {children}
+    </Box>
+  );
+}
+
+/**
+ * The controls at the end of a list card, and of a page header.
+ *
+ * A teacher's card carries up to eight of these — Edit, Results, Preview,
+ * Publish, a deadline field, a room code, a delete. Right-aligned and wrapping
+ * at `sm` size, on a phone they arrive as a ragged block of pills of eight
+ * different widths, several of them too small to hit accurately, with the last
+ * row pushed to the right where nothing else on the card is.
+ *
+ * Here they are laid out two to a row at full width, so the block has an edge
+ * on both sides and the eye can go down it; an odd one out takes the whole
+ * last row rather than leaving a gap. Each one is given a 40px floor — Chakra's
+ * `sm` button is 32px high, which is under every platform's minimum touch
+ * target — without changing the `size` the call site asked for, so nothing
+ * moves on a desktop.
+ *
+ * Badges are left out of the stretching: a "Missed" pill is a label that
+ * happens to sit among the buttons, and a label stretched to half the card
+ * reads as something to press.
+ */
+export function CardActions({ children, ...rest }) {
+  return (
+    <Flex
+      w={{ base: '100%', md: 'auto' }}
+      gap={2}
+      wrap="wrap"
+      align="center"
+      justify={{ base: 'flex-start', md: 'flex-end' }}
+      flexShrink={0}
+      sx={{
+        '& > *:not(.chakra-badge)': { flex: '1 1 calc(50% - 0.25rem)', minWidth: 0 },
+        // For the ones that cannot halve: a split button, a date field, anything
+        // whose label is a sentence. Marked at the call site with
+        // `data-card-action-wide`.
+        '& > [data-card-action-wide]': { flex: '1 1 100%' },
+        '& .chakra-button, & .chakra-input, & .chakra-select': { minHeight: '40px' },
+        [CARD_ROW_QUERY]: {
+          '& > *:not(.chakra-badge)': { flex: '0 0 auto' },
+          '& > [data-card-action-wide]': { flex: '0 0 auto' },
+          '& .chakra-button, & .chakra-input, & .chakra-select': { minHeight: 'auto' },
+        },
+      }}
+      {...rest}
+    >
+      {children}
+    </Flex>
+  );
+}
+
+/**
+ * The title block at the top of a tab, with whatever the tab's own controls are.
+ *
+ * Same story as `CardActions`, one level up: "Tutorials", a sentence about
+ * them, then Manual and + New tutorial — which on a phone came out as a
+ * heading with one button hanging off its right-hand end and the other adrift
+ * below. Stacked, the buttons are a row of their own at the width of the page.
+ */
+export function PageHeader({ title, description, actions, children, ...rest }) {
+  return (
+    <Flex
+      direction={{ base: 'column', md: 'row' }}
+      justify="space-between"
+      align={{ base: 'stretch', md: 'flex-start' }}
+      gap={{ base: 3, md: 4 }}
+      mb={4}
+      {...rest}
+    >
+      <Box minW={0}>
+        {typeof title === 'string' ? <Heading size="md">{title}</Heading> : title}
+        {description &&
+          (typeof description === 'string' ? (
+            <Text fontSize="sm" color="lmFg.muted" mt={1}>
+              {description}
+            </Text>
+          ) : (
+            description
+          ))}
+        {children}
+      </Box>
+      {actions && <CardActions>{actions}</CardActions>}
+    </Flex>
   );
 }
 

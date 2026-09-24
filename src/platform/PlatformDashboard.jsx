@@ -1,144 +1,154 @@
+// client/src/platform/PlatformDashboard.jsx
+//
+// The XCEED platform menu, at /platform. Three tools that configure the
+// platform itself rather than any one module.
+//
+// The cards follow the same shape as the Super Admin menu they are reached
+// from — icon tile, title, one line of what is behind it, an arrow that appears
+// on hover — because arriving here used to feel like arriving in a different
+// product: a full-bleed three-colour gradient, a "Click to access" badge on
+// every card restating what a card already is, and headings pinned to
+// `gray.800` that vanished into the card in dark mode.
+
 import React from 'react';
 import {
   Box,
-  Heading,
-  SimpleGrid,
-  Card,
-  CardBody,
-  useColorModeValue,
-  Icon,
-  Text,
-  VStack,
   Container,
-  Badge,
+  Flex,
+  Heading,
+  Icon,
+  SimpleGrid,
+  Text,
+  useColorModeValue,
 } from '@chakra-ui/react';
-import { FiSettings, FiLayers, FiUserPlus } from 'react-icons/fi';
-import { useNavigate } from 'react-router-dom';
+import { FiSettings, FiLayers, FiUserPlus, FiArrowRight, FiArrowLeft } from 'react-icons/fi';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+
+const CARDS = [
+  {
+    title: 'Platform Configuration',
+    description: 'Roles that exist platform-wide, and the links exempted from them.',
+    icon: FiSettings,
+    accent: 'blue',
+    path: '/platform/config',
+  },
+  {
+    title: 'Module Contributors',
+    description: 'The modules XCEED is made of, and who is credited with building each one.',
+    icon: FiLayers,
+    accent: 'purple',
+    path: '/platform/modules',
+  },
+  {
+    title: 'User Registration',
+    description: 'Registration records and the configuration data behind them.',
+    icon: FiUserPlus,
+    accent: 'pink',
+    path: '/platform/data',
+  },
+];
+
+const PlatformCard = ({ title, description, icon, accent, path }) => {
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const border = useColorModeValue('gray.200', 'gray.700');
+  const descColor = useColorModeValue('gray.600', 'gray.400');
+  const iconBg = useColorModeValue(`${accent}.50`, `${accent}.900`);
+  const iconColor = useColorModeValue(`${accent}.600`, `${accent}.300`);
+  const hoverBorder = useColorModeValue(`${accent}.400`, `${accent}.500`);
+
+  return (
+    <Box
+      as={RouterLink}
+      to={path}
+      role="group"
+      bg={cardBg}
+      borderWidth="1px"
+      borderColor={border}
+      borderRadius="xl"
+      p={6}
+      display="flex"
+      flexDirection="column"
+      gap={4}
+      transition="all 0.2s ease"
+      _hover={{
+        transform: 'translateY(-4px)',
+        boxShadow: 'lg',
+        borderColor: hoverBorder,
+        textDecoration: 'none',
+      }}
+      _focusVisible={{ boxShadow: 'outline' }}
+    >
+      <Flex align="center" justify="space-between">
+        <Flex align="center" justify="center" boxSize={12} borderRadius="lg" bg={iconBg} color={iconColor}>
+          <Icon as={icon} boxSize={6} />
+        </Flex>
+        <Icon
+          as={FiArrowRight}
+          boxSize={5}
+          color={iconColor}
+          opacity={0}
+          transform="translateX(-6px)"
+          transition="all 0.2s ease"
+          _groupHover={{ opacity: 1, transform: 'translateX(0)' }}
+        />
+      </Flex>
+      <Box>
+        <Heading as="h3" size="md" mb={1}>
+          {title}
+        </Heading>
+        <Text fontSize="sm" color={descColor}>
+          {description}
+        </Text>
+      </Box>
+    </Box>
+  );
+};
 
 const PlatformDashboard = () => {
   const navigate = useNavigate();
+  const pageBg = useColorModeValue('gray.50', 'gray.900');
+  const subColor = useColorModeValue('gray.600', 'gray.400');
+  const backColor = useColorModeValue('gray.500', 'gray.400');
+  const backHover = useColorModeValue('gray.700', 'gray.200');
 
-  const bgGradient = useColorModeValue('linear(to-br, blue.50, purple.50, pink.50)', 'gray.900');
-  const bgCard = useColorModeValue('rgba(255, 255, 255, 0.95)', 'gray.800');
-  const borderColor = useColorModeValue('gray.300', 'gray.700');
-
-  const cards = [
-    {
-      title: 'Platform Configuration',
-      description: 'Manage roles and exempted links for the platform',
-      icon: FiSettings,
-      color: 'blue',
-      gradient: 'linear(to-br, blue.500, blue.600)',
-      path: '/platform/config'
-    },
-    {
-      title: 'Module Contributors',
-      description: 'Add and manage platform modules with contributors',
-      icon: FiLayers,
-      color: 'purple',
-      gradient: 'linear(to-br, purple.500, purple.600)',
-      path: '/platform/modules'
-    },
-    {
-      title: 'User Registration',
-      description: 'View all platform configurations and user data',
-      icon: FiUserPlus,
-      color: 'pink',
-      gradient: 'linear(to-br, pink.500, pink.600)',
-      path: '/platform/data'
-    }
-  ];
-
-  const handleCardClick = (path) => {
-    navigate(path);
+  // The menu is reached from Super Admin, and until now had no way back to it
+  // short of the browser's own button.
+  const goBack = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate('/superadmin');
   };
 
   return (
-    <Box bgGradient={bgGradient} minH="100vh" pb={16}>
-      <Box 
-        bgGradient="linear(to-r, purple.600, blue.600, teal.500)"
-        pt={8}
-        pb={20}
-        position="relative"
-        overflow="hidden"
-      >
-        <Box
-          position="absolute"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          opacity="0.1"
-          bgImage="radial-gradient(circle, white 1px, transparent 1px)"
-          bgSize="30px 30px"
-        />
-        <Container maxW="7xl" position="relative">
-          <VStack spacing={3} align="center" textAlign="center">
-            <Badge colorScheme="whiteAlpha" fontSize="sm" px={3} py={1} borderRadius="full">
-              Platform Dashboard
-            </Badge>
-            <Heading size="2xl" color="white" fontWeight="bold">
-              Platform Management Center
-            </Heading>
-            <Text color="whiteAlpha.900" fontSize="lg" maxW="2xl">
-              Select an option below to manage your platform
-            </Text>
-          </VStack>
-        </Container>
-      </Box>
+    <Box bg={pageBg} minH="100vh" py={{ base: 8, md: 14 }}>
+      <Container maxW="6xl">
+        <Flex
+          as="button"
+          type="button"
+          onClick={goBack}
+          align="center"
+          gap={2}
+          mb={6}
+          color={backColor}
+          fontSize="sm"
+          _hover={{ color: backHover }}
+          transition="color 0.2s ease"
+        >
+          <Icon as={FiArrowLeft} boxSize={4} />
+          Back
+        </Flex>
 
-      <Container maxW="7xl" mt={-12} position="relative" zIndex={1}>
-        <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={8}>
-          {cards.map((card, index) => (
-            <Card
-              key={index}
-              bg={bgCard}
-              borderRadius="2xl"
-              shadow="2xl"
-              border="1px"
-              borderColor={borderColor}
-              overflow="hidden"
-              transition="all 0.3s"
-              cursor="pointer"
-              onClick={() => handleCardClick(card.path)}
-              _hover={{ 
-                transform: 'translateY(-8px)', 
-                shadow: '3xl',
-                borderColor: `${card.color}.400`
-              }}
-            >
-              <CardBody p={8}>
-                <VStack spacing={6} align="start">
-                  <Box
-                    bgGradient={card.gradient}
-                    p={4}
-                    borderRadius="xl"
-                    display="inline-block"
-                  >
-                    <Icon as={card.icon} boxSize={10} color="white" />
-                  </Box>
-                  
-                  <VStack spacing={2} align="start">
-                    <Heading size="lg" color="gray.800">
-                      {card.title}
-                    </Heading>
-                    <Text color="gray.600" fontSize="md">
-                      {card.description}
-                    </Text>
-                  </VStack>
+        <Box mb={{ base: 8, md: 12 }} textAlign={{ base: 'left', md: 'center' }}>
+          <Heading as="h1" size="xl" mb={2}>
+            XCEED Platform
+          </Heading>
+          <Text color={subColor} fontSize={{ base: 'md', md: 'lg' }}>
+            Settings that belong to the platform itself, not to any one module.
+          </Text>
+        </Box>
 
-                  <Badge 
-                    colorScheme={card.color} 
-                    fontSize="sm" 
-                    px={3} 
-                    py={1} 
-                    borderRadius="full"
-                  >
-                    Click to access
-                  </Badge>
-                </VStack>
-              </CardBody>
-            </Card>
+        <SimpleGrid columns={{ base: 1, sm: 2, lg: 3 }} spacing={6}>
+          {CARDS.map((card) => (
+            <PlatformCard key={card.path} {...card} />
           ))}
         </SimpleGrid>
       </Container>

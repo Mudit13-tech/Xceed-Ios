@@ -64,12 +64,12 @@ function LiveVerdict({ verdict, busy }) {
     <Tooltip
       label={
         remaining
-          ? `Not right yet. ${remaining} check${remaining === 1 ? '' : 's'} left on this answer.`
-          : 'Not right yet, and that was your last check. You can still submit.'
+          ? `Incorrect. ${remaining} check${remaining === 1 ? '' : 's'} left on this answer.`
+          : 'Incorrect, and that was your last check. You can still submit.'
       }
     >
       <Badge colorScheme="orange" fontSize="0.65rem">
-        not yet{remaining ? ` · ${remaining} left` : ''}
+        Incorrect{remaining ? ` · ${remaining} left` : ''}
       </Badge>
     </Tooltip>
   );
@@ -161,9 +161,13 @@ export default function TutorialPlayer() {
    * student is currently typing — used when the live stream nudges a refresh, so
    * a question opening across the room never wipes the box someone is mid-answer
    * in.
+   *
+   * `recheck` is for a reload caused by the teacher editing the questions: the
+   * server has re-checked every answer against the new key, so its ticks replace
+   * the ones on screen instead of being merged under them.
    */
   const load = useCallback(
-    async (merge = false) => {
+    async (merge = false, { recheck = false } = {}) => {
       setError(null);
       try {
         const [detail, sitting] = await Promise.all([
@@ -192,7 +196,7 @@ export default function TutorialPlayer() {
         // saved copy is all there is.
         setInputs((prev) => (merge ? { ...restored, ...prev } : restored));
         setVerdicts((prev) =>
-          merge
+          merge && !recheck
             ? { ...verdictsFromResponses(sitting.attempt?.responses), ...prev }
             : verdictsFromResponses(sitting.attempt?.responses),
         );
@@ -210,10 +214,13 @@ export default function TutorialPlayer() {
     load();
   }, [load]);
 
-  // Subscribe to the live pace only once we know the tutorial is in live mode.
+  // Subscribed whenever there is a paper on screen. A live tutorial reads its
+  // pace from it; every tutorial reads `contentRevision`, which moves when the
+  // teacher's edits are pushed through to the papers.
+  const hasPaper = Boolean(attempt);
   const liveStreamUrl = useMemo(
-    () => (live ? lmApi.tutorialLiveStreamUrl(classId, tutorialId) : null),
-    [live, classId, tutorialId],
+    () => (hasPaper ? lmApi.tutorialLiveStreamUrl(classId, tutorialId) : null),
+    [hasPaper, classId, tutorialId],
   );
   const pollLive = useCallback(
     () => lmApi.tutorialLiveState(classId, tutorialId),
@@ -226,18 +233,32 @@ export default function TutorialPlayer() {
 
   // When the teacher opens the next question or flips a hint, the revision bumps
   // — re-fetch the attempt to pull the newly revealed content in, preserving
-  // whatever the student is typing.
+  // whatever the student is typing. When they edit the questions,
+  // `contentRevision` bumps and the same reload brings the new wording in.
   const lastRevisionRef = useRef(-1);
+  const lastContentRef = useRef(null);
   useEffect(() => {
     if (!liveState) return;
-    setLive((prev) => ({ ...(prev || {}), ...liveState }));
+    if (liveState.live) setLive((prev) => ({ ...(prev || {}), ...liveState }));
     const revision = Number(liveState.revision ?? 0);
-    if (revision !== lastRevisionRef.current) {
+    const content = Number(liveState.contentRevision ?? 0);
+    const contentChanged = lastContentRef.current !== null && content !== lastContentRef.current;
+    lastContentRef.current = content;
+    if (revision !== lastRevisionRef.current || contentChanged) {
       lastRevisionRef.current = revision;
       // Skip the very first frame — it matches what load() already fetched.
-      if (revision > 0) load(true);
+      if (revision > 0 || contentChanged) load(true, { recheck: contentChanged });
+      if (contentChanged) {
+        toast({
+          status: 'info',
+          title: 'Your teacher updated the questions',
+          description: 'Your numbers and anything you have typed are kept.',
+          duration: 6000,
+          isClosable: true,
+        });
+      }
     }
-  }, [liveState, load]);
+  }, [liveState, load, toast]);
 
   const responses = useMemo(
     () =>

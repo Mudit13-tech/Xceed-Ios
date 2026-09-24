@@ -53,6 +53,44 @@
  * See build/mobileOverrides.js. `npm run drift` reports what AMS has changed in
  * lmApi.js since; this file wraps whatever that file exports rather than
  * restating any of it, so most such changes need nothing done here.
+ *
+ * Reviewed 2026-09-19 against the +106/-13 the drift report was holding, and
+ * nothing needed porting - recorded because the report cannot tell "absorbed by
+ * the wrapper" from "not looked at yet", and the next reader would otherwise
+ * read all 119 lines again to find that out.
+ *
+ * Nine methods arrived (attachmentUrl, fetchAttachment, requestLeaveCode, the
+ * second argument on leaveClass, getFormSummaryForRespondent,
+ * formResponsesZipUrl, getFormSummaryByLink, uploadFormFilesByLink, the options
+ * bag on myTutorialAttempt) and the loop at the bottom classified every one of
+ * them correctly: the three that POST are invalidating, the readers and url
+ * builders pass straight through. The changes inside `request` itself -
+ * Priority Hints, keepalive on recordViolation, readLocal for the token - are
+ * below the wrap and arrive without being mentioned here at all.
+ *
+ * The one thing worth re-checking rather than assuming: upstream moved its
+ * token read to safeStorage's `readLocal`. `currentToken` and `sameSession`
+ * below do not use it, and do not need to - their `try` encloses the property
+ * access as well as the `getItem`, which is the throw safeStorage exists to
+ * catch. Worth revisiting only if safeStorage ever grows a fallback that
+ * returns a token where a bare read would not, since these two would then be
+ * comparing against a different value than `request` is sending.
+ *
+ * Reviewed again 2026-09-20 against the +24/-1 of the AMS sync merged that day,
+ * and again nothing needed porting. Five methods arrived: the co-teacher gate
+ * (checkCoTeacherEmail, requestCoTeacherCode), the `otp` argument threaded
+ * through inviteMembers, and the two role-revocations (adminRevokeFaculty,
+ * adminRevokeStudent). The loop classifies all five as writes, which is right
+ * for four of them. `checkCoTeacherEmail` is the exception and is deliberately
+ * left alone: it POSTs but changes nothing, so it clears the shell cache it
+ * need not have. That is the direction WRITES is documented to err in, and the
+ * cost is one refetch of me/overview/classes while a teacher types an address
+ * into the invite box — cheaper than a hand-kept exception list that goes stale
+ * the first time upstream turns one of these into a real write.
+ *
+ * Reviewed 2026-09-24 against the +2/-0 of that day's sync: one method,
+ * ttRoomLocations, a plain GET. The loop passes it straight through as a
+ * reader, so nothing needed porting.
  */
 import { Preferences } from '@capacitor/preferences';
 

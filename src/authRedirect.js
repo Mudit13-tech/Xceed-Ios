@@ -94,12 +94,83 @@ export const singleRoleTarget = (role, user) => {
 };
 
 /**
+ * A head who reaches BOTH dashboards through the bare `HOD` appointment.
+ *
+ * `HOD` on its own has always opened the Learning dashboard AND the iLEED one,
+ * so such an account has two destinations even though it holds one role. Every
+ * "this account has only one role, skip the picker" shortcut has to know that,
+ * or it drops a head onto one of their two screens and hides the other — which
+ * is how a head comes to report that their cards never appear.
+ *
+ * False once either named role is held: the account then has exactly the
+ * destinations its roles name, and the ordinary counting is right.
+ * Mirrors `hasUnnamedHodDashboards` in server/src/services/departmentHeads.js.
+ */
+export const hasUnnamedHodDashboards = (roles) => {
+  const held = (Array.isArray(roles) ? roles : [roles])
+    .filter(Boolean)
+    .map((role) => String(role).trim().toLowerCase());
+  return held.includes('hod')
+    && !held.includes('hod-learning')
+    && !held.includes('hod-ileed');
+};
+
+/**
+ * A head who reaches the timetable dashboard through the `HOD` appointment.
+ *
+ * Unconditional where `hasUnnamedHodDashboards` is not, and for the dean's
+ * reason rather than the head's: splitting `HOD` into `hod-learning` and
+ * `hod-ileed` was about those two screens, and neither half was ever a way of
+ * withdrawing the timetable view — it did not exist then. So every account
+ * holding the appointment has this destination on top of whatever its named
+ * roles give it.
+ *
+ * Which means a head holding `HOD` and one named role has TWO destinations
+ * while holding, as far as the cards are concerned, one role — and the
+ * "only one role, skip the picker" shortcut would drop them on the named one
+ * and hide this card completely.
+ */
+export const hasTimetableHodDashboard = (roles) =>
+  (Array.isArray(roles) ? roles : [roles])
+    .filter(Boolean)
+    .some((role) => String(role).trim().toLowerCase() === 'hod');
+
+/**
+ * A dean who reaches BOTH dashboards through the one role they hold.
+ *
+ * `DEAN` opens the Learning dean dashboard and the iLEED one, so such an
+ * account has two destinations even though it holds a single role — and every
+ * "this account has only one role, skip the picker" shortcut has to know that,
+ * or it drops a dean onto one of their two screens and hides the other.
+ *
+ * Unconditional where `hasUnnamedHodDashboards` is not: a head stops having two
+ * destinations once an administrator takes one of the named roles away, but
+ * there are no named dean roles to take — what an administrator withdraws from
+ * a dean is the menus behind the screen, not the screen.
+ *
+ * Mirrors `hasDeanDashboards` in server/src/services/deans.js.
+ */
+export const hasDeanDashboards = (roles) =>
+  (Array.isArray(roles) ? roles : [roles])
+    .filter(Boolean)
+    .some((role) => String(role).trim().toLowerCase() === 'dean');
+
+/**
  * Resolves the immediate landing page for a user object: single-role users go
  * straight to their respective module dashboard (e.g. /learning for students),
  * while multi-role users go to /userroles to choose.
  */
 export const defaultTargetForUser = (user) => {
   if (!user) return '/userroles';
+  // Before `landingPath` is trusted: a server that predates the two named
+  // roles still answers a bare head with one of their two dashboards, and
+  // honouring it here would skip the picker that shows the other.
+  if (hasUnnamedHodDashboards(user.role)) return '/userroles';
+  // And any head at all, named roles or not: the timetable card is theirs on
+  // the appointment alone, so there is always a second destination.
+  if (hasTimetableHodDashboard(user.role)) return '/userroles';
+  // And the dean, for the same reason: one role, two dashboards.
+  if (hasDeanDashboards(user.role)) return '/userroles';
   if (typeof user.landingPath === 'string' && user.landingPath.startsWith('/')) {
     return user.landingPath;
   }

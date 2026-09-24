@@ -469,8 +469,19 @@ export default function SetupManual({ standalone = false }) {
                         ))}
                     </div>
                     <Note type="tip">
-                        &ldquo;+ Invite&rdquo; beside <strong>Teachers</strong> opens the same dialog with Role set
-                        to co-teacher — everything you can do in the class, except transfer ownership.
+                        &ldquo;+ Faculty Invite&rdquo; beside <strong>Teachers</strong> opens the same dialog with
+                        Role set to co-teacher — everything you can do in the class, except transfer ownership.
+                        Co-teachers go in <strong>one address at a time</strong>, and the address is checked
+                        against the timetable module&rsquo;s faculty list first: a co-teacher reads every answer
+                        key and every mark, and a mistyped address would otherwise hand all of it to a stranger.
+                    </Note>
+                    <Note type="info">
+                        <strong>Not listed in the timetable?</strong> Check the address for a typo. If it is right
+                        and the person is faculty here, ask your timetable coordinator to add their email ID to the
+                        timetable module. To add a <strong>PhD scholar or a TA</strong> — who will never be on that
+                        list — approve them yourself: the dialog emails a six-digit code to your own address, and
+                        the invitation goes ahead once you enter it. The code names the person it approves and works
+                        for that one address only, so read it before you type it back.
                     </Note>
                     <Note type="info">
                         Invitation mail goes out in the background after the roster rows are written, so the modal

@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import getEnvironment from '../getenvironment';
 import { styles, theme } from './config';
+import ExpandableCard, { expandableCardCss } from './ExpandableCard';
 
 const apiUrl = getEnvironment();
 
@@ -205,7 +206,20 @@ function compactDepartmentLabel(value) {
         .replace(/\bControl\b/g, 'Ctrl');
 }
 
-function BatchChart({ rows }) {
+// `bare` drops the panel box and its own heading, for when the chart is being
+// rendered inside an ExpandableCard that already carries both — otherwise the
+// title appears twice, once on the fold and once under it.
+function Panel({ bare, title, subtitle, children }) {
+    if (bare) return children;
+    return (
+        <div style={{ ...panelBase, padding: 16 }}>
+            <SectionHeader title={title} subtitle={subtitle} />
+            {children}
+        </div>
+    );
+}
+
+function BatchChart({ rows, bare = false }) {
     const batches = rows
         .flatMap((row) => (row.batches || []).map((batch) => ({
             ...batch,
@@ -221,11 +235,11 @@ function BatchChart({ rows }) {
     }
 
     return (
-        <div style={{ ...panelBase, padding: 16 }}>
-            <SectionHeader
-                title="Roll Assignment by Batch"
-                subtitle="Approved roll assignments measured against ERP photo count."
-            />
+        <Panel
+            bare={bare}
+            title="Roll Assignment by Batch"
+            subtitle="Approved roll assignments measured against ERP photo count."
+        >
             <div style={{ height: Math.max(190, batches.length * 50) }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart
@@ -272,11 +286,11 @@ function BatchChart({ rows }) {
                     </BarChart>
                 </ResponsiveContainer>
             </div>
-        </div>
+        </Panel>
     );
 }
 
-function SemesterChart({ rows }) {
+function SemesterChart({ rows, bare = false }) {
     const semesters = [...rows]
         .map((row) => ({
             ...row,
@@ -294,11 +308,11 @@ function SemesterChart({ rows }) {
     }
 
     return (
-        <div style={{ ...panelBase, padding: 16 }}>
-            <SectionHeader
-                title="Subject Embeddings by Semester"
-                subtitle="Only theory classes are counted in the denominator."
-            />
+        <Panel
+            bare={bare}
+            title="Subject Embeddings by Semester"
+            subtitle="Only theory classes are counted in the denominator."
+        >
             <div style={{ height: Math.max(190, semesters.length * 50) }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart
@@ -346,7 +360,7 @@ function SemesterChart({ rows }) {
                     </BarChart>
                 </ResponsiveContainer>
             </div>
-        </div>
+        </Panel>
     );
 }
 
@@ -367,7 +381,19 @@ function getDepartmentOptions(data) {
 
 const normalizeDeptKey = (value) => String(value || '').trim().replace(/[\s_-]+/g, '').toUpperCase();
 
-export default function DashboardProgress({ title = 'Dashboard Progress', compact = false, initialDepartment = '' }) {
+/**
+ * @param {boolean} collapsibleCharts  put the two charts behind folded
+ *        headings instead of drawing them inline. The percentage rings stay
+ *        visible either way — they are the headline, and folding those would
+ *        hide the number somebody came for. Used on the dashboards, where the
+ *        live classroom cards above are what must be seen first.
+ */
+export default function DashboardProgress({
+    title = 'Dashboard Progress',
+    compact = false,
+    collapsibleCharts = false,
+    initialDepartment = '',
+}) {
     const [state, setState] = useState({ data: null, loading: true, refreshing: false, error: '' });
     const [selectedDepartment, setSelectedDepartment] = useState('');
     // Applied at most once — after that the dropdown is the user's to drive.
@@ -541,10 +567,32 @@ export default function DashboardProgress({ title = 'Dashboard Progress', compac
                             />
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: compact ? '1fr' : '1fr 1fr', gap: 14 }}>
-                            <BatchChart rows={groundTruthRows} />
-                            <SemesterChart rows={embeddingRows} />
-                        </div>
+                        {collapsibleCharts ? (
+                            <>
+                                <style dangerouslySetInnerHTML={{ __html: expandableCardCss }} />
+                                <ExpandableCard
+                                    title="Roll Assignment by Batch"
+                                    subtitle="Approved roll assignments measured against ERP photo count."
+                                    badge={formatPercent(summary.groundTruthProgressPct)}
+                                    badgeColor={theme.success}
+                                >
+                                    <BatchChart rows={groundTruthRows} bare />
+                                </ExpandableCard>
+                                <ExpandableCard
+                                    title="Subject Embeddings by Semester"
+                                    subtitle="Only theory classes are counted in the denominator."
+                                    badge={formatPercent(summary.embeddingProgressPct)}
+                                    badgeColor={theme.warning}
+                                >
+                                    <SemesterChart rows={embeddingRows} bare />
+                                </ExpandableCard>
+                            </>
+                        ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: compact ? '1fr' : '1fr 1fr', gap: 14 }}>
+                                <BatchChart rows={groundTruthRows} />
+                                <SemesterChart rows={embeddingRows} />
+                            </div>
+                        )}
                     </>
                 )}
             </section>

@@ -42,6 +42,7 @@ import * as XLSX from 'xlsx';
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile, TableSkeleton } from '../components/common';
 import { LmIcon } from '../components/Icon';
+import RevokeRoleDialog from '../components/RevokeRoleDialog';
 
 /**
  * Student accounts and department-wise roster, for an lm-admin.
@@ -619,6 +620,10 @@ export default function LmAdminStudents() {
   const [error, setError] = useState(null);
   const [editingStudent, setEditingStudent] = useState(null);
   const editModal = useDisclosure();
+  /* The row whose STUDENT role is being taken off — see the faculty directory
+     for why the table, not the dialog, holds this. */
+  const [revoking, setRevoking] = useState(null);
+  const revokeModal = useDisclosure();
   const [normalizing, setNormalizing] = useState(false);
   const toast = useToast();
 
@@ -805,16 +810,33 @@ export default function LmAdminStudents() {
                       <ClaimBadge claimed={student.claimed} />
                     </Td>
                     <Td>
-                      <IconButton
-                        aria-label="Edit student"
-                        icon={<LmIcon name="edit" size={15} />}
-                        size="xs"
-                        variant="ghost"
-                        onClick={() => {
-                          setEditingStudent(student);
-                          editModal.onOpen();
-                        }}
-                      />
+                      <HStack spacing={1} justify="flex-end">
+                        <IconButton
+                          aria-label="Edit student"
+                          icon={<LmIcon name="edit" size={15} />}
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => {
+                            setEditingStudent(student);
+                            editModal.onOpen();
+                          }}
+                        />
+                        {/* Beside the edit rather than in a menu of its own:
+                            both are "this row is wrong", and the dialog behind
+                            this one is where the weight of the decision sits. */}
+                        <IconButton
+                          aria-label={`Remove the student role from ${student.name || student.email}`}
+                          title="Remove the STUDENT role"
+                          icon={<LmIcon name="delete" size={15} />}
+                          size="xs"
+                          variant="ghost"
+                          colorScheme="red"
+                          onClick={() => {
+                            setRevoking(student);
+                            revokeModal.onOpen();
+                          }}
+                        />
+                      </HStack>
                     </Td>
                   </Tr>
                 ))}
@@ -834,6 +856,30 @@ export default function LmAdminStudents() {
         isOpen={editModal.isOpen}
         onClose={editModal.onClose}
         onSaved={() => load(search, selectedDept)}
+      />
+
+      <RevokeRoleDialog
+        role="STUDENT"
+        person={revoking}
+        isOpen={revokeModal.isOpen}
+        onClose={revokeModal.onClose}
+        onDone={(result) => {
+          toast({
+            status: 'success',
+            title: `STUDENT removed from ${result.name || result.email}`,
+            description: [
+              result.hasNoRolesLeft
+                ? 'That account now holds no roles and will see no module until one is granted.'
+                : `Still holds: ${result.rolesLeft.join(', ')}.`,
+              result.enrolmentsEnded
+                ? `Removed from ${result.enrolmentsEnded} class${result.enrolmentsEnded === 1 ? '' : 'es'}.`
+                : 'Classes they had already joined were left alone.',
+            ].filter(Boolean).join(' '),
+            duration: 10000,
+            isClosable: true,
+          });
+          load(search, selectedDept);
+        }}
       />
     </VStack>
   );

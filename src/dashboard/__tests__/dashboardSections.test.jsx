@@ -157,4 +157,31 @@ describe('the toggles', () => {
       screen.getByText(/control what appears on a screen, not who may open it/),
     ).toBeInTheDocument();
   });
+
+  /* An administrator turning panels off had no way to go and look at the
+     result. These point at the lm-admin twins of the two dashboards rather
+     than the post-holders' own routes: /learning/hod-dashboard is behind
+     RequireHod and the dean's behind the dean gate, and an administrator holds
+     neither role. Same component, same endpoint, a gate that admits them. */
+  it('offers a View link into each dashboard', async () => {
+    renderPanel();
+    await screen.findByRole('heading', { name: /HOD Dashboard/i });
+
+    const links = screen.getAllByRole('link', { name: /view/i });
+    const hrefs = links.map((link) => link.getAttribute('href'));
+    expect(hrefs).toContain('/learning/lm-admin/hod-dashboard');
+    expect(hrefs).toContain('/learning/lm-admin/dean-dashboard');
+  });
+
+  /* A navigation would discard unsaved toggles, and comparing the switches
+     against the screen they produce is the entire reason to click it. */
+  it('opens each dashboard in a new tab', async () => {
+    renderPanel();
+    await screen.findByRole('heading', { name: /HOD Dashboard/i });
+
+    for (const link of screen.getAllByRole('link', { name: /view/i })) {
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', expect.stringContaining('noreferrer'));
+    }
+  });
 });

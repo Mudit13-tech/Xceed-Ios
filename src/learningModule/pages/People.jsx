@@ -81,6 +81,11 @@ function InviteModal({ isOpen, onClose, classId, klass, onDone, defaultRole = 's
       setPhase(null);
       setMailProgress(null);
       setCreatedCount(0);
+      // Nor the last run's addresses. The same modal serves both buttons, and a
+      // pasted student roster left in the box would arrive in the co-teacher
+      // field — one line of it as the address, the rest as a refusal.
+      setEmails('');
+      setReport(null);
     }
   }, [isOpen, defaultRole]);
   const [busy, setBusy] = useState(false);
@@ -99,7 +104,90 @@ function InviteModal({ isOpen, onClose, classId, klass, onDone, defaultRole = 's
   const pollRef = useRef(null);
   const toast = useToast();
 
-  const platformRole = role === 'co-teacher' ? 'FACULTY' : 'STUDENT';
+  const isCoTeacher = role === 'co-teacher';
+  const platformRole = isCoTeacher ? 'FACULTY' : 'STUDENT';
+
+  /**
+   * The co-teacher gate, as the person typing sees it — see the server's
+   * services/coTeacherGate for the rule itself.
+   *
+   * `gate` is the verdict on the address currently in the box: null (nothing
+   * to say yet), 'checking', 'listed' with the timetable record read back, or
+   * 'unlisted' with the explanation. `otp` is the code the teacher was mailed
+   * to approve an unlisted address, and is sent with the invitation.
+   *
+   * None of this is a permission check — the server runs the same gate on the
+   * invite itself and refuses it there. What it is for is showing the teacher
+   * *who* an address resolves to while they can still fix a typo, instead of
+   * after a stranger has been handed the class.
+   */
+  const [gate, setGate] = useState(null);
+  const [otp, setOtp] = useState('');
+  const [codeSentTo, setCodeSentTo] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
+  // Only the newest lookup may write the verdict: typing is faster than the
+  // round trip, and a slow answer for a half-typed address must not overwrite
+  // the answer for the finished one.
+  const checkSeq = useRef(0);
+
+  const address = emails.trim().toLowerCase();
+
+  useEffect(() => {
+    if (!isOpen || !isCoTeacher) {
+      setGate(null);
+      return undefined;
+    }
+
+    // Editing the address throws away any approval already in hand: the code
+    // names one address, and the server refuses it for any other.
+    setOtp('');
+    setCodeSentTo('');
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+      setGate(null);
+      return undefined;
+    }
+
+    setGate({ status: 'checking' });
+    const seq = checkSeq.current + 1;
+    checkSeq.current = seq;
+    const timer = setTimeout(async () => {
+      try {
+        const result = await lmApi.checkCoTeacherEmail(classId, address);
+        if (seq !== checkSeq.current) return;
+        setGate({
+          status: result.listed ? 'listed' : 'unlisted',
+          faculty: result.faculty,
+          message: result.message,
+        });
+      } catch {
+        // The invitation runs the same check and will refuse there if it has
+        // to, so a failed lookup costs the readback and nothing else. Better
+        // silent than an error the teacher can do nothing about.
+        if (seq === checkSeq.current) setGate(null);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [isOpen, isCoTeacher, address, classId]);
+
+  /** Mails the teacher the code that approves this one unlisted address. */
+  const sendApprovalCode = async () => {
+    setSendingCode(true);
+    try {
+      const result = await lmApi.requestCoTeacherCode(classId, address);
+      setCodeSentTo(result.sentTo || '');
+      toast({
+        status: 'success',
+        title: 'Approval code sent',
+        description: `Check ${result.sentTo || 'your email'} for a six-digit code. It is valid for 10 minutes.`,
+        duration: 8000,
+      });
+    } catch (error) {
+      toast({ status: 'error', title: 'Could not send the code', description: error.message });
+    } finally {
+      setSendingCode(false);
+    }
+  };
 
   const stopPolling = () => {
     if (pollRef.current) {
@@ -184,6 +272,19 @@ function InviteModal({ isOpen, onClose, classId, klass, onDone, defaultRole = 's
       .filter(Boolean);
     if (!list.length) return;
 
+    // Co-teachers go in one at a time — the server refuses a longer list, and
+    // saying so here beats a round trip to be told. A co-teacher holds every
+    // answer key and every mark in the class; a pasted list of them is a list
+    // nobody reads back.
+    if (isCoTeacher && list.length > 1) {
+      toast({
+        status: 'error',
+        title: 'One at a time',
+        description: 'Invite co-teachers one email address at a time.',
+      });
+      return;
+    }
+
     setBusy(true);
     setReport(null);
     setMailProgress(null);
@@ -193,7 +294,7 @@ function InviteModal({ isOpen, onClose, classId, klass, onDone, defaultRole = 's
     setPhase('creating');
     stopPolling();
     try {
-      const result = await lmApi.inviteMembers(classId, list, role);
+      const result = await lmApi.inviteMembers(classId, list, role, isCoTeacher ? otp.trim() : undefined);
       setReport(result.results);
       setCreatedCount(result.results.filter((entry) => entry.status === 'account_created').length);
       // Membership rows are already written — the roster and counts are
@@ -212,7 +313,20 @@ function InviteModal({ isOpen, onClose, classId, klass, onDone, defaultRole = 's
       }
     } catch (error) {
       setPhase(null);
-      toast({ status: 'error', title: 'Could not invite', description: error.message });
+      // The gate answers with a code rather than a bare failure. Fold it back
+      // into the panel — an address refused here is one the debounced lookup
+      // may never have run for (pasted and submitted in one go), and the
+      // explanation plus the "approve it myself" step is the whole answer the
+      // teacher needs.
+      if (error.payload?.code === 'CO_TEACHER_NOT_IN_TIMETABLE') {
+        setGate({ status: 'unlisted', faculty: null, message: error.payload.message });
+      }
+      toast({
+        status: 'error',
+        title: error.payload?.code === 'CO_TEACHER_NOT_IN_TIMETABLE' ? 'Not in the timetable' : 'Could not invite',
+        description: error.message,
+        duration: 10000,
+      });
     } finally {
       setBusy(false);
     }
@@ -222,7 +336,7 @@ function InviteModal({ isOpen, onClose, classId, klass, onDone, defaultRole = 's
     <Modal isOpen={isOpen} onClose={onClose} size="lg">
       <ModalOverlay />
       <ModalContent>
-        <ModalHeader>Invite people</ModalHeader>
+        <ModalHeader>{isCoTeacher ? 'Invite a co-teacher' : 'Invite people'}</ModalHeader>
         <ModalCloseButton />
         <ModalBody>
           <FormControl mb={4}>
@@ -232,18 +346,145 @@ function InviteModal({ isOpen, onClose, classId, klass, onDone, defaultRole = 's
               {availableRoles.includes('co-teacher') && <option value="co-teacher">Co-teacher</option>}
             </Select>
           </FormControl>
-          <FormControl mt={4}>
-            <FormLabel fontSize="sm">Email addresses</FormLabel>
-            <Textarea
-              rows={6}
-              value={emails}
-              onChange={(event) => setEmails(event.target.value)}
-              placeholder={'one@nitj.ac.in\ntwo@nitj.ac.in, three@nitj.ac.in'}
-            />
-            <FormHelperText fontSize="xs">
-              Separate with commas, spaces or new lines.
-            </FormHelperText>
-          </FormControl>
+          {isCoTeacher ? (
+            <FormControl mt={4}>
+              <FormLabel fontSize="sm">Faculty email address</FormLabel>
+              <Input
+                type="email"
+                value={emails}
+                onChange={(event) => setEmails(event.target.value)}
+                placeholder="name@nitj.ac.in"
+                autoComplete="off"
+              />
+              <FormHelperText fontSize="xs">
+                One co-teacher at a time. The address is checked against the timetable module&apos;s
+                faculty list before anyone is added.
+              </FormHelperText>
+            </FormControl>
+          ) : (
+            <FormControl mt={4}>
+              <FormLabel fontSize="sm">Email addresses</FormLabel>
+              <Textarea
+                rows={6}
+                value={emails}
+                onChange={(event) => setEmails(event.target.value)}
+                placeholder={'one@nitj.ac.in\ntwo@nitj.ac.in, three@nitj.ac.in'}
+              />
+              <FormHelperText fontSize="xs">
+                Separate with commas, spaces or new lines.
+              </FormHelperText>
+            </FormControl>
+          )}
+
+          {/* The gate's verdict on the address in the box. Three states worth
+              showing: looking it up, found (with the record read back, which is
+              what catches a typo that happens to be somebody else's address),
+              and not found — where the refusal, its remedy and the way past it
+              for a scholar or TA all have to be on screen together. */}
+          {isCoTeacher && gate?.status === 'checking' && (
+            <Flex mt={3} align="center" gap={2}>
+              <BusyDots size="4px" color="blue.400" label="Checking" />
+              <Text fontSize="xs" color="lmFg.subtle">
+                Checking the timetable faculty list…
+              </Text>
+            </Flex>
+          )}
+
+          {isCoTeacher && gate?.status === 'listed' && (
+            <Flex
+              mt={3}
+              p={3}
+              gap={3}
+              align="flex-start"
+              borderWidth="1px"
+              borderColor="lmHue.green200"
+              bg="lmHue.green50"
+              borderRadius="md"
+            >
+              <Box color="green.500" pt={0.5}>
+                <LmIcon name="check" size={15} />
+              </Box>
+              <Box>
+                <Text fontSize="xs" fontWeight="700" color="lmFg.heading">
+                  Listed in the timetable faculty list
+                </Text>
+                <Text fontSize="xs" color="lmFg.subtle" mt={1}>
+                  {[gate.faculty?.name, gate.faculty?.designation, gate.faculty?.dept]
+                    .filter(Boolean)
+                    .join(' · ') || 'Record found.'}
+                </Text>
+                <Text fontSize="xs" color="lmFg.subtle" mt={1}>
+                  Check this is the person you meant before sending the invitation.
+                </Text>
+              </Box>
+            </Flex>
+          )}
+
+          {isCoTeacher && gate?.status === 'unlisted' && (
+            <Box
+              mt={3}
+              p={3}
+              borderWidth="1px"
+              borderColor="lmHue.orange200"
+              bg="lmHue.orange50"
+              borderRadius="md"
+            >
+              <Flex gap={3} align="flex-start">
+                <Box color="orange.500" pt={0.5}>
+                  <LmIcon name="warning" size={15} />
+                </Box>
+                <Box>
+                  <Text fontSize="xs" fontWeight="700" color="lmFg.heading">
+                    This faculty is not listed in the timetable
+                  </Text>
+                  <Text fontSize="xs" color="lmFg.subtle" mt={1}>
+                    {gate.message}
+                  </Text>
+                </Box>
+              </Flex>
+
+              <Divider my={3} borderColor="lmHue.orange200" />
+
+              <Text fontSize="xs" fontWeight="700" color="lmFg.heading">
+                Adding a PhD scholar or a TA as a teacher?
+              </Text>
+              <Text fontSize="xs" color="lmFg.subtle" mt={1}>
+                They will never be on the timetable faculty list. Approve them yourself: we email a
+                six-digit code to your own address, and the invitation goes ahead once you enter it.
+              </Text>
+
+              <Flex mt={3} gap={2} align="flex-end" wrap="wrap">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  leftIcon={<FiMail />}
+                  onClick={sendApprovalCode}
+                  isLoading={sendingCode}
+                  loadingText="Sending…"
+                >
+                  {codeSentTo ? 'Resend code' : 'Email me an approval code'}
+                </Button>
+                <FormControl w="auto">
+                  <Input
+                    size="sm"
+                    w="9rem"
+                    value={otp}
+                    onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="6-digit code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    bg="lmBg.surface"
+                  />
+                </FormControl>
+              </Flex>
+              {codeSentTo && (
+                <Text fontSize="xs" color="lmFg.subtle" mt={2}>
+                  Code sent to <strong>{codeSentTo}</strong> — it approves{' '}
+                  <strong>{address}</strong> only, and expires in 10 minutes.
+                </Text>
+              )}
+            </Box>
+          )}
 
           {/* Stated rather than enforced, because it cannot be detected: a
               batch alias is a well-formed address like any other, and only the
@@ -251,57 +492,64 @@ function InviteModal({ isOpen, onClose, classId, klass, onDone, defaultRole = 's
               faculty actually hit, in the order they should try them — most of
               a B.Tech class needs no invitation at all, and typing sixty
               addresses to reach students who could have used the code is the
-              mistake this box exists to head off. */}
-          <Flex
-            mt={3}
-            p={3}
-            gap={3}
-            align="flex-start"
-            borderWidth="1px"
-            borderColor="lmHue.orange200"
-            bg="lmHue.orange50"
-            borderRadius="md"
-          >
-            <Box color="orange.500" pt={0.5}>
-              <LmIcon name="warning" size={15} />
-            </Box>
-            <Box>
-              <Text fontSize="xs" fontWeight="700" color="lmFg.heading">
-                Individual student IDs only — never a group ID
-              </Text>
-              <Text fontSize="xs" color="lmFg.subtle" mt={1}>
-                One address per student. A batch or group alias cannot be invited: it looks like an
-                ordinary address here, and everyone behind it lands in the class as a single account.
-              </Text>
-              <Box as="ul" pl={4} mt={2} fontSize="xs" color="lmFg.subtle">
-                <Box as="li">
-                  <strong>B.Tech students</strong> already have accounts — share the class code{' '}
-                  <Text as="span" fontFamily="mono" fontWeight="700" color="lmFg.heading">
-                    {klass?.code || '——'}
-                  </Text>{' '}
-                  and let them join themselves. No invitation needed.
-                </Box>
-                <Box as="li" mt={1}>
-                  <strong>M.Tech, PhD and everyone else</strong> — invite them here, one individual ID
-                  at a time.
-                </Box>
-                <Box as="li" mt={1}>
-                  <strong>No account yet?</strong> Ask them to create one at{' '}
-                  <Text
-                    as="a"
-                    href="https://xceed.nitj.ac.in/help"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    color="lmHue.blue600"
-                    textDecoration="underline"
-                  >
-                    xceed.nitj.ac.in/help
-                  </Text>
-                  , then share the class code with them.
+              mistake this box exists to head off.
+
+              Students only: a co-teacher is added one address at a time past
+              the timetable gate above, so none of the class-code advice applies
+              — and the one thing it shares, one individual ID at a time, the
+              co-teacher field enforces rather than asks for. */}
+          {!isCoTeacher && (
+            <Flex
+              mt={3}
+              p={3}
+              gap={3}
+              align="flex-start"
+              borderWidth="1px"
+              borderColor="lmHue.orange200"
+              bg="lmHue.orange50"
+              borderRadius="md"
+            >
+              <Box color="orange.500" pt={0.5}>
+                <LmIcon name="warning" size={15} />
+              </Box>
+              <Box>
+                <Text fontSize="xs" fontWeight="700" color="lmFg.heading">
+                  Individual student IDs only — never a group ID
+                </Text>
+                <Text fontSize="xs" color="lmFg.subtle" mt={1}>
+                  One address per student. A batch or group alias cannot be invited: it looks like an
+                  ordinary address here, and everyone behind it lands in the class as a single account.
+                </Text>
+                <Box as="ul" pl={4} mt={2} fontSize="xs" color="lmFg.subtle">
+                  <Box as="li">
+                    <strong>B.Tech students</strong> already have accounts — share the class code{' '}
+                    <Text as="span" fontFamily="mono" fontWeight="700" color="lmFg.heading">
+                      {klass?.code || '——'}
+                    </Text>{' '}
+                    and let them join themselves. No invitation needed.
+                  </Box>
+                  <Box as="li" mt={1}>
+                    <strong>M.Tech, PhD and everyone else</strong> — invite them here, one individual ID
+                    at a time.
+                  </Box>
+                  <Box as="li" mt={1}>
+                    <strong>No account yet?</strong> Ask them to create one at{' '}
+                    <Text
+                      as="a"
+                      href="https://xceed.nitj.ac.in/help"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      color="lmHue.blue600"
+                      textDecoration="underline"
+                    >
+                      xceed.nitj.ac.in/help
+                    </Text>
+                    , then share the class code with them.
+                  </Box>
                 </Box>
               </Box>
-            </Box>
-          </Flex>
+            </Flex>
+          )}
 
           <Box mt={5} p={4} borderWidth="1px" borderColor="lmBorder.base" borderRadius="md" bg="lmBg.sunken">
             <Text fontSize="sm" fontWeight="600">
@@ -402,9 +650,215 @@ function InviteModal({ isOpen, onClose, classId, klass, onDone, defaultRole = 's
             onClick={submit}
             isLoading={busy || phase === 'sending'}
             loadingText={phase === 'sending' ? 'Sending emails…' : 'Creating accounts…'}
-            isDisabled={!emails.trim()}
+            /* An unlisted co-teacher needs the approval code before the button
+               does anything but earn a refusal, so it waits for one rather than
+               spending a round trip to say so. */
+            isDisabled={!emails.trim() || (isCoTeacher && gate?.status === 'unlisted' && otp.trim().length !== 6)}
           >
-            Send invites
+            {isCoTeacher
+              ? gate?.status === 'unlisted'
+                ? 'Approve and invite'
+                : 'Send invite'
+              : 'Send invites'}
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
+
+/**
+ * Promoting somebody already on the roster to co-teacher.
+ *
+ * The same gate the invitation passes — because a gate on the invitation alone
+ * would be a speed bump: the address refused at the invite box is enrolled as a
+ * student, which asks nothing of anybody, and promoted from this menu a second
+ * later. So the menu item opens this rather than writing the role straight
+ * away, and shows the teacher who they are promoting before it does.
+ */
+function PromoteModal({ isOpen, onClose, classId, member, onDone }) {
+  const [gate, setGate] = useState(null);
+  const [otp, setOtp] = useState('');
+  const [codeSentTo, setCodeSentTo] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  const email = String(member?.email || '').trim().toLowerCase();
+
+  useEffect(() => {
+    if (!isOpen || !email) return;
+    setGate({ status: 'checking' });
+    setOtp('');
+    setCodeSentTo('');
+    let live = true;
+    lmApi
+      .checkCoTeacherEmail(classId, email)
+      .then((result) => {
+        if (!live) return;
+        setGate({ status: result.listed ? 'listed' : 'unlisted', faculty: result.faculty, message: result.message });
+      })
+      .catch(() => {
+        // The promotion itself runs the same gate, so a failed lookup only
+        // costs the readback. Treated as unlisted: the approval step is the
+        // safe assumption, and a listed address simply goes through without
+        // the code being read.
+        if (live) setGate({ status: 'unlisted', faculty: null, message: null });
+      });
+    return () => {
+      live = false;
+    };
+  }, [isOpen, email, classId]);
+
+  const sendApprovalCode = async () => {
+    setSendingCode(true);
+    try {
+      const result = await lmApi.requestCoTeacherCode(classId, email);
+      setCodeSentTo(result.sentTo || '');
+      toast({
+        status: 'success',
+        title: 'Approval code sent',
+        description: `Check ${result.sentTo || 'your email'} for a six-digit code. It is valid for 10 minutes.`,
+        duration: 8000,
+      });
+    } catch (error) {
+      toast({ status: 'error', title: 'Could not send the code', description: error.message });
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  const promote = async () => {
+    setBusy(true);
+    try {
+      await lmApi.updateMember(classId, member._id, { role: 'co-teacher', ...(otp.trim() ? { otp: otp.trim() } : {}) });
+      toast({ status: 'success', title: 'Promoted to co-teacher' });
+      onDone();
+      onClose();
+    } catch (error) {
+      if (error.payload?.code === 'CO_TEACHER_NOT_IN_TIMETABLE') {
+        setGate({ status: 'unlisted', faculty: null, message: error.payload.message });
+      }
+      toast({ status: 'error', title: 'Could not promote', description: error.message, duration: 10000 });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const needsCode = gate?.status === 'unlisted';
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} size="lg">
+      <ModalOverlay />
+      <ModalContent>
+        <ModalHeader>Make co-teacher</ModalHeader>
+        <ModalCloseButton />
+        <ModalBody>
+          <Text fontSize="sm">
+            <strong>{member?.name || email}</strong> will be able to do everything you can in this
+            class except transfer ownership — including reading every answer key and every mark.
+          </Text>
+          <Text fontSize="xs" color="lmFg.subtle" mt={1}>
+            {email}
+          </Text>
+
+          {gate?.status === 'checking' && (
+            <Flex mt={3} align="center" gap={2}>
+              <BusyDots size="4px" color="blue.400" label="Checking" />
+              <Text fontSize="xs" color="lmFg.subtle">
+                Checking the timetable faculty list…
+              </Text>
+            </Flex>
+          )}
+
+          {gate?.status === 'listed' && (
+            <Flex
+              mt={3}
+              p={3}
+              gap={3}
+              align="flex-start"
+              borderWidth="1px"
+              borderColor="lmHue.green200"
+              bg="lmHue.green50"
+              borderRadius="md"
+            >
+              <Box color="green.500" pt={0.5}>
+                <LmIcon name="check" size={15} />
+              </Box>
+              <Box>
+                <Text fontSize="xs" fontWeight="700" color="lmFg.heading">
+                  Listed in the timetable faculty list
+                </Text>
+                <Text fontSize="xs" color="lmFg.subtle" mt={1}>
+                  {[gate.faculty?.name, gate.faculty?.designation, gate.faculty?.dept]
+                    .filter(Boolean)
+                    .join(' · ') || 'Record found.'}
+                </Text>
+              </Box>
+            </Flex>
+          )}
+
+          {needsCode && (
+            <Box mt={3} p={3} borderWidth="1px" borderColor="lmHue.orange200" bg="lmHue.orange50" borderRadius="md">
+              <Flex gap={3} align="flex-start">
+                <Box color="orange.500" pt={0.5}>
+                  <LmIcon name="warning" size={15} />
+                </Box>
+                <Box>
+                  <Text fontSize="xs" fontWeight="700" color="lmFg.heading">
+                    This faculty is not listed in the timetable
+                  </Text>
+                  <Text fontSize="xs" color="lmFg.subtle" mt={1}>
+                    {gate.message
+                      || 'Double-check the address. If it is right and the person is faculty here, ask your '
+                        + 'timetable coordinator to add their email ID to the timetable module. To make a PhD '
+                        + 'scholar or a TA a teacher, approve it yourself with a one-time password.'}
+                  </Text>
+                </Box>
+              </Flex>
+
+              <Flex mt={3} gap={2} align="flex-end" wrap="wrap">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  leftIcon={<FiMail />}
+                  onClick={sendApprovalCode}
+                  isLoading={sendingCode}
+                  loadingText="Sending…"
+                >
+                  {codeSentTo ? 'Resend code' : 'Email me an approval code'}
+                </Button>
+                <Input
+                  size="sm"
+                  w="9rem"
+                  value={otp}
+                  onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="6-digit code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  bg="lmBg.surface"
+                />
+              </Flex>
+              {codeSentTo && (
+                <Text fontSize="xs" color="lmFg.subtle" mt={2}>
+                  Code sent to <strong>{codeSentTo}</strong> — it approves <strong>{email}</strong> only,
+                  and expires in 10 minutes.
+                </Text>
+              )}
+            </Box>
+          )}
+        </ModalBody>
+        <ModalFooter gap={2}>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            colorScheme="blue"
+            onClick={promote}
+            isLoading={busy}
+            isDisabled={gate?.status === 'checking' || (needsCode && otp.trim().length !== 6)}
+          >
+            {needsCode ? 'Approve and promote' : 'Make co-teacher'}
           </Button>
         </ModalFooter>
       </ModalContent>
@@ -704,7 +1158,7 @@ function LeaveClassModal({ isOpen, onClose, classId, klass }) {
   );
 }
 
-function PersonRow({ member, isTeacher, isOwner, classId, onChanged, onViewProgress, onEmailMember }) {
+function PersonRow({ member, isTeacher, isOwner, classId, onChanged, onViewProgress, onEmailMember, onPromote }) {
   const toast = useToast();
 
   const act = async (fn, successTitle) => {
@@ -783,8 +1237,11 @@ function PersonRow({ member, isTeacher, isOwner, classId, onChanged, onViewProgr
                   Email student
                 </MenuItem>
               )}
+              {/* Opens the gate rather than writing the role: the address has to
+                  clear the timetable faculty list, or carry the promoting
+                  teacher's own approval code. See PromoteModal. */}
               {member.role === 'student' && (
-                <MenuItem {...buttonTextStyles} onClick={() => act(() => lmApi.updateMember(classId, member._id, { role: 'co-teacher' }), 'Promoted to co-teacher')}>
+                <MenuItem {...buttonTextStyles} onClick={() => onPromote(member)}>
                   Make co-teacher
                 </MenuItem>
               )}
@@ -836,11 +1293,13 @@ export default function People() {
   const { classId, klass, isTeacher, reloadClass } = useOutletContext();
   const [progressFor, setProgressFor] = useState(null);
   const [emailFor, setEmailFor] = useState(null);
+  const [promoteFor, setPromoteFor] = useState(null);
   const [inviteRole, setInviteRole] = useState('student');
   const [availableRoles, setAvailableRoles] = useState(['student', 'co-teacher']);
   const invite = useDisclosure();
   const progress = useDisclosure();
   const emailModal = useDisclosure();
+  const promoteModal = useDisclosure();
   const leaveModal = useDisclosure();
 
   const {
@@ -874,6 +1333,11 @@ export default function People() {
     emailModal.onOpen();
   };
 
+  const openPromote = (member) => {
+    setPromoteFor(member);
+    promoteModal.onOpen();
+  };
+
   if (loading) return <Loading label="Loading people…" skeleton={<TableSkeleton rows={8} columns={4} />} />;
 
   const pending = members.students.filter((m) => m.status === 'pending');
@@ -895,6 +1359,7 @@ export default function People() {
                 onChanged={afterChange}
                 onViewProgress={openProgress}
                 onEmailMember={openEmail}
+                onPromote={openPromote}
               />
             ))}
           </SectionCard>
@@ -906,7 +1371,7 @@ export default function People() {
         action={
           isTeacher ? (
             <Button size="sm" variant="outline" onClick={() => openInvite({ role: 'co-teacher', roles: ['co-teacher'] })}>
-              + Invite
+              + Faculty Invite
             </Button>
           ) : null
         }
@@ -922,6 +1387,7 @@ export default function People() {
             onChanged={afterChange}
             onViewProgress={openProgress}
             onEmailMember={openEmail}
+            onPromote={openPromote}
           />
         ))}
       </SectionCard>
@@ -931,7 +1397,7 @@ export default function People() {
         action={
           isTeacher ? (
             <Button size="sm" variant="outline" onClick={() => openInvite()}>
-              + Invite
+              + Student Invite
             </Button>
           ) : null
         }
@@ -966,6 +1432,7 @@ export default function People() {
                 onChanged={afterChange}
                 onViewProgress={openProgress}
                 onEmailMember={openEmail}
+                onPromote={openPromote}
               />
             ))
         )}
@@ -1001,6 +1468,13 @@ export default function People() {
         onDone={afterChange}
         defaultRole={inviteRole}
         availableRoles={availableRoles}
+      />
+      <PromoteModal
+        isOpen={promoteModal.isOpen}
+        onClose={promoteModal.onClose}
+        classId={classId}
+        member={promoteFor}
+        onDone={afterChange}
       />
       <ProgressModal
         isOpen={progress.isOpen}
