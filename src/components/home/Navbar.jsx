@@ -83,6 +83,11 @@ const PUBLIC_PATHS = [
   // asked about (a visitor who *is* signed in skips it), and every answer is
   // scoped to that address. See modules/helpdeskModule on the server.
   '/help',
+  // The explainer videos, linked from the help desk. Public for the same
+  // reason, and GET /api/v1/explainers is unauthenticated to match (see
+  // server/src/modules/explainerModule). Without this entry a signed-in
+  // student was bounced to /learning and a visitor to /login.
+  '/explainers',
   '/privacy',
   '/forgot-password',
   '/nirf',
@@ -200,7 +205,6 @@ export default function Navbar() {
       if (!response.ok) {
         throw new Error('Failed to logout');
       }
-      localStorage.removeItem('token');
       await clearNativeSession();
       navigate('/login');
     } catch (error) {
