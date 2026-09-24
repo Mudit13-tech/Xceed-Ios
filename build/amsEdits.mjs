@@ -43,9 +43,19 @@ if (!existsSync(path.join(AMS_PATH, '.git'))) {
 // What AMS ships now, at the ref the sync exports. AMS_REF checks against
 // another, e.g. a PR branch before it merges.
 const amsRef = process.env.AMS_REF || 'origin/main';
-const amsFiles = new Set(
-  git(['ls-tree', '-r', '--name-only', `${amsRef}:client`], AMS_PATH).split('\n').filter(Boolean),
-);
+
+// Blob hash per path, from one listing rather than a git call per file.
+const blobs = (listing) =>
+  new Map(
+    listing
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [meta, file] = line.split('\t');
+        return [file, meta.split(' ')[2]];
+      }),
+  );
+const amsBlobs = blobs(git(['ls-tree', '-r', `${amsRef}:client`], AMS_PATH));
 
 // Resolved by a driver, so an edit there cannot stop a sync.
 const DRIVEN = new Set(['mobile', 'package-json', 'union']);
@@ -66,16 +76,14 @@ const driverOf = (files) => {
   );
 };
 
-const ours = git(['ls-files']).split('\n').filter((f) => amsFiles.has(f));
+// This repo as committed, so the answer does not depend on uncommitted work.
+const ourBlobs = blobs(git(['ls-tree', '-r', 'HEAD']));
+const ours = [...ourBlobs.keys()].filter((f) => amsBlobs.has(f));
 const drivers = driverOf(ours);
 
-const edited = [];
-for (const file of ours) {
-  if (DRIVEN.has(drivers.get(file))) continue;
-  const theirs = git(['rev-parse', `${amsRef}:client/${file}`], AMS_PATH);
-  const mine = git(['hash-object', file]);
-  if (theirs !== mine) edited.push(file);
-}
+const edited = ours.filter(
+  (file) => !DRIVEN.has(drivers.get(file)) && ourBlobs.get(file) !== amsBlobs.get(file),
+);
 
 if (!edited.length) {
   console.log(`No AMS file is edited in place (checked ${ours.length} against AMS ${amsRef}).`);
