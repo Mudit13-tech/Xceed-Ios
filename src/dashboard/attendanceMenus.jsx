@@ -16,7 +16,7 @@ import {
 } from '@chakra-ui/react';
 import { FiExternalLink, FiSave } from 'react-icons/fi';
 import getEnvironment from '../getenvironment';
-import { ALL_MENUS, leadershipMenuKeysFor } from '../attendancemodule/menuCatalogue';
+import { ALL_MENUS, LEADERSHIP_MENU_KEYS } from '../attendancemodule/menuCatalogue';
 
 const apiUrl = getEnvironment();
 
@@ -54,10 +54,23 @@ const apiUrl = getEnvironment();
  *
  * ── It is a display preference, not an authorisation boundary.
  *
- * Both views are already gated by `attendanceLeadershipReadAccess`, refused any
- * request that is not a GET by `refuseAttendanceWrites`, and re-checked per
- * menu on the server by `requireHodMenu` / `requireDeanMenu`. A toggle here
- * grants visibility, never the ability to change anything.
+ * Both views are already gated by `attendanceLeadershipReadAccess` and refused
+ * any request that is not a GET by `refuseAttendanceWrites`. A toggle here
+ * grants visibility, never the ability to change anything — which is what
+ * makes it safe that both views are now offered every iLEED screen: the
+ * operational ones show their data and every button on them is refused.
+ *
+ * A toggle here is the control, in all three places it has to be: the link
+ * leaves the shell's sidebar, the screen below refuses to render, and the
+ * endpoints it reads close — `requireLeadershipMenu` is mounted on every iLEED
+ * data mount a head or the Dean can reach, and reads whichever of the two
+ * documents belongs to the viewer. Switching a menu off and being told by a
+ * head that they can still open it is the bug this closed.
+ *
+ * What it is still NOT is an authorisation boundary. Every read behind it was
+ * already scoped by the handlers and refused any method but a GET; this makes
+ * a display preference enforceable, which is a different thing from being what
+ * keeps anybody's data from anybody.
  *
  * ── View opens the real screen, not a copy of it.
  *
@@ -69,6 +82,13 @@ const apiUrl = getEnvironment();
  * head's dashboard sees it at institute scope rather than being refused for
  * heading no department. What they are checking is which panels the toggles
  * above put on the screen, and that is the same answer at either scope.
+ *
+ * The gates above leave that intact in both directions. `requireLeadershipMenu`
+ * defers for an admin, who is not a read-only viewer, so no endpoint closes on
+ * them; the shells' own guard does apply, because it reads the toggles rather
+ * than the viewer — which is what makes View a preview worth opening. An admin
+ * following it sees the head's menu, and a screen the head cannot open answers
+ * them the way it answers the head.
  */
 
 const AUDIENCES = [
@@ -79,7 +99,7 @@ const AUDIENCES = [
     view: '/ileed-hod/dashboard',
     title: 'HOD — iLEED menus',
     blurb:
-      "What a head of department may look at, scoped to the department they head. The same setting as the Head of Department section in the attendance module's Dept Menu Config.",
+      "What a head of department may look at, scoped to the department they head. Every iLEED screen can be given to them, and all of them are read-only. The same setting as the Head of Department section in the attendance module's Dept Menu Config.",
     accent: 'blue',
   },
   {
@@ -89,26 +109,26 @@ const AUDIENCES = [
     view: '/ileed-dean/dashboard',
     title: 'Dean (Academic) — iLEED menus',
     blurb:
-      'What the Dean (Academic) may look at, across every department at once. Its own document, so it need not match the heads.',
+      'What the Dean (Academic) may look at, across every department at once. The same screens as a head, at institute scope, and equally read-only. Its own document, so it need not match the heads.',
     accent: 'purple',
   },
 ];
 
 /**
- * Which menus each column's view actually draws, per audience.
+ * Which menus these views draw — now every one of them, in both shells.
  *
- * Per audience and not one shared set, because the two views do not draw the
- * same screens: Confidence Monitor and Class Verification are the Dean's and
- * not a head's, and are not merely unlinked in the HOD shell — there is no
- * route for them under `/ileed-hod` at all. Marked as one list, the HOD column
- * told an administrator those two switches "had a screen"; they turned them on
- * and nothing ever appeared. Derived from the layouts' own catalogue, so a
- * screen added to either view is marked here without this file being edited.
+ * One set rather than one per audience, because the two shells carry the same
+ * screens again: a dean reads every department where a head reads the one they
+ * head, and that is a difference of scope, not of which pages exist. Derived
+ * from the layouts' own catalogue, so a screen added to them is marked here
+ * without this file being edited.
+ *
+ * This was once per audience, and that was not paranoia — the shells really
+ * did differ, and a single shared set had the HOD column promising a screen
+ * only the Dean had. If they diverge again, this goes back to being per
+ * audience at the same time, not afterwards.
  */
-const screensFor = {
-  hod: new Set(leadershipMenuKeysFor('hod')),
-  dean: new Set(leadershipMenuKeysFor('dean')),
-};
+const hasScreen = new Set(LEADERSHIP_MENU_KEYS);
 
 const AttendanceMenusPanel = () => {
   // Per audience: the stored map, or null while it is still being read. Kept
@@ -347,13 +367,11 @@ const AttendanceMenusPanel = () => {
                               <Text fontSize="sm" fontWeight="600">
                                 {menu.label}
                               </Text>
-                              {/* Which menus THIS column's view draws today
-                                  — see screensFor. The other toggles are
-                                  stored and honoured by the server, but no
-                                  link appears for them, and an admin
-                                  switching one on deserves to be told rather
-                                  than to go looking. */}
-                              {screensFor[audience.key].has(menu.key) && (
+                              {/* Every menu has a screen in both shells
+                                  today — see hasScreen, and the note there
+                                  about what happens if that stops being
+                                  true. */}
+                              {hasScreen.has(menu.key) && (
                                 <Badge colorScheme="green" fontSize="0.6rem" borderRadius="full" px={2}>
                                   has a screen
                                 </Badge>
@@ -383,12 +401,11 @@ const AttendanceMenusPanel = () => {
       )}
 
       <Text fontSize="xs" color={subColor} mt={4}>
-        Menus marked <b>has a screen</b> are the ones that column&apos;s view draws today. The
-        head of department&apos;s view has the dashboard, attendance reports and the manual;
-        the Dean&apos;s has those plus the confidence monitor and class verification, which
-        judge the recognition system rather than report a department&apos;s attendance. Every
-        other toggle is stored and enforced by the server, but draws no link yet — turning
-        one on changes nothing visible until its screen arrives.
+        Every menu here has a screen behind it in both views: a head of department sees
+        their own department, the Dean (Academic) sees every department. Both are read-only
+        whatever is enabled — the operational screens (capture, roll assignment, ERP upload,
+        embeddings, extra and altering classes) show their data, and the server refuses
+        anything that would change it.
       </Text>
     </Box>
   );

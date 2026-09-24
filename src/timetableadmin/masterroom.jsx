@@ -265,6 +265,18 @@ function MasterRoom() {
     }
   };
 
+  const cancelEdit = () => {
+    setEditRoomId(null);
+    setEditedRoom({
+      room: '',
+      type: '',
+      building: '',
+      floor: '',
+      dept: '',
+      landMark: '',
+    });
+  };
+
   const handleSaveEdit = () => {
     if (editRoomId) {
       const rowIndex = masterRooms.findIndex((room) => room._id === editRoomId);
@@ -671,120 +683,37 @@ function MasterRoom() {
                     <Tbody>
                       {masterRooms.map((room) => (
                         <Tr key={room._id}>
-                          <Td textAlign="center">
-                            {editRoomId === room._id ? (
-                              <Input
-                                type="text"
-                                value={editedRoom.room}
-                                onChange={(e) =>
-                                  setEditedRoom({ ...editedRoom, room: e.target.value })
-                                }
-                                size="sm"
-                              />
-                            ) : (
-                              room.room
-                            )}
-                          </Td>
-                          <Td textAlign="center">
-                            {editRoomId === room._id ? (
-                              <Input
-                                type="text"
-                                value={editedRoom.type}
-                                onChange={(e) =>
-                                  setEditedRoom({ ...editedRoom, type: e.target.value })
-                                }
-                                size="sm"
-                              />
-                            ) : (
-                              room.type
-                            )}
+                          <Td textAlign="center">{room.room}</Td>
+                          <Td textAlign="center">{room.type}</Td>
+                          <Td textAlign="center" display={{ base: 'none', lg: 'table-cell' }}>
+                            {room.building}
                           </Td>
                           <Td textAlign="center" display={{ base: 'none', lg: 'table-cell' }}>
-                            {editRoomId === room._id ? (
-                              <Input
-                                type="text"
-                                value={editedRoom.building}
-                                onChange={(e) =>
-                                  setEditedRoom({ ...editedRoom, building: e.target.value })
-                                }
-                                size="sm"
-                              />
-                            ) : (
-                              room.building
-                            )}
-                          </Td>
-                          <Td textAlign="center" display={{ base: 'none', lg: 'table-cell' }}>
-                            {editRoomId === room._id ? (
-                              <Input
-                                type="text"
-                                value={editedRoom.floor}
-                                onChange={(e) =>
-                                  setEditedRoom({ ...editedRoom, floor: e.target.value })
-                                }
-                                size="sm"
-                              />
-                            ) : (
-                              room.floor
-                            )}
+                            {room.floor}
                           </Td>
                           <Td textAlign="center" display={{ base: 'none', md: 'table-cell' }}>
-                            {editRoomId === room._id ? (
-                              <Select
-                                placeholder="Select department"
-                                value={editedRoom.dept}
-                                onChange={(e) =>
-                                  setEditedRoom({ ...editedRoom, dept: e.target.value })
-                                }
-                                size="sm"
-                              >
-                                {departments.map((dept) => (
-                                  <option key={dept} value={dept}>
-                                    {dept}
-                                  </option>
-                                ))}
-                              </Select>
-                            ) : (
-                              room.dept
-                            )}
+                            {room.dept}
                           </Td>
                           <Td textAlign="center" display={{ base: 'none', xl: 'table-cell' }} maxW="200px" overflow="hidden" textOverflow="ellipsis" whiteSpace="nowrap">
-                            {editRoomId === room._id ? (
-                              <Input
-                                type="text"
-                                placeholder="Google Maps URL"
-                                value={editedRoom.landMark}
-                                onChange={(e) =>
-                                  setEditedRoom({ ...editedRoom, landMark: e.target.value })
-                                }
-                                size="sm"
-                              />
-                            ) : (
-                              room.landMark
-                            )}
+                            {room.landMark}
                           </Td>
                           <Td textAlign="center">
-                            {editRoomId === room._id ? (
-                              <Button colorScheme="green" size="sm" onClick={handleSaveEdit}>
-                                Save
-                              </Button>
-                            ) : (
-                              <HStack spacing={2} justify="center" flexWrap="wrap">
-                                <IconButton
-                                  icon={<EditIcon />}
-                                  colorScheme="blue"
-                                  size="sm"
-                                  aria-label="Edit"
-                                  onClick={() => handleEditClick(room._id)}
-                                />
-                                <IconButton
-                                  icon={<DeleteIcon />}
-                                  colorScheme="red"
-                                  size="sm"
-                                  aria-label="Delete"
-                                  onClick={() => handleDeleteClick(room._id)}
-                                />
-                              </HStack>
-                            )}
+                            <HStack spacing={2} justify="center" flexWrap="wrap">
+                              <IconButton
+                                icon={<EditIcon />}
+                                colorScheme="blue"
+                                size="sm"
+                                aria-label="Edit"
+                                onClick={() => handleEditClick(room._id)}
+                              />
+                              <IconButton
+                                icon={<DeleteIcon />}
+                                colorScheme="red"
+                                size="sm"
+                                aria-label="Delete"
+                                onClick={() => handleDeleteClick(room._id)}
+                              />
+                            </HStack>
                           </Td>
                         </Tr>
                       ))}
@@ -796,6 +725,114 @@ function MasterRoom() {
           </Card>
         </VStack>
       </Container>
+
+      {/* Edit Room Modal
+          Editing used to happen in the table row itself, which put the inputs
+          for Building, Floor, Department and Google Map inside cells that are
+          hidden below lg, md and xl respectively. On any screen narrower than
+          1280px the map field could not be reached at all, and below 992px
+          neither could the building or the floor: pressing Edit offered Room
+          and Type and nothing else. A dialog does not have columns to hide. */}
+      <Modal isOpen={Boolean(editRoomId)} onClose={cancelEdit} size="lg" isCentered scrollBehavior="inside">
+        <ModalOverlay bg="blackAlpha.700" backdropFilter="blur(10px)" zIndex={1400} />
+        <ModalContent zIndex={1400}>
+          <ModalHeader bgGradient="linear(to-r, green.400, teal.400)" color="white" borderTopRadius="md">
+            <HStack spacing={3}>
+              <Icon as={EditIcon} boxSize={5} />
+              <Text>Edit Room{editedRoom.room ? ` — ${editedRoom.room}` : ''}</Text>
+            </HStack>
+          </ModalHeader>
+          <ModalCloseButton color="white" />
+          <ModalBody p={6}>
+            <VStack spacing={4} align="stretch">
+              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                <FormControl isRequired>
+                  <FormLabel fontWeight="semibold" color="gray.700">Room Number</FormLabel>
+                  <Input
+                    value={editedRoom.room || ''}
+                    onChange={(e) => setEditedRoom({ ...editedRoom, room: e.target.value })}
+                    placeholder="Enter room number"
+                  />
+                </FormControl>
+                <FormControl isRequired>
+                  <FormLabel fontWeight="semibold" color="gray.700">Room Type</FormLabel>
+                  <Input
+                    value={editedRoom.type || ''}
+                    onChange={(e) => setEditedRoom({ ...editedRoom, type: e.target.value })}
+                    placeholder="Lecture hall, lab, …"
+                  />
+                </FormControl>
+                <FormControl isRequired>
+                  <FormLabel fontWeight="semibold" color="gray.700">Building</FormLabel>
+                  <Input
+                    value={editedRoom.building || ''}
+                    onChange={(e) => setEditedRoom({ ...editedRoom, building: e.target.value })}
+                    placeholder="Enter building"
+                  />
+                </FormControl>
+                <FormControl isRequired>
+                  <FormLabel fontWeight="semibold" color="gray.700">Floor</FormLabel>
+                  <Input
+                    value={editedRoom.floor || ''}
+                    onChange={(e) => setEditedRoom({ ...editedRoom, floor: e.target.value })}
+                    placeholder="Enter floor"
+                  />
+                </FormControl>
+              </SimpleGrid>
+
+              <FormControl>
+                <FormLabel fontWeight="semibold" color="gray.700">Department</FormLabel>
+                <Select
+                  placeholder="Select department"
+                  value={editedRoom.dept || ''}
+                  onChange={(e) => setEditedRoom({ ...editedRoom, dept: e.target.value })}
+                >
+                  {/* The department already on the room, when the master
+                      semester list no longer offers it — a department renamed
+                      since, or spelled differently when the room was created.
+                      Without this the select falls back to its placeholder and
+                      saving any other field would quietly blank the department
+                      the room did have. */}
+                  {editedRoom.dept &&
+                    !departments.some((dept) => dept === editedRoom.dept) && (
+                      <option value={editedRoom.dept}>{editedRoom.dept}</option>
+                    )}
+                  {departments.map((dept) => (
+                    <option key={dept} value={dept}>
+                      {dept}
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl>
+                <FormLabel fontWeight="semibold" color="gray.700">Google Map / Landmark</FormLabel>
+                <Input
+                  value={editedRoom.landMark || ''}
+                  onChange={(e) => setEditedRoom({ ...editedRoom, landMark: e.target.value })}
+                  placeholder="Enter Google Maps URL"
+                />
+                {/* This is what the Find a Classroom page opens when somebody
+                    asks where a room is, so it is the field most worth being
+                    able to correct. */}
+                <Text fontSize="xs" color="gray.500" mt={1}>
+                  Opened by the map button on the classroom search page.
+                </Text>
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter bg="gray.50">
+            <HStack spacing={3}>
+              <Button variant="ghost" onClick={cancelEdit}>
+                Cancel
+              </Button>
+              <Button colorScheme="green" onClick={handleSaveEdit}>
+                Save Changes
+              </Button>
+            </HStack>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal isOpen={isOpen} onClose={cancelDelete} size="md" isCentered>

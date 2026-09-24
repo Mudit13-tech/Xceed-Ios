@@ -30,6 +30,21 @@ const SQUARE_BTN = {
   textDecoration: 'none',
 };
 
+/**
+ * The XCEED mark needs something dark behind it.
+ *
+ * `clublogo.png` is a near-white wordmark on transparency — drawn for the
+ * platform's dark hero, which is where everything else that uses it sits. This
+ * header is white, so the button was a white X on white: in daylight, on a
+ * phone, there was nothing there to press. The mark therefore carries its own
+ * ground rather than borrowing the header's. The learning module's header does
+ * the same thing for the same button — see XCEED_MARK there.
+ */
+const XCEED_MARK = {
+  background: '#171923',
+  border: '1px solid #171923',
+};
+
 // Power glyph for the mobile header's logout button.
 function PowerIcon({ size = 18 }) {
   return (
@@ -541,7 +556,7 @@ export default function AMSLayout() {
                   href="/"
                   title="Xceed home"
                   aria-label="Xceed home"
-                  style={{ ...SQUARE_BTN, color: T.text }}
+                  style={{ ...SQUARE_BTN, ...XCEED_MARK, color: T.text }}
                 >
                   <img
                     src="/clublogo.png"

@@ -6,11 +6,21 @@ import { CustomTh, CustomLink, CustomBlueButton, CustomDeleteButton } from "../s
 import Header from "../components/header";
 import {
   Box,
+  Button,
   Center,
   Container,
   FormControl,
   FormLabel,
+  HStack,
   Input,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
+  SimpleGrid,
   Table,
   TableCaption,
   TableContainer,
@@ -20,6 +30,7 @@ import {
   Th,
   Thead,
   Tr,
+  VStack,
 } from "@chakra-ui/react";
 
 function MasterSemester() {
@@ -94,6 +105,11 @@ function MasterSemester() {
     if (editedRow) {
       setEditedSemester({ ...editedRow });
     }
+  };
+
+  const cancelEdit = () => {
+    setEditSemesterId(null);
+    setEditedSemester({ sem: "", type: "", dept: "", degree: "", year: "" });
   };
 
   const handleSaveEdit = () => {
@@ -320,112 +336,41 @@ function MasterSemester() {
             {masterSems.map((semester) => (
               <Tr key={semester._id}>
                 <Td fontSize={{ base: "xs", md: "sm" }}><Center>
-                  {editSemesterId === semester._id ? (
-                    <input
-                      type="text"
-                      value={editedSemester.sem}
-                      onChange={(e) =>
-                        setEditedSemester({
-                          ...editedSemester,
-                          sem: e.target.value,
-                        })
-                      }
-                    />
-                  ) : (
-                    semester.sem
-                  )}</Center>
+                  {semester.sem}</Center>
                 </Td>
                 <Td fontSize={{ base: "xs", md: "sm" }}><Center>
-                    {editSemesterId === semester._id ? (
-                      <input
-                        type="text"
-                        value={editedSemester.type}
-                        onChange={(e) =>
-                          setEditedSemester({
-                            ...editedSemester,
-                            type: e.target.value,
-                          })
-                        }
-                      />
-                    ) : (
-                      semester.type
-                    )}
+                    {semester.type}
                 </Center>
                 </Td>
                 <Td fontSize={{ base: "xs", md: "sm" }}><Center>
                   
-                    {editSemesterId === semester._id ? (
-                      <input
-                        type="text"
-                        value={editedSemester.dept}
-                        onChange={(e) =>
-                          setEditedSemester({
-                            ...editedSemester,
-                            dept: e.target.value,
-                          })
-                        }
-                      />
-                    ) : (
-                      semester.dept
-                    )}
+                    {semester.dept}
                 </Center>
                 </Td>
                 <Td fontSize={{ base: "xs", md: "sm" }}><Center>
                   
-                    {editSemesterId === semester._id ? (
-                      <input
-                        type="text"
-                        value={editedSemester.degree}
-                        onChange={(e) =>
-                          setEditedSemester({
-                            ...editedSemester,
-                            degree: e.target.value,
-                          })
-                        }
-                      />
-                    ) : (
-                      semester.degree
-                    )}
+                    {semester.degree}
                 </Center>
                 </Td>
                 <Td fontSize={{ base: "xs", md: "sm" }}><Center>
                   
-                    {editSemesterId === semester._id ? (
-                      <input
-                        type="text"
-                        value={editedSemester.year}
-                        onChange={(e) =>
-                          setEditedSemester({
-                            ...editedSemester,
-                            year: e.target.value,
-                          })
-                        }
-                      />
-                    ) : (
-                      semester.year
-                    )}
+                    {semester.year}
                 </Center>
                 </Td>
                 <Td fontSize={{ base: "xs", md: "sm" }}><Center>
                   
-                    {editSemesterId === semester._id ? (
-                      <CustomBlueButton onClick={handleSaveEdit}>
-                        Save
+                    <>
+                      <CustomBlueButton
+                        onClick={() => handleEditClick(semester._id)}
+                      >
+                        Edit
                       </CustomBlueButton>
-                    ) : (
-                      <>
-                        <CustomBlueButton
-                          onClick={() => handleEditClick(semester._id)}
-                        >
-                          Edit
-                        </CustomBlueButton>
-                        <CustomDeleteButton
-                          onClick={() => handleDelete(semester._id)}
-                        >
-                          Delete
-                        </CustomDeleteButton>
-                      </>
-                    )}
+                      <CustomDeleteButton
+                        onClick={() => handleDelete(semester._id)}
+                      >
+                        Delete
+                      </CustomDeleteButton>
+                    </>
                 </Center>
                 </Td>
               </Tr>
@@ -433,6 +378,95 @@ function MasterSemester() {
           </Tbody>
         </Table>
 </TableContainer>
+
+      {/* Edit dialog.
+          Editing used to happen in the row itself, which put six bare inputs
+          across a table that scrolls sideways on anything but a wide screen —
+          the same shape that made the room page's location fields
+          unreachable. A dialog fits the fields to the screen instead of to
+          the column they happen to sit in. */}
+      <Modal
+        isOpen={Boolean(editSemesterId)}
+        onClose={cancelEdit}
+        size="lg"
+        isCentered
+        scrollBehavior="inside"
+      >
+        <ModalOverlay bg="blackAlpha.700" backdropFilter="blur(10px)" />
+        <ModalContent>
+          <ModalHeader>
+            Edit Semester
+            {editedSemester.sem ? ` — ${editedSemester.sem}` : ""}
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack spacing={4} align="stretch">
+              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                <FormControl>
+                  <FormLabel fontWeight="semibold">Semester</FormLabel>
+                  <Input
+                    value={editedSemester.sem || ""}
+                    onChange={(e) =>
+                      setEditedSemester({ ...editedSemester, sem: e.target.value })
+                    }
+                    placeholder="Enter semester"
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel fontWeight="semibold">Type</FormLabel>
+                  <Input
+                    value={editedSemester.type || ""}
+                    onChange={(e) =>
+                      setEditedSemester({ ...editedSemester, type: e.target.value })
+                    }
+                    placeholder="Odd, Even, …"
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel fontWeight="semibold">Department</FormLabel>
+                  <Input
+                    value={editedSemester.dept || ""}
+                    onChange={(e) =>
+                      setEditedSemester({ ...editedSemester, dept: e.target.value })
+                    }
+                    placeholder="Enter department"
+                  />
+                </FormControl>
+                <FormControl>
+                  <FormLabel fontWeight="semibold">Degree</FormLabel>
+                  <Input
+                    value={editedSemester.degree || ""}
+                    onChange={(e) =>
+                      setEditedSemester({ ...editedSemester, degree: e.target.value })
+                    }
+                    placeholder="BTech, MTech, …"
+                  />
+                </FormControl>
+              </SimpleGrid>
+              <FormControl>
+                <FormLabel fontWeight="semibold">Year</FormLabel>
+                <Input
+                  value={editedSemester.year || ""}
+                  onChange={(e) =>
+                    setEditedSemester({ ...editedSemester, year: e.target.value })
+                  }
+                  placeholder="Enter year"
+                />
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <HStack spacing={3}>
+              <Button variant="ghost" onClick={cancelEdit}>
+                Cancel
+              </Button>
+              <Button colorScheme="blue" onClick={handleSaveEdit}>
+                Save Changes
+              </Button>
+            </HStack>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Container>
   );
 }

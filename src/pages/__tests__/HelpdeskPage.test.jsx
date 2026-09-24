@@ -1022,3 +1022,164 @@ describe('where the page is left scrolled', () => {
     }
   });
 });
+
+/**
+ * The classroom search in the "find my classroom" answer: suggestions as the
+ * reader types, each one a link straight to its Google Maps location, and the
+ * reader's own class rooms offered before anything is typed.
+ */
+describe('the classroom search', () => {
+  const ROOMS = [
+    { room: 'LT-1', building: 'Lecture Theatre Complex', floor: 'Ground', mapUrl: 'https://maps.app.goo.gl/lt1' },
+    { room: 'LT-2', building: 'Lecture Theatre Complex', floor: '1', mapUrl: 'https://maps.app.goo.gl/lt2' },
+    { room: 'CR205', building: 'IT Building', floor: '2', mapUrl: '' },
+    { room: 'BAD', building: '', floor: '', mapUrl: 'javascript:alert(1)' },
+  ];
+
+  const openAnswer = async (mine = []) => {
+    const user = userEvent.setup();
+    const fetchMock = routeFetch({
+      '/menu': {
+        body: { menu: [{ category: 'Timetable', topics: [{ id: 'find-classroom', question: 'How do I find my classroom?' }] }] },
+      },
+      '/session': { body: { pass: 'pass-1', email: 'asha@nitj.ac.in' } },
+      '/topic/find-classroom': {
+        body: {
+          answer: {
+            id: 'find-classroom',
+            category: 'Timetable',
+            title: 'Finding a classroom',
+            blocks: [{ type: 'roomSearch', mine }],
+            actions: [],
+            followUps: [],
+          },
+        },
+      },
+      '/rooms': { body: { rooms: ROOMS } },
+    });
+    render(<HelpdeskPage />);
+    await screen.findByText(/You are signed in as/);
+    await user.click(screen.getByRole('button', { name: 'How do I find my classroom?' }));
+    await screen.findByText('Finding a classroom');
+    return { user, fetchMock };
+  };
+
+  it('suggests rooms as you type and links each straight to Google Maps', async () => {
+    const { user, fetchMock } = await openAnswer();
+
+    await user.type(screen.getByRole('combobox', { name: 'Search for a classroom' }), 'lt1');
+
+    const link = await screen.findByRole('link', { name: /LT-1/ });
+    expect(link).toHaveAttribute('href', 'https://maps.app.goo.gl/lt1');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(screen.queryByText('LT-2')).not.toBeInTheDocument();
+
+    // One fetch for the list, however many keys were typed.
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/rooms'))).toHaveLength(1);
+    const [, options] = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/rooms'));
+    expect(options.headers['X-Helpdesk-Pass']).toBe('pass-1');
+  });
+
+  it('matches on the building too, and says when a room has no location', async () => {
+    const { user } = await openAnswer();
+
+    await user.type(screen.getByRole('combobox', { name: 'Search for a classroom' }), 'it building');
+
+    expect(await screen.findByText('CR205')).toBeInTheDocument();
+    expect(screen.getByText('No location recorded')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /CR205/ })).not.toBeInTheDocument();
+  });
+
+  it('never turns a non-http map link into an anchor', async () => {
+    const { user } = await openAnswer();
+
+    await user.type(screen.getByRole('combobox', { name: 'Search for a classroom' }), 'bad');
+
+    expect(await screen.findByText('BAD')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /BAD/ })).not.toBeInTheDocument();
+  });
+
+  it('offers the rooms of your own classes before anything is typed', async () => {
+    await openAnswer([{ room: 'LT-2', label: 'CS201 Data Structures' }]);
+
+    const link = await screen.findByRole('link', { name: /LT-2/ });
+    expect(link).toHaveAttribute('href', 'https://maps.app.goo.gl/lt2');
+    expect(screen.getByText(/CS201 Data Structures/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Somebody opening question after question is hunting, not reading. After the
+ * fifth they are pointed at the search bar, after the tenth at the XCEED team,
+ * each once, and "Continue" always simply carries on.
+ */
+describe('the "still looking?" prompts', () => {
+  const menuWithTeam = [
+    ...BIG_MENU,
+    { category: 'XCEED team', topics: [{ id: 'ask-a-human', question: 'My question is not answered here' }] },
+  ];
+  const reply = (id) => ({ body: { answer: { id, title: `Answer ${id}`, blocks: [], actions: [], followUps: [] } } });
+
+  const signedIn = () => {
+    const fetchMock = routeFetch({
+      '/menu': { body: { menu: menuWithTeam } },
+      '/session': { body: { pass: 'pass-1', email: 'asha@nitj.ac.in' } },
+      '/topic/lm-0': reply('lm-0'),
+      '/topic/lm-1': reply('lm-1'),
+      '/topic/ask-a-human': reply('ask-a-human'),
+    });
+    render(<HelpdeskPage />);
+    return fetchMock;
+  };
+
+  /* Alternates between two questions: the one just asked drops out of the
+     narrowed list, so the other is always on screen to click. */
+  const askQuestions = async (user, from, to) => {
+    for (let n = from; n <= to; n += 1) {
+      const id = n % 2 ? 'lm-0' : 'lm-1';
+      const index = id === 'lm-0' ? 0 : 1;
+      await user.click(await screen.findByRole('button', { name: `Learning question ${index}` }));
+      await waitFor(() => expect(screen.getAllByText(`Answer ${id}`).length).toBeGreaterThan(0));
+    }
+  };
+
+  it('suggests the search bar after the fifth question, once, and focuses it', async () => {
+    signedIn();
+    const user = userEvent.setup();
+    await screen.findByText(/You are signed in as/);
+
+    await askQuestions(user, 1, 5);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await askQuestions(user, 6, 6);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent(/search bar/i);
+
+    await user.click(screen.getByRole('button', { name: 'Use the search bar' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Search the questions')).toHaveFocus();
+
+    // Not again for the questions after it, until the tenth.
+    await askQuestions(user, 7, 10);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('offers the XCEED team after the tenth, and Continue just carries on', async () => {
+    const fetchMock = signedIn();
+    const user = userEvent.setup();
+    await screen.findByText(/You are signed in as/);
+
+    await askQuestions(user, 1, 6);
+    await user.click(await screen.findByRole('button', { name: 'Continue' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await askQuestions(user, 7, 11);
+    expect(await screen.findByRole('dialog')).toHaveTextContent(/XCEED team/);
+
+    await user.click(screen.getByRole('button', { name: 'Email the XCEED team' }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/topic/ask-a-human'))).toBe(true),
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});

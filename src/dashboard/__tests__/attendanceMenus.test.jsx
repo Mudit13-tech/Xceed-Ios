@@ -5,7 +5,7 @@ import { ChakraProvider } from '@chakra-ui/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 import AttendanceMenusPanel from '../attendanceMenus';
-import { ALL_MENUS, leadershipMenuKeysFor } from '../../attendancemodule/menuCatalogue';
+import { ALL_MENUS, LEADERSHIP_MENU_KEYS } from '../../attendancemodule/menuCatalogue';
 
 /**
  * Choosing which iLEED screens the two leadership views carry.
@@ -197,43 +197,43 @@ describe('when one column cannot be loaded', () => {
 describe('which menus the views actually draw', () => {
   const labelled = (key) => ALL_MENUS.find((menu) => menu.key === key).label;
 
-  /* Eighteen switches of which five do anything is a trap, so the ones with a
-     screen behind them are marked — and marked from the layouts' own list, so
-     a screen added to them is marked without this panel being edited. */
-  it('marks exactly the menus that column\'s layout renders', async () => {
+  /* Marked from the layouts' own list, so a screen added to them is marked
+     without this panel being edited. Both shells carry the whole catalogue
+     now, so every switch in both columns has a screen behind it — but the
+     count is still asserted against the catalogue rather than hard-coded, so
+     narrowing either shell without narrowing this badge fails here. */
+  it('marks every menu, in both columns', async () => {
     renderPanel();
     await screen.findByRole('heading', { name: HOD });
+
+    expect(LEADERSHIP_MENU_KEYS).toHaveLength(ALL_MENUS.length);
 
     // Counted inside each column: the footer note below them uses the same
     // words to explain what the badge means, and a bare screen-wide count
     // would be asserting that sentence as well.
-    for (const [title, audience] of [[HOD, 'hod'], [DEAN, 'dean']]) {
-      const keys = leadershipMenuKeysFor(audience);
-      expect(within(column(title)).getAllByText('has a screen')).toHaveLength(keys.length);
+    for (const title of [HOD, DEAN]) {
+      expect(within(column(title)).getAllByText('has a screen'))
+        .toHaveLength(LEADERSHIP_MENU_KEYS.length);
 
-      for (const key of keys) {
+      for (const key of LEADERSHIP_MENU_KEYS) {
         const row = within(column(title)).getAllByText(labelled(key))[0].closest('div');
         expect(within(row).getByText('has a screen')).toBeInTheDocument();
       }
     }
   });
 
-  /* The bug this replaced: the badge was drawn from one shared list, so the
-     HOD column promised a screen for Confidence Monitor and Class
-     Verification. Neither has a route under /ileed-hod at all — an
-     administrator switched them on and waited for links that could never
-     appear. The Dean's column still marks them, because the Dean's view
-     really does draw them. */
-  it('does not promise the head of department a screen the dean alone has', async () => {
+  /* The operational screens are the point of the widening: they are offered to
+     both audiences, and what makes that safe is the server's read-only rule
+     rather than their absence from the menu. */
+  it('offers the operational screens to both audiences', async () => {
     renderPanel();
     await screen.findByRole('heading', { name: HOD });
 
-    for (const key of ['confidenceMonitor', 'classVerification']) {
-      const hodRow = within(column(HOD)).getAllByText(labelled(key))[0].closest('div');
-      expect(within(hodRow).queryByText('has a screen')).toBeNull();
-
-      const deanRow = within(column(DEAN)).getAllByText(labelled(key))[0].closest('div');
-      expect(within(deanRow).getByText('has a screen')).toBeInTheDocument();
+    for (const key of ['erpUpload', 'cameraRegistry', 'groundTruth', 'rollAssignment']) {
+      for (const title of [HOD, DEAN]) {
+        const row = within(column(title)).getAllByText(labelled(key))[0].closest('div');
+        expect(within(row).getByText('has a screen')).toBeInTheDocument();
+      }
     }
   });
 

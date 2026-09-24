@@ -76,7 +76,10 @@ function FirstYearLoad() {
   const [expandedDept, setExpandedDept] = useState({});
 
   const [timetableData, setTimetableData] = useState({});
-  const [firstYearCode, setFirstYearCode] = useState({});
+  // Empty string, not `{}`: every use of this is a URL segment or a request
+  // body field, and an object put `/viewclasstt/[object Object]/undefined` on
+  // the wire before the subjects had loaded.
+  const [firstYearCode, setFirstYearCode] = useState("");
   const [subjects, setSubjects] = useState([]);
 
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
@@ -351,7 +354,9 @@ function FirstYearLoad() {
       setTimetableData(data);
     };
 
-    fetchTimetableData(selectedSemester, firstYearCode);
+    // Before the subjects land there is no first year code to ask about, and
+    // the request went out as `/viewclasstt/undefined/undefined`.
+    if (firstYearCode) fetchTimetableData(selectedSemester, firstYearCode);
     fetchFacultyData(currentCode, currentDepartment, selectedSemester)
   }, [selectedSemester, apiUrl, currentCode, firstYearCode]);
 
@@ -477,17 +482,39 @@ function FirstYearLoad() {
       });
 
       if (response.ok) {
-        const data = await response.json();
-      } else {
-        console.error(
-          "Failed to send data to the backend. HTTP status:",
-          response.status
-        );
+        setMessage("Data saved successfully");
+        return;
       }
+
+      // "Data saved successfully" used to be set in a `finally`, so a refused
+      // save — a 403 from the department guard, say — told the coordinator
+      // their allotment was stored when the server had thrown it away.
+      const data = await response.json().catch(() => ({}));
+      console.error(
+        "Failed to send data to the backend. HTTP status:",
+        response.status
+      );
+      setMessage("");
+      toast({
+        title: 'Save failed',
+        description:
+          data.error || `The server refused the save (HTTP ${response.status}).`,
+        status: 'error',
+        duration: 8000,
+        isClosable: true,
+        position: 'top',
+      });
     } catch (error) {
       console.error("Error sending data to the backend:", error);
-    } finally {
-      setMessage("Data saved successfully");
+      setMessage("");
+      toast({
+        title: 'Save failed',
+        description: 'The request did not reach the server. Check your connection and try again.',
+        status: 'error',
+        duration: 8000,
+        isClosable: true,
+        position: 'top',
+      });
     }
   };
 

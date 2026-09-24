@@ -4,6 +4,7 @@ import ViewTimetable from './viewtt';
 import getEnvironment from '../getenvironment';
 import MailProgressModal from './mailProgressModal';
 import { notifyGate } from './notifyGate';
+import { bannerColor, bannerTone } from './slotBanner';
 import './Timetable.css';
 import TimetableSummary from './ttsummary';
 import ReactToPrint from 'react-to-print';
@@ -550,7 +551,12 @@ const Timetable = () => {
         const data = await response.json();
         if (check !== slotCheckSeq.current) return;
         setMessage(data.message);
-         setTimeout(() => setMessage(''), 2000); 
+        // Only clear the answer we ourselves put up: a second selection made
+        // within these two seconds has already replaced it with a fresh
+        // "Checking...", and wiping that would hide a check still in flight.
+        setTimeout(() => {
+          if (check === slotCheckSeq.current) setMessage('');
+        }, 2000);
       }
     } catch (error) {
       // Leaving "Checking..." on screen forever would read as a hung check.
@@ -957,7 +963,8 @@ const Timetable = () => {
 
       <Portal>
         <Box
-          bg={showMessage && message ? 'rgba(255, 100, 0, 0.9)' : 0}
+          // Violet while it asks, green or red once it knows — see slotBanner.
+          bg={showMessage && message ? bannerColor(bannerTone(message)) : 0}
           color="white"
           textAlign="center"
           fontWeight="bold"

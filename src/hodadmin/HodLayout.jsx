@@ -9,17 +9,25 @@
 // do is drift into sharing a menu list, which is exactly what a shared layout
 // with a flag invites.
 //
-// The server is the boundary, not this file: `attendanceLeadershipReadAccess` admits
-// the role, `refuseAttendanceWrites` rejects anything that is not a GET, and
-// `requireHodMenu` re-checks each toggle. Hiding a link here only spares
-// somebody a screen full of 403s.
+// The server is the boundary, not this file: `attendanceLeadershipReadAccess`
+// admits the role and `refuseAttendanceWrites` rejects anything that is not a
+// GET, on every mount these screens read from. Hiding a link here only spares
+// somebody a screen they were not meant to be offered.
+//
+// A toggle is the control, not a hint. Switching a menu off takes the link out
+// of this sidebar, refuses the screen below (see disabledMenu), and closes the
+// endpoints it reads — `requireLeadershipMenu` is mounted on every iLEED data
+// mount a leadership viewer can reach. A head who types the path of a menu an
+// administrator left off gets told it is off, rather than a page of tables
+// that never fill.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import getEnvironment from '../getenvironment';
 import { theme } from '../attendancemodule/config';
 import LeadershipSidebar from '../attendancemodule/LeadershipSidebar';
-import { leadershipMenusFor } from '../attendancemodule/menuCatalogue';
+import { leadershipMenusFor, menuForPath } from '../attendancemodule/menuCatalogue';
+import MenuDisabledNotice from '../attendancemodule/MenuDisabledNotice';
 
 const apiUrl = getEnvironment();
 
@@ -30,14 +38,12 @@ const apiUrl = getEnvironment();
 // drives every set. Routes point at the read-only destinations an HOD can
 // actually open.
 //
-// The head's slice of that list is smaller than the Dean's: Confidence Monitor
-// and Class Verification judge the recognition system rather than report a
-// department's attendance, and a head can act on nothing either shows. Which
-// those are is now stated in the catalogue (NOT_FOR_HEADS) rather than here,
-// because the settings screen has to know it too — while it did not, an admin
-// switching Class Verification on for the heads was told it "has a screen" and
-// then watched nothing appear.
-const SHARED_MENUS = leadershipMenusFor('/ileed-hod', 'hod');
+// A head draws the WHOLE catalogue — every iLEED menu has a route in this
+// shell, and the Dean (Academic)'s shell draws the same set at a wider scope.
+// What keeps that safe is the read-only rule above rather than a short list of
+// screens, and which of the eighteen a given institute's heads actually see is
+// an administrator's decision, one toggle at a time.
+const SHARED_MENUS = leadershipMenusFor('/ileed-hod');
 
 export const HOD_MENUS = [
     ...SHARED_MENUS.filter((menu) => menu.id !== 'helpManual'),
@@ -63,6 +69,7 @@ const EMPTY_CONTEXT = {
 
 export default function HodLayout() {
     const navigate = useNavigate();
+    const location = useLocation();
     // null = still loading. Rendering the menu from `{}` would flash an empty
     // sidebar and then fill it, which reads as a broken page.
     const [hodMenus, setHodMenus] = useState(null);
@@ -140,6 +147,28 @@ export default function HodLayout() {
         );
     }, [hodMenus]);
 
+    /**
+     * The screen being asked for, when an administrator has switched it off.
+     *
+     * Hiding the link was never enough: an old bookmark, a link somebody was
+     * sent, or a typed path all reached the screen anyway, and it rendered as
+     * though it had been enabled. The server refuses its data now — see
+     * requireLeadershipMenu — so without this the reader gets a page of failed
+     * fetches, which looks like a broken screen rather than a closed one.
+     *
+     * Null while the toggles are still loading, so nothing is refused on the
+     * strength of an answer that has not arrived. The dashboard is never
+     * refused: it is where the role card lands. A path with no catalogue menu
+     * behind it — the head's own mailbox, or a typo — is not a toggle's to
+     * withhold and goes to the router as before.
+     */
+    const disabledMenu = useMemo(() => {
+        if (!hodMenus) return null;
+        const menu = menuForPath('/ileed-hod', location.pathname);
+        if (!menu || !menu.menuKey || menu.id === 'dashboard') return null;
+        return hodMenus[menu.menuKey] === true ? null : menu;
+    }, [hodMenus, location.pathname]);
+
     if (error) return null;
 
     return (
@@ -154,6 +183,8 @@ export default function HodLayout() {
             <main style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
                 {context.error ? (
                     <div style={{ padding: 32, color: theme.danger }}>{context.error}</div>
+                ) : disabledMenu ? (
+                    <MenuDisabledNotice label={disabledMenu.label} audience="a head of department" />
                 ) : (
                     <Outlet context={context} />
                 )}

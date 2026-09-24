@@ -134,22 +134,27 @@ describe('a head of department is offered one card per dashboard', () => {
       'hod-learning': '/learning/hod-dashboard',
       'hod-ileed': '/ileed-hod/dashboard',
       'ileed-hod': '/ileed-hod/dashboard',
+      'timetable-hod': '/timetable-hod/dashboard',
     },
   });
 
   const cardHeadings = () =>
     screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent);
 
-  it('shows both, and not a third for the bare appointment', async () => {
+  it('shows one per dashboard, and not an extra for the bare appointment', async () => {
     mockFetchFor(hodUser(['HOD', 'hod-learning', 'hod-ileed']));
 
     const { default: AllocatedRolesPage } = await import('../allotedroles');
     renderWithProviders(<AllocatedRolesPage />);
 
     await waitFor(() => expect(cardHeadings().length).toBeGreaterThan(0));
-    // Exactly two: one per dashboard. Three would mean the appointment is
+    // One per dashboard and no more. A fourth would mean the appointment is
     // being drawn as a card of its own and opening one of them twice.
-    expect(cardHeadings()).toEqual(['Xceed Learning — HOD', 'iLEED — HOD']);
+    expect(cardHeadings()).toEqual([
+      'Xceed Learning — HOD',
+      'iLEED — HOD',
+      'Timetable — HOD',
+    ]);
   });
 
   /* Splitting the role in two is only worth anything if either half can be
@@ -162,7 +167,9 @@ describe('a head of department is offered one card per dashboard', () => {
     renderWithProviders(<AllocatedRolesPage />);
 
     await waitFor(() => expect(cardHeadings().length).toBeGreaterThan(0));
-    expect(cardHeadings()).toEqual(['Xceed Learning — HOD']);
+    // The timetable card stays: withdrawing `hod-ileed` withdraws the iLEED
+    // dashboard, and nothing else.
+    expect(cardHeadings()).toEqual(['Xceed Learning — HOD', 'Timetable — HOD']);
   });
 
   /* Every head appointed before the two roles existed holds only `HOD` until
@@ -174,7 +181,11 @@ describe('a head of department is offered one card per dashboard', () => {
     renderWithProviders(<AllocatedRolesPage />);
 
     await waitFor(() => expect(cardHeadings().length).toBeGreaterThan(0));
-    expect(cardHeadings()).toEqual(['Xceed Learning — HOD', 'iLEED — HOD']);
+    expect(cardHeadings()).toEqual([
+      'Xceed Learning — HOD',
+      'iLEED — HOD',
+      'Timetable — HOD',
+    ]);
   });
 
   /* The bug a head actually reported: no cards at all.
@@ -204,7 +215,11 @@ describe('a head of department is offered one card per dashboard', () => {
     renderWithProviders(<AllocatedRolesPage />);
 
     await waitFor(() => expect(cardHeadings().length).toBeGreaterThan(0));
-    expect(cardHeadings()).toEqual(['Xceed Learning — HOD', 'iLEED — HOD']);
+    expect(cardHeadings()).toEqual([
+      'Xceed Learning — HOD',
+      'iLEED — HOD',
+      'Timetable — HOD',
+    ]);
     await settle();
     expect(navigateSpy).not.toHaveBeenCalledWith('/learning/hod-dashboard');
   });
@@ -216,14 +231,22 @@ describe('a head of department is offered one card per dashboard', () => {
     renderWithProviders(<AllocatedRolesPage />);
 
     await waitFor(() => expect(cardHeadings().length).toBeGreaterThan(0));
-    expect(cardHeadings()).toEqual(['Xceed Learning — HOD', 'iLEED — HOD']);
+    expect(cardHeadings()).toEqual([
+      'Xceed Learning — HOD',
+      'iLEED — HOD',
+      'Timetable — HOD',
+    ]);
   });
 
   /* The shortcut is not disabled for heads in general — only while the one
      role really does stand for two screens. An administrator who withdrew the
      iLEED dashboard left exactly one destination, so going straight there is
      right. */
-  it('still skips the picker once a head has only one dashboard left', async () => {
+  /* Was "still skips the picker once a head has only one dashboard left".
+     Withdrawing `hod-ileed` no longer leaves one destination: the timetable
+     card is appended on the appointment alone, so there are still two, and
+     skipping would hide the one that is not `hod-learning`. */
+  it('does not skip the picker for a head who still has the timetable card', async () => {
     mockFetchFor(hodUser(['HOD', 'hod-learning']));
 
     const { default: AllocatedRolesPage } = await import('../allotedroles');
@@ -231,7 +254,19 @@ describe('a head of department is offered one card per dashboard', () => {
 
     await waitFor(() => expect(cardHeadings().length).toBeGreaterThan(0));
     await settle();
-    expect(navigateSpy).toHaveBeenCalledWith('/learning/hod-dashboard');
+    expect(navigateSpy).not.toHaveBeenCalledWith('/learning/hod-dashboard');
+  });
+
+  /* The head-of-department timetable view is read-only and reached from this
+     card; a head must actually be able to get to it. */
+  it('offers the timetable card to every head, named roles or not', async () => {
+    mockFetchFor(hodUser(['HOD', 'hod-learning', 'hod-ileed']));
+
+    const { default: AllocatedRolesPage } = await import('../allotedroles');
+    renderWithProviders(<AllocatedRolesPage />);
+
+    await waitFor(() => expect(cardHeadings().length).toBeGreaterThan(0));
+    expect(cardHeadings()).toContain('Timetable — HOD');
   });
 });
 
