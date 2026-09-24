@@ -9,6 +9,7 @@ import {
   Flex,
   HStack,
   Heading,
+  Image,
   Link,
   Select,
   Spinner,
@@ -54,6 +55,35 @@ const KIND_STYLE = {
 };
 
 const formatWhen = (value) => (value ? new Date(value).toLocaleString() : '');
+
+
+/**
+ * A reporter's screenshot, linked to the full-size file. Its own load/error
+ * state rather than Chakra's `fallback`, which would also show while loading.
+ */
+function ScreenshotThumb({ url, title, border, subColor }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <Text fontSize="xs" color={subColor}>
+        The screenshot could not be loaded — it may have been removed.
+      </Text>
+    );
+  }
+  return (
+    <Link href={url} isExternal display="inline-block">
+      <Image
+        src={url}
+        alt={`Screenshot attached to "${title}"`}
+        maxH="240px"
+        borderRadius="md"
+        borderWidth="1px"
+        borderColor={border}
+        onError={() => setFailed(true)}
+      />
+    </Link>
+  );
+}
 
 function ReportCard({ report, onDecide, onSendNote }) {
   // Empty, not the note already sent. The box is where the *next* message is
@@ -146,6 +176,18 @@ function ReportCard({ report, onDecide, onSendNote }) {
             {report.pageUrl}
           </Link>
         </Text>
+      )}
+
+      {/* The screenshot the reporter attached. Served from the learning
+          module (same origin, so the session cookie goes with it); click for
+          full size. */}
+      {report.screenshotUrl && (
+        <Box mb={3}>
+          <Text fontSize="xs" color={subColor} mb={1}>
+            Screenshot
+          </Text>
+          <ScreenshotThumb url={report.screenshotUrl} title={report.title} border={border} subColor={subColor} />
+        </Box>
       )}
 
       {report.reviewedByName && (

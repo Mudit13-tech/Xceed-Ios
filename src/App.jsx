@@ -62,6 +62,8 @@ const Note = lazyWithPreload(() => import('./timetableadmin/addnote'));
 import Navbar from './components/home/Navbar';
 // Eager for the same reason as Navbar: it guards every signed-in page.
 import DobGate from './components/DobGate';
+import LoginHistoryModal from './components/LoginHistory';
+import ProfileModal from './components/ProfileModal';
 import ErrorBoundary from './components/ErrorBoundary';
 const PrintSummary = lazyWithPreload(() => import('./timetableadmin/printSummary'));
 const LoadDistribution = lazyWithPreload(() => import('./timetableadmin/loaddistribution'));
@@ -811,6 +813,10 @@ function App() {
           route (the Navbar hides itself on several), and hosts the one-time
           edit the account menus open. */}
       <DobGate />
+      {/* The login-history dialog the account menus open. */}
+      <LoginHistoryModal />
+      {/* "Edit profile": name, roll number, email and date of birth. */}
+      <ProfileModal />
 
       {/* One boundary around the whole table rather than per route: a lazy
           element with no Suspense above it throws, and a single boundary here
