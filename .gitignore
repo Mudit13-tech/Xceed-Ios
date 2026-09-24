@@ -12,7 +12,17 @@ dist
 dist-ssr
 *.local
 
-.env
+# Every .env variant, not just the exact name. Editors leave working copies
+# behind -- nano writes .env.save on an interrupted edit -- and one of those
+# carrying a filled-in OTA_SECRET_KEY would put the deploy key in the repo.
+# .env.production is deliberate and stays tracked: public CDN urls for the
+# notebook runtimes, no secrets.
+.env*
+!.env.production
+
+# PR drafts and working notes, not project files.
+Claude outputs/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
