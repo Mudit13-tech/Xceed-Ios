@@ -16,6 +16,7 @@ import LogoutConfirmModal from '../LogoutConfirmModal';
 import { openDobEditor } from '../DobGate';
 import { loginPathFor } from '../../authRedirect';
 import { clearNativeSession } from '../../mobile/session';
+import { isNativeApp } from '../../utils/nativeCapabilities';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import lmApi from '../../learningModule/api/lmApi';
 
@@ -103,6 +104,10 @@ const PUBLIC_PATHS = [
   '/ml/t1',
 ];
 
+// The landing page: '/' on the web. The installed app opens '/' on the login
+// screen, so there the landing page lives at '/home' (see App.jsx).
+const homePath = isNativeApp() ? '/home' : '/';
+
 export default function Navbar() {
   const { colorMode, toggleColorMode } = useColorMode();
   const [navbarOpen, setNavbarOpen] = useState(false);
@@ -132,6 +137,7 @@ export default function Navbar() {
       return response.json();
     },
     retry: false,
+    staleTime: 5 * 60 * 1000,
   });
 
   // A refetch that fails leaves the *last successful* `data` in place — that is
@@ -154,10 +160,12 @@ export default function Navbar() {
       queryClient.prefetchQuery({
         queryKey: ['learning', 'classes', 'active'],
         queryFn: () => lmApi.listClasses(),
+        staleTime: 5 * 60 * 1000,
       });
       queryClient.prefetchQuery({
         queryKey: ['learning', 'classes', 'archived'],
         queryFn: () => lmApi.listClasses('archived'),
+        staleTime: 5 * 60 * 1000,
       });
     }
   }, [isAuthenticated, queryClient]);
@@ -289,7 +297,7 @@ export default function Navbar() {
     >
       <div className="tw-max-w-screen-xl tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-mx-auto tw-p-4">
         <Link
-          to="/home"
+          to={homePath}
           className="tw-flex tw-items-center tw-space-x-3 rtl:tw-space-x-reverse"
         >
           <img src="/clublogo.png" className="tw-h-8" alt="Xceed Logo" />
@@ -316,7 +324,7 @@ export default function Navbar() {
           <ul className="tw-font-medium tw-flex tw-flex-col tw-items-center tw-p-4 md:tw-p-0 tw-mt-4 tw-border tw-rounded-lg tw-space-y-5 md:tw-space-y-0 md:tw-flex-row md:tw-space-x-8 rtl:tw-space-x-reverse md:tw-mt-0 md:tw-border-0 tw-bg-gray-900 tw-border-gray-700 tw-list-none">
             <li>
               <a
-                href="/home"
+                href={homePath}
                 className="tw-block tw-py-2 tw-px-3 tw-text-cyan-300 tw-rounded md:tw-bg-transparent md:tw-text-cyan-300 md:tw-p-0 hover:tw-text-cyan-500"
                 aria-current="page"
               >

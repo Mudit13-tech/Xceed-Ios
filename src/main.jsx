@@ -14,70 +14,24 @@ import { queryPersister, shouldPersistQuery } from './utils/queryPersister';
 import { learningModuleTheme } from './learningModule/theme';
 import { AppToastContainer } from './utils/appToast';
 import './utils/favicon';
+// Web implementations here; the mobile app swaps each for a native one. See
+// src/mobile/README.md.
 import {
   APP_NAME,
   credentialsFor,
   handleUnauthorized,
   installAxiosSessionGuard,
 } from './mobile/httpSession';
+import { CACHE_GC_TIME, PERSIST_MAX_AGE, PERSIST_BUSTER } from './mobile/queryCache';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 0,
-      gcTime: Infinity,
+      gcTime: CACHE_GC_TIME,
     },
   },
 });
-
-/**
- * The two guardrails on the persisted cache. Both are defaults worth overriding.
- *
- * maxAge: the default is 24 hours, and it is all-or-nothing - one timestamp
- * covers the whole cache, so a cache last written 25 hours ago is thrown away
- * entirely rather than per query. On a phone that is precisely backwards: the
- * stretch of days between opening the app is exactly when there is no network
- * to fall back on, and expiring the cache then turns the one screen that could
- * have worked offline into an empty one. Unbounded is safe here because
- * staleTime is 0 - nothing restored is ever treated as fresh, it is shown while
- * the refetch runs behind it.
- *
- * buster: the release version, so an OTA update starts from an empty cache
- * rather than rehydrating one written by the previous bundle into components
- * that may no longer read that shape.
- *
- * Read from a <meta> tag rather than inlined at build time, and that detail is
- * the whole point. As a `define` it was baked into this module, which lands in
- * the chunk every route imports — so each new version renamed that chunk,
- * rewrote the import path inside all ~270 route chunks and changed their hashes
- * too. Measured across two publishes with no source change at all: 270 chunks,
- * 9.79 MB, rebuilt for nothing, and a delta OTA made every user download it.
- * index.html is imported by no JavaScript, so the same value there renames
- * nothing, and it already changes every release because it names the hashed
- * entry chunk.
- *
- * Deliberately not a hand-maintained constant. Most of this app arrives by
- * sync from AMS, so a response shape can change without anyone here reviewing
- * it — a "bump this when the shape changes" rule has nobody to enforce it and
- * would be wrong exactly when it mattered. Costing a cold first load per update
- * is the cheaper mistake.
- *
- * The fallback covers the dev server before the tag exists and jsdom under
- * test, where there is no index.html at all; neither persists a cache worth
- * busting.
- */
-const bundleVersion =
-  (typeof document !== 'undefined' &&
-    document.querySelector('meta[name="app-version"]')?.content) ||
-  'dev';
-
-const persistOptions = {
-  persister: queryPersister,
-  maxAge: Infinity,
-  buster: bundleVersion,
-  // Keeps the signed-in user off disk; see queryPersister.js.
-  dehydrateOptions: { shouldDehydrateQuery: shouldPersistQuery },
-};
 
 const helmetContext = {};
 
@@ -116,16 +70,11 @@ window.fetch = async function(url, options = {}) {
   }
   
   const response = await originalFetch(url, options);
-  
-  // Intercept 401 errors from our own API
-  if (response.status === 401 && isOwnServer) {
-    handleUnauthorized();
-  }
-  
+  if (response.status === 401 && isOwnServer) handleUnauthorized();
   return response;
 };
 
-axios.defaults.withCredentials = false;
+axios.defaults.withCredentials = true;
 axios.interceptors.request.use((config) => {
   // Same reasoning as the fetch wrapper above, and the same failure if it is
   // skipped: this runs on every axios call in the platform.
@@ -134,7 +83,6 @@ axios.interceptors.request.use((config) => {
   // it goes on whether or not there is a token to go with it.
   config.headers['X-App-Name'] = APP_NAME;
   if (token) config.headers.Authorization = `Bearer ${token}`;
-  config.withCredentials = false;
   return config;
 });
 
@@ -154,14 +102,22 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <HelmetProvider context={helmetContext}>
       <ChakraProvider theme={appTheme}>
         <RecoilRoot>
-          <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+          <PersistQueryClientProvider
+            client={queryClient}
+            persistOptions={{
+              persister: queryPersister,
+              maxAge: PERSIST_MAX_AGE,
+              buster: PERSIST_BUSTER,
+              // Keeps the signed-in user off disk; see queryPersister.js.
+              dehydrateOptions: { shouldDehydrateQuery: shouldPersistQuery },
+            }}
+          >
             <App />
           </PersistQueryClientProvider>
         </RecoilRoot>
       </ChakraProvider>
-      {/* Mounted once, outside the provider on purpose: this is the renderer for
-          toasts raised from plain modules (see utils/appToast.js), and it
-          carries its own copy of the theme. */}
+      {/* The renderer for toasts raised from plain modules (utils/appToast.js).
+          Outside the provider on purpose: it carries its own copy of the theme. */}
       <AppToastContainer />
     </HelmetProvider>
   </React.StrictMode>

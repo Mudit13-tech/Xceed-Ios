@@ -183,7 +183,7 @@ const generateSummaryTablePDF = async (allFacultySummaries, deptfaculty, session
       },
     };
     
-    savePdfDoc(docDefinition, 'timetable_summary.pdf');
+    savePdfDoc(docDefinition, 'timetable_summary.pdf', { web: ['download', 'open'] });
   } catch (error) {
     console.error('Error during PDF generation:', error);
   }
