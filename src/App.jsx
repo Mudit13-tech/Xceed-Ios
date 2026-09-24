@@ -16,6 +16,8 @@
 
 import React, { Suspense } from 'react';
 import RouteFallback from './components/RouteFallback';
+import MobileShell from './mobile/MobileShell';
+import { isNativeApp } from './utils/nativeCapabilities';
 import {
   BrowserRouter as Router,
   Routes,
@@ -60,6 +62,8 @@ const Note = lazyWithPreload(() => import('./timetableadmin/addnote'));
 import Navbar from './components/home/Navbar';
 // Eager for the same reason as Navbar: it guards every signed-in page.
 import DobGate from './components/DobGate';
+import LoginHistoryModal from './components/LoginHistory';
+import ProfileModal from './components/ProfileModal';
 import ErrorBoundary from './components/ErrorBoundary';
 const PrintSummary = lazyWithPreload(() => import('./timetableadmin/printSummary'));
 const LoadDistribution = lazyWithPreload(() => import('./timetableadmin/loaddistribution'));
@@ -269,7 +273,11 @@ const MLFineTuning = lazyWithPreload(() => import('./attendancemodule/MLFineTuni
 const APP_ROUTES = (
         <Routes>
           {/* Landing Page */}
-          <Route path="/" element={<Home />} />
+          {/* The installed app opens on the login screen rather than the landing
+              page; /home reaches the landing page from inside it. On the web
+              both paths are the landing page. */}
+          <Route path="/" element={isNativeApp() ? <Navigate to="/login" replace /> : <Home />} />
+          <Route path="/home" element={<Home />} />
           {/* Module introductions. Public on purpose — their audience is the
               faculty and department staff being introduced to a module before
               anyone has given them an account. Both are listed in Navbar's
@@ -796,6 +804,7 @@ function App() {
        the download took (#2413). React Router has done this under the flag
        since 6.13; it is the default in v7. */
     <Router future={{ v7_startTransition: true }}>
+      <MobileShell />
       {/* <div className="app"> */}
 
       {/* <h1>XCEED-Timetable Module</h1>  */}
@@ -804,6 +813,10 @@ function App() {
           route (the Navbar hides itself on several), and hosts the one-time
           edit the account menus open. */}
       <DobGate />
+      {/* The login-history dialog the account menus open. */}
+      <LoginHistoryModal />
+      {/* "Edit profile": name, roll number, email and date of birth. */}
+      <ProfileModal />
 
       {/* One boundary around the whole table rather than per route: a lazy
           element with no Suspense above it throws, and a single boundary here

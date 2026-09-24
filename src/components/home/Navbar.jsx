@@ -5,16 +5,25 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import getEnvironment from '../../getenvironment';
 import {
+  Box,
   Text,
   Button,
   Flex,
   IconButton,
+  Menu,
+  MenuButton,
+  MenuDivider,
+  MenuItem,
+  MenuList,
   useColorMode,
   useDisclosure,
 } from '@chakra-ui/react';
 import LogoutConfirmModal from '../LogoutConfirmModal';
-import { openDobEditor } from '../DobGate';
+import { openProfile } from '../ProfileModal';
+import { LastLogin, openLoginHistory } from '../LoginHistory';
 import { loginPathFor } from '../../authRedirect';
+import { clearNativeSession } from '../../mobile/session';
+import { isNativeApp } from '../../utils/nativeCapabilities';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import lmApi from '../../learningModule/api/lmApi';
 
@@ -81,6 +90,11 @@ const PUBLIC_PATHS = [
   // asked about (a visitor who *is* signed in skips it), and every answer is
   // scoped to that address. See modules/helpdeskModule on the server.
   '/help',
+  // The explainer videos, linked from the help desk. Public for the same
+  // reason, and GET /api/v1/explainers is unauthenticated to match (see
+  // server/src/modules/explainerModule). Without this entry a signed-in
+  // student was bounced to /learning and a visitor to /login.
+  '/explainers',
   '/privacy',
   '/forgot-password',
   '/nirf',
@@ -101,6 +115,10 @@ const PUBLIC_PATHS = [
   '/404',
   '/ml/t1',
 ];
+
+// The landing page: '/' on the web. The installed app opens '/' on the login
+// screen, so there the landing page lives at '/home' (see App.jsx).
+const homePath = isNativeApp() ? '/home' : '/';
 
 export default function Navbar() {
   const { colorMode, toggleColorMode } = useColorMode();
@@ -194,6 +212,7 @@ export default function Navbar() {
       if (!response.ok) {
         throw new Error('Failed to logout');
       }
+      await clearNativeSession();
       navigate('/login');
     } catch (error) {
       console.error('Error during logout:', error.message);
@@ -289,7 +308,7 @@ export default function Navbar() {
     >
       <div className="tw-max-w-screen-xl tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-mx-auto tw-p-4">
         <Link
-          to="/"
+          to={homePath}
           className="tw-flex tw-items-center tw-space-x-3 rtl:tw-space-x-reverse"
         >
           <img src="/clublogo.png" className="tw-h-8" alt="Xceed Logo" />
@@ -316,7 +335,7 @@ export default function Navbar() {
           <ul className="tw-font-medium tw-flex tw-flex-col tw-items-center tw-p-4 md:tw-p-0 tw-mt-4 tw-border tw-rounded-lg tw-space-y-5 md:tw-space-y-0 md:tw-flex-row md:tw-space-x-8 rtl:tw-space-x-reverse md:tw-mt-0 md:tw-border-0 tw-bg-gray-900 tw-border-gray-700 tw-list-none">
             <li>
               <a
-                href="/"
+                href={homePath}
                 className="tw-block tw-py-2 tw-px-3 tw-text-cyan-300 tw-rounded md:tw-bg-transparent md:tw-text-cyan-300 md:tw-p-0 hover:tw-text-cyan-500"
                 aria-current="page"
               >
@@ -384,9 +403,36 @@ export default function Navbar() {
                 <>
                   {userDetails && (
                     <Flex align="center" gap={2}>
-                      <Text fontSize="sm" color="orange">
-                        {userDetails.user.email}
-                      </Text>
+                      {/* The account menu: who is signed in, when they last
+                          signed in before this, and the account's own
+                          settings. isLazy so the history is fetched only
+                          when the menu is first opened. */}
+                      <Menu placement="bottom-end" isLazy>
+                        <MenuButton
+                          as={Button}
+                          variant="ghost"
+                          size="sm"
+                          color="orange"
+                          fontWeight="normal"
+                          _hover={{ bg: 'whiteAlpha.200' }}
+                          _active={{ bg: 'whiteAlpha.300' }}
+                        >
+                          {userDetails.user.email} ▾
+                        </MenuButton>
+                        <MenuList zIndex={10000}>
+                          <Box px={3} py={2}>
+                            <Text fontSize="sm" fontWeight="600" noOfLines={1}>
+                              {accountLabel}
+                            </Text>
+                            <LastLogin color="gray.500" />
+                          </Box>
+                          <MenuDivider />
+                          <MenuItem onClick={openLoginHistory}>Login history</MenuItem>
+                          {/* Name, roll number, email and date of birth — the
+                              birthday is kept off this menu itself. */}
+                          <MenuItem onClick={openProfile}>Edit profile</MenuItem>
+                        </MenuList>
+                      </Menu>
 
                       <IconButton
                         onClick={toggleColorMode}
@@ -415,19 +461,6 @@ export default function Navbar() {
                           boxShadow: '0 0 0 3px rgba(34, 211, 238, 0.45)',
                         }}
                       />
-
-                      {/* The one-time date-of-birth edit; the dialog says
-                          whether it is still available. */}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        color="white"
-                        fontWeight="normal"
-                        _hover={{ color: 'cyan.300' }}
-                        onClick={openDobEditor}
-                      >
-                        Date of birth
-                      </Button>
 
                       <Button
                         variant="outline"

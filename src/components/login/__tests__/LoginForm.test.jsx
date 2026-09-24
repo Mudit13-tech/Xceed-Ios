@@ -50,7 +50,11 @@ const queueFetch = (...replies) => {
 };
 
 const signIn = async (user) => {
-  await user.type(screen.getByPlaceholderText('Enter your email'), 'asha@nitj.ac.in');
+  // The form is not the first thing rendered: LoginForm reads saved accounts out
+  // of secure storage before it can know whether to show the password form, the
+  // account switcher or a PIN prompt, and shows "Loading..." until it does. The
+  // synchronous query this used to open ran against that placeholder.
+  await user.type(await screen.findByPlaceholderText('Enter your email'), 'asha@nitj.ac.in');
   await user.type(screen.getByPlaceholderText('Enter your password'), 'hunter2');
   await user.click(screen.getByRole('button', { name: 'Login' }));
 };

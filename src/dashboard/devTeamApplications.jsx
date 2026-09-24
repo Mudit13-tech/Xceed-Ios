@@ -31,6 +31,7 @@ import {
 import { Link as RouterLink } from 'react-router-dom';
 
 import lmApi from '../learningModule/api/lmApi';
+import { serverFileLinkProps } from '../utils/nativeCapabilities';
 
 /**
  * Requests to join the development team, for the people who decide on them.
@@ -377,8 +378,7 @@ function EventClaimCard({ claim, onDecide }) {
       <Stack direction={{ base: 'column', sm: 'row' }} spacing={2} align="center" mb={3}>
         <Button
           as={Link}
-          href={lmApi.fileUrl(claim.proof?.url)}
-          isExternal
+          {...serverFileLinkProps(lmApi.fileUrl(claim.proof?.url), claim.proof?.name)}
           size="sm"
           colorScheme="blue"
           variant="outline"

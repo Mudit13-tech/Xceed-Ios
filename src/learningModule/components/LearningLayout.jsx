@@ -42,17 +42,14 @@ import TimetableChangeModal from './TimetableChangeModal';
 import LogoutConfirmModal from '../../components/LogoutConfirmModal';
 import useTimetableChanges from '../hooks/useTimetableChanges';
 import { LmIcon } from './Icon';
-import { buttonTextStyles } from './common';
-import { openDobEditor } from '../../components/DobGate';
+import { buttonTextStyles, BusyDots } from './common';
+import { clearNativeSession } from '../../mobile/session';
+import { openProfile, PROFILE_UPDATED_EVENT } from '../../components/ProfileModal';
+import { LastLogin, openLoginHistory } from '../../components/LoginHistory';
 
 // Split out of the shell: every student sees it exactly once, and nobody else
 // ever does, so it has no business in the bundle that loads on every page.
 const CompleteProfile = lazy(() => import('../pages/CompleteProfile'));
-
-// Same reasoning: the one-time correction is opened by a handful of accounts,
-// once each, and never again — it has no business in the shell's bundle.
-const EditIdentityModal = lazy(() => import('./EditIdentityModal'));
-
 
 // Shared look for the header's square action buttons (theme toggle, logout) so
 // they read as one pair. Mirrors the attendance shell's SQUARE_BTN.
@@ -556,9 +553,13 @@ export default function LearningLayout() {
     load();
   }, [load]);
 
-  // Kept apart from the drawer's `isOpen`: the account menu's one-time edit and
-  // the mobile nav open on different things and must not share a switch.
-  const identityEdit = useDisclosure();
+  // A name or roll number corrected from "Edit profile" (components/
+  // ProfileModal) — re-read so the header shows it.
+  useEffect(() => {
+    const reload = () => load();
+    window.addEventListener(PROFILE_UPDATED_EVENT, reload);
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, reload);
+  }, [load]);
 
   const logoutModal = useDisclosure();
 
@@ -572,6 +573,7 @@ export default function LearningLayout() {
       console.error('Error during logout:', error.message);
     }
     localStorage.removeItem('token');
+    await clearNativeSession();
     /* Closed after the request rather than before it: the dialog shows the
        logout running, and closing it first would hide that behind a page the
        user is about to leave anyway. */
@@ -725,7 +727,7 @@ export default function LearningLayout() {
             </HStack>
 
             {me && (
-              <Menu placement="bottom-end">
+              <Menu placement="bottom-end" isLazy>
                 <MenuButton as={Button} variant="ghost" size="sm" px={2}>
                   <HStack spacing={2}>
                     <Avatar size="xs" name={me.name} />
@@ -748,31 +750,18 @@ export default function LearningLayout() {
                     <Text fontSize="xs" color="lmFg.muted" noOfLines={1}>
                       {me.email}
                     </Text>
+                    {/* Fetched when the menu first opens (isLazy above). */}
+                    <LastLogin color="lmFg.muted" />
                   </Box>
                   <MenuDivider />
-                  {/* One correction, and then it is an administrator's job.
-                      The gate above takes the name and roll number in a hurry,
-                      on a first sign-in, and locks them because result sheets
-                      are read by them — but a student who mistyped their own
-                      roll number should not need to find an administrator for
-                      it. The item disappears the moment the edit is spent
-                      (`canCorrectIdentity`, decided server-side), and says on
-                      its face that it is the only one. */}
-                  {me.canCorrectIdentity && (
-                    <MenuItem color={menuTextColor} onClick={identityEdit.onOpen}>
-                      <HStack spacing={2} w="100%">
-                        <Text fontSize="sm">Edit name & roll number</Text>
-                        <Box flex="1" />
-                        <Badge colorScheme="orange" borderRadius="full" px={2} fontSize="0.65rem">
-                          One-time
-                        </Badge>
-                      </HStack>
-                    </MenuItem>
-                  )}
-                  {/* The platform-wide one-time edit (see components/DobGate):
-                      the dialog itself says whether it is still available. */}
-                  <MenuItem color={menuTextColor} onClick={openDobEditor}>
-                    <Text fontSize="sm">Date of birth</Text>
+                  {/* Name, roll number, email and date of birth in one dialog
+                      (components/ProfileModal), each with its one-time edit —
+                      the birthday is kept off this menu itself. */}
+                  <MenuItem color={menuTextColor} onClick={openProfile}>
+                    <Text fontSize="sm">Edit profile</Text>
+                  </MenuItem>
+                  <MenuItem color={menuTextColor} onClick={openLoginHistory}>
+                    <Text fontSize="sm">Login history</Text>
                   </MenuItem>
                   <MenuItem color={menuTextColor} onClick={logoutModal.onOpen}>
                     Log out
@@ -810,14 +799,19 @@ export default function LearningLayout() {
           </Box>
 
           <Box flex="1" minW={0} w="100%">
-            <Outlet
-              context={{
-                me,
-                overview,
-                reloadOverview: load,
-                timetableChanges,
-              }}
-            />
+            {/* A route chunk on its way, whose page shape the shell cannot know — so
+                BusyDots rather than a skeleton that would promise the wrong one.
+                See the sweep in __tests__/NoSpinners.test.jsx. */}
+            <React.Suspense fallback={<Flex p={8} justify="center"><BusyDots label="Loading…" /></Flex>}>
+              <Outlet
+                context={{
+                  me,
+                  overview,
+                  reloadOverview: load,
+                  timetableChanges,
+                }}
+              />
+            </React.Suspense>
           </Box>
         </Flex>
       </Container>
@@ -898,20 +892,6 @@ export default function LearningLayout() {
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
-
-      {/* Mounted only once opened: the lazy chunk should not be fetched by every
-          account that merely has the menu item. */}
-      {identityEdit.isOpen && (
-        <Suspense fallback={null}>
-          <EditIdentityModal
-            isOpen={identityEdit.isOpen}
-            onClose={identityEdit.onClose}
-            // `load` re-reads the profile, which is what removes the menu item
-            // and puts the corrected name in the header.
-            onSaved={load}
-          />
-        </Suspense>
-      )}
 
       <LogoutConfirmModal
         isOpen={logoutModal.isOpen}

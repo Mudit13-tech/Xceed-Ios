@@ -599,7 +599,7 @@ export default function MyGroundTruthPhotos() {
   return (
     <VStack align="stretch" spacing={5}>
       <SectionCard
-        title="Refrence photo"
+        title="Reference photo"
         subtitle="Shown for reference — it is not changed from here."
       >
         <HStack align="start" spacing={5} flexWrap="wrap">

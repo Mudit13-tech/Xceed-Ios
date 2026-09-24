@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import getEnvironment from '../getenvironment';
+import { mediaUrl } from '../utils/nativeCapabilities';
 
 /**
  * The help desk: a menu-driven assistant for registration, class-joining and
@@ -891,15 +892,17 @@ function Block({ block, call }) {
        does not.
     
        `src` is site-relative and the server enforces it (see blocks.js), so
-       these load from the same origin as the page. */
+       on the web these load from the same origin as the page. mediaUrl
+       returns it unchanged there; the app anchors it to the API host, as it
+       does on ExplainersPage. */
     return (
       <div className="hd-videos">
         {block.items.map((item) => (
           <figure className="hd-video" key={item.src}>
             <video className="hd-video-player" controls preload="none" playsInline>
-              <source src={item.src} type="video/mp4" />
+              <source src={mediaUrl(item.src)} type="video/mp4" />
               Your browser cannot play this video.{' '}
-              <a href={item.src}>Download it instead.</a>
+              <a href={mediaUrl(item.src)}>Download it instead.</a>
             </video>
             <figcaption className="hd-video-cap">
               <span className="hd-video-title">

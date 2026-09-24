@@ -8,6 +8,21 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/test/setup.js',
     /**
+     * An agent session working in a git worktree puts a full second copy of
+     * the repo under .claude/worktrees/, tests included. Vitest's default
+     * exclude does not cover it, so every such worktree lying around adds
+     * another complete run of the suite to `npm test`.
+     *
+     * Setting this replaces the default exclude list rather than extending it,
+     * so node_modules and dist are repeated here deliberately.
+     */
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.{idea,git,cache,output,temp}/**',
+      '**/.claude/worktrees/**',
+    ],
+    /**
      * Vitest defaults to 5s per test, which this suite outgrew.
      *
      * Most page tests reach their component through `await import('../pages/X')`

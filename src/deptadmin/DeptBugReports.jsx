@@ -84,6 +84,30 @@ const CSS = `
   .dbr-tab--on { background: ${theme.accentDim}; color: ${theme.accent}; border-color: rgba(99,102,241,0.22); }
 `;
 
+
+/** A reporter's screenshot, linked to the full-size file, with a line in its
+ *  place if the file has gone. */
+function ScreenshotThumb({ url, title }) {
+    const [failed, setFailed] = useState(false);
+    if (failed) {
+        return (
+            <div style={{ fontSize: 11, color: theme.textMuted }}>
+                The screenshot could not be loaded — it may have been removed.
+            </div>
+        );
+    }
+    return (
+        <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block' }}>
+            <img
+                src={url}
+                alt={`Screenshot attached to "${title}"`}
+                onError={() => setFailed(true)}
+                style={{ maxHeight: 240, maxWidth: '100%', borderRadius: 8, border: `1px solid ${theme.border}` }}
+            />
+        </a>
+    );
+}
+
 function Pill({ style, children }) {
     return (
         <span style={{
@@ -313,6 +337,14 @@ function QueueCard({ report, onDecide, onSendNote }) {
                     <a href={report.pageUrl} target="_blank" rel="noopener noreferrer" style={{ color: theme.accent }}>
                         {report.pageUrl}
                     </a>
+                </div>
+            )}
+
+            {/* The screenshot the reporter attached; click for full size. */}
+            {report.screenshotUrl && (
+                <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 4 }}>Screenshot</div>
+                    <ScreenshotThumb url={report.screenshotUrl} title={report.title} />
                 </div>
             )}
 

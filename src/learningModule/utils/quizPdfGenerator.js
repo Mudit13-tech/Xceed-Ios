@@ -1,5 +1,6 @@
 import pdfMakeInitializer from '../../filedownload/pdfMakeInitializer';
 import { richTextBlocks, richTextToPlain } from '../richTextUtils';
+import { savePdfDoc } from '../../filedownload/savePdf';
 import { resolveImages } from './pdfImages';
 
 pdfMakeInitializer();
@@ -373,5 +374,5 @@ export async function generateQuizPdf(quizData, withAnswers = false) {
   const suffix = withAnswers ? 'questions_and_answers' : 'questions';
   const filename = `${cleanFilename}_${suffix}.pdf`;
 
-  pdfMake.createPdf(docDefinition).download(filename);
+  savePdfDoc(docDefinition, filename);
 }

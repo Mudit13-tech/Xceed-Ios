@@ -66,6 +66,7 @@ import {
   useSecondTick,
 } from '../components/liveExam';
 import DeleteButton from '../components/DeleteButton';
+import { useTerminationAlerts } from '../../mobile/useTerminationAlerts';
 
 const duration = (seconds) => {
   if (!seconds) return '—';
@@ -1762,6 +1763,7 @@ export default function QuizResults() {
   const [studentStatusFilter, setStudentStatusFilter] = useState('all');
   const [studentSort, setStudentSort] = useState({ key: 'rollNumber', direction: 'asc' });
   const skewRef = useRef(0);
+  const announceTerminations = useTerminationAlerts({ classId, onReload: () => load(true) });
   const toast = useToast();
 
   /**
@@ -1776,6 +1778,9 @@ export default function QuizResults() {
       try {
         const fetched = await lmApi.quizResults(classId, quizId);
         if (fetched.serverTime) skewRef.current = Date.now() - new Date(fetched.serverTime).getTime();
+
+        announceTerminations(fetched, quiet);
+
         setData(fetched);
         setUpdatedAt(new Date());
       } catch (err) {
@@ -1787,7 +1792,7 @@ export default function QuizResults() {
         setRefreshing(false);
       }
     },
-    [classId, quizId],
+    [classId, quizId, announceTerminations],
   );
 
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import getEnvironment from '../getenvironment';
+import { mediaUrl } from '../utils/nativeCapabilities';
 
 /**
  * Every explainer recording, grouped by the feature it demonstrates.
@@ -97,12 +98,13 @@ const AUDIENCES = [
 ];
 
 function VideoCard({ video }) {
+  const src = mediaUrl(video.url);
   return (
     <figure className="xp-card" style={{ margin: 0 }}>
       <video className="xp-player" controls preload="none" playsInline>
-        <source src={video.url} type="video/mp4" />
+        <source src={src} type="video/mp4" />
         Your browser cannot play this video.{' '}
-        <a href={video.url}>Download it instead.</a>
+        <a href={src}>Download it instead.</a>
       </video>
       <figcaption className="xp-meta">
         <h3 className="xp-title">

@@ -4,6 +4,7 @@ import './navbar.css';
 import { loginPathFor } from '../../../authRedirect';
 // import jwt from 'jsonwebtoken';
 import aim2CrackLogo from '../../assets/images/navbar/Aim2Crack-logo.png';
+import { clearNativeSession } from '../../../mobile/session';
 
 function Navbar() {
   const code = window.location.pathname.split('/')[2];
@@ -44,10 +45,11 @@ useEffect(() => {
     // Implement your logic for opening the navigation menu
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     // Implement the logout logic here
     // Clear the token from localStorage and update the user state if needed
     localStorage.removeItem('token');
+    await clearNativeSession();
     // setUser(null); // If you are using the `user` state, reset it to null upon logout
     setTokenState(false); // Update tokenState to false to indicate the user is logged out
     navigate('/login') // Redirect the user to the login page after logout

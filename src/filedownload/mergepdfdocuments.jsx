@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { savePdfBytes } from './savePdf';
 import { ChakraProvider, Container, Box, Button, Input, Text, VStack, HStack, Select } from '@chakra-ui/react';
 import { FaTrash, FaGripVertical } from 'react-icons/fa';
 import { PDFDocument } from 'pdf-lib';
@@ -95,26 +96,13 @@ const MergePDFComponent = () => {
 
       // Save the merged PDF
       const mergedPdfBytes = await mergedPdf.save();
-      const mergedPdfBlob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
-
-    //   const currentDate = new Date();
       const dynamicFilename = `${dept}_TT.pdf`;
       setFilename(dynamicFilename);
 
-      // Create a download link
-      const downloadLink = document.createElement('a');
-      downloadLink.href = URL.createObjectURL(mergedPdfBlob);
-      downloadLink.download = filename;
-      // Append the link to the body
-      document.body.appendChild(downloadLink);
+      // `filename` is still the previous render's value here — setFilename does
+      // not update it synchronously — so save under the name just computed.
+      await savePdfBytes(mergedPdfBytes, dynamicFilename);
 
-      // Trigger a click event on the link to initiate the download
-      downloadLink.click();
-
-      // Remove the link from the body
-      document.body.removeChild(downloadLink);
-
-      console.log('Merged PDF:', mergedPdfBlob);
     } catch (error) {
       console.error('Error merging PDFs:', error);
     }

@@ -45,6 +45,7 @@ import {
 import { Link as RouterLink } from 'react-router-dom';
 
 import lmApi from '../api/lmApi';
+import { serverFileLinkProps } from '../../utils/nativeCapabilities';
 import { EmptyState, ErrorState, Loading, SectionCard, TableSkeleton } from '../components/common';
 import { formatDateTime, relativeTime } from '../format';
 import { LmIcon } from '../components/Icon';
@@ -897,8 +898,7 @@ function EventClaimList({ participations }) {
             </Text>
             {claim.proof?.url ? (
               <Link
-                href={lmApi.fileUrl(claim.proof.url)}
-                isExternal
+                {...serverFileLinkProps(lmApi.fileUrl(claim.proof.url), claim.proof.name)}
                 color="teal.500"
                 fontSize="xs"
                 wordBreak="break-all"

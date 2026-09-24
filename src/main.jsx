@@ -12,13 +12,23 @@ import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { queryPersister, shouldPersistQuery } from './utils/queryPersister';
 import { learningModuleTheme } from './learningModule/theme';
+import { AppToastContainer } from './utils/appToast';
 import './utils/favicon';
+// Web implementations here; the mobile app swaps each for a native one. See
+// src/mobile/README.md.
+import {
+  APP_NAME,
+  credentialsFor,
+  handleUnauthorized,
+  installAxiosSessionGuard,
+} from './mobile/httpSession';
+import { CACHE_GC_TIME, PERSIST_MAX_AGE, PERSIST_BUSTER } from './mobile/queryCache';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 0,
-      gcTime: 24 * 60 * 60 * 1000,
+      gcTime: CACHE_GC_TIME,
     },
   },
 });
@@ -30,7 +40,7 @@ const originalFetch = window.fetch;
 // hosts here — a missed host means no Authorization header, and the session
 // then rests entirely on a SameSite=None cookie that private windows drop.
 const apiOrigin = getEnvironment();
-window.fetch = function(url, options = {}) {
+window.fetch = async function(url, options = {}) {
   /* Read through `readLocal`, because this wrapper is on the path of every
      request the application makes and a bare `localStorage.getItem` throws —
      it does not return null — in a browser told to keep no site data. A Safe
@@ -43,7 +53,7 @@ window.fetch = function(url, options = {}) {
   const isOwnServer = target.startsWith(apiOrigin);
 
   if (isOwnServer) {
-    options.credentials = 'include';
+    options.credentials = credentialsFor(target, apiOrigin);
     options.headers = {
       ...options.headers,
       /* Names this app on every call to our own API, signed in or not.
@@ -54,12 +64,14 @@ window.fetch = function(url, options = {}) {
          unconditionally rather than beside the token, because the requests with
          no token — a guest joining a Short or answering a shared form — are
          exactly the ones that would otherwise arrive with nothing to prove. */
-      'X-App-Name': 'xceed-web',
+      'X-App-Name': APP_NAME,
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
   }
   
-  return originalFetch(url, options);
+  const response = await originalFetch(url, options);
+  if (response.status === 401 && isOwnServer) handleUnauthorized();
+  return response;
 };
 
 axios.defaults.withCredentials = true;
@@ -69,10 +81,12 @@ axios.interceptors.request.use((config) => {
   const token = readLocal('token');
   // Same reasoning as the fetch wrapper above: the header is the CSRF proof, so
   // it goes on whether or not there is a token to go with it.
-  config.headers['X-App-Name'] = 'xceed-web';
+  config.headers['X-App-Name'] = APP_NAME;
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
+
+installAxiosSessionGuard();
 
 /**
  * Semantic colour tokens must be registered on the theme at the provider, which
@@ -92,6 +106,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             client={queryClient}
             persistOptions={{
               persister: queryPersister,
+              maxAge: PERSIST_MAX_AGE,
+              buster: PERSIST_BUSTER,
               // Keeps the signed-in user off disk; see queryPersister.js.
               dehydrateOptions: { shouldDehydrateQuery: shouldPersistQuery },
             }}
@@ -100,6 +116,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           </PersistQueryClientProvider>
         </RecoilRoot>
       </ChakraProvider>
+      {/* The renderer for toasts raised from plain modules (utils/appToast.js).
+          Outside the provider on purpose: it carries its own copy of the theme. */}
+      <AppToastContainer />
     </HelmetProvider>
   </React.StrictMode>
 );

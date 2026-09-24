@@ -884,7 +884,7 @@ function ProgressModal({ isOpen, onClose, classId, membership }) {
             <Loading minH="160px" skeleton={<TableSkeleton rows={3} columns={4} title={false} />} />
           ) : (
             <>
-              <HStack spacing={6} mb={4}>
+              <HStack spacing={4} mb={4} wrap="wrap">
                 <Box>
                   <Text fontSize="2xl" fontWeight="700">
                     {data.summary.turnedIn}
@@ -1172,10 +1172,10 @@ function PersonRow({ member, isTeacher, isOwner, classId, onChanged, onViewProgr
   };
 
   return (
-    <Flex align="center" gap={3} py={3} borderBottomWidth="1px" borderColor="lmBorder.subtle">
+    <Flex align="center" gap={3} py={3} borderBottomWidth="1px" borderColor="lmBorder.subtle" wrap="wrap">
       <Avatar size="sm" name={member.name || member.email} getInitials={() => initials(member.name || member.email)} />
       <Box flex="1" minW={0}>
-        <HStack spacing={2}>
+        <HStack spacing={2} wrap="wrap">
           <Text fontSize="sm" fontWeight="500" noOfLines={1}>
             {member.name || member.email || 'Pending user'}
           </Text>
@@ -1192,7 +1192,7 @@ function PersonRow({ member, isTeacher, isOwner, classId, onChanged, onViewProgr
       </Box>
 
       {member.status === 'pending' && isTeacher && (
-        <HStack>
+        <HStack wrap="wrap">
           <Button
             size="xs"
             colorScheme="green"

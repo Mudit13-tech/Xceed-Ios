@@ -1,111 +1,52 @@
-import { Capacitor, CapacitorCookies, registerPlugin } from '@capacitor/core';
-import { Share } from '@capacitor/share';
-import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
-import { FilePicker } from '@capawesome/capacitor-file-picker';
-import { Browser } from '@capacitor/browser';
-
-const Downloads = registerPlugin('Downloads');
-
 /**
- * Checks if the app is running as a native app (iOS or Android)
+ * Device capabilities — the web implementation.
+ *
+ * The mobile app (xceed-app) builds from this same client and swaps this file
+ * for `nativeCapabilities.mobile.js`, which does these things through
+ * Capacitor. Here every function takes its web path, so this repo carries no
+ * Capacitor dependency and the web build is unaffected by any of it. Keep the
+ * exports and their signatures in step with that file. See src/mobile/README.md.
  */
-export const isNativeApp = () => {
-  return Capacitor.isNativePlatform();
+
+/** Whether this is the installed app. Never, in the web build. */
+export const isNativeApp = () => false;
+
+const clickDownload = (href, fileName) => {
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 };
 
-/**
- * Saves a file into the device's public Downloads folder. Android's native
- * DownloadManager streams the response to disk, so large files do not occupy
- * WebView memory and can keep downloading in the background.
- */
+/** Downloads `url` as `fileName`. */
 export const downloadFileNative = async (url, fileName) => {
-  if (!isNativeApp()) {
-    // Fallback for web
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    return;
-  }
-
-  try {
-    // DownloadManager only accepts absolute http(s) URLs. The download buttons
-    // use paths such as `/subject_template.xlsx`, which browsers resolve for
-    // us but native Android does not.
-    const downloadUrl = new URL(url, window.location.href).href;
-
-    // iOS does not expose a public Downloads directory to apps. Keep its
-    // platform-standard "Save to Files" flow instead of calling Android code.
-    if (Capacitor.getPlatform() !== 'android') {
-      return await Share.share({
-        title: fileName,
-        text: `Save ${fileName} to Files`,
-        url: downloadUrl,
-        dialogTitle: 'Save file',
-      });
-    }
-
-    // DownloadManager is outside the WebView, so explicitly forward the
-    // session cookies needed by authenticated file endpoints.
-    const cookies = await CapacitorCookies.getCookies({ url: downloadUrl });
-    const cookieHeader = Object.entries(cookies)
-      .map(([name, value]) => `${name}=${value}`)
-      .join('; ');
-
-    return await Downloads.download({
-      url: downloadUrl,
-      fileName,
-      headers: cookieHeader ? { Cookie: cookieHeader } : {},
-    });
-  } catch (error) {
-    console.error('Native download failed', error);
-    alert('Could not start the download. Please try again.');
-    throw error;
-  }
+  clickDownload(url, fileName);
 };
+
+/** Downloads base64 content as `fileName`. */
+export const downloadBase64Native = async (base64Data, fileName, mimeType = 'application/pdf') => {
+  clickDownload(`data:${mimeType};base64,${base64Data}`, fileName);
+};
+
+/** The native file picker. Callers keep their own <input type="file">. */
+export const pickFileNative = async () => null;
+
+/** The native camera. Callers keep their own upload control. */
+export const takePhotoNative = async () => null;
 
 /**
- * Opens the native file picker to select a file from the phone.
- * @param {object} options Optional settings (e.g., types, multiple)
+ * Props for a link to a file the API serves — an attachment, a submission, a
+ * generated report. On the web an ordinary external anchor is exactly right.
+ * (In the app an anchor to the API host is routed back into the app by its
+ * app-links filter, so there the tap becomes a native download instead.)
  */
-export const pickFileNative = async (options = { multiple: false }) => {
-  if (!isNativeApp()) {
-    // We could fallback to an input element here, but usually the calling
-    // component has its own web fallback input element.
-    console.warn('Native file picker called on web environment');
-    return null;
-  }
-
-  try {
-    const result = await FilePicker.pickFiles(options);
-    return result.files; // Array of selected files
-  } catch (error) {
-    console.error('Error picking file', error);
-    return null;
-  }
-};
+export const serverFileLinkProps = (url) => (url ? { href: url, isExternal: true } : { href: url });
 
 /**
- * Opens the native camera to take a photo.
+ * Where a site-relative media url (`/explainer-videos/x.mp4`) should load from.
+ * On the web, from this origin, so it is returned unchanged. (The app's pages
+ * are served from a local origin, so there it is anchored to the API host.)
  */
-export const takePhotoNative = async () => {
-  if (!isNativeApp()) {
-    alert('Camera is only supported in the native app.');
-    return null;
-  }
-
-  try {
-    const photo = await Camera.getPhoto({
-      quality: 90,
-      allowEditing: true,
-      resultType: CameraResultType.Uri,
-      source: CameraSource.Camera,
-    });
-    return photo;
-  } catch (error) {
-    console.error('Error taking photo', error);
-    return null;
-  }
-};
+export const mediaUrl = (url) => url;
