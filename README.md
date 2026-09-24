@@ -282,26 +282,47 @@ a future conflict**. Not a possible one — a scheduled one, waiting for the syn
 that happens to touch it. So the goal is not to resolve conflicts well. It is to
 own as few of AMS's lines as possible.
 
+**The rule: this repo never edits a file AMS ships.** A sync can only conflict on
+a file both sides changed, so if we change none of AMS's files, a sync has
+nothing to conflict on. Check it at any time:
+
+```bash
+npm run ams-edits             # AMS files edited in place; the goal is none
+npm run ams-edits -- --check  # exit 1 if there are any
+```
+
+The exceptions are the files with a merge driver (see below), which resolve on
+their own. `vite.config.js` and `vitest.config.js` are AMS's and stay untouched:
+the app builds and tests through `vite.app.config.js` and `vitest.app.config.js`,
+which wrap them. The npm scripts point at those, so **run tests with `npm test`**.
+A bare `npx vitest` uses AMS's config, which doesn't swap in the overrides, so it
+tests the web code instead.
+
 There are three ways to add something, in order of preference.
 
 **1. A new file.** Nothing to conflict with, ever. `src/utils/deepLink.js`,
-`src/utils/otaUpdater.js`, `src/mobile/MobileShell.jsx` and the rest of
-`src/mobile/` cost nothing at sync time and never have.
+`src/utils/otaUpdater.js` and the rest cost nothing at sync time and never have.
 
-**2. A one-line seam into a new file.** When something genuinely has to run from
-inside an AMS file, put the logic in a new file and leave a single call behind.
-This is what `src/mobile/` is for, and most of it started life inline:
+**2. A seam: AMS calls a function, the app implements it.** When something has
+to run from inside an AMS page, AMS gets the call and a web implementation that
+does nothing (or does what the web already did), and the app ships the native
+implementation as `X.mobile.js` beside it. The seams are listed in
+`src/mobile/README.md`, which lives in AMS too:
 
-| Lives in | Was | Called from |
+| Seam | Web (AMS) | App (`.mobile`) |
 |---|---|---|
-| `MobileShell.jsx` | 110 lines in `App.jsx` | one `<MobileShell />` |
-| `session.js` | the same 6 lines in 4 files | `await clearNativeSession()` |
-| `useTerminationAlerts.jsx` | 67 lines in `QuizResults.jsx` | 2 lines |
-| `httpSession.js` | 50 lines in `main.jsx` | the import, and one call |
+| `mobile/MobileShell.jsx` | renders nothing | back button, deep links, push, OTA |
+| `mobile/session.js` | nothing to clear | clears keystore accounts and PIN |
+| `mobile/httpSession.js` | `xceed-web`, cookies | `xceed-learning`, header-only, 401 ends session |
+| `mobile/queryCache.js` | react-query defaults | kept indefinitely, busted per release |
+| `mobile/useTerminationAlerts.jsx` | no-op | terminated-attempt alerts |
+| `components/NativeCamera.jsx` | renders nothing | device camera |
+| `utils/nativeCapabilities.js` | plain anchors | DownloadManager / Share sheet |
 
-Note the name is about ownership, not about phones: `src/mobile/` means *this
-repo owns it*. Some of what lives there — the terminated-exam alert — is not
-device-specific at all. It is there because it is ours, and AMS's files are not.
+A new seam, or a fix that is right for the web too, goes to AMS as a PR (in your
+AMS clone, from a branch off `origin/main`). Copy the files into this repo so
+they are **byte-identical** to the PR. The sync after AMS merges it then sees
+the same change on both sides, and there is nothing to conflict.
 
 **3. An override, for a file that is genuinely a fork.** Some files are not
 patched but rewritten — `LoginForm.jsx` is the login *flow*, with saved
@@ -346,6 +367,7 @@ it is paid with the diff in hand, rather than at 2am with a deploy stopped.
 |---|---|
 | `* text=auto eol=lf` | Line endings are fixed here, not by each machine's `core.autocrlf`. The sync runs from Windows *and* from ubuntu; without this the same file can be committed with different endings and every line reads as changed. |
 | `android/**`, `capacitor.config.json`, `README.md` | Ours. AMS has a copy, but it describes the web deployment. |
+| `.gitignore` | Unioned: both sides' lines are kept. |
 | `package-lock.json` | Ours, then regenerated from the merged `package.json`. A lockfile conflict cannot be resolved by hand and means nothing when it happens. |
 | `package.json` | Unioned by `build/mergePackageJson.mjs`: a dependency the web client added is taken, our Capacitor deps, our `version` (the OTA channel reads it) and `deploy:ota` survive. |
 

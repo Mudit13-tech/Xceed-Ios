@@ -360,7 +360,7 @@ class PDFGenerator extends React.Component {
           pageBreak: 'auto',
         }
         console.log(documentDefinition)
-        savePdfDoc(documentDefinition, `${headTitle}_timetable.pdf`);
+        savePdfDoc(documentDefinition, `${headTitle}_timetable.pdf`, { web: 'open' });
       });
     };
   };

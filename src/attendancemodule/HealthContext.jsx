@@ -28,8 +28,7 @@ export function HealthProvider({ children }) {
   usePolling(checkDirectML, 5000, { enabled: clientStatus === 'offline' });
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const sse = new EventSource(`${apiUrl}/attendancemodule/health/stream${token ? `?_stream_auth_token=${encodeURIComponent(token)}` : ''}`, { withCredentials: true });
+    const sse = new EventSource(`${apiUrl}/attendancemodule/health/stream`, { withCredentials: true });
 
     sse.onmessage = (e) => {
       try {

@@ -17,6 +17,7 @@
 import React, { Suspense } from 'react';
 import RouteFallback from './components/RouteFallback';
 import MobileShell from './mobile/MobileShell';
+import { isNativeApp } from './utils/nativeCapabilities';
 import {
   BrowserRouter as Router,
   Routes,
@@ -270,12 +271,10 @@ const MLFineTuning = lazyWithPreload(() => import('./attendancemodule/MLFineTuni
 const APP_ROUTES = (
         <Routes>
           {/* Landing Page */}
-          {/* The app opens on the login screen, not on the web landing page:
-              an installed app has one job on launch and a marketing page is
-              not it. Home keeps a route of its own so the links into it —
-              Navbar's brand, the intro pages' calls to action — still land
-              somewhere. */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          {/* The installed app opens on the login screen rather than the landing
+              page; /home reaches the landing page from inside it. On the web
+              both paths are the landing page. */}
+          <Route path="/" element={isNativeApp() ? <Navigate to="/login" replace /> : <Home />} />
           <Route path="/home" element={<Home />} />
           {/* Module introductions. Public on purpose — their audience is the
               faculty and department staff being introduced to a module before

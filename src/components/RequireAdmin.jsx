@@ -47,6 +47,7 @@ export default function RequireAdmin() {
       return response.json();
     },
     retry: false,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Nothing is rendered while the role is unknown. Defaulting the other way

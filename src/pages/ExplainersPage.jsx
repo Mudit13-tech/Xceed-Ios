@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import getEnvironment from '../getenvironment';
+import { mediaUrl } from '../utils/nativeCapabilities';
 
 /**
  * Every explainer recording, grouped by the feature it demonstrates.
@@ -27,22 +28,6 @@ import getEnvironment from '../getenvironment';
 
 const apiUrl = getEnvironment();
 const API = `${apiUrl}/api/v1/explainers`;
-
-/**
- * Where a recording actually lives.
- *
- * The catalogue hands back site-relative urls (`/explainer-videos/x.mp4`),
- * which the web client resolves against its own origin. This app's origin is
- * the Capacitor WebView's, so the same string would resolve to a copy inside
- * the bundle - and the only way to make that resolve is to publish 222 MB of
- * MP4 to every phone on the network. Anchoring to getEnvironment() instead is
- * what lets scripts/otaManifest.cjs leave `explainer-videos` out of the bundle
- * entirely; the two changes only work together.
- *
- * Matches lmApi's `fileUrl`: absolute urls are passed through, so a catalogue
- * that starts naming a CDN needs nothing here.
- */
-const videoSrc = (url) => (url?.startsWith('http') ? url : `${apiUrl}${url}`);
 
 const CSS = `
 .xp { --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f8fafc;
@@ -113,7 +98,7 @@ const AUDIENCES = [
 ];
 
 function VideoCard({ video }) {
-  const src = videoSrc(video.url);
+  const src = mediaUrl(video.url);
   return (
     <figure className="xp-card" style={{ margin: 0 }}>
       <video className="xp-player" controls preload="none" playsInline>

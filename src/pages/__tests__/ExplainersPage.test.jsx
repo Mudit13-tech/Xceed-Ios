@@ -99,52 +99,17 @@ describe('ExplainersPage', () => {
     }
   });
 
-  // Absolute, not the site-relative string the catalogue returns. Under
-  // Capacitor a relative url resolves against the WebView's own origin, i.e.
-  // into the bundle - and the bundle deliberately no longer carries these
-  // files (scripts/otaManifest.cjs). A player pointed at a relative url is a
-  // player pointed at nothing.
-  it('anchors each player to the api origin, not the app origin', async () => {
+  it('points each player at the url the catalogue gave it', async () => {
     render(<ExplainersPage />);
     await heading('Getting started');
 
     const sources = [...document.querySelectorAll('video source')]
       .map((el) => el.getAttribute('src'));
     expect(sources).toEqual([
-      'http://api.test/explainer-videos/class-creation-teacher-demo.mp4',
-      'http://api.test/explainer-videos/class-joining-student-demo.mp4',
-      'http://api.test/explainer-videos/quizzes-student-demo.mp4',
+      '/explainer-videos/class-creation-teacher-demo.mp4',
+      '/explainer-videos/class-joining-student-demo.mp4',
+      '/explainer-videos/quizzes-student-demo.mp4',
     ]);
-  });
-
-  it('passes an absolute url from the catalogue through untouched', async () => {
-    fetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        sections: [
-          {
-            id: 'getting-started',
-            title: 'Getting started',
-            videos: [
-              {
-                id: 'cdn-hosted',
-                title: 'Hosted elsewhere',
-                audience: 'teacher',
-                url: 'https://cdn.example/explainer-videos/x.mp4',
-                missing: false,
-              },
-            ],
-          },
-        ],
-      }),
-    });
-
-    render(<ExplainersPage />);
-    await heading('Getting started');
-
-    expect(document.querySelector('video source').getAttribute('src')).toBe(
-      'https://cdn.example/explainer-videos/x.mp4',
-    );
   });
 
   it('counts what is on screen', async () => {

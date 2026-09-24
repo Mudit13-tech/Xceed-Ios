@@ -1,6 +1,6 @@
 import pdfMakeInitializer from '../../filedownload/pdfMakeInitializer';
 import { richTextBlocks, richTextToPlain } from '../richTextUtils';
-import { isNativeApp, downloadBase64Native } from '../../utils/nativeCapabilities';
+import { savePdfDoc } from '../../filedownload/savePdf';
 import { resolveImages } from './pdfImages';
 
 pdfMakeInitializer();
@@ -374,15 +374,5 @@ export async function generateQuizPdf(quizData, withAnswers = false) {
   const suffix = withAnswers ? 'questions_and_answers' : 'questions';
   const filename = `${cleanFilename}_${suffix}.pdf`;
 
-  if (isNativeApp()) {
-    pdfMake.createPdf(docDefinition).getBase64(async (base64Data) => {
-      try {
-        await downloadBase64Native(base64Data, filename, 'application/pdf');
-      } catch (err) {
-        console.error('PDF generation failed:', err);
-      }
-    });
-  } else {
-    pdfMake.createPdf(docDefinition).download(filename);
-  }
+  savePdfDoc(docDefinition, filename);
 }
