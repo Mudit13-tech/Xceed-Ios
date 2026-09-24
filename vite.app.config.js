@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import path from 'node:path'
 
 import { mergeConfig } from 'vite'
 
@@ -43,8 +45,40 @@ function appVersionMeta() {
   }
 }
 
+/**
+ * Leave the web-only parts of public/ out of the app's build.
+ *
+ * Vite copies all of public/ into dist, and `cap sync` copies all of dist into
+ * the APK. AMS's public/ carries 222 MB of explainer videos (and, when fetched,
+ * the ~490 MB notebook runtimes). The app never loads them from the bundle:
+ * mediaUrl in nativeCapabilities.mobile.js points the players at the API host,
+ * and the notebooks load their runtimes from the web origin. Shipped anyway,
+ * they made the APK ~258 MB.
+ *
+ * The list is the OTA's own (scripts/otaManifest.cjs), so the APK and an OTA
+ * update always contain the same files. The web build is untouched: it runs
+ * from vite.config.js, which never loads this plugin, and serves the videos
+ * from public/ as before. The dev server also still serves public/.
+ */
+function excludeWebOnlyAssets() {
+  const { BUNDLE_EXCLUDES } = createRequire(import.meta.url)('./scripts/otaManifest.cjs')
+  let outDir
+  return {
+    name: 'exclude-web-only-assets',
+    apply: 'build',
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir)
+    },
+    closeBundle() {
+      for (const dir of BUNDLE_EXCLUDES) {
+        rmSync(path.join(outDir, dir), { recursive: true, force: true })
+      }
+    },
+  }
+}
+
 // mobileOverrides is `enforce: 'pre'`, so it resolves ahead of AMS's plugins
 // even though mergeConfig appends it after them.
 export default mergeConfig(webConfig, {
-  plugins: [mobileOverrides({ verbose: true }), appVersionMeta()],
+  plugins: [mobileOverrides({ verbose: true }), appVersionMeta(), excludeWebOnlyAssets()],
 })
