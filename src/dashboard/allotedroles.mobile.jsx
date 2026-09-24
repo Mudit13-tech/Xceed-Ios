@@ -46,6 +46,7 @@ import getEnvironment from '../getenvironment';
 import {
   EXCLUDED_ROLES,
   hasUnnamedHodDashboards,
+  hasTimetableHodDashboard,
   hasDeanDashboards,
   singleRoleTarget,
 } from '../authRedirect';
@@ -132,6 +133,17 @@ const ROLE_META = {
       "Head of Department view — your department's attendance, live classrooms and reports",
     icon: FiUserCheck,
     accent: 'cyan',
+  },
+  // The timetable card for a head: a read-only report of the department's
+  // semester-wise load, so a head no longer needs `DTTI` (which edits the
+  // timetable) just to see it. Appended on the bare `HOD` role alone — there
+  // is no named timetable-HOD role that could have taken it away.
+  'timetable-hod': {
+    name: 'Timetable — HOD',
+    description:
+      "Head of Department view — your department's semester-wise load: subjects, faculty and rooms",
+    icon: FiCalendar,
+    accent: 'blue',
   },
   STUDENT: {
     name: 'Student',
@@ -393,6 +405,9 @@ const AllocatedRolesPage = () => {
   // String() to filter it, so there is no shape left for this to throw on.
   const extraCards = [];
   if (hasRole(platformRoles, 'HOD') && !hasNamedHodRole) extraCards.push({ role: 'ileed-hod' });
+  // Unconditional on the appointment, unlike the iLEED card: splitting the HOD
+  // role in two was never a way of taking the timetable view away.
+  if (hasRole(platformRoles, 'HOD')) extraCards.push({ role: 'timetable-hod' });
   if (hasRole(platformRoles, 'DEAN')) extraCards.push({ role: 'ileed-dean' });
 
   // A module that turned the user away sent them back here. Without this the
@@ -429,6 +444,10 @@ const AllocatedRolesPage = () => {
       // Redirecting here would land them on one and hide the other — the head
       // would never see a card at all.
       if (hasUnnamedHodDashboards(user.role)) return;
+      // Nor is a head who holds a named role: `hod-learning` plus `HOD` is one
+      // card in allocatedRoles but two destinations, because the timetable card
+      // is appended on the appointment alone. Redirecting would hide it.
+      if (hasTimetableHodDashboard(user.role)) return;
       // And a dean is not one either: `DEAN` opens the Learning dean dashboard
       // and the iLEED one, and the second is the synthetic card above.
       if (hasDeanDashboards(user.role)) return;

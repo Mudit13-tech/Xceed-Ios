@@ -87,6 +87,10 @@
  * cost is one refetch of me/overview/classes while a teacher types an address
  * into the invite box — cheaper than a hand-kept exception list that goes stale
  * the first time upstream turns one of these into a real write.
+ *
+ * Reviewed 2026-09-24 against the +2/-0 of that day's sync: one method,
+ * ttRoomLocations, a plain GET. The loop passes it straight through as a
+ * reader, so nothing needed porting.
  */
 import { Preferences } from '@capacitor/preferences';
 
