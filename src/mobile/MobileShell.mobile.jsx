@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { App as CapacitorApp } from '@capacitor/app';
 import {
   Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, ModalOverlay, Text,
@@ -150,6 +151,32 @@ export default function MobileShell() {
   const [applying, setApplying] = useState(false);
   // Held so the button press can let setupOtaUpdater carry on to the apply.
   const confirmRef = useRef(null);
+  const queryClient = useQueryClient();
+
+  /**
+   * Coming back to the app refreshes what is on screen.
+   *
+   * A few AMS queries carry their own staleTime (five minutes on /user/getuser,
+   * for one), so react-query's refetch-on-focus skips them: reopening the app
+   * inside that window showed the cached roles and never asked again. On the
+   * web that trade is AMS's to make. In the app, reopening is the moment the
+   * data is most likely to be old, so invalidate. That refetches only the
+   * queries currently mounted, and the persisted cache still paints first.
+   */
+  useEffect(() => {
+    let listener;
+    let cancelled = false;
+    Promise.resolve(CapacitorApp.addListener('resume', () => queryClient.invalidateQueries()))
+      .then((handle) => {
+        if (cancelled) handle?.remove?.();
+        else listener = handle;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      listener?.remove?.();
+    };
+  }, [queryClient]);
 
   useEffect(() => {
     // See OTA_START_DELAY_MS: the updater competes with the first screen for
