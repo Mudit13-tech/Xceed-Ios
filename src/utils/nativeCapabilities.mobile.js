@@ -132,15 +132,21 @@ export const downloadFileNative = async (url, fileName) => {
       headers.Authorization = `Bearer ${token}`;
     }
 
-    const result = await Downloads.download({ url: downloadUrl, fileName, headers });
+    // `open` asks DownloadsPlugin to hand the file to a viewer once it lands --
+    // Android's open-in-place, the counterpart of iOS's Quick Look below. It is
+    // still saved to Downloads either way. An APK older than the option ignores
+    // it and never sets `opens`, which is how the toast knows which to say.
+    const result = await Downloads.download({ url: downloadUrl, fileName, headers, open: true });
 
     // DownloadManager has the file and posts its own progress notification from
     // here, so this is the point the tap is known to have worked — the same
     // green box the web build shows.
     appToast({
       status: 'success',
-      title: 'Downloaded successfully',
-      description: `${fileName || 'Your file'} — check your Downloads folder.`,
+      title: result?.opens ? 'Opening file' : 'Downloaded successfully',
+      description: result?.opens
+        ? `${fileName || 'Your file'} opens when it finishes downloading, and stays in your Downloads folder.`
+        : `${fileName || 'Your file'} — check your Downloads folder.`,
     });
     return result;
   } catch (error) {
@@ -156,9 +162,28 @@ export const downloadFileNative = async (url, fileName) => {
 };
 
 /**
+ * Hand a file the app just saved to whatever opens it, as iOS does with Quick
+ * Look. On Android FileViewer is an ACTION_VIEW through its own FileProvider,
+ * which covers external storage, so the saved copy is what opens.
+ *
+ * Best effort, after the save has already been reported: an APK built before
+ * the plugin was added does not have it (hence isPluginAvailable, since this
+ * code arrives by OTA ahead of the store build), and a file type no installed
+ * app claims is still saved. Neither is worth an error toast.
+ */
+async function openSavedFileOnAndroid(uri) {
+  if (!uri || !Capacitor.isPluginAvailable('FileViewer')) return;
+  try {
+    await FileViewer.openDocumentFromLocalPath({ path: uri });
+  } catch (error) {
+    console.warn('Saved the file but could not open it', error);
+  }
+}
+
+/**
  * Saves a base64 string to a file on the device.
- * On Android, attempts to save to the public Downloads folder via ExternalStorage.
- * On iOS, saves to Cache and presents the Share sheet.
+ * On Android, attempts to save to the public Downloads folder via ExternalStorage,
+ * then opens it. On iOS, saves to Cache and opens it in Quick Look.
  */
 export const downloadBase64Native = async (base64Data, fileName, mimeType = 'application/pdf') => {
   if (!isNativeApp()) {
@@ -221,6 +246,7 @@ export const downloadBase64Native = async (base64Data, fileName, mimeType = 'app
         title: 'Downloaded successfully',
         description: `${fileName} — check your Downloads folder.`,
       });
+      await openSavedFileOnAndroid(result.uri);
       return result;
     } catch (e) {
       console.warn('Failed writing to Download/, falling back to Documents/', e);
@@ -234,6 +260,7 @@ export const downloadBase64Native = async (base64Data, fileName, mimeType = 'app
         title: 'Downloaded successfully',
         description: `${fileName} — check your Documents folder.`,
       });
+      await openSavedFileOnAndroid(fallbackResult.uri);
       return fallbackResult;
     }
   } catch (error) {
