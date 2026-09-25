@@ -27,7 +27,6 @@ import { AttachmentList, AttachmentPicker } from '../components/Attachments';
 import CommentThread from '../components/CommentThread';
 import RichText from '../components/RichText';
 import RichTextEditor from '../components/RichTextEditor';
-import UpcomingCard from '../components/UpcomingCard';
 import { isRichTextEmpty } from '../richTextUtils';
 import { AnnouncementStreamSkeleton, DueBadge, EmptyState, ErrorState, Loading, StateBadge, buttonTextStyles } from '../components/common';
 import { courseworkLink, courseworkMeta, relativeTime } from '../format';
@@ -462,7 +461,21 @@ export default function Stream() {
   return (
     <Flex gap={{ base: 4, lg: 6 }} align="flex-start" direction={{ base: 'column', lg: 'row' }} w="100%">
       <Box w={{ base: '100%', lg: '280px' }} flexShrink={0}>
-        <UpcomingCard classId={classId} />
+        <Box bg="lmBg.surface" borderWidth="1px" borderColor="lmBorder.base" borderRadius="lg" p={4} mb={4}>
+          <Heading size="xs" mb={3} color="lmFg.body">
+            Upcoming
+          </Heading>
+          <Text fontSize="sm" color="lmFg.muted">
+            Track due dates on the{' '}
+            <Text as={RouterLink} to="/learning/todo" color="blue.600" textDecoration="underline">
+              To-do page
+            </Text>
+            .
+          </Text>
+          <Button as={RouterLink} to={`/learning/class/${classId}/material`} size="sm" mt={3} w="100%" variant="outline">
+            View class material
+          </Button>
+        </Box>
 
         {klass.description && (
           <Box bg="lmBg.surface" borderWidth="1px" borderColor="lmBorder.base" borderRadius="lg" p={4}>
