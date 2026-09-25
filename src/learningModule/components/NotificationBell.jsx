@@ -22,6 +22,7 @@ import {
 } from '@chakra-ui/react';
 import { keyframes } from '@emotion/react';
 import lmApi from '../api/lmApi';
+import usePolling from '../../utils/usePolling';
 import { buttonTextStyles } from './common';
 import { notificationIcon, relativeTime } from '../format';
 import NotificationPreferencesModal from './NotificationPreferencesModal';
@@ -84,14 +85,18 @@ export default function NotificationBell() {
     load();
   }, [load, onPopoverClose]);
 
+  /* The bell is on every learning page, so this one timer is the platform's
+     most-run request: once a minute, per signed-in tab. Students leave those
+     tabs open for days — a lecture tab, a coursework tab, one from Tuesday —
+     and a bare setInterval kept every one of them asking for notifications
+     nobody was there to read. usePolling stops while the tab is hidden and
+     fires once on return, so a student coming back still lands on a current
+     count. */
+  usePolling(load, POLL_MS);
+
   useEffect(() => {
-    load();
-    const timer = setInterval(load, POLL_MS);
     window.addEventListener('lmNotificationsUpdated', load);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener('lmNotificationsUpdated', load);
-    };
+    return () => window.removeEventListener('lmNotificationsUpdated', load);
   }, [load]);
 
   const open = async (notification) => {

@@ -22,13 +22,25 @@ import {
   handleUnauthorized,
   installAxiosSessionGuard,
 } from './mobile/httpSession';
-import { CACHE_GC_TIME, PERSIST_MAX_AGE, PERSIST_BUSTER } from './mobile/queryCache';
+import {
+  CACHE_GC_TIME,
+  PERSIST_MAX_AGE,
+  PERSIST_BUSTER,
+  DEFAULT_STALE_TIME,
+  REFETCH_ON_WINDOW_FOCUS,
+  QUERY_RETRY,
+} from './mobile/queryCache';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 0,
+      // See mobile/queryCache.js for why these are what they are, and why the
+      // one that used to be here (staleTime: 0) was costing a request storm on
+      // every tab switch.
+      staleTime: DEFAULT_STALE_TIME,
       gcTime: CACHE_GC_TIME,
+      refetchOnWindowFocus: REFETCH_ON_WINDOW_FOCUS,
+      retry: QUERY_RETRY,
     },
   },
 });

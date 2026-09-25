@@ -27,6 +27,7 @@ import { keyframes } from '@emotion/react';
 import lmApi from '../api/lmApi';
 import { formatDateTime, relativeTime } from '../format';
 import { LmIcon } from './Icon';
+import useOnlineStatus from '../../utils/useOnlineStatus';
 
 /**
  * The text colour a bare-button control has to state for itself.
@@ -133,6 +134,7 @@ export const accessDeniedOf = (error) =>
   error?.status === 403 ? ACCESS_DENIED[error?.payload?.code] || null : null;
 
 export function ErrorState({ error, onRetry }) {
+  const offline = !useOnlineStatus();
   if (!error) return null;
 
   // The wording itself stays server-side, so it can name the subject and stay
@@ -164,6 +166,39 @@ export function ErrorState({ error, onRetry }) {
           </Box>
         </Flex>
       </Box>
+    );
+  }
+
+  /* A dropped connection is the commonest reason anything on this screen
+     fails, and "Failed to fetch" is the worst possible way to say it — it
+     reads as a fault in the site to somebody whose wifi has simply gone. The
+     browser knows; it is only ever asked once the request has already failed,
+     because `navigator.onLine` can say yes on a network with no route out but
+     never says no while there is one. */
+  if (offline) {
+    return (
+      <Alert status="warning" borderRadius="md" my={4} alignItems="flex-start">
+        <AlertIcon />
+        <Box>
+          <Text fontWeight="600">You are offline.</Text>
+          <Text fontSize="sm" color="lmFg.subtle" mt={1}>
+            This will load once you are back on a network. Anything already open
+            stays readable in the meantime.
+          </Text>
+          {onRetry && (
+            <Text
+              as="button"
+              onClick={onRetry}
+              mt={1}
+              fontSize="sm"
+              textDecoration="underline"
+              color="lmHue.orange700"
+            >
+              Try again
+            </Text>
+          )}
+        </Box>
+      </Alert>
     );
   }
 

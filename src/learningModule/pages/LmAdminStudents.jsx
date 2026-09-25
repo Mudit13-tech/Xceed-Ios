@@ -43,6 +43,7 @@ import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile, TableSkeleton } from '../components/common';
 import { LmIcon } from '../components/Icon';
 import RevokeRoleDialog from '../components/RevokeRoleDialog';
+import { formatDob } from '../../components/DobGate';
 
 /**
  * Student accounts and department-wise roster, for an lm-admin.
@@ -788,6 +789,7 @@ export default function LmAdminStudents() {
                   <Th>Name</Th>
                   <Th>Email</Th>
                   <Th>Roll Number</Th>
+                  <Th>Date of Birth</Th>
                   <Th>Department</Th>
                   <Th isNumeric>Classes Enrolled</Th>
                   <Th>Status</Th>
@@ -800,6 +802,8 @@ export default function LmAdminStudents() {
                     <Td fontWeight="600">{student.name || '—'}</Td>
                     <Td>{student.email}</Td>
                     <Td>{student.rollNumber || '—'}</Td>
+                    {/* Given by the student after signing in; blank until then. */}
+                    <Td whiteSpace="nowrap">{formatDob(student.dob) || '—'}</Td>
                     <Td>{student.dept || '—'}</Td>
                     <Td isNumeric>
                       <Badge colorScheme={student.classCount > 0 ? 'blue' : 'gray'}>

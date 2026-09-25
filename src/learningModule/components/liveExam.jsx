@@ -35,6 +35,7 @@ import {
 } from '@chakra-ui/react';
 
 import lmApi from '../api/lmApi';
+import usePolling from '../../utils/usePolling';
 import ExamCodes from './ExamCodes';
 import { SectionCard } from './common';
 import { formatDateTime, relativeTime } from '../format';
@@ -1669,16 +1670,16 @@ export default function LiveExamControl({ classId, quiz, live, onDone }) {
 
   useEffect(() => {
     openRef.current = isOpen;
-    if (!isOpen) return undefined;
-    setLoading(true);
-    load();
-    const id = setInterval(load, LIVE_POLL_MS);
-    return () => clearInterval(id);
-    // `load` is deliberately out of the deps: it changes on every fetch (it
-    // closes over `data`), and following it would restart the interval each
-    // time, turning a 15-second poll into a much faster one.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (isOpen) setLoading(true);
   }, [isOpen]);
+
+  /* `load` changing identity on every fetch used to be a hazard here — it
+     closes over `data`, and an effect following it would restart the interval
+     each time and turn a 15-second poll into a much faster one. usePolling
+     holds the callback in a ref, so the timer is driven by `isOpen` alone.
+     It also stops while the tab is hidden: this panel is opened and left up
+     beside an exam, and nobody reads a live roll from a background tab. */
+  usePolling(load, LIVE_POLL_MS, { enabled: isOpen });
 
   // What the panel would show as needing a decision: students shut out of the
   // paper, plus anyone writing outside the lockdown. Counted from the list

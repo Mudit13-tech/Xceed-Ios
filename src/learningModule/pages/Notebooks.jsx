@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Badge,
@@ -17,6 +17,7 @@ import {
 } from '@chakra-ui/react';
 import { FiChevronDown, FiDownload, FiUpload } from 'react-icons/fi';
 
+import { useQuery } from '@tanstack/react-query';
 import lmApi from '../api/lmApi';
 import {
   CardActions,
@@ -114,28 +115,26 @@ const LANGUAGE_META = {
 
 export default function Notebooks() {
   const { classId, isTeacher } = useOutletContext();
-  const [notebooks, setNotebooks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [busy, setBusy] = useState('');
   const navigate = useNavigate();
   const toast = useToast();
   const importInputRef = useRef(null);
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setNotebooks(await lmApi.listNotebooks(classId));
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [classId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  /* Held in the query cache, so coming back to this tab paints the list that
+     was there and refreshes it behind you, instead of a spinner and a wait.
+     Every tab in this class is a route, so leaving one unmounts it — without a
+     cache that made every visit a cold fetch, however recently you had looked. */
+  const {
+    data: notebooks = [],
+    isLoading: loading,
+    error,
+    refetch: load,
+  } = useQuery({
+    queryKey: ['learning', 'notebooks', classId],
+    queryFn: () => lmApi.listNotebooks(classId),
+    placeholderData: (prev) => prev,
+    staleTime: 2 * 60 * 1000,
+  });
 
   const create = async (language = 'python', { sample = false } = {}) => {
     setBusy(sample ? `sample-${language}` : 'new');

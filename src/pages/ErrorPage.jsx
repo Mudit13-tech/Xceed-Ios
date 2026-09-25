@@ -1,5 +1,4 @@
 import StarryBackgroundAnimation from "../components/home/StarryBackgroundAnimation"
-import Lottie from 'lottie-react'
 import { useState, useEffect } from 'react'
 
 // HOW TO USE THIS COMPONENT ?
@@ -46,7 +45,12 @@ function ErrorPage(props) {
                     zIndex:'5', position:'absolute',
                     width:'100%', height:'inherit'}}>
                 <StarryBackgroundAnimation/>
-                {/* <Lottie animationData ={animation404} style={{opacity:'15%'}}/> */}
+                {/* Whatever animation the caller wants over the stars — NotFound
+                    passes a Lottie. It arrives as an element so `lottie-react`
+                    and its animation JSON stay in the caller's chunk: this page
+                    is what a lost or offline visitor is shown, and it used to
+                    carry the whole animation runtime through an import it never
+                    called. See the note in App.jsx. */}
                 {props.animation}
             </main>
             <section id="home" style={{zIndex:'6', position:'absolute',

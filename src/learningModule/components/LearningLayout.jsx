@@ -42,10 +42,12 @@ import TimetableChangeModal from './TimetableChangeModal';
 import LogoutConfirmModal from '../../components/LogoutConfirmModal';
 import useTimetableChanges from '../hooks/useTimetableChanges';
 import { LmIcon } from './Icon';
+import useOnlineStatus from '../../utils/useOnlineStatus';
 import { buttonTextStyles, BusyDots } from './common';
 import { clearNativeSession } from '../../mobile/session';
 import { openProfile, PROFILE_UPDATED_EVENT } from '../../components/ProfileModal';
 import { LastLogin, openLoginHistory } from '../../components/LoginHistory';
+import { openActiveSessions } from '../../components/ActiveSessions';
 
 // Split out of the shell: every student sees it exactly once, and nobody else
 // ever does, so it has no business in the bundle that loads on every page.
@@ -469,6 +471,7 @@ function NavItems({
  * mobile, and the header that carries the join/create actions.
  */
 export default function LearningLayout() {
+  const online = useOnlineStatus();
   const { colorMode, toggleColorMode } = useColorMode();
   const pageBg = useColorModeValue('gray.50', 'gray.900');
   const menuTextColor = useColorModeValue('gray.800', 'gray.100');
@@ -608,6 +611,25 @@ export default function LearningLayout() {
 
   return (
     <Box minH={studentOnly ? '100vh' : 'calc(100vh - 64px)'} bg={pageBg}>
+      {/* Said once, at the top, rather than left for each page to discover by
+          failing. Everything already fetched stays on screen — the query cache
+          is on disk — so a student on a dropped connection can keep reading
+          their coursework; what they could not tell before is whether the site
+          was broken or their wifi was. Not sticky and not dismissible: it is a
+          fact about the connection, and it leaves of its own accord. */}
+      {!online && (
+        <Box bg="orange.100" borderBottomWidth="1px" borderColor="orange.300">
+          <Container maxW="1400px" py={2}>
+            <Flex align="center" gap={2} fontSize="sm" color="orange.900">
+              <LmIcon name="warning" size={16} />
+              <Text>
+                You are offline. Anything already open stays readable; new pages
+                and anything you submit will wait until you are back.
+              </Text>
+            </Flex>
+          </Container>
+        </Box>
+      )}
       <Box bg={headerBg} borderBottomWidth="1px" borderColor={headerBorderColor} position="sticky" top={0} zIndex={20}>
         <Container maxW="1400px" py={3}>
           <Flex align="center" gap={{ base: 2, md: 3 }}>
@@ -759,6 +781,9 @@ export default function LearningLayout() {
                       the birthday is kept off this menu itself. */}
                   <MenuItem color={menuTextColor} onClick={openProfile}>
                     <Text fontSize="sm">Edit profile</Text>
+                  </MenuItem>
+                  <MenuItem color={menuTextColor} onClick={openActiveSessions}>
+                    <Text fontSize="sm">Active devices</Text>
                   </MenuItem>
                   <MenuItem color={menuTextColor} onClick={openLoginHistory}>
                     <Text fontSize="sm">Login history</Text>

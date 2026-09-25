@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link as RouterLink, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Alert,
@@ -15,6 +15,7 @@ import {
   useDisclosure,
   useToast,
 } from '@chakra-ui/react';
+import { useQuery } from '@tanstack/react-query';
 import lmApi from '../api/lmApi';
 import {
   CardActions,
@@ -48,40 +49,45 @@ const hasDeadline = (assignment, dueDates) =>
 
 export default function Assignments() {
   const { classId, isTeacher, klass } = useOutletContext();
-  const [assignments, setAssignments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [dueDates, setDueDates] = useState({});
   // The assignment whose sample papers are open, or null.
   const [previewing, setPreviewing] = useState(null);
-  // Forms with the Assignment category — document hand-ins, listed here as
-  // well as on the Forms tab.
-  const [formAssignments, setFormAssignments] = useState([]);
   const [previewForm, setPreviewForm] = useState(null);
   const formPreview = useDisclosure();
   const navigate = useNavigate();
   const toast = useToast();
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
+  /* Held in the query cache, so coming back to this tab paints the list that
+     was there and refreshes it behind you, instead of a spinner and a wait.
+     Every tab in this class is a route, so leaving one unmounts it — without a
+     cache that made every visit a cold fetch, however recently you had looked.
+
+     Both lists come from one query because they are one screen: the numerical
+     assignments, and the forms carrying the Assignment category — document
+     hand-ins, listed here as well as on the Forms tab. */
+  const {
+    data: lists,
+    isLoading: loading,
+    error,
+    refetch: load,
+  } = useQuery({
+    queryKey: ['learning', 'assignments', classId],
+    queryFn: async () => {
       // A failure listing forms must not hide the numerical assignments.
       const [list, forms] = await Promise.all([
         lmApi.listAssignments(classId),
         Promise.resolve(lmApi.listForms(classId)).catch(() => []),
       ]);
-      setAssignments(list);
-      setFormAssignments((forms || []).filter((form) => form.category === 'assignment'));
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [classId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+      return {
+        assignments: list,
+        formAssignments: (forms || []).filter((form) => form.category === 'assignment'),
+      };
+    },
+    placeholderData: (prev) => prev,
+    staleTime: 2 * 60 * 1000,
+  });
+  const assignments = lists?.assignments || [];
+  const formAssignments = lists?.formAssignments || [];
 
   const create = async () => {
     try {

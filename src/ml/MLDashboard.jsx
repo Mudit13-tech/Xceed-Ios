@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import usePolling from '../utils/usePolling';
 import axios from "axios";
 import getEnvironment from "../getenvironment";
 import {
@@ -89,9 +90,14 @@ function MLDashboard() {
     fetchStatus();
     fetchStudents();
     fetchRollLists();
-    const interval = setInterval(fetchStatus, 5000);
-    return () => clearInterval(interval);
   }, []);
+
+  // Five seconds is the right cadence for watching a service come up; it is the
+  // wrong one for a dashboard left open in a background tab, where it was
+  // twelve requests a minute, indefinitely, for nobody. Paused while hidden and
+  // refreshed on return, so the status on screen is never one you have to
+  // wonder about.
+  usePolling(fetchStatus, 5000, { immediate: false });
 
   // ── Service Control ──
   const handleServiceAction = async (action) => {

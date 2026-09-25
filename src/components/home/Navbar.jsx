@@ -21,6 +21,7 @@ import {
 import LogoutConfirmModal from '../LogoutConfirmModal';
 import { openProfile } from '../ProfileModal';
 import { LastLogin, openLoginHistory } from '../LoginHistory';
+import { openActiveSessions } from '../ActiveSessions';
 import { loginPathFor } from '../../authRedirect';
 import { clearNativeSession } from '../../mobile/session';
 import { isNativeApp } from '../../utils/nativeCapabilities';
@@ -427,6 +428,7 @@ export default function Navbar() {
                             <LastLogin color="gray.500" />
                           </Box>
                           <MenuDivider />
+                          <MenuItem onClick={openActiveSessions}>Active devices</MenuItem>
                           <MenuItem onClick={openLoginHistory}>Login history</MenuItem>
                           {/* Name, roll number, email and date of birth — the
                               birthday is kept off this menu itself. */}

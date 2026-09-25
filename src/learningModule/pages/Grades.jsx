@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Link as RouterLink, useOutletContext } from 'react-router-dom';
 import {
   Box,
@@ -16,13 +16,11 @@ import {
   useToast,
   useColorModeValue,
 } from '@chakra-ui/react';
+import { useQuery } from '@tanstack/react-query';
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, TableSkeleton } from '../components/common';
 
 function GradebookGrid({ classId, isTeacher }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   const toast = useToast();
@@ -34,21 +32,36 @@ function GradebookGrid({ classId, isTeacher }) {
   const mutedText = useColorModeValue('gray.500', 'gray.400');
   const textColor = useColorModeValue('gray.700', 'gray.200');
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setData(await lmApi.gradebook(classId));
-      setEdits({});
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [classId]);
+  /* Held in the query cache, so coming back to this tab paints the gradebook
+     that was there and refreshes it behind you, instead of a spinner and a
+     wait. Every tab in this class is a route, so leaving one unmounts it —
+     without a cache that made every visit a cold rebuild of the whole table.
 
-  useEffect(() => {
-    load();
-  }, [load]);
+     Alone among the tabs, this one does not refresh when the window regains
+     focus. It is a surface somebody types marks into, and pulling the table
+     out from under a teacher who alt-tabbed to check a script is worse than
+     showing them a gradebook a minute old. A save reloads it explicitly. */
+  const {
+    data = null,
+    isLoading: loading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['learning', 'gradebook', classId],
+    queryFn: () => lmApi.gradebook(classId),
+    placeholderData: (prev) => prev,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  /* Marks typed but not yet saved are dropped on a deliberate reload, and only
+     on a deliberate one. Clearing them inside the query would mean any
+     background refresh silently discarded what a teacher was in the middle of
+     entering. */
+  const load = useCallback(async () => {
+    setEdits({});
+    return refetch();
+  }, [refetch]);
 
   if (loading) return <Loading label="Building the gradebook…" skeleton={<TableSkeleton rows={8} columns={6} />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;

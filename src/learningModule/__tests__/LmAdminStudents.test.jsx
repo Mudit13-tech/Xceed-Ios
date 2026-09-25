@@ -31,6 +31,7 @@ const sampleData = {
       name: 'Aarav Gupta',
       email: 'aarav@nitj.ac.in',
       rollNumber: '21103001',
+      dob: '2004-05-06',
       dept: 'Computer Science and Engineering',
       classCount: 2,
       claimed: true,
@@ -76,6 +77,10 @@ describe('LmAdminStudents page', () => {
     expect(screen.getByText('Sneha Patel')).toBeInTheDocument();
     expect(screen.getByText('sneha@nitj.ac.in')).toBeInTheDocument();
     expect(screen.getByText('21103002')).toBeInTheDocument();
+
+    // Date of birth: shown when the student has given one, a dash until then.
+    expect(screen.getByRole('columnheader', { name: 'Date of Birth' })).toBeInTheDocument();
+    expect(screen.getByText('6 May 2004')).toBeInTheDocument();
 
     // Claimed badges
     expect(screen.getByText('active')).toBeInTheDocument();
