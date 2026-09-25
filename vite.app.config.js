@@ -76,6 +76,26 @@ function appVersionMeta() {
  *
  * Existing directives are preserved and only missing ones appended, so this
  * stays correct if upstream sets any of them itself.
+ *
+ * Android gets the original tag back, before anything reads it. This is one
+ * bundle for both platforms, so "at build time" would otherwise mean "on
+ * Android too", where both directives do harm:
+ *
+ *  viewport-fit=cover. Capacitor's SystemBars reads the tag at DOMContentLoaded
+ *  (capacitorSystemBarsCheckMetaViewport) and, finding cover on WebView 140+,
+ *  stops padding the WebView clear of the system bars and leaves the page to
+ *  pad itself with env(safe-area-inset-*). Nothing does that on Android --
+ *  safeArea.js is iOS only -- so on Android 15+, where edge-to-edge is
+ *  enforced, the header would slide under the status bar. Over OTA, no store
+ *  build needed.
+ *
+ *  maximum-scale / user-scalable=no. Android's WebView honours these, so they
+ *  would take away pinch-zoom on the timetable and certificate previews, the
+ *  screens index.mobile.css keeps it for. The zoom they prevent is WebKit's.
+ *
+ * The script runs during parsing, after Capacitor's bridge (injected at
+ * document start) and before DOMContentLoaded. It restores only on a positive
+ * 'android', so an iOS build that somehow ran it early still keeps cover.
  */
 function mobileViewport() {
   // user-scalable=no is belt and braces to maximum-scale, not a second policy:
@@ -93,7 +113,12 @@ function mobileViewport() {
           for (const directive of REQUIRED) {
             if (!present.has(directive.split('=')[0])) parts.push(directive)
           }
-          return `<meta name="viewport" content="${parts.join(', ')}" />`
+          const restoreOnAndroid =
+            '<script>(function(){var c=window.Capacitor;' +
+            "if(!c||!c.getPlatform||c.getPlatform()!=='android')return;" +
+            'var m=document.querySelector(\'meta[name="viewport"]\');' +
+            `if(m)m.setAttribute('content',${JSON.stringify(content)});})()</script>`
+          return `<meta name="viewport" content="${parts.join(', ')}" />\n    ${restoreOnAndroid}`
         }
       )
     },
