@@ -29,11 +29,7 @@ import { preloadPath } from '../../routePreload';
 // the header beside the class code instead of competing with the teaching tabs.
 // Insights is up there too: it is what a teacher opens the class to check —
 // who is behind, what needs chasing — not another kind of coursework.
-// Exported so the iOS header (ClassLayout.mobile.jsx) draws its tab row from
-// this same list: a tab added here appears on the phone without a second
-// edit, and a role's tabs cannot drift between the two.
-// eslint-disable-next-line react-refresh/only-export-components
-export const TABS = [
+const TABS = [
   { path: '', label: 'Stream', end: true },
   { path: 'material', label: 'Material' },
   // Beside Material: both are things to watch or read before the work, so they

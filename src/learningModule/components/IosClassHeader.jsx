@@ -43,8 +43,29 @@ import {
   Text,
   useClipboard,
 } from '@chakra-ui/react';
+import { Copy, EllipsisVertical } from 'lucide-react';
 import { LmIcon } from './Icon';
 import NotificationPreferencesModal from './NotificationPreferencesModal';
+
+// The two glyphs this header needs that AMS's Icon.jsx does not register.
+// Drawn here, with LmIcon's own defaults, rather than added to its ICONS map:
+// Icon.jsx is AMS's file, and an entry written into it is a line every sync
+// has to merge around.
+const LOCAL_GLYPHS = { copy: Copy, more: EllipsisVertical };
+
+function HeaderIcon({ name, size }) {
+  const Glyph = LOCAL_GLYPHS[name];
+  if (!Glyph) return <LmIcon name={name} size={size} />;
+  return (
+    <Glyph
+      size={size}
+      strokeWidth={1.75}
+      aria-hidden="true"
+      focusable="false"
+      style={{ flexShrink: 0, display: 'inline-block', verticalAlign: 'text-bottom' }}
+    />
+  );
+}
 
 // Every interactive surface on the card is the same translucent white over the
 // class colour, so the card reads as one object in whatever colour a class has
@@ -170,7 +191,7 @@ export default function IosClassHeader({ klass, classId, isTeacher }) {
             <MenuButton
               as={IconButton}
               aria-label="Class options"
-              icon={<LmIcon name="more" size={18} />}
+              icon={<HeaderIcon name="more" size={18} />}
               size="sm"
               borderRadius="full"
               flexShrink={0}
@@ -227,7 +248,7 @@ export default function IosClassHeader({ klass, classId, isTeacher }) {
               </Text>
             </Box>
             <HStack spacing={2} flexShrink={0} fontSize="sm" fontWeight="600">
-              <LmIcon name={hasCopied ? 'check' : 'copy'} size={18} />
+              <HeaderIcon name={hasCopied ? 'check' : 'copy'} size={18} />
               <Text>{hasCopied ? 'Copied' : 'Copy'}</Text>
             </HStack>
           </Flex>

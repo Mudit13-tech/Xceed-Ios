@@ -12,9 +12,11 @@
  * the header wholesale rather than adjusting it, and a rewrite living in the
  * AMS copy is what turns every upstream touch of that file into a conflict
  * nobody can resolve without knowing both intentions. The AMS copy beside this
- * one keeps exactly one addition — `export` on TABS, so the tab row is defined
- * in one place and a tab added upstream appears here for free. Run
- * `npm run drift` to see what has changed in it.
+ * one is left byte-for-byte as upstream ships it. TABS is not exported there,
+ * so the list is copied below, and ClassLayoutTabsMatchAms.test.js reads it
+ * out of ClassLayout.jsx on every run: a tab added upstream fails that test
+ * instead of silently missing from the phone. Run `npm run drift` to see what
+ * else has changed in it.
  *
  * The cost of the override is that this copy stops inheriting upstream work
  * on the data layer, and that cost is real: the AMS sync that landed with this
@@ -27,14 +29,14 @@
  * The tab row is rebuilt here rather than reused because the desktop row is
  * sized for a pointer: 14px labels in a strip that a thumb has to land on
  * between two others. Its behaviour — which tabs a role sees, the accent that
- * sets Anonymous Feedback apart — comes from the shared TABS, so only the
+ * sets Anonymous Feedback apart — comes from TABS, AMS's own list, so only the
  * measurements differ.
  */
 import React, { useEffect } from 'react';
 import { NavLink, Outlet, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Box, Button, Flex, useToast } from '@chakra-ui/react';
-import AmsClassLayout, { TABS } from './ClassLayout';
+import AmsClassLayout from './ClassLayout';
 import lmApi from '../api/lmApi';
 import { loginPathFor } from '../../authRedirect';
 import { isIosApp } from '../../mobile/platform';
@@ -45,6 +47,26 @@ import SubjectAttendanceStrip from '../components/SubjectAttendanceStrip';
 import useStableNavigate from '../hooks/useStableNavigate';
 
 const IOS = isIosApp();
+
+// A copy of AMS's TABS in ClassLayout.jsx, which does not export it -- and
+// editing that file to export it would make it one more AMS file this repo
+// changes in place. ClassLayoutTabsMatchAms.test.js keeps the two identical.
+// eslint-disable-next-line react-refresh/only-export-components
+export const TABS = [
+  { path: '', label: 'Stream', end: true },
+  { path: 'material', label: 'Material' },
+  { path: 'shorts', label: 'Shorts' },
+  { path: 'quizzes', label: 'Quizzes' },
+  { path: 'tutorials', label: 'Tutorials' },
+  { path: 'assignments', label: 'Assignments' },
+  { path: 'forms', label: 'Forms' },
+  { path: 'notebooks', label: 'Coding' },
+  { path: 'grades', label: 'Grades' },
+  { path: 'studio', label: 'AI Studio' },
+  { path: 'playground', label: 'AI Playground', studentOnly: true },
+  { path: 'discussions', label: 'Forum' },
+  { path: 'feedback', label: 'Anonymous Feedback', accent: 'purple' },
+];
 
 function IosClassLayout() {
   const { classId } = useParams();
@@ -160,10 +182,6 @@ function IosClassLayout() {
     </Box>
   );
 }
-
-// Re-exported so the override presents the same module surface as the file it
-// stands in for; anything importing TABS gets it whichever copy resolves.
-export { TABS };
 
 export default function ClassLayout() {
   return IOS ? <IosClassLayout /> : <AmsClassLayout />;
