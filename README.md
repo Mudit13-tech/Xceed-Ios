@@ -196,11 +196,10 @@ There is no iOS build of the web bundle. **One bundle is uploaded for both store
 | File | What it does |
 |---|---|
 | `src/mobile/platform.js` | The one place that answers "am I on iOS" — `isIosApp()`, `isAndroidApp()`, `nativePlatform()`. Grep for these to audit which screens have been touched. |
-| `src/mobile/statusBar.js` | Turns off the status-bar overlay so the app header clears the Dynamic Island, and keeps the clock/battery legible in both themes. Re-applied after every full-screen native view (Quick Look, the share sheet), because `@capacitor/status-bar` resets it from `capacitor.config.json` on `viewDidAppear`. |
+| `src/mobile/statusBar.js` | Turns off the status-bar overlay so the app header clears the Dynamic Island, and keeps the clock/battery legible in both themes. Re-applied after every full-screen native view (Quick Look, the share sheet), because `@capacitor/status-bar` resets it from `capacitor.config.json` on `viewDidAppear`. The plugin is left out of the Android build (`android.includePlugins`), since its Android startup code would move that layout. |
 | `src/mobile/swipeBack.js` | Swipe from the left edge to go back. Android already gets this from the system gesture and the hardware key via Capacitor's `backButton`; iOS had no way back at all from a screen whose own header did not offer one. It drives the router rather than WKWebView's `allowsBackForwardNavigationGestures`, and declines the gesture where going back would destroy work (a quiz attempt, a live Short, a presentation), on root paths, over a horizontal scroller, and while a dialog is open. |
-| `src/learningModule/pages/ClassLayout.mobile.jsx` | The class card laid out **down** the screen instead of across it: labelled tiles, the class code in its own full-width panel, settings in an overflow menu, a student's card built from what a student may do. iOS only — on Android and the web it renders AMS's component untouched, because the Android app is the one shipping today and its header already fits its screens. |
 
-> Because `ClassLayout.mobile.jsx` **replaces** rather than wraps the AMS component, it stops inheriting upstream changes to `ClassLayout.jsx`. That is exactly what `npm run drift` is for — run it before a release and port what AMS changed. See [Section 10](#-10-pulling-updates-from-ams-safe-sync).
+> The class screen is AMS's own on both phones. `ClassHeaderCard.jsx` gives it a phone layout below `md` (labelled tiles, the class code in its own panel, settings in an overflow menu), so there is no iOS override for it. There used to be one, `ClassLayout.mobile.jsx`; AMS shipped the same design, and the copy was already missing what AMS added after it, such as the room's map pin, so it was removed.
 
 ---
 
@@ -439,9 +438,9 @@ inheriting everything else. Prefer this when you are adding rather than
 replacing.
 
 **An override is still both platforms.** `.mobile` means *native*, not *iOS*:
-the one bundle runs on Android too. `ClassLayout.mobile.jsx` is the case to copy
-— it rewrites the class header for iOS and renders AMS's component untouched
-everywhere else, branching on `isIosApp()` from `src/mobile/platform.js`. See
+the one bundle runs on Android too. `src/utils/nativeCapabilities.mobile.js` is
+the case to copy: one override, with the iOS and Android paths branching at
+runtime on the platform. `src/mobile/platform.js` answers that question. See
 [iOS-only behaviour in the web code](#ios-only-behaviour-in-the-web-code).
 
 ### The cost of an override, and `npm run drift`
@@ -577,9 +576,6 @@ setupOtaUpdater() runs in main.jsx
 
 ### Swipe-from-the-left-edge does nothing
 - It is iOS-only by design (`isIosApp()`), and it deliberately declines in several places: on root paths, during a quiz attempt or a live session, over a horizontal scroller (the class tab row reaches the same edge), with a dialog open, with a second finger down, or on a mostly-vertical drag. See `src/mobile/swipeBack.js`.
-
-### A class screen looks right on iOS but stale after an AMS sync
-- `ClassLayout.mobile.jsx` replaces the AMS component, so upstream changes to `ClassLayout.jsx` do not reach iOS on their own. Run `npm run drift -- -v` and port what matters.
 
 ### App still shows old content after OTA update
 - OTA only updates the JS bundle. If you changed native code, you need a full native release — an APK/AAB via the Play Store, or an `.ipa` via App Store Connect / TestFlight.

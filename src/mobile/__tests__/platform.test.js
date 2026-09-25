@@ -1,15 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The platform gate on the class chrome.
+ * platform.js, the one runtime check that keeps iOS-only behaviour off Android.
  *
- * Every redesigned screen ships to Android too — one bundle serves both
- * stores — so the only thing keeping the Android app where it is, is a runtime
- * check. That check is worth a test of its own: nothing in an iOS screenshot
- * will ever reveal that Android quietly moved with it.
+ * One bundle serves both stores, so this check is the only thing between an
+ * iOS change and the Android app. It is worth a test of its own: nothing in an
+ * iOS screenshot will ever show that Android quietly moved with it.
  *
- * platform.js is read at import by the screens that use it, so each case resets
- * the module registry and imports again against a different Capacitor.
+ * Each case resets the module registry and imports again against a different
+ * Capacitor.
  */
 
 beforeEach(() => {
@@ -21,11 +20,11 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe('learningModule iOS class chrome', () => {
+describe('the platform check', () => {
   it('reports the platform it was given', async () => {
     vi.resetModules();
     vi.doMock('@capacitor/core', () => ({ Capacitor: { getPlatform: () => 'ios' } }));
-    const { isIosApp, isAndroidApp, nativePlatform } = await import('../../mobile/platform');
+    const { isIosApp, isAndroidApp, nativePlatform } = await import('../platform');
     expect(nativePlatform()).toBe('ios');
     expect(isIosApp()).toBe(true);
     expect(isAndroidApp()).toBe(false);
@@ -40,7 +39,7 @@ describe('learningModule iOS class chrome', () => {
         },
       },
     }));
-    const { isIosApp, nativePlatform } = await import('../../mobile/platform');
+    const { isIosApp, nativePlatform } = await import('../platform');
     expect(nativePlatform()).toBe('web');
     expect(isIosApp()).toBe(false);
   });
