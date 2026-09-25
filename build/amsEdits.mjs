@@ -81,18 +81,47 @@ const ourBlobs = blobs(git(['ls-tree', '-r', 'HEAD']));
 const ours = [...ourBlobs.keys()].filter((f) => amsBlobs.has(f));
 const drivers = driverOf(ours);
 
-const edited = ours.filter(
-  (file) => !DRIVEN.has(drivers.get(file)) && ourBlobs.get(file) !== amsBlobs.get(file),
-);
+// What the last sync delivered. A file that still matches it is AMS's, even if
+// AMS has changed it since: that is a change waiting for the next sync, not an
+// edit of ours, and it cannot conflict. With AMS_REF (checking against a PR
+// branch) the comparison is against that ref alone.
+const VENDOR = process.env.AMS_REF
+  ? null
+  : ['ams-update', 'origin/ams-update'].find((ref) => {
+      try {
+        git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+const vendorBlobs = VENDOR ? blobs(git(['ls-tree', '-r', VENDOR])) : null;
+
+const edited = [];
+let behind = 0;
+for (const file of ours) {
+  if (DRIVEN.has(drivers.get(file))) continue;
+  const mine = ourBlobs.get(file);
+  if (vendorBlobs && mine === vendorBlobs.get(file)) {
+    if (mine !== amsBlobs.get(file)) behind += 1;
+    continue;
+  }
+  if (mine !== amsBlobs.get(file)) edited.push(file);
+}
+
+const behindNote = behind
+  ? `\n${behind} file(s) have newer AMS changes that the next sync will bring in. Those are not edits.`
+  : '';
 
 if (!edited.length) {
-  console.log(`No AMS file is edited in place (checked ${ours.length} against AMS ${amsRef}).`);
+  console.log(`No AMS file is edited in place (checked ${ours.length} against AMS ${amsRef}).${behindNote}`);
   process.exit(0);
 }
 
 console.log(`${edited.length} AMS file(s) edited in place. Each is a future sync conflict:\n`);
 for (const file of edited) console.log(`  ${file}`);
 console.log(
-  '\nMove the change into AMS (a PR), or into an X.mobile.js override or seam. See src/mobile/README.md.',
+  '\nMove the change into AMS (a PR), or into an X.mobile.js override or seam. See src/mobile/README.md.' +
+    behindNote,
 );
 if (check) process.exit(1);
