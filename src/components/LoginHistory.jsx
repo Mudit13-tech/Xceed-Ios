@@ -22,6 +22,7 @@ import {
 } from '@chakra-ui/react';
 import { useQuery } from '@tanstack/react-query';
 import getEnvironment from '../getenvironment';
+import { storedDeviceId } from '../mobile/deviceInfo';
 
 /**
  * The signed-in account's own sign-ins: when, on what kind of device, from
@@ -47,11 +48,18 @@ const DEVICE_LABEL = {
   unknown: 'Unknown device',
 };
 
+/** "Samsung SM-S911B · Chrome on Android 14" — the model when the device
+ *  reported one, else the kind of device. */
 export const deviceLabel = (row) => {
-  const kind = DEVICE_LABEL[row?.device] || DEVICE_LABEL.unknown;
-  const detail = [row?.browser, row?.os && `on ${row.os}`].filter(Boolean).join(' ');
+  const kind = row?.model || DEVICE_LABEL[row?.device] || DEVICE_LABEL.unknown;
+  const os = row?.os ? `${row.os}${row.osVersion ? ` ${row.osVersion.split('.')[0]}` : ''}` : '';
+  const detail = [row?.browser, os && `on ${os}`].filter(Boolean).join(' ');
   return detail ? `${kind} · ${detail}` : kind;
 };
+
+/** The short form of a device ID shown to the account holder, enough to tell
+ *  two of their own devices apart. */
+export const shortDeviceId = (id) => (id ? String(id).replace(/-/g, '').slice(0, 8) : '');
 
 export const formatWhen = (value) => {
   const date = new Date(value);
@@ -91,7 +99,7 @@ export function LastLogin({ fontSize = 'xs', color }) {
   if (isPending) line = 'Last login: loading…';
   else if (isError) line = 'Last login: unavailable';
   else if (!data[1]) line = 'Last login: none before this one';
-  else line = `Last login: ${formatWhen(data[1].at)} · ${DEVICE_LABEL[data[1].device] || DEVICE_LABEL.unknown}`;
+  else line = `Last login: ${formatWhen(data[1].at)} · ${data[1].model || DEVICE_LABEL[data[1].device] || DEVICE_LABEL.unknown}`;
   return (
     <Text fontSize={fontSize} color={color} noOfLines={2}>
       {line}
@@ -102,6 +110,8 @@ export function LastLogin({ fontSize = 'xs', color }) {
 export default function LoginHistoryModal() {
   const [isOpen, setOpen] = useState(false);
   const { data, isPending, isError, refetch } = useLoginHistory(isOpen);
+  // Read, never made, here: an ID is created only by signing in.
+  const thisDevice = isOpen ? storedDeviceId() : '';
 
   useEffect(() => {
     const open = () => {
@@ -140,6 +150,7 @@ export default function LoginHistoryModal() {
                   <Tr>
                     <Th>When</Th>
                     <Th>Device</Th>
+                    <Th>Device ID</Th>
                     <Th>IP address</Th>
                   </Tr>
                 </Thead>
@@ -154,7 +165,22 @@ export default function LoginHistoryModal() {
                           </Badge>
                         ) : null}
                       </Td>
-                      <Td>{deviceLabel(row)}</Td>
+                      <Td>
+                        {deviceLabel(row)}
+                        {row.newDevice ? (
+                          <Badge ml={2} colorScheme="orange" fontSize="0.6rem">
+                            New device
+                          </Badge>
+                        ) : null}
+                      </Td>
+                      <Td fontFamily="mono" whiteSpace="nowrap">
+                        {shortDeviceId(row.deviceId) || '—'}
+                        {row.deviceId && row.deviceId === thisDevice ? (
+                          <Badge ml={2} colorScheme="blue" fontSize="0.6rem" fontFamily="body">
+                            This device
+                          </Badge>
+                        ) : null}
+                      </Td>
                       <Td fontFamily="mono">{row.ip || '—'}</Td>
                     </Tr>
                   ))}
@@ -163,9 +189,13 @@ export default function LoginHistoryModal() {
             </TableContainer>
           )}
           <Text fontSize="xs" color="gray.500" mt={3}>
-            Laptops and desktops send the same browser details, so a computer is shown as a laptop
-            only when its browser reported a battery at sign-in. The IP address is the one your network
-            presents to XCEED; on campus Wi-Fi many people share it.
+            "New device" marks the first sign-in from a device ID this account had not used before.
+            The device ID belongs to a browser or app install, so clearing browser data or a private
+            window shows up as a new device. The phone model is reported by Chrome, Edge and Samsung
+            Internet on Android and by the XCEED app; Safari, Firefox and computers do not report
+            one. Laptops and desktops send the same browser details, so a computer is shown as a
+            laptop only when its browser reported a battery at sign-in. The IP address is the one
+            your network presents to XCEED; on campus Wi-Fi many people share it.
           </Text>
         </ModalBody>
         <ModalFooter>

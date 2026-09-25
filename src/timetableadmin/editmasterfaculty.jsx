@@ -56,6 +56,13 @@ function Faculty() {
   const [department, setDepartment] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  /* The question a save asks when the address on the row is new: should this
+     person have an XCEED Learning account? Null when there is nothing to ask.
+     Held here rather than answered by the save itself so that an account
+     carrying the Faculty role only ever appears because a coordinator said
+     yes to it. */
+  const [accountPrompt, setAccountPrompt] = useState(null);
+  const [creatingAccount, setCreatingAccount] = useState(false);
   const [formData, setFormData] = useState({
     facultyID: '',
     name: '',
@@ -165,6 +172,108 @@ function Faculty() {
     });
   };
 
+  /**
+   * What a save should say about the account behind the address, when it is
+   * not going to ask.
+   *
+   * Only the outcomes worth a sentence — 'unchanged' and 'already-faculty' are
+   * the ordinary ones and stay quiet rather than adding a line to every save.
+   */
+  const accountNote = (account) => {
+    switch (account?.outcome) {
+      case 'no-name':
+        return 'This row needs a name as well as an address before a learning account can be opened for it.';
+      case 'not-authorised':
+        return 'Only timetable coordinators can open an XCEED Learning account from here.';
+      default:
+        return undefined;
+    }
+  };
+
+  /** What became of the coordinator's yes. */
+  const accountResultToast = (account) => {
+    switch (account?.outcome) {
+      case 'created':
+        return {
+          title: 'Learning account created',
+          description: account.mailQueued
+            ? `${account.email} has been emailed a welcome message with how to set a password.`
+            : `An account was created for ${account.email}. No email was sent — this row is set not to be emailed — so tell them to use "Forgot password" to claim it.`,
+          status: 'success',
+        };
+      case 'role-added':
+        return {
+          title: 'Faculty role added',
+          description: `${account.email} already had an XCEED account; it can now be used for the Learning module.`,
+          status: 'success',
+        };
+      case 'already-faculty':
+        return {
+          title: 'Nothing to do',
+          description: `${account.email} already has a faculty account.`,
+          status: 'info',
+        };
+      case 'not-authorised':
+        return {
+          title: 'Not allowed',
+          description: 'Only timetable coordinators can open a learning account.',
+          status: 'error',
+        };
+      default:
+        return {
+          title: 'Could not create the account',
+          description: 'The faculty row is saved. Try again, or ask an administrator to import this department.',
+          status: 'error',
+        };
+    }
+  };
+
+  /* Yes. The address is read from the stored row on the server, not sent from
+     here, so this only ever opens an account for what the master table says. */
+  const confirmAccount = async () => {
+    if (!accountPrompt) return;
+    setCreatingAccount(true);
+    try {
+      const res = await fetch(
+        `${apiUrl}/timetablemodule/faculty/${accountPrompt.id}/learning-account`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include' },
+      );
+      const body = await res.json().catch(() => null);
+      // A 403 comes from the route's own role check and carries no outcome of
+      // its own, so it is named here rather than falling through to "could not
+      // create", which would send a coordinator looking for a fault.
+      const account = res.status === 403 ? { outcome: 'not-authorised' } : body?.account;
+      toast({
+        ...accountResultToast(account),
+        duration: 8000,
+        isClosable: true,
+        position: 'top',
+      });
+    } catch (err) {
+      console.error('Learning account error:', err);
+      toast({
+        title: 'Could not create the account',
+        description: 'The faculty row is saved. Try again from this screen.',
+        status: 'error',
+        duration: 8000,
+        isClosable: true,
+        position: 'top',
+      });
+    } finally {
+      setCreatingAccount(false);
+      setAccountPrompt(null);
+    }
+  };
+
+  /** Asks, if there is anything to ask; otherwise reports what is worth reporting. */
+  const handleAccountOutcome = (account, facultyId) => {
+    if (account?.outcome === 'needs-confirmation' && facultyId) {
+      setAccountPrompt({ ...account, id: facultyId });
+      return undefined;
+    }
+    return accountNote(account);
+  };
+
   const saveEdit = async () => {
     try {
       const res = await fetch(`${apiUrl}/timetablemodule/faculty/${editRowId}`, {
@@ -174,6 +283,7 @@ function Faculty() {
         body: JSON.stringify(formData),
       });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      const saved = await res.json().catch(() => null);
       setFacultyList(facultyList.map(r => r._id === editRowId ? formData : r));
       setEditRowId(null);
       setFormData({ 
@@ -187,10 +297,12 @@ function Faculty() {
         order: '',
         notifyByEmail: true
       });
+      const note = handleAccountOutcome(saved?.account, editRowId);
       toast({
         title: 'Faculty Updated',
+        description: note,
         status: 'success',
-        duration: 3000,
+        duration: note ? 7000 : 3000,
         isClosable: true,
         position: 'top',
       });
@@ -295,6 +407,7 @@ function Faculty() {
         body: JSON.stringify(formData),
       });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      const saved = await res.json().catch(() => null);
       onClose();
       setDepartment(department); // trigger refetch
       setFormData({ 
@@ -308,10 +421,12 @@ function Faculty() {
         order: '',
         notifyByEmail: true
       });
+      const note = handleAccountOutcome(saved?.account, saved?._id);
       toast({
         title: 'Faculty Added',
+        description: note,
         status: 'success',
-        duration: 3000,
+        duration: note ? 7000 : 3000,
         isClosable: true,
         position: 'top',
       });
@@ -588,6 +703,50 @@ function Faculty() {
                   onClick={saveNew}
                 >
                   Save Faculty
+                </Button>
+              </ModalFooter>
+            </ModalContent>
+          </Modal>
+
+          {/* The question the save asks when the address on the row is new.
+              Deliberately a decision rather than a notice: the account it opens
+              carries the Faculty role, which is what lets somebody create
+              classes, set papers and read answer keys on the learning side. */}
+          <Modal
+            isOpen={Boolean(accountPrompt)}
+            onClose={() => (creatingAccount ? undefined : setAccountPrompt(null))}
+            isCentered
+          >
+            <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(10px)" zIndex={1500} />
+            <ModalContent zIndex={1500}>
+              <ModalHeader>Create an XCEED Learning account?</ModalHeader>
+              {!creatingAccount && <ModalCloseButton />}
+              <ModalBody>
+                <Text mb={3}>
+                  <strong>{accountPrompt?.name}</strong> has been saved with the address{' '}
+                  <strong>{accountPrompt?.email}</strong>.
+                </Text>
+                <Text mb={3}>
+                  {accountPrompt?.hasAccount
+                    ? 'An XCEED account already exists for this address. Saying yes adds the Faculty role to it, so it can be used for classes, coursework and tests in the Learning module. Nothing else about their account changes.'
+                    : 'Saying yes creates an XCEED account for them with the Faculty role, and emails them how to set a password. Saying no changes nothing — the faculty row is saved either way, and this can be done later.'}
+                </Text>
+              </ModalBody>
+              <ModalFooter gap={3}>
+                <Button
+                  variant="ghost"
+                  onClick={() => setAccountPrompt(null)}
+                  isDisabled={creatingAccount}
+                >
+                  No, not now
+                </Button>
+                <Button
+                  colorScheme="purple"
+                  onClick={confirmAccount}
+                  isLoading={creatingAccount}
+                  loadingText="Creating…"
+                >
+                  {accountPrompt?.hasAccount ? 'Yes, add the Faculty role' : 'Yes, create the account'}
                 </Button>
               </ModalFooter>
             </ModalContent>

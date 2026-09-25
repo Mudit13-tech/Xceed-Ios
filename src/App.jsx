@@ -64,6 +64,7 @@ import Navbar from './components/home/Navbar';
 import DobGate from './components/DobGate';
 import LoginHistoryModal from './components/LoginHistory';
 import ProfileModal from './components/ProfileModal';
+import ActiveSessions from './components/ActiveSessions';
 import ErrorBoundary from './components/ErrorBoundary';
 const PrintSummary = lazyWithPreload(() => import('./timetableadmin/printSummary'));
 const LoadDistribution = lazyWithPreload(() => import('./timetableadmin/loaddistribution'));
@@ -817,6 +818,8 @@ function App() {
       <LoginHistoryModal />
       {/* "Edit profile": name, roll number, email and date of birth. */}
       <ProfileModal />
+      {/* "Active devices": where the account is signed in, each with Log out. */}
+      <ActiveSessions />
 
       {/* One boundary around the whole table rather than per route: a lazy
           element with no Suspense above it throws, and a single boundary here

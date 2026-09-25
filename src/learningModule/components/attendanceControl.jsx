@@ -23,6 +23,7 @@ import {
 
 import lmApi from '../api/lmApi';
 import { LIVE_POLL_MS, nameOf } from './liveExam';
+import usePolling from '../../utils/usePolling';
 import { relativeTime } from '../format';
 import { LmIcon } from './Icon';
 
@@ -96,15 +97,15 @@ export function AttendanceModal({ isOpen, onClose, classId, quiz, toast, onDone 
   }, [classId, quiz._id]);
 
   useEffect(() => {
-    if (!isOpen) return undefined;
-    setLoading(true);
-    load();
-    // The register is read alongside a live exam, so it goes stale the same way
-    // the live panel does — a student who started since it opened must not still
-    // read as "not started" when staff decide whether to mark them absent.
-    const id = setInterval(load, LIVE_POLL_MS);
-    return () => clearInterval(id);
-  }, [isOpen, load]);
+    if (isOpen) setLoading(true);
+  }, [isOpen]);
+
+  // The register is read alongside a live exam, so it goes stale the same way
+  // the live panel does — a student who started since it opened must not still
+  // read as "not started" when staff decide whether to mark them absent. Paused
+  // while the tab is hidden, and refreshed the moment it comes back, so what
+  // staff act on is current without the gap being polled for nobody.
+  usePolling(load, LIVE_POLL_MS, { enabled: isOpen });
 
   const mark = async (row, status) => {
     setBusyId(row.studentId);

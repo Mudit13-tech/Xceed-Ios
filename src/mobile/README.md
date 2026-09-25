@@ -22,6 +22,7 @@ that file in place of this one. So:
 | `mobile/httpSession.js` | `xceed-web`, cookies on, 401 left to the page | `xceed-learning`, header-only auth, a 401 ends the session |
 | `mobile/queryCache.js` | react-query defaults | cache kept indefinitely, busted per release |
 | `mobile/MobileShell.jsx` | renders nothing | back button, deep links, push, OTA updates |
+| `mobile/deviceInfo.js` (`getDeviceInfo`, `currentDeviceId`, `storedDeviceId`) | browser device ID in localStorage; model and OS version from Client Hints (Android Chromium only) | the native device ID, model and OS version |
 | `mobile/useTerminationAlerts.jsx` | announces nothing | announces terminated quiz attempts |
 | `components/NativeCamera.jsx` | renders nothing | device camera for upload forms |
 | `utils/nativeCapabilities.js` | plain anchors and downloads | Android DownloadManager, iOS Share sheet |

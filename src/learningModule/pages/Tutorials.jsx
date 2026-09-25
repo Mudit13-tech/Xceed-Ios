@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link as RouterLink, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Badge,
@@ -10,6 +10,7 @@ import {
   Text,
   useToast,
 } from '@chakra-ui/react';
+import { useQuery } from '@tanstack/react-query';
 import lmApi from '../api/lmApi';
 import {
   CardActions,
@@ -42,29 +43,27 @@ const hasDeadline = (tutorial, dueDates) =>
  */
 export default function Tutorials() {
   const { classId, isTeacher, klass } = useOutletContext();
-  const [tutorials, setTutorials] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [dueDates, setDueDates] = useState({});
   // The tutorial whose sample papers are open, or null.
   const [previewing, setPreviewing] = useState(null);
   const navigate = useNavigate();
   const toast = useToast();
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setTutorials(await lmApi.listTutorials(classId));
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [classId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  /* Held in the query cache, so coming back to this tab paints the list that
+     was there and refreshes it behind you, instead of a spinner and a wait.
+     Every tab in this class is a route, so leaving one unmounts it — without a
+     cache that made every visit a cold fetch, however recently you had looked. */
+  const {
+    data: tutorials = [],
+    isLoading: loading,
+    error,
+    refetch: load,
+  } = useQuery({
+    queryKey: ['learning', 'tutorials', classId],
+    queryFn: () => lmApi.listTutorials(classId),
+    placeholderData: (prev) => prev,
+    staleTime: 2 * 60 * 1000,
+  });
 
   const create = async () => {
     try {

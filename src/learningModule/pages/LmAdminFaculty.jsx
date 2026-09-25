@@ -34,6 +34,7 @@ import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile, TableSkeleton } from '../components/common';
 import { LmIcon } from '../components/Icon';
 import RevokeRoleDialog from '../components/RevokeRoleDialog';
+import { formatDob } from '../../components/DobGate';
 
 /**
  * Faculty accounts, for an lm-admin.
@@ -564,6 +565,7 @@ export default function LmAdminFaculty() {
                 <Tr>
                   <Th>Name</Th>
                   <Th>Email</Th>
+                  <Th>Date of Birth</Th>
                   <Th>Added</Th>
                   <Th isNumeric>Classes</Th>
                   <Th>Status</Th>
@@ -577,7 +579,7 @@ export default function LmAdminFaculty() {
               {groups.map((group) => (
                 <Tbody key={group.dept}>
                   <Tr>
-                    <Td colSpan={6} bg="blackAlpha.50" py={2}>
+                    <Td colSpan={7} bg="blackAlpha.50" py={2}>
                       <HStack spacing={2}>
                         <Text fontWeight="700" fontSize="sm" color="lmFg.heading">
                           {group.dept}
@@ -593,6 +595,8 @@ export default function LmAdminFaculty() {
                     <Tr key={person._id}>
                       <Td fontWeight="600">{person.name || '—'}</Td>
                       <Td>{person.email}</Td>
+                      {/* Given by the account holder after signing in; blank until then. */}
+                      <Td whiteSpace="nowrap">{formatDob(person.dob) || '—'}</Td>
                       <Td whiteSpace="nowrap">{joinedOn(person.createdAt)}</Td>
                       <Td isNumeric>
                         <RouterLinkStyle

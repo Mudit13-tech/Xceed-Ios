@@ -53,9 +53,6 @@ import { LmIcon } from '../components/Icon';
 import RoomWithMap from '../components/RoomWithMap';
 import { CLASS_COLORS } from '../format';
 import { canCreateClass } from '../roles';
-import useUserDetails from '../../components/useUserDetails';
-import { openProfile } from '../../components/ProfileModal';
-import { formatDob } from '../../components/DobGate';
 
 // getDay() is 0=Sunday..6=Saturday; the timetable itself never schedules
 // Sunday (see server's ttInternals.DAYS), so that index is left unmapped.
@@ -730,59 +727,6 @@ function OpenExamBanner({ exam, muted }) {
 
 
 
-/**
- * The account's own details at the top of the dashboard — name, roll number
- * (students), date of birth — with the way to correct them. Read from the
- * platform account (`useUserDetails`), which is where the date of birth lives;
- * the module's `me` supplies the name while that loads.
- */
-function YourDetails({ me, muted }) {
-  const { user } = useUserDetails();
-  const border = useColorModeValue('gray.200', 'whiteAlpha.200');
-  if (!me && !user) return null;
-
-  const roles = (me?.roles || []).map((role) => String(role).toLowerCase());
-  const isStudent = roles.includes('student');
-  const name = user?.name && !String(user.name).includes('@') ? user.name : me?.name;
-  const rollNumber = user?.rollNumber || me?.rollNumber || '';
-  const dob = formatDob(user?.dob);
-
-  const items = [
-    ['Name', name || '—'],
-    ...(isStudent || rollNumber ? [['Roll number', rollNumber || '—']] : []),
-    ['Date of birth', dob || 'Not added yet'],
-  ];
-
-  return (
-    <Flex
-      borderWidth="1px"
-      borderColor={border}
-      borderRadius="lg"
-      px={4}
-      py={3}
-      mb={5}
-      gap={{ base: 3, md: 8 }}
-      wrap="wrap"
-      align="center"
-    >
-      {items.map(([label, value]) => (
-        <Box key={label} minW={0}>
-          <Text fontSize="xs" color={muted} textTransform="uppercase" letterSpacing="wide">
-            {label}
-          </Text>
-          <Text fontSize="sm" fontWeight="600" wordBreak="break-word">
-            {value}
-          </Text>
-        </Box>
-      ))}
-      <Box flex="1" />
-      <Button size="sm" variant="outline" onClick={openProfile}>
-        Edit profile
-      </Button>
-    </Flex>
-  );
-}
-
 export default function Dashboard() {
   const { me, overview, reloadOverview, timetableChanges } = useOutletContext() || {};
   const [searchParams, setSearchParams] = useSearchParams();
@@ -908,8 +852,6 @@ export default function Dashboard() {
           </>
         }
       />
-
-      <YourDetails me={me} muted={secondaryTextColor} />
 
       {overview ? (
         <Grid templateColumns={{ base: '1fr 1fr', md: 'repeat(4, 1fr)' }} gap={4} mb={6}>

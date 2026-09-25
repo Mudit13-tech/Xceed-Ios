@@ -40,6 +40,7 @@ const sampleData = {
       email: 'older@nitj.ac.in',
       dept: 'Computer Science and Engineering',
       createdAt: '2023-01-15T10:00:00.000Z',
+      dob: '1980-01-02',
       classCount: 3,
       claimed: true,
     },
@@ -115,6 +116,14 @@ describe('LmAdminFaculty directory', () => {
   it('shows when each account was added', async () => {
     await load();
     expect(screen.getByText(/15 Jan 2023/)).toBeInTheDocument();
+  });
+
+  it('shows each account’s date of birth, or a dash when none is given', async () => {
+    await load();
+    expect(screen.getByRole('columnheader', { name: 'Date of Birth' })).toBeInTheDocument();
+    const rows = screen.getAllByRole('row').map((row) => row.textContent);
+    expect(rows.find((text) => text.includes('older@nitj.ac.in'))).toContain('2 January 1980');
+    expect(rows.find((text) => text.includes('newer@nitj.ac.in'))).toContain('—');
   });
 
   it('reports the claimed status of each account', async () => {
