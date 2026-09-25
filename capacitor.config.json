@@ -19,5 +19,22 @@
   },
   "ios": {
     "contentInset": "never"
+  },
+  "android": {
+    "includePlugins": [
+      "@capacitor/app",
+      "@capacitor/browser",
+      "@capacitor/camera",
+      "@capacitor/file-viewer",
+      "@capacitor/filesystem",
+      "@capacitor/preferences",
+      "@capacitor/push-notifications",
+      "@capacitor/share",
+      "@capawesome/capacitor-file-picker",
+      "@capgo/capacitor-downloader",
+      "@capgo/capacitor-updater",
+      "capacitor-native-biometric",
+      "capacitor-secure-storage-plugin"
+    ]
   }
 }

@@ -29,6 +29,11 @@ import { isIosApp } from './platform';
  * status bar to fix a cutout it does not have would be trading a working app
  * for an untested one, so the guard is the platform, not merely "is native".
  *
+ * The guard alone is not enough on Android, which is why the plugin is not in
+ * the Android build at all (android.includePlugins in capacitor.config.json):
+ * its Android load() applies overlaysWebView true and a black bar on startup,
+ * before any JS runs. See src/mobile/__tests__/androidPluginAllowlist.test.js.
+ *
  *
  * Why this is applied more than once
  * ----------------------------------
@@ -63,7 +68,9 @@ import { isIosApp } from './platform';
  * declarations.d.ts — `plugins` exists only at the top level), so it would hand
  * Android a status bar change on a platform whose layout is already correct and
  * where the Android implementation behaves differently again. The guard above
- * exists precisely to avoid that, and config cannot honour it.
+ * exists precisely to avoid that, and config cannot honour it. (Android no
+ * longer builds the plugin, so that objection has gone; re-asserting from here
+ * is still what lets the strip follow the colour mode, which config cannot.)
  *
  * So the value is re-asserted from here instead, whenever the WebView's height
  * changes — which is the observable half of the reset, whichever plugin caused
