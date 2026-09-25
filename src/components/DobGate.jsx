@@ -17,7 +17,8 @@ import {
   Text,
   useToast,
 } from '@chakra-ui/react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
+import useUserDetails from './useUserDetails';
 import getEnvironment from '../getenvironment';
 
 /**
@@ -64,23 +65,8 @@ export default function DobGate() {
   const apiUrl = getEnvironment();
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { data, isError } = useQuery({
-    queryKey: USER_QUERY_KEY,
-    queryFn: async () => {
-      const response = await fetch(`${apiUrl}/user/getuser/`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
-      if (response.status === 401) throw new Error('Unauthorized');
-      if (!response.ok) throw new Error('Failed to fetch user details');
-      return response.json();
-    },
-    retry: false,
-    staleTime: 5 * 60 * 1000,
-  });
+  const { user } = useUserDetails();
 
-  const user = !isError ? data?.user : null;
   const savedDob = String(user?.dob || '');
   const hasDob = /^\d{4}-\d{2}-\d{2}$/.test(savedDob);
   const canEdit = hasDob && !user?.dobCorrectedAt;

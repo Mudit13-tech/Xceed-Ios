@@ -163,13 +163,30 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
   const myReaction = reactions.some((r) => String(r.userId) === String(me?.id));
   const likedBy = likedByNames(reactions, me?.id);
 
+  /* Answered on the tap, not on the round trip.
+     This is the most-tapped control in the module and the one place where a
+     wait is most obvious: a thumb that fills a third of a second after you
+     press it reads as a press that did not land, so people press it again.
+     The toggle is applied locally first and put back if the server disagrees,
+     which is the one case where showing an answer before it is confirmed is
+     safe — nothing depends on a reaction, and the truth arrives either way. */
   const react = async () => {
+    const mine = { userId: me?.id, name: me?.name, value: '👍' };
+    const before = reactions;
+    const after = myReaction
+      ? reactions.filter((r) => String(r.userId) !== String(me?.id))
+      : [...reactions, mine];
+    setReactions(after);
+
     try {
       // The stored reaction value, not an icon: the server keys reactions by
       // this string and existing rows already carry it.
       const result = await lmApi.reactToAnnouncement(classId, item._id, '👍');
+      // The server's list is authoritative — it carries everybody else's
+      // reactions, which may have moved while this one was in flight.
       setReactions(result.reactions);
     } catch (error) {
+      setReactions(before);
       toast({ status: 'error', title: error.message });
     }
   };
@@ -302,6 +319,11 @@ function AnnouncementCard({ item, classId, isTeacher, me, onChanged }) {
           onClick={react}
           leftIcon={<LmIcon name="like" size={14} />}
           flexShrink={0}
+          /* Its only content is an icon and a count, which gives a screen
+             reader a button called "3" — or, at zero, one called nothing at
+             all. The label says what pressing it does, and which way. */
+          aria-label={myReaction ? 'Remove your like' : 'Like this announcement'}
+          aria-pressed={myReaction}
         >
           {reactions.length || ''}
         </Button>

@@ -53,6 +53,7 @@ import {
   FormControl,
   FormLabel,
 } from '@chakra-ui/react'
+import { getDeviceInfo } from '../../mobile/deviceInfo'
 
 const LoginForm = () => {
   const queryClient = useQueryClient();
@@ -226,7 +227,7 @@ const LoginForm = () => {
   const handleSubmit = async (e) => {
     setIsLoading(true)
     e.preventDefault()
-    const userData = { email, password }
+    const userData = { email, password, device: await getDeviceInfo() }
     if (captcha) {
       userData.captchaToken = captcha.token
       userData.captchaAnswer = captchaAnswer

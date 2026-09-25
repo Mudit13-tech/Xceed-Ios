@@ -726,6 +726,7 @@ function OpenExamBanner({ exam, muted }) {
 }
 
 
+
 export default function Dashboard() {
   const { me, overview, reloadOverview, timetableChanges } = useOutletContext() || {};
   const [searchParams, setSearchParams] = useSearchParams();

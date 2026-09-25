@@ -65,6 +65,7 @@ import {
   nameOf,
   useSecondTick,
 } from '../components/liveExam';
+import usePolling from '../../utils/usePolling';
 import DeleteButton from '../components/DeleteButton';
 import { useTerminationAlerts } from '../../mobile/useTerminationAlerts';
 
@@ -1833,14 +1834,16 @@ export default function QuizResults() {
     defaultTabAppliedRef.current = true;
   }, [data, classId, quizId]);
 
-  // Poll only while the monitor is the tab on screen. The analytics tabs read a
-  // finished cohort and gain nothing from re-fetching, and a poll running behind
-  // them would keep a class-sized query warm for nobody.
-  useEffect(() => {
-    if (tab !== 0 || !auto) return undefined;
-    const id = setInterval(() => load(true), LIVE_POLL_MS);
-    return () => clearInterval(id);
-  }, [tab, auto, load]);
+  /* Poll only while the monitor is the tab on screen — the analytics tabs read
+     a finished cohort and gain nothing from re-fetching — and only while the
+     browser tab is too. A monitor left open behind other tabs, which is what
+     happens to a monitor, was re-running a class-sized query every fifteen
+     seconds for a screen nobody was looking at. */
+  usePolling(() => load(true), LIVE_POLL_MS, {
+    enabled: tab === 0 && auto,
+    // The page loads itself on mount; this timer only keeps it current.
+    immediate: false,
+  });
 
   const act = useCallback((attempt, next) => setAction({ attempt, action: next }), []);
 

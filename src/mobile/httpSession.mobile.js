@@ -102,3 +102,8 @@ export function installAxiosSessionGuard() {
     },
   );
 }
+
+// Everything else the web seam exports, unchanged. AMS may add exports to a
+// seam (src/mobile/README.md allows it), and without this the app build fails
+// on the first one it has not heard of. Exports declared in this file win.
+export * from './httpSession';

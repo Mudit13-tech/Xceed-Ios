@@ -5,15 +5,23 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import getEnvironment from '../../getenvironment';
 import {
+  Box,
   Text,
   Button,
   Flex,
   IconButton,
+  Menu,
+  MenuButton,
+  MenuDivider,
+  MenuItem,
+  MenuList,
   useColorMode,
   useDisclosure,
 } from '@chakra-ui/react';
 import LogoutConfirmModal from '../LogoutConfirmModal';
-import { openDobEditor } from '../DobGate';
+import { openProfile } from '../ProfileModal';
+import { LastLogin, openLoginHistory } from '../LoginHistory';
+import { openActiveSessions } from '../ActiveSessions';
 import { loginPathFor } from '../../authRedirect';
 import { clearNativeSession } from '../../mobile/session';
 import { isNativeApp } from '../../utils/nativeCapabilities';
@@ -396,9 +404,37 @@ export default function Navbar() {
                 <>
                   {userDetails && (
                     <Flex align="center" gap={2}>
-                      <Text fontSize="sm" color="orange">
-                        {userDetails.user.email}
-                      </Text>
+                      {/* The account menu: who is signed in, when they last
+                          signed in before this, and the account's own
+                          settings. isLazy so the history is fetched only
+                          when the menu is first opened. */}
+                      <Menu placement="bottom-end" isLazy>
+                        <MenuButton
+                          as={Button}
+                          variant="ghost"
+                          size="sm"
+                          color="orange"
+                          fontWeight="normal"
+                          _hover={{ bg: 'whiteAlpha.200' }}
+                          _active={{ bg: 'whiteAlpha.300' }}
+                        >
+                          {userDetails.user.email} ▾
+                        </MenuButton>
+                        <MenuList zIndex={10000}>
+                          <Box px={3} py={2}>
+                            <Text fontSize="sm" fontWeight="600" noOfLines={1}>
+                              {accountLabel}
+                            </Text>
+                            <LastLogin color="gray.500" />
+                          </Box>
+                          <MenuDivider />
+                          <MenuItem onClick={openActiveSessions}>Active devices</MenuItem>
+                          <MenuItem onClick={openLoginHistory}>Login history</MenuItem>
+                          {/* Name, roll number, email and date of birth — the
+                              birthday is kept off this menu itself. */}
+                          <MenuItem onClick={openProfile}>Edit profile</MenuItem>
+                        </MenuList>
+                      </Menu>
 
                       <IconButton
                         onClick={toggleColorMode}
@@ -427,19 +463,6 @@ export default function Navbar() {
                           boxShadow: '0 0 0 3px rgba(34, 211, 238, 0.45)',
                         }}
                       />
-
-                      {/* The one-time date-of-birth edit; the dialog says
-                          whether it is still available. */}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        color="white"
-                        fontWeight="normal"
-                        _hover={{ color: 'cyan.300' }}
-                        onClick={openDobEditor}
-                      >
-                        Date of birth
-                      </Button>
 
                       <Button
                         variant="outline"

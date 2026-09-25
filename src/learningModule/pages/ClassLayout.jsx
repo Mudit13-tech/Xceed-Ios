@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { NavLink, Outlet, useParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { NavLink, Outlet, useLocation, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Badge,
@@ -101,6 +101,22 @@ export default function ClassLayout() {
       preloadPath(`/learning/class/${classId}${tab ? `/${tab}` : ''}`);
     });
   }, [classId]);
+
+  /* Keep the tab you are on where you can see it.
+     The row scrolls sideways on a phone, and the browser does not scroll it for
+     you: opening Grades from a link, or coming back to a class you had left on
+     a later tab, left the highlighted tab somewhere off the right-hand edge —
+     so the one thing on the row that says where you are was the one thing you
+     could not see. `nearest` rather than `center` so a tab already in view does
+     not jump under the finger about to tap it, and the row is only scrolled
+     once the tabs are actually on screen — before that there is nothing to
+     find. */
+  const tabRowRef = useRef(null);
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const active = tabRowRef.current?.querySelector('.active');
+    active?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  }, [pathname, loading]);
 
   if (loading) return <Loading label="Opening class…" minH="360px" skeleton={<ClassShellSkeleton />} />;
   if (error) {
@@ -269,6 +285,7 @@ export default function ClassLayout() {
       )}
 
       <Flex
+        ref={tabRowRef}
         gap={1}
         borderBottomWidth="1px"
         borderColor="lmBorder.base"
@@ -277,6 +294,26 @@ export default function ClassLayout() {
         bg="lmBg.surface"
         borderTopRadius="lg"
         px={2}
+        /* Thirteen tabs do not fit a phone, so the row scrolls. Hide the bar
+           itself — it sits on the tabs' own underline and reads as a second,
+           broken one — and let the fade at the right edge say there is more.
+           Momentum scrolling on iOS, where a bare overflow row feels stuck. */
+        sx={{
+          scrollbarWidth: 'none',
+          WebkitOverflowScrolling: 'touch',
+          '&::-webkit-scrollbar': { display: 'none' },
+        }}
+        position="relative"
+        _after={{
+          content: '""',
+          position: 'sticky',
+          right: 0,
+          flex: '0 0 24px',
+          alignSelf: 'stretch',
+          marginLeft: '-24px',
+          pointerEvents: 'none',
+          bgGradient: 'linear(to-r, transparent, lmBg.surface)',
+        }}
       >
         {visibleTabs.map((tab) => {
           // Blue is the module's default tab accent; a tab may claim its own to

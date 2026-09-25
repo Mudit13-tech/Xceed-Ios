@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useOutletContext, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -24,6 +24,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 
+import { useQuery } from '@tanstack/react-query';
 import lmApi from '../api/lmApi';
 import CommentThread from '../components/CommentThread';
 import { EmptyState, ErrorState, Loading, SectionCard, ThreadListSkeleton } from '../components/common';
@@ -232,25 +233,25 @@ function Thread({ discussion, classId, isTeacher, onChanged }) {
 export default function Discussions() {
   const { classId, isTeacher } = useOutletContext();
   const { discussionId } = useParams();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setData(await lmApi.listDiscussions(classId));
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [classId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  /* Held in the query cache, so coming back to this tab paints what was there
+     and refreshes it behind you, instead of a spinner and a wait. Every tab in
+     this class is a route, so leaving one unmounts it — without a cache that
+     made every visit a cold fetch, however recently you had looked. */
+  const {
+    data = null,
+    isLoading: loading,
+    error,
+    refetch: load,
+  } = useQuery({
+    queryKey: ['learning', 'discussions', classId],
+    queryFn: () => lmApi.listDiscussions(classId),
+    placeholderData: (prev) => prev,
+    // Shorter than the other lists: a forum is the one tab where somebody else
+    // posting while you are on another tab is the normal case.
+    staleTime: 30 * 1000,
+  });
 
   if (loading) return <Loading label="Loading the forum…" skeleton={<ThreadListSkeleton />} />;
   if (error) return <ErrorState error={error} onRetry={load} />;

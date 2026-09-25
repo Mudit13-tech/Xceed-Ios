@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Box, Button, Divider, Flex, Heading, Text, useDisclosure } from '@chakra-ui/react';
+import { useQuery } from '@tanstack/react-query';
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, WorkListSkeleton } from '../components/common';
 import FormCard from '../components/FormCard';
@@ -24,27 +25,25 @@ const categoryOf = (form) => (form.category === 'assignment' ? 'assignment' : 'n
  */
 export default function Forms() {
   const { classId, klass, isTeacher } = useOutletContext();
-  const [forms, setForms] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const navigate = useNavigate();
   const previewDialog = useDisclosure();
   const [previewForm, setPreviewForm] = useState(null);
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setForms(await lmApi.listForms(classId));
-    } catch (err) {
-      setError(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [classId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  /* Held in the query cache, so coming back to this tab paints the list that
+     was there and refreshes it behind you, instead of a spinner and a wait.
+     Every tab in this class is a route, so leaving one unmounts it — without a
+     cache that made every visit a cold fetch, however recently you had looked. */
+  const {
+    data: forms = [],
+    isLoading: loading,
+    error,
+    refetch: load,
+  } = useQuery({
+    queryKey: ['learning', 'forms', classId],
+    queryFn: () => lmApi.listForms(classId),
+    placeholderData: (prev) => prev,
+    staleTime: 2 * 60 * 1000,
+  });
 
   const create = async () => {
     try {
