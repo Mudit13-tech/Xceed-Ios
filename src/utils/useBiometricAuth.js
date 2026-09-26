@@ -114,5 +114,27 @@ export const useBiometricAuth = () => {
     }
   };
 
-  return { isAvailable, authenticate };
+  /**
+   * What to call the sensor on a button: 'Face ID', 'Touch ID', or null when
+   * there is nothing to offer. iOS only -- Android has no button that asks,
+   * and returns null so it never grows one.
+   *
+   * A separate call rather than a change to isAvailable(), whose boolean the
+   * Android path and every existing caller depend on.
+   */
+  const biometryLabel = async () => {
+    if (!Capacitor.isNativePlatform() || !isIos()) return null;
+    try {
+      const result = await withTimeout(NativeBiometric.isAvailable(), 'isAvailable');
+      if (!result.isAvailable) return null;
+      if (result.biometryType === BiometryType.FACE_ID) return 'Face ID';
+      if (result.biometryType === BiometryType.TOUCH_ID) return 'Touch ID';
+      return result.biometryType === BiometryType.NONE ? null : 'Face ID';
+    } catch (e) {
+      console.error('[biometric] biometryLabel error:', e);
+      return null;
+    }
+  };
+
+  return { isAvailable, authenticate, biometryLabel };
 };

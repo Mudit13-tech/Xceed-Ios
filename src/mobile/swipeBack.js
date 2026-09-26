@@ -73,11 +73,44 @@ const LOCKED = [/\/attempt\//, /\/short\/live\//, /\/present(\/|$)/, /\/seb-exit
 /**
  * Routes where there is nothing behind to go back to.
  *
- * The same list the hardware back key uses. It exits the app there; this
- * gesture does nothing instead, because a thumb resting near the edge of the
- * screen should never be able to close the app.
+ * The hardware back key's list, plus `/userroles`. The key exits the app on
+ * these; this gesture does nothing instead, because a thumb resting near the
+ * edge of the screen should never be able to close the app.
+ *
+ * `/userroles` is the dashboard every unlock lands on, and it is reached by a
+ * full page load from /login (see utils/sessionSwitch.js), so the entry behind
+ * it is always the login screen. Going back there does not return anywhere
+ * useful: the login screen sees a saved account, runs Face ID or asks for the
+ * PIN again, and puts the user straight back on the dashboard. To the user
+ * that reads as a back gesture that does nothing except demand their face.
  */
-const ROOT_PATHS = ['/', '/login', '/home', '/learning', '/learning/'];
+const ROOT_PATHS = ['/', '/login', '/home', '/learning', '/learning/', '/userroles'];
+
+/**
+ * True if a dialog is actually open on screen.
+ *
+ * `[role="dialog"]` alone is not that question. Chakra's <Popover> keeps its
+ * content element -- role="dialog" -- mounted for as long as the popover is,
+ * open or not, and hides it with `visibility: hidden` on the positioner around
+ * it. The notification bell renders one on every Learning page whenever the
+ * viewport is wide enough (iPad, or an iPhone held landscape), and the timetable
+ * load screens render them in table cells. Asking only "is there a dialog?"
+ * meant the gesture was refused on every one of those screens, permanently.
+ *
+ * So a dialog counts only if it is modal (Chakra's Modal, Drawer and
+ * AlertDialog set aria-modal, and unmount when closed) or it is visible.
+ */
+function hasOpenDialog() {
+  const dialogs = document.querySelectorAll('[role="dialog"], [role="alertdialog"]');
+  for (const el of dialogs) {
+    if (el.getAttribute('aria-modal') === 'true') return true;
+    if (el.closest('[hidden], [aria-hidden="true"]')) continue;
+    const style = window.getComputedStyle(el);
+    if (style.visibility === 'hidden' || style.display === 'none') continue;
+    return true;
+  }
+  return false;
+}
 
 /**
  * True if the touch started inside something that scrolls sideways.
@@ -209,7 +242,7 @@ export function setupSwipeBack({ getPath, goBack }) {
     // An open dialog is its own context. Going back would navigate the screen
     // underneath it and leave the dialog sitting over a page it does not belong
     // to; dismissing it is the modal's own job, not this gesture's.
-    if (document.querySelector('[role="dialog"]')) return;
+    if (hasOpenDialog()) return;
     if (insideHorizontalScroller(event.target)) return;
 
     tracking = true;

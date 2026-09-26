@@ -122,7 +122,7 @@ describe('mobile swipe-back', () => {
     expect(goBack).not.toHaveBeenCalled();
   });
 
-  it.each(['/', '/login', '/home', '/learning'])('does nothing at %s', (root) => {
+  it.each(['/', '/login', '/home', '/learning', '/userroles'])('does nothing at %s', (root) => {
     path = root;
     swipe(6, 300);
     // Notably it does not exit the app either, unlike the hardware back key: a
@@ -153,6 +153,35 @@ describe('mobile swipe-back', () => {
     swipe(6, 300);
 
     expect(goBack).not.toHaveBeenCalled();
+  });
+
+  it('leaves an open modal alone', () => {
+    const modal = document.createElement('section');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    document.body.appendChild(modal);
+
+    swipe(6, 300);
+
+    expect(goBack).not.toHaveBeenCalled();
+  });
+
+  it('is not blocked by a closed popover that stays mounted', () => {
+    // Chakra's <Popover> keeps its role="dialog" content in the DOM while closed
+    // and hides it with visibility on the positioner around it. The bell on
+    // every Learning page renders one, so treating it as open refused the
+    // gesture on every screen that has the bell.
+    const positioner = document.createElement('div');
+    positioner.style.visibility = 'hidden';
+    const content = document.createElement('section');
+    content.setAttribute('role', 'dialog');
+    content.style.visibility = 'hidden';
+    positioner.appendChild(content);
+    document.body.appendChild(positioner);
+
+    swipe(6, 220);
+
+    expect(goBack).toHaveBeenCalledTimes(1);
   });
 
   it('ignores a two-finger gesture', () => {

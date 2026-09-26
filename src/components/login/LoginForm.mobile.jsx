@@ -54,6 +54,7 @@ import {
   FormLabel,
 } from '@chakra-ui/react'
 import { getDeviceInfo } from '../../mobile/deviceInfo'
+import { isIosApp } from '../../mobile/platform'
 
 const LoginForm = () => {
   const queryClient = useQueryClient();
@@ -90,7 +91,57 @@ const LoginForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { isAvailable, authenticate } = useBiometricAuth();
+  const { isAvailable, authenticate, biometryLabel } = useBiometricAuth();
+
+  /**
+   * A way back to Face ID from the PIN screen. iOS only.
+   *
+   * The only Face ID prompt this screen used to make was the automatic one at
+   * launch, and on iOS that one is easy to lose: the push-permission alert
+   * MobileShell raises on first launch appears over it and iOS cancels the
+   * Face ID sheet (LAError.systemCancel), and a user who dismisses it by
+   * accident gets the same result. Both dropped the user on the PIN pad with no way to ask for Face
+   * ID again short of killing the app -- which reads as "Face ID doesn't work".
+   *
+   * Android keeps exactly what it had: biometryLabel() is null there, so the
+   * button never renders.
+   */
+  const [biometricButtonLabel, setBiometricButtonLabel] = useState(null)
+  const [isBiometricBusy, setIsBiometricBusy] = useState(false)
+
+  useEffect(() => {
+    if (currentView !== 'pin' || !isIosApp() || !activeAccount?.token) {
+      setBiometricButtonLabel(null)
+      return undefined
+    }
+    let cancelled = false
+    biometryLabel().then((label) => {
+      if (!cancelled) setBiometricButtonLabel(label)
+    })
+    return () => {
+      cancelled = true
+    }
+    // biometryLabel is rebuilt by useBiometricAuth on every render; listing it
+    // would re-ask the plugin on every keystroke into the PIN pad.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView, activeAccount?.token])
+
+  const handleBiometricUnlock = async () => {
+    if (!activeAccount?.token || isBiometricBusy) return
+    setIsBiometricBusy(true)
+    try {
+      const result = await authenticate(`Log in as ${activeAccount.email}`)
+      if (!result.success) return
+      await activateAccount({
+        account: activeAccount,
+        queryClient,
+        updateLastActiveEmail,
+        fallbackTarget: redirectTargetFrom(location.search) || '/userroles',
+      })
+    } finally {
+      setIsBiometricBusy(false)
+    }
+  }
 
   useEffect(() => {
     if (isAccountsLoading || isInitialized) return;
@@ -359,13 +410,28 @@ const LoginForm = () => {
           onRemoveAccount={removeAccount}
         />
       ) : currentView === 'pin' ? (
-        <PinEntry 
-          isSetup={false} 
-          activeAccount={activeAccount}
-          removeAccount={removeAccount}
-          updateLastActiveEmail={updateLastActiveEmail}
-          onCancel={() => setCurrentView(accounts.length > 0 ? 'switcher' : 'form')} 
-        />
+        <>
+          <PinEntry 
+            isSetup={false} 
+            activeAccount={activeAccount}
+            removeAccount={removeAccount}
+            updateLastActiveEmail={updateLastActiveEmail}
+            onCancel={() => setCurrentView(accounts.length > 0 ? 'switcher' : 'form')} 
+          />
+          {biometricButtonLabel && (
+            <Button
+              mt={3}
+              width='100%'
+              variant='outline'
+              colorScheme='blue'
+              onClick={handleBiometricUnlock}
+              isLoading={isBiometricBusy}
+              loadingText={`Waiting for ${biometricButtonLabel}`}
+            >
+              Use {biometricButtonLabel}
+            </Button>
+          )}
+        </>
       ) : currentView === 'setup' ? (
         <PinEntry 
           isSetup={true} 

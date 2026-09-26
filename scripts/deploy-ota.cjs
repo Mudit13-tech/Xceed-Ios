@@ -29,8 +29,76 @@ const VERSION_URL = `${SERVER_URL}/api/v1/ota/version.json`;
  */
 const fileUrl = (hash) => `${SERVER_URL}/api/v1/ota/files/${hash}`;
 
+/** -1, 0 or 1, comparing dotted numeric versions the way the device does. */
+function compareVersions(a, b) {
+  const pa = String(a || '0').split('.').map(Number);
+  const pb = String(b || '0').split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] || 0;
+    const y = pb[i] || 0;
+    if (x !== y) return x > y ? 1 : -1;
+  }
+  return 0;
+}
+
+/**
+ * Refuse a publish that would reach every phone and do the wrong thing there.
+ *
+ * Both checks guard mistakes that have already been one keystroke away:
+ *
+ *  - The build reads `.env`. VITE_DISABLE_OTA=1 is how a developer keeps a
+ *    device build's own JS, and VITE_NATIVE_API_ORIGIN is how they point it at
+ *    a local server. Published, the first turns the updater off on every
+ *    installed app -- no later release could ever reach them again -- and the
+ *    second points every app at a laptop.
+ *
+ *  - The device only takes a version strictly greater than the one it runs
+ *    (utils/otaUpdater.js). A merge that carries an older package.json version
+ *    publishes a number equal to or below what is live, the upload succeeds,
+ *    and no phone ever downloads it. That is how the iOS fixes were stuck:
+ *    package.json said 2.1.52 while the server was already serving 2.1.53.
+ */
+async function preflight(nextVersion) {
+  if (isDev) return;
+
+  const problems = [];
+  if (process.env.VITE_DISABLE_OTA === '1') {
+    problems.push('VITE_DISABLE_OTA=1 is set in .env — the published bundle would switch OTA off on every device. Comment it out.');
+  }
+  const origin = process.env.VITE_NATIVE_API_ORIGIN;
+  if (origin && origin.replace(/\/+$/, '') !== 'https://xceed.nitj.ac.in') {
+    problems.push(`VITE_NATIVE_API_ORIGIN is ${origin} — the published bundle would call that instead of production. Remove it from .env.`);
+  }
+
+  try {
+    const { data } = await axios.get(VERSION_URL, { timeout: 10000 });
+    const live = data?.version;
+    if (live && compareVersions(nextVersion, live) <= 0) {
+      problems.push(
+        `This would publish ${nextVersion}, but the server already serves ${live}; devices only take a higher version. ` +
+          `Set "version" in package.json to ${live} and run again.`,
+      );
+    }
+  } catch (error) {
+    console.log(`⚠️  Could not read the live version from ${VERSION_URL} (${error.message}); the upload will tell.`);
+  }
+
+  if (problems.length) {
+    console.error('❌ Not publishing:');
+    for (const problem of problems) console.error(`   - ${problem}`);
+    process.exit(1);
+  }
+}
+
 async function deploy() {
   console.log('🚀 Starting OTA Deployment...');
+
+  {
+    const { version } = require(PACKAGE_JSON_PATH);
+    const parts = version.split('.');
+    parts[2] = parseInt(parts[2]) + 1;
+    await preflight(parts.join('.'));
+  }
 
   // 1. Build the project
   console.log('📦 Building Vite project...');
