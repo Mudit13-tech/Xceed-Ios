@@ -51,7 +51,7 @@ import {
 } from '../components/common';
 import { LmIcon } from '../components/Icon';
 import RoomWithMap from '../components/RoomWithMap';
-import { CLASS_COLORS } from '../format';
+import { CLASS_COLORS, semesterLabel } from '../format';
 import { canCreateClass } from '../roles';
 
 // getDay() is 0=Sunday..6=Saturday; the timetable itself never schedules
@@ -288,7 +288,7 @@ function CreateClassModal({ isOpen, onClose, onCreated, me }) {
 
   const branch = branches.find((item) => item.code === branchCode) || null;
   const subject = subjects.find((item) => item.id === subjectId) || null;
-  const section = semester ? `Sem ${semester}` : '';
+  const section = semesterLabel(semester);
 
   const reset = useCallback(() => {
     setBranchCode('');

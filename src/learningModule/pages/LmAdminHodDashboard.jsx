@@ -32,6 +32,7 @@ import {
   SemesterOutcomeChart,
 } from '../components/hodCharts';
 import { useChartTheme } from '../chartTheme';
+import { semesterLabel } from '../format';
 
 /**
  * HOD Dashboard — what a department looks like right now, and how it got here.
@@ -119,18 +120,22 @@ const feedbackDay = (value) => {
 };
 
 /**
- * Anonymous student feedback, over the classes in view.
+ * Student feedback, over the classes in view.
  *
  * The one panel on this screen made of somebody's own words rather than counts,
  * which is why it is built differently from the rest of the file:
  *
- *  - **The author is never here to be shown.** The server strips the student's
- *    id, name, email and roll number before this component ever sees a note,
- *    and blunts the timestamp to the day, because "17:42, four minutes after
- *    the lab" identifies a student in a class of thirty no matter what fields
- *    were dropped. There is deliberately nothing in this component that could
- *    render an author, so a future field on the response cannot leak one by
- *    being spread into a row.
+ *  - **Whether the author is shown is the server's answer, not this
+ *    component's,** and it is answered per note rather than per reader. A dean
+ *    is sent every author; a head of department is sent one only where staff
+ *    marked a note inappropriate, and otherwise no id, name, email or roll
+ *    number and a timestamp blunted to the day — because "17:42, four minutes
+ *    after the lab" identifies a student in a class of thirty no matter what
+ *    fields were dropped. See leadershipView on the server for the policy.
+ *
+ *    So the heading is read off the rows in hand rather than off a flag: an
+ *    HOD's list is anonymous until one note in it is not, and a panel headed
+ *    "anonymous" over a name is worse than no heading at all.
  *  - **No CSV.** Every other table here downloads, and this one does not: a
  *    spreadsheet of students' unattributed complaints about named colleagues is
  *    a file that gets forwarded, and the counts above the list are what a report
@@ -144,14 +149,52 @@ const feedbackDay = (value) => {
  */
 function FeedbackPanel({ feedback, scopeLabel, showDept }) {
   const [expanded, setExpanded] = useState(false);
-  const items = feedback.items || [];
+  // A department filter of the panel's own, so the list can be narrowed without
+  // moving the tiles and charts on the rest of the page. The page-level bar
+  // still governs what was fetched; this narrows what is read.
+  const [deptFilter, setDeptFilter] = useState('');
+  const all = useMemo(() => feedback.items || [], [feedback.items]);
+  // Derived from the rows, not from a flag beside them: identity is decided per
+  // note now, so "is this list anonymous" is a question about its contents.
+  const identified = all.some((note) => note.student);
+
+  const deptOptions = useMemo(
+    () => [...new Set(all.map((note) => note.dept).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [all],
+  );
+  const items = deptFilter ? all.filter((note) => note.dept === deptFilter) : all;
   const shown = expanded ? items : items.slice(0, 10);
   const sentiment = feedback.bySentiment || {};
 
   return (
     <SectionCard
-      title="Anonymous student feedback"
-      subtitle={`What students wrote about ${scopeLabel === 'institute' ? 'the institute’s' : 'the department’s'} classes. Never attributed — the author is not sent to this screen, and the date is the day only.`}
+      title={identified ? 'Student feedback' : 'Anonymous student feedback'}
+      subtitle={
+        identified
+          ? `What students wrote about ${scopeLabel === 'institute' ? 'the institute’s' : 'the department’s'} classes. Where a name is shown, the student was told before writing that it would be.`
+          : `What students wrote about ${scopeLabel === 'institute' ? 'the institute’s' : 'the department’s'} classes. Never attributed — the author is not sent to this screen, and the date is the day only.`
+      }
+      action={
+        showDept && deptOptions.length > 1 ? (
+          <Select
+            size="sm"
+            maxW="200px"
+            value={deptFilter}
+            onChange={(event) => {
+              setDeptFilter(event.target.value);
+              setExpanded(false);
+            }}
+            placeholder="All departments"
+            aria-label="Filter feedback by department"
+          >
+            {deptOptions.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </Select>
+        ) : null
+      }
     >
       <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4} mb={5}>
         <StatTile label="Notes" value={feedback.total ?? 0} accent="purple.500" />
@@ -212,6 +255,12 @@ function FeedbackPanel({ feedback, scopeLabel, showDept }) {
                   </Text>
                 </Flex>
 
+                {/* The author is rendered below the note, not here — see the
+                    sender block further down, which also says whether the name
+                    is shown because the note was marked inappropriate. One
+                    place, so the two cannot come to disagree about when a name
+                    appears. */}
+
                 <Text fontSize="sm" color="lmFg.body" whiteSpace="pre-wrap">
                   {note.text}
                 </Text>
@@ -224,10 +273,48 @@ function FeedbackPanel({ feedback, scopeLabel, showDept }) {
                   ) : (
                     'Class removed'
                   )}
-                  {note.semester ? ` · Sem ${note.semester}` : ''}
+                  {note.semester ? ` · ${semesterLabel(note.semester)}` : ''}
                   {showDept && note.dept ? ` · ${note.dept}` : ''}
                   {note.facultyName ? ` · ${note.facultyName}` : ''}
                 </Text>
+
+                {/* The author, where this reader may see one.
+                    A dean sees every author; a head of department sees one
+                    only where staff marked the note inappropriate, which is
+                    the escalation the student's warning mail points them at.
+                    The server decides — the presence of `student` in the
+                    payload IS the permission, so nothing here can widen it. */}
+                {note.student && (
+                  <Box
+                    mt={3}
+                    bg="lmHue.red50"
+                    borderWidth="1px"
+                    borderColor="lmHue.red100"
+                    borderRadius="md"
+                    p={3}
+                  >
+                    <Text
+                      fontSize="xs"
+                      fontWeight="700"
+                      color="lmHue.red800"
+                      textTransform="uppercase"
+                      letterSpacing="wide"
+                    >
+                      {note.inappropriate ? 'Marked inappropriate — sender' : 'Sender'}
+                    </Text>
+                    <Text fontSize="sm" color="lmHue.red900" mt={1}>
+                      {note.student.name || 'Unknown'}
+                      {note.student.rollNumber ? ` · ${note.student.rollNumber}` : ''}
+                      {note.student.email ? ` · ${note.student.email}` : ''}
+                    </Text>
+                    {note.inappropriate && (
+                      <Text fontSize="xs" color="lmHue.red800" mt={2}>
+                        The student has already been warned and a strike recorded. Their name is
+                        shown here so you can act on it if it warrants more than that.
+                      </Text>
+                    )}
+                  </Box>
+                )}
 
                 {note.response && (
                   <Box mt={3} pl={3} borderLeftWidth="2px" borderColor="lmBorder.base">
@@ -325,7 +412,28 @@ export default function LmAdminHodDashboard({ variant = 'hod' }) {
 
   // Memoised so the rollups below do not recompute on every render: a fresh
   // `[]` from the fallback is a new array each time and would defeat them.
-  const classes = useMemo(() => data?.classes ?? [], [data]);
+  const allClasses = useMemo(() => data?.classes ?? [], [data]);
+
+  /* The classrooms table's own department filter.
+   *
+   * Separate from the bar at the top of the page on purpose: that one decides
+   * what the server fetched, so moving it re-reads every tile and chart on the
+   * screen. This one narrows the table alone, which is what somebody reading
+   * down a dean's institute-wide list of classrooms actually wants — the
+   * headline figures stay put to be compared against.
+   *
+   * Held here rather than inside the table so the CSV downloads what is on
+   * screen: a file that disagrees with the table it came from is worse than no
+   * file. */
+  const [tableDept, setTableDept] = useState('');
+  const classes = useMemo(
+    () => (tableDept ? allClasses.filter((cls) => cls.dept === tableDept) : allClasses),
+    [allClasses, tableDept],
+  );
+  const tableDeptOptions = useMemo(
+    () => [...new Set(allClasses.map((cls) => cls.dept).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [allClasses],
+  );
   const totals = data?.totals ?? {};
 
   /* The department's content mix, summed from the rows in view rather than
@@ -543,7 +651,7 @@ export default function LmAdminHodDashboard({ variant = 'hod' }) {
       >
         {filters.semesters.map((s) => (
           <option key={s} value={s}>
-            Semester {s}
+            {semesterLabel(s)}
           </option>
         ))}
       </Select>
@@ -973,14 +1081,37 @@ export default function LmAdminHodDashboard({ variant = 'hod' }) {
       <SectionCard
         title="Classrooms"
         subtitle={
-          filtered
-            ? `Filtered · ${classes.length} class${classes.length !== 1 ? 'es' : ''}`
+          filtered || tableDept
+            ? `Filtered · ${classes.length} class${classes.length !== 1 ? 'es' : ''}${
+                tableDept ? ` in ${tableDept}` : ''
+              }`
             : `All classes · ${classes.length} total`
         }
         action={
-          <Button size="sm" variant="outline" onClick={exportClasses} isDisabled={!classes.length}>
-            Download CSV
-          </Button>
+          <Flex gap={2} align="center" wrap="wrap">
+            {/* Narrows this table alone. The bar at the top of the page decides
+                what was fetched and moves every figure on the screen with it;
+                this leaves them where they are to be read against. */}
+            {!deptLocked && tableDeptOptions.length > 1 && (
+              <Select
+                size="sm"
+                maxW="200px"
+                value={tableDept}
+                onChange={(event) => setTableDept(event.target.value)}
+                placeholder="All departments"
+                aria-label="Filter classrooms by department"
+              >
+                {tableDeptOptions.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </Select>
+            )}
+            <Button size="sm" variant="outline" onClick={exportClasses} isDisabled={!classes.length}>
+              Download CSV
+            </Button>
+          </Flex>
         }
       >
         {classes.length === 0 ? (

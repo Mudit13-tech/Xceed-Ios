@@ -830,6 +830,9 @@ function ViewTab({ departments, deptLoading, deptError, onUpdate, defaultDepartm
     const [dept,         setDept]         = useState(defaultDepartment);
     const [pklFiles,     setPklFiles]     = useState([]);
     const [history,      setHistory]      = useState([]);
+    // Set when this department is shown only for the semesters this user
+    // generated embeddings for — another department's, not their own.
+    const [semScope,     setSemScope]     = useState(null);
     const [pklLoading,   setPklLoading]   = useState(false);
     const [expandedRow,  setExpandedRow]  = useState(null);
     const [deletingFile,  setDeletingFile]  = useState(null);
@@ -852,6 +855,7 @@ function ViewTab({ departments, deptLoading, deptError, onUpdate, defaultDepartm
             const files   = filesData.files  || [];
             const hist    = histData.records || [];
             setHistory(hist);
+            setSemScope(Array.isArray(filesData.semScope) ? filesData.semScope : null);
 
             const enriched = files.map(f => {
                 const match = hist.find(h => h.embeddingFile === f.filename);
@@ -884,7 +888,7 @@ function ViewTab({ departments, deptLoading, deptError, onUpdate, defaultDepartm
     }, []);
 
     useEffect(() => {
-        setPklFiles([]); setHistory([]); setExpandedRow(null);
+        setPklFiles([]); setHistory([]); setExpandedRow(null); setSemScope(null);
         if (dept) loadPklFiles(dept);
     }, [dept]);
 
@@ -1038,6 +1042,14 @@ function ViewTab({ departments, deptLoading, deptError, onUpdate, defaultDepartm
                         {departments.map(d => <option key={d} value={d}>{d.replace(/_/g, ' ')}</option>)}
                     </select>
                 </div>
+                {semScope && (
+                    <div style={{ marginTop: 12, fontSize: '12px', color: theme.textMuted }}>
+                        Showing only the semesters you generated embeddings for here:{' '}
+                        <strong style={{ color: theme.text }}>
+                            {[...semScope].sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0)).join(', ')}
+                        </strong>
+                    </div>
+                )}
             </div>
 
             {!dept ? (
@@ -1454,6 +1466,13 @@ function ViewTab({ departments, deptLoading, deptError, onUpdate, defaultDepartm
  */
 export default function EmbeddingGeneration({ defaultDepartment = '', showErpTab = true }) {
     const { departments, deptLoading, deptError } = useDepartments();
+    // Manual Generation lists every department, not just the caller's own:
+    // faculty teach classes on other departments' timetables, and the server
+    // lets these calls through for any department (enforceEmbeddingDepartments).
+    const allDepts = useDepartments(`${EMB_BASE}/departments`);
+    // View lists the caller's own departments, Basic Sciences, and any
+    // department they generated embeddings in (only their semesters of it).
+    const viewDepts = useDepartments(`${EMB_BASE}/view-departments`);
     // Tab 3 = ERP Embedding Generation — the default entry point where it is
     // offered; manual paste/xlsx generation (tab 1) is the fallback path, and
     // the only entry point when ERP is not on offer.
@@ -1500,7 +1519,9 @@ export default function EmbeddingGeneration({ defaultDepartment = '', showErpTab
 
             {activeTab === 1 && (
                 <GenerateTab
-                    departments={departments} deptLoading={deptLoading} deptError={deptError}
+                    departments={allDepts.departments}
+                    deptLoading={allDepts.deptLoading}
+                    deptError={allDepts.deptError}
                     prefill={prefill}
                     onPrefillConsumed={() => setPrefill(null)}
                     defaultDepartment={defaultDepartment}
@@ -1511,7 +1532,9 @@ export default function EmbeddingGeneration({ defaultDepartment = '', showErpTab
             )}
             {activeTab === 2 && (
                 <ViewTab
-                    departments={departments} deptLoading={deptLoading} deptError={deptError}
+                    departments={viewDepts.departments}
+                    deptLoading={viewDepts.deptLoading}
+                    deptError={viewDepts.deptError}
                     onUpdate={handleUpdate}
                     defaultDepartment={defaultDepartment}
                 />

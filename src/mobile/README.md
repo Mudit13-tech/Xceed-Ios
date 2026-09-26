@@ -27,6 +27,8 @@ that file in place of this one. So:
 | `components/NativeCamera.jsx` | renders nothing | device camera for upload forms |
 | `utils/nativeCapabilities.js` | plain anchors and downloads | Android DownloadManager, iOS Share sheet |
 
-`filedownload/savePdf.js` is shared rather than swapped. It calls
-`nativeCapabilities`, and on the web it does exactly what each call site did
-before it existed.
+`filedownload/savePdf.js` and `filedownload/saveFile.js` are shared rather than
+swapped. They call `nativeCapabilities`, and on the web they do exactly what each
+call site did before they existed. A page that builds a file in the browser (a
+CSV, a spreadsheet) should hand it to `saveBlob` from `saveFile.js`. A bare
+`<a download>` over a blob: URL does nothing in the app.

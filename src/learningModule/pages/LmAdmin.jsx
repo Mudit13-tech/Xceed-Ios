@@ -11,6 +11,13 @@ import {
   Link as RouterLinkStyle,
   SimpleGrid,
   Stack,
+  Switch,
+  Table,
+  Tbody,
+  Td,
+  Th,
+  Thead,
+  Tr,
   Text,
   VStack,
   useToast,
@@ -19,7 +26,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile, WorkListSkeleton } from '../components/common';
-import { relativeTime } from '../format';
+import { relativeTime, semesterLabel } from '../format';
 import { sebDiagnosis } from '../sebDiagnosis';
 import { LmIcon } from '../components/Icon';
 
@@ -495,6 +502,251 @@ function SebInstallerCard() {
   );
 }
 
+
+/**
+ * Filling class rosters from the attendance module's register.
+ *
+ * The attendance module already knows which roll numbers sit in which subject.
+ * A teacher opening a learning class for the same subject should not have to
+ * build that list again by hand, and this is the button that saves them from
+ * it — matched on semester, subject abbreviation and faculty, all three.
+ *
+ * Preview first, always. The run enrols students and mails their teachers,
+ * which are both things it is better to have seen coming.
+ */
+function RosterSyncCard() {
+  const [dept, setDept] = useState('');
+  const [preview, setPreview] = useState(null);
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState('');
+  const [sendMail, setSendMail] = useState(true);
+  const toast = useToast();
+
+  const look = async () => {
+    setBusy('preview');
+    setResult(null);
+    try {
+      setPreview(await lmApi.adminRosterSyncPreview({ dept: dept.trim() || undefined }));
+    } catch (err) {
+      toast({ status: 'error', title: err.message });
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const run = async () => {
+    const total = preview?.totals?.wouldAdd || 0;
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(
+      `Add ${total} student${total === 1 ? '' : 's'} across ${preview.totals.classes} class${
+        preview.totals.classes === 1 ? '' : 'es'
+      }?` + (sendMail ? '\n\nEach faculty member will be emailed once.' : '\n\nNo email will be sent.'),
+    )) return;
+
+    setBusy('run');
+    try {
+      const outcome = await lmApi.adminRosterSyncRun({ dept: dept.trim() || undefined, sendMail });
+      setResult(outcome);
+      setPreview(null);
+      toast({
+        status: 'success',
+        title: `${outcome.totals.added} student${outcome.totals.added === 1 ? '' : 's'} added`,
+        description: `${outcome.totals.facultyMailed} faculty emailed · ${outcome.totals.failed} could not be added`,
+      });
+    } catch (err) {
+      toast({ status: 'error', title: err.message });
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const rows = result?.subjects || preview?.subjects || [];
+  const unmatched = result?.unmatched || preview?.unmatched || [];
+
+  return (
+    <SectionCard
+      title="Fill class rosters from attendance"
+      subtitle="Adds the students the attendance register lists for a subject into the learning class for that same subject — matched on semester, the subject abbreviation and the faculty member's email. Only ever adds the missing ones; nobody already in a class is touched."
+      /* This card runs it for a department. The page behind the link is the
+         same two endpoints laid out as a table — a row per classroom with what
+         is waiting in it, a semester filter, and a button per row — which is
+         what reading forty classrooms needs and a paragraph is not. */
+      action={
+        <RouterLinkStyle as={RouterLink} to="/learning/lm-admin/roster-sync" fontSize="sm" color="blue.600">
+          Open as a table →
+        </RouterLinkStyle>
+      }
+    >
+      <Stack direction={{ base: 'column', md: 'row' }} spacing={3} mb={4} align={{ md: 'center' }}>
+        <Input
+          size="sm"
+          maxW={{ md: '280px' }}
+          placeholder="Limit to one department (blank = all)"
+          value={dept}
+          onChange={(event) => setDept(event.target.value)}
+        />
+        <Button size="sm" onClick={look} isLoading={busy === 'preview'} loadingText="Checking…">
+          Check what would happen
+        </Button>
+        {preview && preview.totals.wouldAdd > 0 && (
+          <Button size="sm" colorScheme="blue" onClick={run} isLoading={busy === 'run'} loadingText="Adding…">
+            Add {preview.totals.wouldAdd} student{preview.totals.wouldAdd === 1 ? '' : 's'}
+          </Button>
+        )}
+        <HStack spacing={2}>
+          <Switch size="sm" isChecked={sendMail} onChange={(event) => setSendMail(event.target.checked)} />
+          <Text fontSize="sm" color="lmFg.muted">Email each faculty member</Text>
+        </HStack>
+      </Stack>
+
+      {preview && (
+        <Alert status={preview.totals.wouldAdd ? 'info' : 'success'} borderRadius="md" mb={4} fontSize="sm">
+          <AlertIcon />
+          {preview.totals.wouldAdd
+            ? `${preview.totals.wouldAdd} to add across ${preview.totals.classes} class(es). ${preview.totals.missingEmail} roll number(s) have no email on record. ${preview.totals.unmatched} class(es) matched no subject.`
+            : `Nothing to add. ${preview.totals.missingEmail} roll number(s) have no email on record; ${preview.totals.unmatched} class(es) matched no subject.`}
+        </Alert>
+      )}
+
+      {rows.length > 0 && (
+        <Box overflowX="auto" mb={4}>
+          <Table size="sm">
+            <Thead>
+              <Tr>
+                <Th>Class</Th>
+                <Th>Subject</Th>
+                <Th>Faculty</Th>
+                <Th isNumeric>{result ? 'Added' : 'To add'}</Th>
+                <Th isNumeric>Already in</Th>
+                <Th isNumeric>No email</Th>
+                <Th isNumeric>Failed</Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              {rows.map((row) => (
+                <Tr key={row.classId}>
+                  <Td>{row.className}</Td>
+                  <Td>
+                    {row.subject}
+                    <Text fontSize="xs" color="lmFg.muted">
+                      {row.dept} · {semesterLabel(row.semester)}
+                    </Text>
+                  </Td>
+                  <Td>{row.facultyName || row.facultyEmail}</Td>
+                  <Td isNumeric fontWeight="600">{result ? row.addedCount : row.wouldAdd}</Td>
+                  <Td isNumeric color="lmFg.muted">{row.alreadyIn}</Td>
+                  <Td isNumeric>
+                    {row.missingEmailCount > 0 ? (
+                      <Badge colorScheme="yellow">{row.missingEmailCount}</Badge>
+                    ) : (
+                      <Text as="span" color="lmFg.muted">0</Text>
+                    )}
+                  </Td>
+                  <Td isNumeric>
+                    {(result ? row.failedCount : row.wouldFail) > 0 ? (
+                      <Badge colorScheme="orange">{result ? row.failedCount : row.wouldFail}</Badge>
+                    ) : (
+                      <Text as="span" color="lmFg.muted">0</Text>
+                    )}
+                  </Td>
+                </Tr>
+              ))}
+            </Tbody>
+          </Table>
+        </Box>
+      )}
+
+      {/* The roll numbers with nowhere to send an account. Listed on their own
+          rather than among the failures: nothing went wrong in the run, the
+          student record simply has no address on it, and this list is the
+          worklist for whoever fills those in. No address is ever guessed at. */}
+      {rows.some((row) => (row.missingEmail || []).length) && (
+        <Box mb={4}>
+          <Text fontSize="sm" fontWeight="600" mb={1}>No email address on record</Text>
+          <Text fontSize="xs" color="lmFg.muted" mb={2}>
+            These roll numbers are on the attendance register but have no address to
+            enrol. Add one to the student record and run this again.
+          </Text>
+          {rows.filter((row) => (row.missingEmail || []).length).map((row) => (
+            <Box key={`${row.classId}-noemail`} mb={3}>
+              <Text fontSize="xs" color="lmFg.muted" mb={1}>{row.className}</Text>
+              <Flex wrap="wrap" gap={1}>
+                {row.missingEmail.map((entry) => (
+                  <Badge key={entry.rollNo} colorScheme="yellow" variant="subtle" fontWeight="500" textTransform="none">
+                    <Box as="span" fontFamily="mono">{entry.rollNo}</Box>
+                    {entry.name ? ` ${entry.name}` : ''}
+                  </Badge>
+                ))}
+              </Flex>
+            </Box>
+          ))}
+        </Box>
+      )}
+
+      {/* Taken out of the class at some point, and back on the register. Left
+          alone: that row exists because somebody removed them on purpose, and
+          putting them back silently is the one overwrite this must not do. */}
+      {rows.some((row) => (row.previouslyRemoved || []).length) && (
+        <Box mb={4}>
+          <Text fontSize="sm" fontWeight="600" mb={1}>On the register, but removed from the class</Text>
+          <Text fontSize="xs" color="lmFg.muted" mb={2}>
+            Not re-added — somebody removed them deliberately. Add them from the
+            class People tab if that was not intended.
+          </Text>
+          {rows.filter((row) => (row.previouslyRemoved || []).length).map((row) => (
+            <Box key={`${row.classId}-removed`} mb={2}>
+              <Text fontSize="xs" color="lmFg.muted" mb={1}>{row.className}</Text>
+              <Flex wrap="wrap" gap={1}>
+                {row.previouslyRemoved.map((entry) => (
+                  <Badge key={entry.rollNo} variant="subtle" fontWeight="500" textTransform="none">
+                    <Box as="span" fontFamily="mono">{entry.rollNo}</Box>
+                    {entry.name ? ` ${entry.name}` : ''}
+                  </Badge>
+                ))}
+              </Flex>
+            </Box>
+          ))}
+        </Box>
+      )}
+
+      {rows.some((row) => (row.failed || []).length) && (
+        <Box mb={4}>
+          <Text fontSize="sm" fontWeight="600" mb={2}>Could not be added</Text>
+          {rows.filter((row) => (row.failed || []).length).map((row) => (
+            <Box key={`${row.classId}-failed`} mb={3}>
+              <Text fontSize="xs" color="lmFg.muted" mb={1}>{row.className}</Text>
+              <VStack align="stretch" spacing={0.5}>
+                {row.failed.map((entry) => (
+                  <Text key={entry.rollNo} fontSize="xs">
+                    <Box as="span" fontFamily="mono">{entry.rollNo}</Box>
+                    {entry.name ? ` ${entry.name}` : ''} — {entry.reason}
+                  </Text>
+                ))}
+              </VStack>
+            </Box>
+          ))}
+        </Box>
+      )}
+
+      {unmatched.length > 0 && (
+        <Box>
+          <Text fontSize="sm" fontWeight="600" mb={2}>
+            Classes that matched no attendance subject ({unmatched.length})
+          </Text>
+          <VStack align="stretch" spacing={0.5}>
+            {unmatched.map((entry) => (
+              <Text key={entry.classId} fontSize="xs" color="lmFg.muted">
+                <Box as="span" fontWeight="600" color="lmFg.body">{entry.className}</Box>
+                {' — '}{entry.reason}
+              </Text>
+            ))}
+          </VStack>
+        </Box>
+      )}
+    </SectionCard>
+  );
+}
+
 function DeletionRequestsCard({ requests, onRefresh }) {
   const toast = useToast();
 
@@ -629,6 +881,8 @@ export default function LmAdmin() {
       </SimpleGrid>
 
       <DeletionRequestsCard requests={deletionRequests} onRefresh={load} />
+
+      <RosterSyncCard />
 
       <SectionCard
         title="Faculty accounts"

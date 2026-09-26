@@ -439,6 +439,14 @@ const lmApi = {
     request(`/classes/${classId}/feedback/${feedbackId}`, { method: 'PATCH', body }),
   deleteFeedback: (classId, feedbackId) =>
     request(`/classes/${classId}/feedback/${feedbackId}`, { method: 'DELETE' }),
+  /* The author taking their own note back — read or unread. It leaves every
+     staff view; see feedbackController.withdrawFeedback. */
+  withdrawFeedback: (classId, feedbackId) =>
+    request(`/classes/${classId}/feedback/${feedbackId}/withdraw`, { method: 'POST', body: {} }),
+  /* Staff saying a note is abuse rather than feedback. Warns the author by
+     mail and takes it off the staff list, telling staff nothing about who. */
+  markFeedbackInappropriate: (classId, feedbackId) =>
+    request(`/classes/${classId}/feedback/${feedbackId}/inappropriate`, { method: 'POST', body: {} }),
 
   /* classwork */
   listCoursework: (classId, params) => request(`/classes/${classId}/coursework${qs(params)}`),
@@ -1117,6 +1125,25 @@ const lmApi = {
   /* lm-admin — all classes owned by a specific faculty member.
      Powers the class-count click-through on the faculty directory page. */
   adminGetFacultyClasses: (facultyId) => request(`/admin/faculty/${facultyId}/classes`),
+
+  /* Filling class rosters from the attendance module's subject register. The
+     preview writes nothing; the run enrols students and mails their teachers,
+     so the screen always shows the first before offering the second. */
+  /* The console's dropdowns, without planning anything — see the server. */
+  adminRosterSyncOptions: ({ dept } = {}) => request(`/admin/roster-sync/options${qs({ dept })}`),
+  adminRosterSyncPreview: ({ dept, semester, classId } = {}) =>
+    request(`/admin/roster-sync${qs({ dept, semester, classId })}`),
+  /* `background: true` answers with `{ runId }` at once and does the work
+     behind it — a semester is minutes of enrolling and mailing, and a request
+     held open for that is a button that spins with nothing to say. Poll
+     `adminRosterSyncRunStatus` for what it is doing; the result arrives on the
+     run when it finishes. */
+  adminRosterSyncRun: ({ dept, semester, classId, sendMail = true, background = false } = {}) =>
+    request('/admin/roster-sync', {
+      method: 'POST',
+      body: { dept, semester, classId, sendMail, background },
+    }),
+  adminRosterSyncRunStatus: (runId) => request(`/admin/roster-sync/run/${encodeURIComponent(runId)}`),
   /* HOD dashboard — per-class activity counts plus the faculty / student /
      classroom totals for the departments in view. Accepts optional
      { dept, semester, session } filters.
