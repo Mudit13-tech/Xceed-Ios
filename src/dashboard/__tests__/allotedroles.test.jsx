@@ -347,3 +347,30 @@ describe('a Dean (Academic) is offered one card per dashboard', () => {
     expect(cardHeadings()).not.toContain('iLEED — Dean (Academic)');
   });
 });
+
+describe('the welcome heading', () => {
+  it('shows the name, with the address beneath it', async () => {
+    mockFetchFor({
+      _id: 'u6',
+      name: 'Hari Murugan',
+      email: ['someone@nitj.ac.in'],
+      role: ['FACULTY', 'ITTC'],
+      roleTargets: { FACULTY: '/learning', ITTC: '/tt/admin' },
+    });
+
+    const { default: AllocatedRolesPage } = await import('../allotedroles');
+    renderWithProviders(<AllocatedRolesPage />);
+
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Hari Murugan');
+    expect(screen.getByText('someone@nitj.ac.in')).toBeInTheDocument();
+  });
+
+  it('falls back to the address when no name is on record', async () => {
+    mockFetchFor({ _id: 'u7', name: undefined, email: ['ittc.cse@nitj.ac.in'], role: ['FACULTY', 'ITTC'], roleTargets: { FACULTY: '/learning', ITTC: '/tt/admin' } });
+
+    const { default: AllocatedRolesPage } = await import('../allotedroles');
+    renderWithProviders(<AllocatedRolesPage />);
+
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('ittc.cse@nitj.ac.in');
+  });
+});

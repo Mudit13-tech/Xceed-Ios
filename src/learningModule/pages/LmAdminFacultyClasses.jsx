@@ -12,7 +12,7 @@ import { Link as RouterLink, useParams } from 'react-router-dom';
 
 import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, StatTile, TableSkeleton } from '../components/common';
-import { relativeTime } from '../format';
+import { relativeTime, semesterLabel } from '../format';
 
 /**
  * All classes owned by one faculty member, shown to an lm-admin.
@@ -68,7 +68,7 @@ function ClassCard({ cls }) {
       <Flex gap={3} wrap="wrap" mt={2}>
         {cls.semester && (
           <Text fontSize="xs" color="lmFg.muted">
-            Sem {cls.semester}
+            {semesterLabel(cls.semester)}
           </Text>
         )}
         {cls.session && (

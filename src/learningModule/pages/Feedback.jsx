@@ -108,6 +108,24 @@ function StudentView({ data, classId, klass, toast, onChange }) {
   const [category, setCategory] = useState('teaching');
   const [sentiment, setSentiment] = useState('suggestion');
   const [sending, setSending] = useState(false);
+  const [withdrawing, setWithdrawing] = useState('');
+
+  /* Confirmed, because it cannot be undone: the note leaves every staff view
+     the moment this returns, and there is no un-withdraw. */
+  const withdraw = async (item) => {
+    // eslint-disable-next-line no-alert
+    if (!window.confirm('Withdraw this feedback? Staff will no longer be able to see it, and this cannot be undone.')) return;
+    setWithdrawing(item._id);
+    try {
+      const result = await lmApi.withdrawFeedback(classId, item._id);
+      toast({ status: 'success', title: result?.message || 'Withdrawn.' });
+      onChange();
+    } catch (error) {
+      toast({ status: 'error', title: error.message });
+    } finally {
+      setWithdrawing('');
+    }
+  };
   // Held separately from the toast: a refusal for language comes with a warning
   // count attached, and that has to stay on screen next to the box being
   // rewritten rather than slide away after five seconds.
@@ -151,7 +169,12 @@ function StudentView({ data, classId, klass, toast, onChange }) {
       <Box>
         <SectionCard
           title="Send anonymous feedback"
-          subtitle={`Your name is never shown to the teaching staff of ${klass?.name || 'this class'}.`}
+          /* "Never shown to the teaching staff" is still true and is still the
+             thing worth saying at the top. It used to read as a blanket
+             never, sitting directly above a note that now describes the one
+             case where a name is shown to somebody — so it points at that
+             rather than talking over it. */
+          subtitle={`Your name is not shown to the teaching staff of ${klass?.name || 'this class'}. Read the note below for the two people who can see it.`}
         >
           <PromiseNote />
 
@@ -324,10 +347,51 @@ function StudentView({ data, classId, klass, toast, onChange }) {
                   </Box>
                 )}
 
+                {item.inappropriate && (
+                  <Box mt={3} bg="orange.50" borderRadius="md" p={3}>
+                    <Text fontSize="xs" fontWeight="700" color="orange.800">
+                      Marked inappropriate by the teaching staff
+                    </Text>
+                    <Text fontSize="sm" color="orange.900" mt={1}>
+                      A warning was recorded against your account and emailed to you. Your teacher
+                      was not told who you are — but your name is now visible to your head of
+                      department against this feedback. If you believe this was a mistake, speak
+                      to them.
+                    </Text>
+                  </Box>
+                )}
+
                 <Flex justify="space-between" align="center" mt={3} gap={2}>
-                  <Badge colorScheme={STATUS_META[item.status]?.colorScheme || 'gray'} variant="subtle">
-                    {item.withdrawn ? 'Withdrawn' : STATUS_META[item.status]?.label || item.status}
+                  <Badge
+                    colorScheme={
+                      item.withdrawn || item.removed
+                        ? 'gray'
+                        : STATUS_META[item.status]?.colorScheme || 'gray'
+                    }
+                    variant="subtle"
+                  >
+                    {item.withdrawn
+                      ? 'Withdrawn'
+                      : item.removed
+                        ? 'Removed by an administrator'
+                        : STATUS_META[item.status]?.label || item.status}
                   </Badge>
+
+                  {/* Available while the note stands, read or unread. Somebody
+                      who has thought better of what they sent has no other way
+                      out, and staff having read it is not a reason to trap
+                      them with it. */}
+                  {item.canWithdraw && (
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      colorScheme="gray"
+                      isLoading={withdrawing === item._id}
+                      onClick={() => withdraw(item)}
+                    >
+                      Withdraw
+                    </Button>
+                  )}
                 </Flex>
               </Box>
             ))}
@@ -344,7 +408,22 @@ function StudentView({ data, classId, klass, toast, onChange }) {
  * Half a promise is worse than none here: a student told only "this is
  * anonymous" writes something they would not have written knowing an
  * administrator can read it, which is neither fair to them nor useful to
- * anybody. So both halves appear, before the box, at the same size.
+ * anybody. So every half appears, before the box, at the same size.
+ *
+ * The third paragraph is the exception staff can trigger, and it belongs here
+ * rather than in the warning mail that follows it. A student finding out only
+ * after the fact that a mark shows their name to the head of department was
+ * never told the terms they were writing under — and the deterrent only works
+ * on somebody who knew about it before they typed.
+ *
+ * The second paragraph names the Dean (Academic) because the dean's dashboard
+ * shows every author, unconditionally — see the feedback section of
+ * adminController, where `identify` is true for anybody not scoped to their own
+ * department. Without that name the third paragraph would be false as well: it
+ * says a mark is the only thing that lifts anonymity, which is true of the head
+ * of department and was never true of the dean. The three paragraphs and that
+ * one line of the dashboard are a single statement about who reads what, and
+ * have to be edited as one.
  */
 function PromiseNote() {
   return (
@@ -354,9 +433,16 @@ function PromiseNote() {
         time is shown to them only as a date.
       </Text>
       <Text fontSize="sm" color="lmFg.body" mt={2}>
-        <b>Your institute administrator can.</b> The sender is recorded, so the channel can stay open
-        without becoming a place to abuse staff anonymously. Say what you honestly think — including
-        things that are hard to say — but say it the way you would sign your name to.
+        <b>Your institute administrator and the Dean (Academic) can.</b> The sender is recorded, so
+        the channel can stay open without becoming a place to abuse staff anonymously. Say what you
+        honestly think — including things that are hard to say — but say it the way you would sign
+        your name to.
+      </Text>
+      <Text fontSize="sm" color="lmFg.body" mt={2}>
+        <b>If staff mark what you send as inappropriate, your head of department will see your
+        name against it</b> — along with a warning recorded on your account. Your teacher still will
+        not be told who you are. That mark is the only thing that shows your name to your head of
+        department, and only abuse triggers it.
       </Text>
     </Box>
   );
@@ -386,6 +472,32 @@ function StaffView({ data, classId, toast, onChange }) {
       onChange();
     } catch (err) {
       toast({ title: err.message || 'Could not update', status: 'error' });
+    }
+  };
+
+  /* Confirmed, and not undoable from here: it sends somebody a warning, and an
+     undo would be a second mail contradicting the first. The server's reply is
+     shown rather than a message written here, so what staff are told stays in
+     one place — see feedbackController.markFeedbackInappropriate. */
+  const markInappropriate = async (id) => {
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(
+      'Mark this as inappropriate?\n\nThe student who sent it will be warned by email and a '
+      + 'strike recorded against their account. You will not be told who they are. This cannot '
+      + 'be undone.',
+    )) return;
+    try {
+      const result = await lmApi.markFeedbackInappropriate(classId, id);
+      toast({
+        status: 'info',
+        title: 'Marked inappropriate',
+        description: result?.message,
+        duration: 15000,
+        isClosable: true,
+      });
+      onChange();
+    } catch (err) {
+      toast({ title: err.message || 'Could not mark this', status: 'error' });
     }
   };
 
@@ -458,6 +570,7 @@ function StaffView({ data, classId, toast, onChange }) {
               item={item}
               isAdminView={isAdminView}
               onUpdate={(body) => update(item._id, body)}
+              onInappropriate={() => markInappropriate(item._id)}
             />
           ))}
         </Flex>
@@ -466,7 +579,7 @@ function StaffView({ data, classId, toast, onChange }) {
   );
 }
 
-function FeedbackCard({ item, isAdminView, onUpdate }) {
+function FeedbackCard({ item, isAdminView, onUpdate, onInappropriate }) {
   const [reply, setReply] = useState(item.response || '');
   const [replying, setReplying] = useState(false);
   const sentiment = SENTIMENT_META[item.sentiment] || SENTIMENT_META.suggestion;
@@ -509,9 +622,13 @@ function FeedbackCard({ item, isAdminView, onUpdate }) {
         </Box>
       )}
 
-      {item.withdrawn && (
+      {/* A withdrawn note never reaches a staff list at all now, so anything
+          flagged here was removed by an administrator. The old copy said
+          "Withdrawn by the sender" for both, which told a teacher the student
+          had dropped a complaint when the institute had taken it down. */}
+      {item.removed && (
         <Text fontSize="xs" color="lmFg.muted" mt={2}>
-          Withdrawn by the sender.
+          Removed by an administrator.
         </Text>
       )}
 
@@ -569,6 +686,12 @@ function FeedbackCard({ item, isAdminView, onUpdate }) {
             Reply
           </Button>
         )}
+        {/* For a note that is abuse rather than feedback. It warns the author
+            and takes the note off this list; it tells you nothing about who
+            they are, which is the point of the channel. */}
+        <Button size="xs" variant="ghost" colorScheme="orange" onClick={onInappropriate}>
+          Mark inappropriate
+        </Button>
       </HStack>
     </Box>
   );

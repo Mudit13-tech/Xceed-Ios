@@ -77,6 +77,29 @@ export function initials(name = '') {
   );
 }
 
+/**
+ * A semester, exactly as the record holds it.
+ *
+ * A stored semester is not a number and does not need a word in front of it. It
+ * is typed once into the timetable's master list and copied verbatim from there
+ * into a branch's semesters, onto each subject, and onto the class created from
+ * that subject — so what a record holds is already a name: `B.Tech-5`, carrying
+ * its degree.
+ *
+ * Half a dozen screens wrote `Sem {value}` or `Semester {value}` in front of it
+ * anyway, which reads "Sem B.Tech-5". Worse, it reads like a label somebody
+ * could retype into a filter, and it cannot be: that string is what every
+ * filter and every match in this module compares against, so a screen that
+ * decorates it is showing a spelling nothing is stored under.
+ *
+ * Which is why this adds nothing and removes nothing. It exists so there is one
+ * place saying so, and so the next screen has something to call instead of
+ * inventing a prefix of its own.
+ */
+export function semesterLabel(value) {
+  return String(value ?? '').trim();
+}
+
 /** Palette offered when picking a class colour. */
 export const CLASS_COLORS = [
   '#1967d2',

@@ -96,6 +96,7 @@ const FacultyLoadCOE = lazyWithPreload(() => import('./timetableadmin/facultyloa
 const AdminClash = lazyWithPreload(() => import('./timetableadmin/AdminClashes.jsx'));
 const DeptCoordinators = lazyWithPreload(() => import('./timetableadmin/deptcoordinators.jsx'));
 const InstituteMergedDownload = lazyWithPreload(() => import('./timetableadmin/instituteMergedDownload.jsx'));
+const FirstYearFacultyExport = lazyWithPreload(() => import('./timetableadmin/firstYearFacultyExport.jsx'));
 
 const Home = lazyWithPreload(() => import('./pages/Home'));
 // Public introductions to the two newest modules, linked from the top of the
@@ -444,6 +445,10 @@ const APP_ROUTES = (
           <Route
             path="/tt/admin/mergeddownload"
             element={<InstituteMergedDownload />}
+          />
+          <Route
+            path="/tt/admin/firstyearfacultyexport"
+            element={<FirstYearFacultyExport />}
           />
           {/* <Route
             path="/tt/:generatedLink/generatepdf/mergepdf"

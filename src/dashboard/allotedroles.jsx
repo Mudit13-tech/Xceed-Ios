@@ -479,7 +479,10 @@ const AllocatedRolesPage = () => {
   }
 
   const email = Array.isArray(user?.email) ? user.email[0] : user?.email;
-  const displayName = user?.name || email || 'there';
+  // The person's name, falling back to the address only when no name is on
+  // record; the address is still shown beneath it when the two differ.
+  const name = typeof user?.name === 'string' ? user.name.trim() : '';
+  const displayName = name || email || 'there';
   const roleCount = allocatedRoles.length + learningCards.length + extraCards.length;
 
   return (
@@ -506,8 +509,13 @@ const AllocatedRolesPage = () => {
               letterSpacing="-0.01em"
               wordBreak="break-word"
             >
-              {email || displayName}
+              {displayName}
             </Heading>
+            {name && email ? (
+              <Text color={subColor} fontSize={{ base: 'sm', md: 'md' }} mt={1} wordBreak="break-all">
+                {email}
+              </Text>
+            ) : null}
             <Text color={subColor} fontSize={{ base: 'md', md: 'lg' }} mt={3}>
               {roleCount
                 ? `Choose a workspace to continue — you have ${roleCount} ${roleCount === 1 ? 'role' : 'roles'}.`

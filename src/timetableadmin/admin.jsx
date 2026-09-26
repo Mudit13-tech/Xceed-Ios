@@ -474,6 +474,14 @@ const AdminPage = () => {
       gradient: 'linear(to-br, purple.600, blue.800)',
       isNew: true,
     },
+    {
+      key: '/tt/admin/firstyearfacultyexport',
+      path: '/tt/admin/firstyearfacultyexport',
+      label: 'First Year Faculty (CSV per Session)',
+      icon: FiUsers,
+      gradient: 'linear(to-br, pink.600, purple.800)',
+      isNew: true,
+    },
     // No `path`: this one fetches a file rather than navigating to a page, so
     // the tile below renders it as a button.
     {
