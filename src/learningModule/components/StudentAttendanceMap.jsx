@@ -22,6 +22,7 @@ import {
   VStack,
 } from '@chakra-ui/react';
 import { SectionCard } from './common';
+import { semesterLabel } from '../format';
 
 // Helper to normalize any date input (String "YYYY-MM-DD", Date object, or ISO timestamp) to "YYYY-MM-DD"
 function toDateString(d) {
@@ -151,7 +152,7 @@ export default function StudentAttendanceMap({
           const isEven = /even/i.test(h.semester);
           list.push({
             value: h.semester,
-            label: h.semester.toLowerCase().includes('sem') ? h.semester : `Semester ${h.semester}`,
+            label: semesterLabel(h.semester),
             isCurrent: false,
             score: yr * 10 + (isEven ? 2 : 1),
           });

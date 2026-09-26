@@ -14,6 +14,8 @@ import {
 import lmApi from '../api/lmApi';
 import { LmIcon } from './Icon';
 import DeleteButton from './DeleteButton';
+import getEnvironment from '../../getenvironment';
+import { serverFileLinkProps, downloadFileNative, isNativeApp } from '../../utils/nativeCapabilities';
 
 // Names from the module's icon set (see Icon.jsx), one per attachment kind.
 const ICONS = { file: 'attachment', link: 'link', video: 'video', audio: 'audio', note: 'document' };
@@ -52,6 +54,13 @@ const saveBlob = (blob, filename) => {
  * Download button. The button fetches with the session token instead of relying
  * on the cookie a plain link carries, which an installed iOS app does not hand
  * to the tab it opens — see lmApi.fetchAttachment.
+ *
+ * Neither of those routes works in the Capacitor app: a same-tab navigation to
+ * the API host gets hijacked by Android's app-link intent filter (see
+ * serverFileLinkProps), and a blob-anchor click is exactly the "Save to Files"
+ * problem downloadFileNative exists for on iOS. So on native both the name and
+ * the Download button go through downloadFileNative instead; on web this is
+ * untouched.
  */
 function AttachmentChip({ attachment, compact }) {
   const toast = useToast();
@@ -59,6 +68,11 @@ function AttachmentChip({ attachment, compact }) {
   const label = attachment.name || attachment.url;
 
   const download = async () => {
+    if (isNativeApp()) {
+      // downloadFileNative already reports success/failure via toast.
+      await downloadFileNative(lmApi.attachmentUrl(attachment), attachment.name || attachment.url.split('/').pop()).catch(() => {});
+      return;
+    }
     setSaving(true);
     try {
       const blob = await lmApi.fetchAttachment(attachment);
@@ -87,8 +101,9 @@ function AttachmentChip({ attachment, compact }) {
       _hover={{ borderColor: 'blue.400' }}
     >
       <Link
-        href={lmApi.attachmentUrl(attachment)}
-        isExternal
+        {...(attachment.kind === 'link'
+          ? { href: attachment.url, isExternal: true }
+          : serverFileLinkProps(lmApi.attachmentUrl(attachment), label))}
         display="flex"
         alignItems="center"
         gap={2}
@@ -173,7 +188,13 @@ export function AttachmentPicker({ attachments = [], onChange, disabled, classId
     Array.from(files).forEach((file) => form.append('files', file));
 
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/api/v1/learningmodule/classes/${targetClassId}/uploads`);
+    // Absolute, not relative. This is the one call in the module that does not
+    // go through lmApi — it needs XHR for upload progress — and a relative path
+    // resolves against wherever the page is served from. In the app that is
+    // xceed.learning.app, Capacitor's local asset server, which has no API to
+    // POST to: every attachment upload from a phone failed on it.
+    xhr.open('POST', `${getEnvironment()}/api/v1/learningmodule/classes/${targetClassId}/uploads`);
+    xhr.withCredentials = true;
 
     // Copy auth token from existing requests
     const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';

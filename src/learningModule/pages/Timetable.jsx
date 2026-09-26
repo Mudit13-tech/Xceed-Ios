@@ -30,6 +30,7 @@ import TimetableWidget from '../components/TimetableWidget';
 import SafeChild from '../components/SafeChild';
 import { isStudentOnly } from '../roles';
 import { LmIcon } from '../components/Icon';
+import { semesterLabel } from '../format';
 
 /**
  * Standard department acronym mappings to bridge student class department names
@@ -386,7 +387,7 @@ export default function Timetable() {
         targetSem: matchedSem,
         subjects: item.subjects,
         isPrimary,
-        label: `${matchedDept} · Semester ${matchedSem} (${item.subjects} subject${
+        label: `${matchedDept} · ${semesterLabel(matchedSem)} (${item.subjects} subject${
           item.subjects === 1 ? '' : 's'
         })${isPrimary ? ' · Primary' : ''}`,
       };
@@ -564,7 +565,7 @@ export default function Timetable() {
         p={{ base: 3, md: 5 }}
         title={
           sessionObj && sem
-            ? `${dept} · Semester ${sem}${
+            ? `${dept} · ${semesterLabel(sem)}${
                 sessionObj.session ? ` · ${sessionObj.session}` : ''
               }`
             : 'Weekly Timetable'
@@ -689,7 +690,7 @@ export default function Timetable() {
           <Alert status="info" borderRadius="md" fontSize="sm">
             <AlertIcon />
             <Box>
-              No timetable entries available for {dept} Semester {sem}.
+              No timetable entries available for {dept} {semesterLabel(sem)}.
             </Box>
           </Alert>
         )}

@@ -81,6 +81,7 @@ const DevTeam = lazyWithPreload(() => import('./pages/DevTeam'));
 const LmAdmin = lazyWithPreload(() => import('./pages/LmAdmin'));
 const LmAdminFaculty = lazyWithPreload(() => import('./pages/LmAdminFaculty'));
 const LmAdminStudents = lazyWithPreload(() => import('./pages/LmAdminStudents'));
+const LmAdminRosterSync = lazyWithPreload(() => import('./pages/LmAdminRosterSync'));
 const LmAdminFacultyClasses = lazyWithPreload(() => import('./pages/LmAdminFacultyClasses'));
 const LmAdminHodDashboard = lazyWithPreload(() => import('./pages/LmAdminHodDashboard'));
 const LmHodSubjects = lazyWithPreload(() => import('./pages/LmHodSubjects'));
@@ -173,6 +174,7 @@ const LEARNING_ROUTES = (
           <Route path="lm-admin/faculty" element={<LmAdminFaculty />} />
           <Route path="lm-admin/faculty/:facultyId/classes" element={<LmAdminFacultyClasses />} />
           <Route path="lm-admin/students" element={<LmAdminStudents />} />
+          <Route path="lm-admin/roster-sync" element={<LmAdminRosterSync />} />
           <Route path="lm-admin/hod-dashboard" element={<LmAdminHodDashboard />} />
           {/* The dean's screen, reached from the console. An administrator is
               not the Dean (Academic) and holds no DEAN role, so the rail's dean

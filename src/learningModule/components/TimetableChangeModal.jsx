@@ -16,6 +16,7 @@ import {
 } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 import { LmIcon } from './Icon';
+import { semesterLabel } from '../format';
 
 /**
  * What changed in your timetable, shown once on the way in.
@@ -146,7 +147,7 @@ export default function TimetableChangeModal({ changes = [], onClose }) {
                   </Text>
                   {item.payload?.sem && (
                     <Badge colorScheme="purple" borderRadius="full">
-                      Semester {item.payload.sem}
+                      {semesterLabel(item.payload.sem)}
                     </Badge>
                   )}
                 </HStack>

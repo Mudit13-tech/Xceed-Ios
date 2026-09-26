@@ -5,7 +5,10 @@
 import { useState, useEffect } from 'react';
 import { API_BASE } from './config';
 
-export function useDepartments() {
+// `url` defaults to the caller's own departments (/ground-truth/departments,
+// narrowed server-side for a department admin). Pass another list endpoint —
+// e.g. /embeddings/departments for every department — to read that instead.
+export function useDepartments(url = `${API_BASE}/departments`) {
     const [departments, setDepartments] = useState([]);
     const [deptLoading, setDeptLoading] = useState(true);
     const [deptError,   setDeptError]   = useState(null);
@@ -13,7 +16,7 @@ export function useDepartments() {
     useEffect(() => {
         let cancelled = false;
         setDeptLoading(true);
-        fetch(`${API_BASE}/departments`, { credentials: 'include' })
+        fetch(url, { credentials: 'include' })
             .then(r => r.json())
             .then(data => {
                 if (cancelled) return;
@@ -37,7 +40,7 @@ export function useDepartments() {
             .catch(err => { if (!cancelled) setDeptError(err.message); })
             .finally(() => { if (!cancelled) setDeptLoading(false); });
         return () => { cancelled = true; };
-    }, []);
+    }, [url]);
 
     return { departments, deptLoading, deptError };
 }

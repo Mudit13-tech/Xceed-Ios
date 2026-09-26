@@ -39,7 +39,7 @@ import lmApi from '../api/lmApi';
 import { EmptyState, ErrorState, Loading, SectionCard, TableSkeleton } from '../components/common';
 import MyGroundTruthPhotos from '../components/MyGroundTruthPhotos';
 import StudentAttendanceMap from '../components/StudentAttendanceMap';
-import { relativeTime } from '../format';
+import { relativeTime, semesterLabel } from '../format';
 
 /**
  * "Was I marked present?" — and the way to argue when the answer is wrong.
@@ -302,7 +302,7 @@ export default function MyAttendance() {
                       <Td>
                         <Text fontSize="sm" fontWeight="600">{record.subject || '—'}</Text>
                         {record.semester && (
-                          <Text fontSize="xs" color="lmFg.muted">Sem {record.semester}</Text>
+                          <Text fontSize="xs" color="lmFg.muted">{semesterLabel(record.semester)}</Text>
                         )}
                       </Td>
                       <Td fontSize="sm">{record.faculty || '—'}</Td>

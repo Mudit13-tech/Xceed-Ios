@@ -52,4 +52,19 @@ describe('useDepartments', () => {
 
     expect(result.current.deptError).toBe('network down');
   });
+
+  it('reads the caller\'s own list by default, and another list when given one', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({ json: () => Promise.resolve({ departments: [{ dept: 'ECE' }] }) }),
+    );
+
+    const own = renderHook(() => useDepartments());
+    await waitFor(() => expect(own.result.current.deptLoading).toBe(false));
+    expect(global.fetch.mock.calls[0][0]).toMatch(/\/ground-truth\/departments$/);
+
+    // Manual Generation's list: every department, not just the caller's.
+    const all = renderHook(() => useDepartments('/api/attendancemodule/embeddings/departments'));
+    await waitFor(() => expect(all.result.current.deptLoading).toBe(false));
+    expect(global.fetch.mock.calls[1][0]).toBe('/api/attendancemodule/embeddings/departments');
+  });
 });

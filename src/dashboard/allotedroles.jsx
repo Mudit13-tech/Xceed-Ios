@@ -1,5 +1,19 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * The roles landing page.
+ *
+ * Both requests go through react-query rather than an effect into local state.
+ * `['user', 'details']` is the key Navbar and RequireAdmin already read, so
+ * arriving here from any page reuses the answer they fetched instead of asking
+ * again, and ProfileModal's invalidation refreshes this page too. Coming back
+ * to it shows the last roles immediately while the refresh runs behind them.
+ *
+ * In the mobile app the same cache is also kept on the device, so the roles
+ * are there on a phone that has no network yet. On the web the signed-in user
+ * is never written to disk (see utils/queryPersister.js).
+ */
+import React, { useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Container,
@@ -286,11 +300,6 @@ const AllocatedRolesPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
-  const [allocatedRoles, setAllocatedRoles] = useState([]);
-  const [learningCards, setLearningCards] = useState([]);
-  const [extraCards, setExtraCards] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState(null);
   const pageBg = useColorModeValue('gray.50', 'gray.900');
   const subColor = useColorModeValue('gray.500', 'gray.400');
   const emptyCardBg = useColorModeValue('white', 'gray.800');
@@ -298,115 +307,118 @@ const AllocatedRolesPage = () => {
   const labelColor = useColorModeValue('gray.400', 'gray.500');
   const emptyIconBg = useColorModeValue('gray.100', 'gray.700');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const response = await fetch(`${apiUrl}/user/getuser`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
-        if (!response.ok) throw new Error('Failed to fetch allocated roles');
-        const userdetails = await response.json();
-        // The paper-review and diabetics modules are gone, but the roles they
-        // issued still sit on existing user records — hide them rather than
-        // offering a card that leads to a route that no longer exists.
-        // Matched case-insensitively: 'editor' was stored with either casing.
-        const platformRoles = (userdetails.user.role || []).filter(
-          (role) => !EXCLUDED_ROLES.includes(String(role).toLowerCase()),
-        );
-        // `HOD` is the appointment, not a dashboard: an account that holds
-        // either of the named module roles reaches both screens through those,
-        // so a third card saying only "Head of Department" would open one of
-        // them a second time. Heads who hold nothing but `HOD` keep it — it is
-        // the only card they have — and the synthetic iLEED card below joins it.
-        const hasNamedHodRole = ['hod-learning', 'hod-ileed']
-          .some((role) => hasRole(platformRoles, role));
-        const cardRoles = hasNamedHodRole
-          ? platformRoles.filter((role) => !hasRole([role], 'HOD'))
-          : platformRoles;
-        setAllocatedRoles(cardRoles);
-        setUser(userdetails.user);
+  // Query 1: User Details
+  const { data: userDetails, isLoading: isUserLoading } = useQuery({
+    queryKey: ['user', 'details'],
+    queryFn: async () => {
+      const response = await fetch(`${apiUrl}/user/getuser`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch allocated roles');
+      return response.json();
+    },
+  });
 
-        // Learning-module standing is per-class, not a platform role, so it has
-        // to be asked for separately. Kept out of `allocatedRoles` so the
-        // single-role auto-redirect below behaves exactly as before.
-        try {
-          const lmResponse = await fetch(`${apiUrl}/api/v1/learningmodule/overview`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-          });
-          if (lmResponse.ok) {
-            const overview = await lmResponse.json();
-            const cards = [];
-            if (overview.teachingCount > 0) {
-              cards.push({
-                role: 'learning-teacher',
-                description: `${overview.teachingCount} class${overview.teachingCount === 1 ? '' : 'es'} you teach${
-                  overview.awaitingReview ? ` · ${overview.awaitingReview} to review` : ''
-                }`,
-              });
-            }
-            // A student who already has the STUDENT platform role has a card
-            // for it, so only add this when their enrolment would otherwise be
-            // invisible (e.g. a faculty member sitting in a colleague's class).
-            if (overview.enrolledCount > 0 && !platformRoles.includes('STUDENT')) {
-              cards.push({
-                role: 'learning-student',
-                description: `${overview.enrolledCount} class${overview.enrolledCount === 1 ? '' : 'es'} you are enrolled in${
-                  overview.pendingWork ? ` · ${overview.pendingWork} pending` : ''
-                }`,
-              });
-            }
-            setLearningCards(cards);
-          }
-        } catch {
-          // The learning module being unreachable must not blank the roles page.
-        }
+  // Query 2: Learning Module Overview
+  const { data: lmOverview, isLoading: isLmLoading } = useQuery({
+    queryKey: ['learning', 'overview'],
+    queryFn: async () => {
+      const response = await fetch(`${apiUrl}/api/v1/learningmodule/overview`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch overview');
+      return response.json();
+    },
+    retry: false,
+  });
 
-        // The iLEED dashboard card for a head who holds the bare `HOD`
-        // appointment and NEITHER named role — one appointed before the two
-        // existed, or restored from a backup taken before them. Derived from
-        // the platform role rather than fetched, so it does not depend on the
-        // attendance module being reachable, and kept out of `allocatedRoles`
-        // for the same reason the learning cards are: it must not turn a
-        // single-role account into a two-role one and suppress the redirect.
-        //
-        // Neither, not "no hod-ileed": a head left holding `hod-learning`
-        // alone has had this dashboard taken away, and appending it back here
-        // would undo the one thing splitting the role in two is for.
-        //
-        // The dean's iLEED card is appended unconditionally on the `DEAN`
-        // role, with no equivalent of the `hasNamedHodRole` test above: there
-        // are no named dean roles, so there is nothing that could have taken
-        // this dashboard away and no way to offer it twice.
-        try {
-          const extras = [];
-          if (hasRole(platformRoles, 'HOD') && !hasNamedHodRole) {
-            extras.push({ role: 'ileed-hod' });
-          }
-          // Unconditional on the appointment, unlike the iLEED card above:
-          // splitting the HOD role in two was about the learning and iLEED
-          // dashboards, and neither half was ever a way of taking the
-          // timetable view away — it did not exist then.
-          if (hasRole(platformRoles, 'HOD')) {
-            extras.push({ role: 'timetable-hod' });
-          }
-          if (hasRole(platformRoles, 'DEAN')) {
-            extras.push({ role: 'ileed-dean' });
-          }
-          setExtraCards(extras);
-        } catch {
-          // An unexpected role shape must not cost the user their other cards.
-        }
-      } catch (error) {
-        console.error('Error fetching allocated roles:', error.message);
-      } finally {
-        setIsLoading(false);
-      }
-    })();
-  }, []);
+  const isLoading = isUserLoading || isLmLoading;
+  const user = userDetails?.user;
+
+  // The paper-review and diabetics modules are gone, but the roles they issued
+  // still sit on existing user records — hide them rather than offering a card
+  // that leads to a route that no longer exists. Matched case-insensitively:
+  // 'editor' was stored with either casing.
+  const platformRoles = useMemo(() => (user?.role || []).filter(
+    (role) => !EXCLUDED_ROLES.includes(String(role).toLowerCase())
+  ), [user?.role]);
+
+  // `HOD` is the appointment, not a dashboard: an account that holds either of
+  // the named module roles reaches both screens through those, so a third card
+  // saying only "Head of Department" would open one of them a second time.
+  // Heads who hold nothing but `HOD` keep it — it is the only card they have —
+  // and the synthetic iLEED card below joins it.
+  const hasNamedHodRole = useMemo(
+    () => ['hod-learning', 'hod-ileed'].some((role) => hasRole(platformRoles, role)),
+    [platformRoles],
+  );
+
+  const allocatedRoles = useMemo(
+    () => (hasNamedHodRole
+      ? platformRoles.filter((role) => !hasRole([role], 'HOD'))
+      : platformRoles),
+    [platformRoles, hasNamedHodRole],
+  );
+
+  // Learning-module standing is per-class, not a platform role, so it is asked
+  // for separately, and kept out of `allocatedRoles` so the single-role
+  // auto-redirect below behaves exactly as before. `retry: false` on its query
+  // and no throw here: the learning module being unreachable must not blank
+  // the roles page.
+  const learningCards = [];
+  if (lmOverview) {
+    if (lmOverview.teachingCount > 0) {
+      learningCards.push({
+        role: 'learning-teacher',
+        description: `${lmOverview.teachingCount} class${lmOverview.teachingCount === 1 ? '' : 'es'} you teach${
+          lmOverview.awaitingReview ? ` · ${lmOverview.awaitingReview} to review` : ''
+        }`,
+      });
+    }
+    // A student who already has the STUDENT platform role has a card for it, so
+    // only add this when their enrolment would otherwise be invisible (e.g. a
+    // faculty member sitting in a colleague's class).
+    if (lmOverview.enrolledCount > 0 && !allocatedRoles.includes('STUDENT')) {
+      learningCards.push({
+        role: 'learning-student',
+        description: `${lmOverview.enrolledCount} class${lmOverview.enrolledCount === 1 ? '' : 'es'} you are enrolled in${
+          lmOverview.pendingWork ? ` · ${lmOverview.pendingWork} pending` : ''
+        }`,
+      });
+    }
+  }
+
+  // The iLEED dashboard card for a head who holds the bare `HOD` appointment
+  // and NEITHER named role — one appointed before the two existed, or restored
+  // from a backup taken before them. Derived from the platform role rather than
+  // fetched, so it does not depend on the attendance module being reachable,
+  // and kept out of `allocatedRoles` for the same reason the learning cards
+  // are: it must not turn a single-role account into a two-role one and
+  // suppress the redirect.
+  //
+  // Neither, not "no hod-ileed": a head left holding `hod-learning` alone has
+  // had this dashboard taken away, and appending it back here would undo the
+  // one thing splitting the role in two is for.
+  //
+  // The dean's iLEED card is appended unconditionally on the `DEAN` role, with
+  // no equivalent of the `hasNamedHodRole` test: there are no named dean roles,
+  // so there is nothing that could have taken this dashboard away and no way to
+  // offer it twice.
+  //
+  // No try/catch, unlike when this ran inside the fetch effect (where a throw
+  // would have cost the user the cards already set): it is derived from
+  // `platformRoles`, which has already put every entry through String() to
+  // filter it, so there is no shape left for this to throw on.
+  const extraCards = [];
+  if (hasRole(platformRoles, 'HOD') && !hasNamedHodRole) extraCards.push({ role: 'ileed-hod' });
+  // Unconditional on the appointment, unlike the iLEED card: splitting the HOD
+  // role in two was never a way of taking the timetable view away.
+  if (hasRole(platformRoles, 'HOD')) extraCards.push({ role: 'timetable-hod' });
+  if (hasRole(platformRoles, 'DEAN')) extraCards.push({ role: 'ileed-dean' });
 
   // A module that turned the user away sent them back here. Without this the
   // return trip is silent and indistinguishable from the card doing nothing —
@@ -438,16 +450,13 @@ const AllocatedRolesPage = () => {
     if (!isLoading && allocatedRoles.length === 1 && user) {
       // A head holding only the bare `HOD` appointment is NOT a single
       // destination account: that one role opens both the Learning and the
-      // iLEED dashboard, and the second is offered as the synthetic card
-      // above. Redirecting here would land them on one and hide the other —
-      // the head would never see a card at all. Read off `user.role` rather
-      // than off `extraCards`, which is set a tick later and would leave a
-      // window where the redirect still wins the race.
+      // iLEED dashboard, and the second is offered as the synthetic card above.
+      // Redirecting here would land them on one and hide the other — the head
+      // would never see a card at all.
       if (hasUnnamedHodDashboards(user.role)) return;
-      // Nor is a head who holds a named role: the timetable card below is
-      // appended on the appointment alone, so `hod-learning` plus `HOD` is one
-      // card here and two destinations in fact. Redirecting would hide the
-      // timetable view from every head who has one.
+      // Nor is a head who holds a named role: `hod-learning` plus `HOD` is one
+      // card in allocatedRoles but two destinations, because the timetable card
+      // is appended on the appointment alone. Redirecting would hide it.
       if (hasTimetableHodDashboard(user.role)) return;
       // And a dean is not one either: `DEAN` opens the Learning dean dashboard
       // and the iLEED one, and the second is the synthetic card above.
@@ -470,7 +479,10 @@ const AllocatedRolesPage = () => {
   }
 
   const email = Array.isArray(user?.email) ? user.email[0] : user?.email;
-  const displayName = user?.name || email || 'there';
+  // The person's name, falling back to the address only when no name is on
+  // record; the address is still shown beneath it when the two differ.
+  const name = typeof user?.name === 'string' ? user.name.trim() : '';
+  const displayName = name || email || 'there';
   const roleCount = allocatedRoles.length + learningCards.length + extraCards.length;
 
   return (
@@ -497,8 +509,13 @@ const AllocatedRolesPage = () => {
               letterSpacing="-0.01em"
               wordBreak="break-word"
             >
-              {email || displayName}
+              {displayName}
             </Heading>
+            {name && email ? (
+              <Text color={subColor} fontSize={{ base: 'sm', md: 'md' }} mt={1} wordBreak="break-all">
+                {email}
+              </Text>
+            ) : null}
             <Text color={subColor} fontSize={{ base: 'md', md: 'lg' }} mt={3}>
               {roleCount
                 ? `Choose a workspace to continue — you have ${roleCount} ${roleCount === 1 ? 'role' : 'roles'}.`
