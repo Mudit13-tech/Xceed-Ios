@@ -29,6 +29,7 @@ import {
 import { FiDownload, FiCheckCircle, FiAlertTriangle, FiUsers } from 'react-icons/fi';
 import { Helmet } from 'react-helmet-async';
 import getEnvironment from '../getenvironment';
+import { saveBlob } from '../filedownload/saveFile';
 import { fetchCurrentSession } from './timetableFetchHelpers';
 
 const ALL_SESSIONS = '__all__';
@@ -61,14 +62,11 @@ const safeName = (value) => String(value || 'session').replace(/[^a-zA-Z0-9._-]+
 const downloadCsv = (session, rows) => {
   // The BOM makes Excel read the file as UTF-8.
   const blob = new Blob([`﻿${buildCsv(rows)}`], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `FirstYear_Faculty_${safeName(session)}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  // saveBlob tells the user itself when the app cannot save the file, so a
+  // failure only needs keeping from surfacing as an unhandled rejection.
+  saveBlob(blob, `FirstYear_Faculty_${safeName(session)}.csv`).catch((err) => {
+    console.error('Saving the CSV failed:', err);
+  });
 };
 
 // GETs a JSON endpoint, turning a failure into an Error carrying the server's
