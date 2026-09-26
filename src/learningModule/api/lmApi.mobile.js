@@ -91,6 +91,19 @@
  * Reviewed 2026-09-24 against the +2/-0 of that day's sync: one method,
  * ttRoomLocations, a plain GET. The loop passes it straight through as a
  * reader, so nothing needed porting.
+ *
+ * Reviewed 2026-09-26 against the +27/-0 of c99f4a8, and nothing needed
+ * porting. Six methods arrived, checked by running the loop's own rule over the
+ * real module rather than by reading: withdrawFeedback,
+ * markFeedbackInappropriate and adminRosterSyncRun POST and invalidate;
+ * adminRosterSyncOptions, adminRosterSyncPreview and adminRosterSyncRunStatus
+ * are readers and pass through. The one to know about is adminRosterSyncRun
+ * with `background: true`: it answers with a runId before the enrolling is
+ * done, so the cache is cleared ahead of the change rather than after it, and
+ * a read during the run can be cached from before it. That is left alone. The
+ * cached reads are the admin's own chrome, not the rosters being filled, and the
+ * lag is the usual one of a single visit. Clearing again when the status poll
+ * reports the run finished would be the fix if that ever matters.
  */
 import { Preferences } from '@capacitor/preferences';
 
