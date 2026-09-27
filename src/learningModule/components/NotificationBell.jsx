@@ -134,17 +134,27 @@ export default function NotificationBell() {
             onClick={() => setPrefsModalOpen(true)}
             title="Notification settings"
           />
+          {/* The only way out of the mobile panel, so it is sized to be hit
+              rather than to match the row: `xs` is a 24px box, which is under
+              every touch-target guideline there is and was being drawn at the
+              very top of the screen. */}
           <IconButton
-            size="xs"
+            size="sm"
             variant="ghost"
             aria-label="Close notifications"
-            icon={<LmIcon name="close" size={16} />}
+            icon={<LmIcon name="close" size={18} />}
             onClick={onClose}
             title="Close notifications"
           />
         </Flex>
       </Flex>
-      <Box maxH={isMobile ? 'calc(100vh - 88px)' : '420px'} overflowY="auto" px={0}>
+      {/* Takes whatever is left under the header rather than guessing at it.
+          The old `calc(100vh - 88px)` was a guess at the header's height and
+          it did not know about the notch: with the panel inset by the safe
+          area the sum was 59px out, which put the last notification under the
+          home indicator. This list is only rendered inside the mobile drawer,
+          which is a flex column. */}
+      <Box flex="1" minH={0} overflowY="auto" px={0}>
         {items.length === 0 && (
           <Text px={4} py={6} fontSize="sm" color="lmFg.muted" textAlign="center">
             Nothing new.
@@ -218,9 +228,27 @@ export default function NotificationBell() {
               </Badge>
             )}
           </Box>
+          {/* Full-screen, so nothing of the page is left to tap to get out of
+              it: no overlay to click through, and on iOS no hardware back key
+              behind it either. That makes the header's X the only exit, and an
+              exit drawn under the Dynamic Island is not an exit -- the panel
+              covers the whole screen, the status bar included, and a `fixed`
+              element takes no notice of the padding safeArea.js puts on the
+              page's own header. Hence the insets here, which are 0 everywhere
+              that has no cutout. src/mobile/swipeBack.js adds the second way
+              out: an edge swipe now dismisses the panel rather than being
+              refused by it. */}
           <Drawer isOpen={isOpen} onClose={onClose} placement="bottom" size="full">
             <DrawerOverlay />
-            <DrawerContent h="100vh" maxH="100vh" borderTopRadius="0" pt={3}>
+            <DrawerContent
+              h="100vh"
+              maxH="100vh"
+              borderTopRadius="0"
+              display="flex"
+              flexDirection="column"
+              pt="calc(var(--xceed-safe-top, 0px) + var(--chakra-space-3))"
+              pb="var(--xceed-safe-bottom, 0px)"
+            >
               {notificationList}
             </DrawerContent>
           </Drawer>

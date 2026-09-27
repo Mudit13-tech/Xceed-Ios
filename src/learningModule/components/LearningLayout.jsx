@@ -846,10 +846,19 @@ export default function LearningLayout() {
         onClose={timetableChanges.dismiss}
       />
 
+      {/* The insets are for the app on a phone with a cutout, where this
+          drawer runs the full height of the screen and its close button would
+          otherwise be drawn under the Dynamic Island. The drawer is `fixed`,
+          so the padding src/mobile/safeArea.js puts on the page's own sticky
+          header does not reach it. `var(--xceed-safe-*)` is set only by that
+          module, on iOS; the 0px fallback is what every other client gets. */}
       <Drawer isOpen={isOpen} placement="left" onClose={onClose}>
         <DrawerOverlay />
-        <DrawerContent>
-          <DrawerCloseButton />
+        <DrawerContent
+          pt="var(--xceed-safe-top, 0px)"
+          pb="var(--xceed-safe-bottom, 0px)"
+        >
+          <DrawerCloseButton top="calc(var(--xceed-safe-top, 0px) + var(--chakra-space-2))" />
           <DrawerHeader>
             <Flex align="center" gap={2}>
               <LmIcon name="brand" size={20} />

@@ -87,7 +87,7 @@ const LOCKED = [/\/attempt\//, /\/short\/live\//, /\/present(\/|$)/, /\/seb-exit
 const ROOT_PATHS = ['/', '/login', '/home', '/learning', '/learning/', '/userroles'];
 
 /**
- * True if a dialog is actually open on screen.
+ * The topmost dialog actually open on screen, or null.
  *
  * `[role="dialog"]` alone is not that question. Chakra's <Popover> keeps its
  * content element -- role="dialog" -- mounted for as long as the popover is,
@@ -99,17 +99,48 @@ const ROOT_PATHS = ['/', '/login', '/home', '/learning', '/learning/', '/userrol
  *
  * So a dialog counts only if it is modal (Chakra's Modal, Drawer and
  * AlertDialog set aria-modal, and unmount when closed) or it is visible.
+ *
+ * The last match in document order wins. Chakra portals each dialog to the end
+ * of <body> as it opens, so that is the one on top and the one a dismissal
+ * should reach -- the same rule its own modal manager uses.
  */
-function hasOpenDialog() {
+function topOpenDialog() {
   const dialogs = document.querySelectorAll('[role="dialog"], [role="alertdialog"]');
+  let top = null;
   for (const el of dialogs) {
-    if (el.getAttribute('aria-modal') === 'true') return true;
+    if (el.getAttribute('aria-modal') === 'true') {
+      top = el;
+      continue;
+    }
     if (el.closest('[hidden], [aria-hidden="true"]')) continue;
     const style = window.getComputedStyle(el);
     if (style.visibility === 'hidden' || style.display === 'none') continue;
-    return true;
+    top = el;
   }
-  return false;
+  return top;
+}
+
+/**
+ * Ask a dialog to close, the way the keyboard would.
+ *
+ * Not `onClose` -- this module has no reference to one, and there is no generic
+ * way to reach a component's own handler from a touch listener. Escape is the
+ * generic way: Chakra binds it on the dialog container
+ * (modal/use-modal.cjs's getDialogContainerProps -> onKeyDown) and routes it
+ * through the same `closeOnEsc` / `onClose` path a real key press takes, so a
+ * dialog that has declined to be dismissed -- MobileShell's update prompt,
+ * whose onClose is a no-op while an update is pending -- declines this too.
+ * The gesture delivers the request; each dialog still decides.
+ */
+function dismissDialog(element) {
+  element.dispatchEvent(new KeyboardEvent('keydown', {
+    key: 'Escape',
+    code: 'Escape',
+    keyCode: 27,
+    which: 27,
+    bubbles: true,
+    cancelable: true,
+  }));
 }
 
 /**
@@ -187,6 +218,7 @@ export function setupSwipeBack({ getPath, goBack }) {
   let indicator = null;
   let tracking = false;   // a touch started at the edge and may become a swipe
   let committed = false;  // it is a horizontal drag; the page must stop scrolling
+  let dialog = null;      // a dialog was open at touchstart: dismiss it, do not navigate
   let startX = 0;
   let startY = 0;
   let startedAt = 0;
@@ -224,6 +256,7 @@ export function setupSwipeBack({ getPath, goBack }) {
   const reset = (animate) => {
     tracking = false;
     committed = false;
+    dialog = null;
     progress = 0;
     hide(animate);
   };
@@ -231,18 +264,35 @@ export function setupSwipeBack({ getPath, goBack }) {
   const onTouchStart = (event) => {
     tracking = false;
     committed = false;
+    dialog = null;
 
     if (event.touches.length !== 1) return;            // pinch, or a second finger
     const touch = event.touches[0];
     if (touch.clientX > EDGE_WIDTH) return;
 
-    const path = getPath();
-    if (ROOT_PATHS.includes(path)) return;
-    if (LOCKED.some((pattern) => pattern.test(path))) return;
-    // An open dialog is its own context. Going back would navigate the screen
-    // underneath it and leave the dialog sitting over a page it does not belong
-    // to; dismissing it is the modal's own job, not this gesture's.
-    if (hasOpenDialog()) return;
+    /**
+     * An open dialog is its own context, and it is the context the gesture is
+     * for.
+     *
+     * Navigating is still wrong -- it would move the screen underneath and
+     * leave the dialog sitting over a page it does not belong to -- but
+     * refusing outright, which is what this used to do, left iOS with no way
+     * out of a dialog whose own close control was unreachable. On this phone
+     * that is not hypothetical: the notification panel is a full-screen drawer
+     * whose only exit is a 24px X at the very top, and there is no hardware
+     * back key behind it. The screen reads as frozen.
+     *
+     * So the gesture keeps its meaning -- "take me out of here" -- and changes
+     * what "here" is: the dialog, not the route. See dismissDialog; a dialog
+     * that refuses Escape refuses this too.
+     */
+    dialog = topOpenDialog();
+
+    if (!dialog) {
+      const path = getPath();
+      if (ROOT_PATHS.includes(path)) return;
+      if (LOCKED.some((pattern) => pattern.test(path))) return;
+    }
     if (insideHorizontalScroller(event.target)) return;
 
     tracking = true;
@@ -294,11 +344,22 @@ export function setupSwipeBack({ getPath, goBack }) {
     const flicked = dx >= FLICK_DISTANCE && dx / elapsed >= FLICK_VELOCITY;
 
     const passed = dx >= commitDistance() || flicked;
+    const dismissing = dialog;
     reset(true);
+
+    if (!passed) return;
+
+    if (dismissing) {
+      // It may have closed itself during the drag -- a notification tapped,
+      // a form submitted -- in which case there is nothing to dismiss and
+      // nothing to navigate either: the gesture began inside a dialog.
+      if (dismissing.isConnected) dismissDialog(dismissing);
+      return;
+    }
 
     // history.length counts forward entries too, so it is a floor rather than a
     // count of what is behind — but a length of 1 does mean there is nothing.
-    if (passed && window.history.length > 1) goBack();
+    if (window.history.length > 1) goBack();
   };
 
   document.addEventListener('touchstart', onTouchStart, { passive: true });

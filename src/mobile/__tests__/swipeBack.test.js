@@ -166,6 +166,67 @@ describe('mobile swipe-back', () => {
     expect(goBack).not.toHaveBeenCalled();
   });
 
+  /**
+   * Refusing the gesture is not the same as there being nothing to do.
+   *
+   * The notification panel is a full-screen drawer: no overlay left to tap
+   * through, no hardware back key on this platform, and one 24px X at the top
+   * of the screen. Refusing left the phone with no way out of it at all. The
+   * gesture now asks the dialog to close, the way Escape does on a keyboard,
+   * and still never navigates the page underneath it.
+   */
+  it('dismisses the dialog it began inside, rather than navigating', () => {
+    const modal = document.createElement('section');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    const closed = vi.fn();
+    modal.addEventListener('keydown', (event) => { if (event.key === 'Escape') closed(); });
+    document.body.appendChild(modal);
+
+    swipe(6, 300);
+
+    expect(closed).toHaveBeenCalledTimes(1);
+    expect(goBack).not.toHaveBeenCalled();
+  });
+
+  it('dismisses the topmost dialog when two are stacked', () => {
+    const under = document.createElement('section');
+    under.setAttribute('role', 'dialog');
+    under.setAttribute('aria-modal', 'true');
+    const over = document.createElement('section');
+    over.setAttribute('role', 'dialog');
+    over.setAttribute('aria-modal', 'true');
+    const reached = [];
+    under.addEventListener('keydown', () => reached.push('under'));
+    over.addEventListener('keydown', () => reached.push('over'));
+    document.body.append(under, over);
+
+    swipe(6, 300);
+
+    expect(reached).toEqual(['over']);
+  });
+
+  /**
+   * A dialog that has declined to be dismissed declines this too: the event is
+   * the same one a key press sends, so `closeOnEsc={false}` and a no-op
+   * onClose -- MobileShell's update prompt -- are honoured without this module
+   * knowing they exist.
+   */
+  it('dismisses a dialog on a route it would refuse to navigate away from', () => {
+    path = '/learning/class/c1/quiz/q1/attempt/a1';
+    const modal = document.createElement('section');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    const closed = vi.fn();
+    modal.addEventListener('keydown', () => closed());
+    document.body.appendChild(modal);
+
+    swipe(6, 300);
+
+    expect(closed).toHaveBeenCalledTimes(1);
+    expect(goBack).not.toHaveBeenCalled();
+  });
+
   it('is not blocked by a closed popover that stays mounted', () => {
     // Chakra's <Popover> keeps its role="dialog" content in the DOM while closed
     // and hides it with visibility on the positioner around it. The bell on
