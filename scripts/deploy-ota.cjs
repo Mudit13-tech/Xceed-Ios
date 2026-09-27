@@ -46,11 +46,9 @@ function compareVersions(a, b) {
  *
  * Both checks guard mistakes that have already been one keystroke away:
  *
- *  - The build reads `.env`. VITE_DISABLE_OTA=1 is how a developer keeps a
- *    device build's own JS, and VITE_NATIVE_API_ORIGIN is how they point it at
- *    a local server. Published, the first turns the updater off on every
- *    installed app -- no later release could ever reach them again -- and the
- *    second points every app at a laptop.
+ *  - The build reads `.env`, and VITE_NATIVE_API_ORIGIN is how a developer
+ *    points a device build at a local server. Published, it would point every
+ *    installed app at a laptop.
  *
  *  - The device only takes a version strictly greater than the one it runs
  *    (utils/otaUpdater.js). A merge that carries an older package.json version
@@ -62,9 +60,6 @@ async function preflight(nextVersion) {
   if (isDev) return;
 
   const problems = [];
-  if (process.env.VITE_DISABLE_OTA === '1') {
-    problems.push('VITE_DISABLE_OTA=1 is set in .env — the published bundle would switch OTA off on every device. Comment it out.');
-  }
   const origin = process.env.VITE_NATIVE_API_ORIGIN;
   if (origin && origin.replace(/\/+$/, '') !== 'https://xceed.nitj.ac.in') {
     problems.push(`VITE_NATIVE_API_ORIGIN is ${origin} — the published bundle would call that instead of production. Remove it from .env.`);

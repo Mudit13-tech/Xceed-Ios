@@ -140,10 +140,18 @@
  * The excluded input types have no text to size and no keyboard to raise; a
  * checkbox given a 16px font-size is just a checkbox with a larger line-box
  * pushing the row it sits in around.
+ *
+ * iOS only. This stylesheet ships to Android too, whose WebView never zooms
+ * on focus, so there the rule would only enlarge every small input. Only iOS
+ * WebKit supports -webkit-touch-callout; Chromium, and with it Android's
+ * WebView, reports it unsupported. @supports adds no specificity, so the
+ * reasoning above holds unchanged inside it.
  */
-input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']),
-textarea,
-select,
-[contenteditable='true'] {
-  font-size: max(16px, 1em);
+@supports (-webkit-touch-callout: none) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='color']),
+  textarea,
+  select,
+  [contenteditable='true'] {
+    font-size: max(16px, 1em);
+  }
 }

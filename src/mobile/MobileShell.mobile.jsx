@@ -202,22 +202,6 @@ export default function MobileShell() {
   }, [queryClient]);
 
   useEffect(() => {
-    // A development build has to be able to keep the code that was built into
-    // it. The updater compares this bundle's version against the server's and,
-    // finding the server ahead, replaces the web assets with production's --
-    // so a device build would run for a few seconds and then silently revert
-    // to whatever is live, taking every local change with it. That is correct
-    // for a user and useless for testing, and it is invisible while it happens:
-    // the app simply stops having the fix you just installed.
-    //
-    // VITE_DISABLE_OTA is read only to turn the updater off, and lives in .env,
-    // which is gitignored. A release build has no .env, so OTA stays on by
-    // default and nothing about shipping changes.
-    if (import.meta.env.VITE_DISABLE_OTA === '1') {
-      console.log('[OTA] Disabled for this build (VITE_DISABLE_OTA=1) — keeping the bundle that was installed.');
-      return undefined;
-    }
-
     // See OTA_START_DELAY_MS: the updater competes with the first screen for
     // the network, and it is the one of the two that can afford to wait.
     const timer = window.setTimeout(() => {
