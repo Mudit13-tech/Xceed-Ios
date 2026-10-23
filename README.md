@@ -1,27 +1,38 @@
-# 📚 XCEED – Learning Module App
+# XCEED — Learning Module App
 
-> A full-featured academic platform for NITJ, built with **React + Vite** and deployed as a native Android app via **Capacitor**.  
-> This guide walks you through **everything** — from cloning the repo to pushing live OTA updates to users' phones.
+XCEED is NIT Jalandhar's academic platform: learning modules, quizzes,
+attendance, timetables, certificates, conferences, an ML course, NIRF and
+institute-ranking data, and admin dashboards for departments and HODs. It is a
+React + Vite web app, shipped as native Android and iOS apps through
+**Capacitor**.
 
----
+This repository is where the iOS build lives. It adds Face ID sign-in, safe-area
+handling for the notch and Dynamic Island, and iOS file downloads and
+attachment viewing, while leaving the Android behaviour as it was.
 
-## 📋 Table of Contents
-
-1. [Prerequisites](#-1-prerequisites)
-2. [Clone & Install](#-2-clone--install)
-3. [Environment Setup (.env)](#-3-environment-setup-env)
-4. [Running the Web App Locally](#-4-running-the-web-app-locally)
-5. [Android App Setup (Capacitor)](#-5-android-app-setup-capacitor)
-6. [Building & Running on Android Studio](#-6-building--running-on-android-studio)
-7. [Publishing OTA Updates](#-7-publishing-ota-updates-over-the-air)
-8. [Pulling Updates from AMS (Safe Sync)](#-8-pulling-updates-from-ams-safe-sync)
-9. [Project Scripts Reference](#-9-project-scripts-reference)
-10. [How OTA Updates Work (Under the Hood)](#-10-how-ota-updates-work-under-the-hood)
-11. [Troubleshooting](#-11-troubleshooting)
+This guide covers everything from cloning the repo to running it on a device
+and pushing live OTA updates to users' phones.
 
 ---
 
-## ⚙️ 1. Prerequisites
+## Table of Contents
+
+1. [Prerequisites](#1-prerequisites)
+2. [Clone & Install](#2-clone--install)
+3. [Environment Setup (.env)](#3-environment-setup-env)
+4. [Running the Web App Locally](#4-running-the-web-app-locally)
+5. [Android App Setup (Capacitor)](#5-android-app-setup-capacitor)
+6. [Building & Running on Android Studio](#6-building--running-on-android-studio)
+7. [iOS App Setup & Running in Xcode](#7-ios-app-setup--running-in-xcode)
+8. [Publishing OTA Updates (Over-the-Air)](#8-publishing-ota-updates-over-the-air)
+9. [Pulling Updates from AMS (Safe Sync)](#9-pulling-updates-from-ams-safe-sync)
+10. [Project Scripts Reference](#10-project-scripts-reference)
+11. [How OTA Updates Work (Under the Hood)](#11-how-ota-updates-work-under-the-hood)
+12. [Troubleshooting](#12-troubleshooting)
+
+---
+
+## 1. Prerequisites
 
 Install these tools **before** doing anything else.
 
@@ -31,18 +42,20 @@ Install these tools **before** doing anything else.
 | [Yarn](https://yarnpkg.com/getting-started/install) | Latest | Package manager (preferred over npm here) |
 | [Git](https://git-scm.com/downloads) | Latest | To clone and manage the repository |
 | [Android Studio](https://developer.android.com/studio) | Latest stable | To build and run the Android app |
+| [Xcode](https://developer.apple.com/xcode/) | Latest stable (macOS only) | To build and run the iOS app |
+| [CocoaPods](https://cocoapods.org/) | 1.6+ | Installs the iOS native dependencies |
 
 > **Node version matters!**  
 > This project requires **Node 22** (defined in `.nvmrc`). If you use [nvm](https://github.com/nvm-sh/nvm) (Mac/Linux) or [nvm-windows](https://github.com/coreybutler/nvm-windows), run `nvm use` inside the project folder and it will auto-switch.
 
 ---
 
-## 📥 2. Clone & Install
+## 2. Clone & Install
 
 ### Step 1 — Clone the repository
 ```bash
-git clone <your-repo-url>
-cd learning-module-app
+git clone https://github.com/Mudit13-tech/Xceed-Ios.git
+cd Xceed-Ios
 ```
 
 ### Step 2 — Install all dependencies
@@ -53,7 +66,7 @@ yarn install
 
 ---
 
-## 🔐 3. Environment Setup (.env)
+## 3. Environment Setup (.env)
 
 The `.env` file is **not committed to Git** (it's in `.gitignore`). You must create it yourself.
 
@@ -76,7 +89,7 @@ OTA_SECRET_KEY=your_secret_key_here
 
 ---
 
-## 🌐 4. Running the Web App Locally
+## 4. Running the Web App Locally
 
 Start the development server:
 ```bash
@@ -89,7 +102,7 @@ Open your browser at **`http://localhost:5173`** — you should see the app.
 
 ---
 
-## 📱 5. Android App Setup (Capacitor)
+## 5. Android App Setup (Capacitor)
 
 This project uses **Capacitor** to wrap the web app into a native Android app.
 
@@ -112,7 +125,7 @@ Android Studio ships with its own JDK. Point your terminal to it:
 
 ---
 
-## 🚀 6. Building & Running on Android Studio
+## 6. Building & Running on Android Studio
 
 Every time you change the web code and want to see it in the Android app, follow these **3 steps in order**:
 
@@ -137,19 +150,49 @@ Once Android Studio opens:
 2. Pick your target — a **connected phone** (USB, with USB Debugging enabled) or an **emulator** (create one via Device Manager).
 3. Click the green **▶ Run** button.
 
-### ❓ Missing folders? (First-time only)
+### Missing folders? (First-time only)
 When you first clone, the `android/` directory will be missing `.gradle/`, `build/`, `local.properties`, and `capacitor-cordova-android-plugins/`. **This is normal.** They are generated automatically:
 - `npx cap sync android` creates the Capacitor plugin folders.
 - Opening in Android Studio creates `local.properties` and builds the Gradle cache.
 
 ---
 
-## 📡 7. Publishing OTA Updates (Over-the-Air)
+## 7. iOS App Setup & Running in Xcode
+
+iOS builds need a Mac with Xcode and CocoaPods installed. The native project is
+in `ios/App` and targets iOS 15 or later.
+
+### Step 1 — Build and sync
+```bash
+npm run build
+npx cap sync ios
+```
+This copies `dist/` into the iOS project and runs `pod install` for the
+Capacitor plugins.
+
+### Step 2 — Open in Xcode
+```bash
+npx cap open ios
+```
+This opens `ios/App/App.xcworkspace` (always use the workspace, not the
+`.xcodeproj`).
+
+### Step 3 — Run
+1. Under **Signing & Capabilities**, choose your development team.
+2. Pick a simulator or a connected iPhone.
+3. Press **Run** (⌘R).
+
+Face ID only works on a real device or on a simulator with
+**Features ▸ Face ID ▸ Enrolled** turned on.
+
+---
+
+## 8. Publishing OTA Updates (Over-the-Air)
 
 OTA updates push new code **directly to users' installed apps** without going through the Play Store. The app checks for updates on every launch and applies them instantly.
 
 ### Prerequisites
-- `.env` must have `OTA_SECRET_KEY` set (see [Section 3](#-3-environment-setup-env)).
+- `.env` must have `OTA_SECRET_KEY` set (see [Section 3](#3-environment-setup-env)).
 - `.env` must have `OTA_SERVER_URL` set to the correct server.
 - You need internet access to reach the server.
 
@@ -182,7 +225,7 @@ Next time a user opens the installed Android app:
 
 ---
 
-## 🔄 8. Pulling Updates from AMS (Safe Sync)
+## 9. Pulling Updates from AMS (Safe Sync)
 
 There is a companion repository called `AMS-with-TimeTable`. When it gets updated, use the safe sync script to bring those changes into this project without losing your custom work.
 
@@ -306,7 +349,7 @@ On a clone that predates this, run `npm run setup:git`.
 
 ---
 
-## 📖 9. Project Scripts Reference
+## 10. Project Scripts Reference
 
 | Command | What it does |
 |---|---|
@@ -314,6 +357,8 @@ On a clone that predates this, run `npm run setup:git`.
 | `npm run build` | Builds the production web bundle into `dist/` |
 | `npx cap sync android` | Copies `dist/` into Android project & syncs plugins |
 | `npx cap open android` | Opens the Android project in Android Studio |
+| `npx cap sync ios` | Copies `dist/` into the iOS project & installs pods |
+| `npx cap open ios` | Opens the iOS workspace in Xcode |
 | `npm run deploy:ota` | Builds, bumps version, zips, and uploads an OTA update |
 | `npm run deploy:ota -- --dev` | Same but targets `localhost:8010` |
 | `npm run test` | Runs the test suite once |
@@ -323,7 +368,7 @@ On a clone that predates this, run `npm run setup:git`.
 
 ---
 
-## 🔬 10. How OTA Updates Work (Under the Hood)
+## 11. How OTA Updates Work (Under the Hood)
 
 The system uses [`@capgo/capacitor-updater`](https://capgo.app/) as the update engine:
 
@@ -356,7 +401,7 @@ setupOtaUpdater() runs in main.jsx
 
 ---
 
-## 🛠️ 11. Troubleshooting
+## 12. Troubleshooting
 
 ### `yarn install` fails
 - Check your Node version: `node -v` — must be **22**.
